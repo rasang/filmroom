@@ -46,6 +46,8 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 2. **Choose a stock and adjust** — Tap a film stock, tune exposure, grain and halation, then choose a print/direct-scan path, crop or add a frame as needed. Compare with the original as you work.
 3. **Export a new file** — Choose a format, size and color space, then add it to the queue. JPEG/PNG files go to the gallery's “暗房” album; TIFF files go to “Downloads/暗房”.
 
+> **Batch exports and heat:** Processing multiple photos continuously puts sustained load on your phone. It may become noticeably hot, use more battery and slow down as the system thermally throttles. Export in smaller batches; if the phone becomes noticeably hot, stop processing and let it cool before continuing.
+
 The [user guide](使用说明.txt) is currently in Chinese. Exports retain supported capture metadata, **including existing GPS and author information**—check before sharing publicly. See the [metadata rules](docs/EXPORT_METADATA.md) for details.
 
 ## Supported formats
