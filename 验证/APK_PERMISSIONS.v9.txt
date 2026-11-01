@@ -1,8 +1,0 @@
-package: dev.filmroom
-uses-permission: name='android.permission.WAKE_LOCK'
-uses-permission: name='android.permission.FOREGROUND_SERVICE'
-uses-permission: name='android.permission.FOREGROUND_SERVICE_DATA_SYNC'
-uses-permission: name='android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING'
-uses-permission: name='android.permission.POST_NOTIFICATIONS'
-permission: dev.filmroom.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-uses-permission: name='dev.filmroom.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'

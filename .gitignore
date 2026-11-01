@@ -3,3 +3,6 @@
 /app/build/
 /local.properties
 *.iml
+
+# Generated validation reports (keep outside version control)
+/验证/
