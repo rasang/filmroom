@@ -63,7 +63,7 @@ Landscape and portrait compositions, keeping every perforation and the entire fr
   <a href="docs/images/showcase/framed-cat.webp"><img src="docs/images/showcase/framed-cat.webp" width="31%" align="top" alt="Film-edge sample: cat" /></a>
 </p>
 
-<sub>User-provided screenshots and finished photos. Click an image to view it larger. Web copies are resized with metadata removed, without additional color grading or cropping. Film edges are app-generated frames, not scans of physical film.</sub>
+<sub>User-provided screenshots and finished photos. Click an image to view it larger. Web copies are resized with metadata removed and no additional color grading. Sample photos retain their full composition; only excess top spacing in the interface screenshots is trimmed. Film edges are app-generated frames, not scans of physical film.</sub>
 
 ## Start with a roll of film
 
