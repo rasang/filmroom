@@ -281,7 +281,12 @@ class ExportQueueActivity : ComponentActivity() {
                 val inset=dp(if(concise)24 else 66);previewPlaceholder.setPadding(inset,inset,inset,inset)
                 val horizontal=wide || (concise && resources.configuration.fontScale<1.5f)
                 body.orientation=if(horizontal)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-                previewFrame.layoutParams=LinearLayout.LayoutParams(if(horizontal)dp(if(concise)104 else 224)else -1,dp(if(concise)112 else if(wide)180 else 176))
+                // Compact photographs sit inside the card rather than sharing its outer edge.
+                // Trade 12dp of image width for the inset, preserving the text/action column width.
+                container.setPadding(0,0,0,dp(if(concise)12 else 16))
+                previewFrame.layoutParams=LinearLayout.LayoutParams(if(horizontal)dp(if(concise)92 else 224)else -1,dp(if(concise)100 else if(wide)180 else 176)).apply {
+                    if(concise){marginStart=dp(12);topMargin=dp(12);if(!horizontal)marginEnd=dp(12)}
+                }
                 info.layoutParams=if(horizontal)LinearLayout.LayoutParams(0,-2,1f)else LinearLayout.LayoutParams(-1,-2)
             }
             val stock=stockNames[job.parameters.filmStock] ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92)
@@ -299,7 +304,10 @@ class ExportQueueActivity : ComponentActivity() {
             message.setTextColor(if(job.state==ExportJobState.FAILED)ink else muted)
             message.text=job.localizedMessage ?: ""
             val importantMessage=job.metadataWarning!=null || job.state==ExportJobState.FAILED || !job.localizedMessage.isNullOrBlank()
-            message.visibility=if(importantMessage && !job.localizedMessage.isNullOrBlank())View.VISIBLE else View.GONE
+            // A successfully saved photo needs no metadata warning block in the compact list.
+            // The original warning stays in Details; failures retain their visible explanation.
+            val compactMetadataWarning=concise && job.state==ExportJobState.COMPLETED && !job.metadataWarning.isNullOrBlank()
+            message.visibility=if(!compactMetadataWarning && importantMessage && !job.localizedMessage.isNullOrBlank())View.VISIBLE else View.GONE
             retry.visibility=if(presentation.canRetry)View.VISIBLE else View.GONE;retry.text=if(job.state==ExportJobState.PAUSED)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c9691192f1b)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b8784c8dd563)
             cancel.visibility=if(presentation.canCancel)View.VISIBLE else View.GONE
             retry.isEnabled=!working;cancel.isEnabled=!working;retry.alpha=if(working).45f else 1f;cancel.alpha=retry.alpha

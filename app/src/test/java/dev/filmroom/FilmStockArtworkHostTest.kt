@@ -110,7 +110,8 @@ class FilmStockArtworkHostTest {
                     assertNull(button.ellipsize)
                     assertTrue("Each card fits its viewport",button.width<=strip().width)
                     val textWidth=button.width-button.compoundPaddingLeft-button.compoundPaddingRight
-                    for(line in 0 until button.layout.lineCount)assertTrue("Whole label fits without clipping ${button.text}",button.layout.getLineWidth(line)<=textWidth+1)
+                    // getLineWidth includes trailing break spaces; getLineMax measures the visible line.
+                    for(line in 0 until button.layout.lineCount)assertTrue("Whole label fits without clipping ${width}x$height font$scale ${button.text} line=$line width=${button.layout.getLineWidth(line)} room=$textWidth layoutWidth=${button.layout.width} card=${button.width} max=${button.layout.getLineMax(line)} glyphs=[${button.text.subSequence(button.layout.getLineStart(line),button.layout.getLineEnd(line))}]",button.layout.getLineMax(line)<=textWidth+1)
                     for(line in 0 until button.layout.lineCount)assertEquals(0,button.layout.getEllipsisCount(line))
                 }
                 val output=Bitmap.createBitmap(content.width,content.height,Bitmap.Config.ARGB_8888);content.draw(Canvas(output))

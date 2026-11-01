@@ -34,11 +34,13 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.17.** APKs will be distributed through [GitHub Releases](https://github.com/rasang/filmroom/releases); check that page for available published versions. You can also [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current source version: 0.1.18.** APKs will be distributed through [GitHub Releases](https://github.com/rasang/filmroom/releases); check that page for available published versions. You can also [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
 - Versions through 0.1.16 used the old debug certificate. Version 0.1.17 starts a new fixed release certificate; see the migration notice below. Keep your own signing key; source release builds are unsigned by default.
+
+See [0.1.18 notes](docs/RELEASE_0_1_18.md) for inset compact export thumbnails, approximately 2.5 visible film choices at normal font size, and successful-export metadata warnings moved into Details.
 
 ## Your first photo
 

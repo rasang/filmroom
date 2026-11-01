@@ -825,11 +825,8 @@ class MainActivity:ComponentActivity() {
     }
     private fun stockChoices(p:EditorState,s:EditorUiState,target:LinearLayout=tools){
             // Film browsing is deliberately tap-only; short parameter enums retain their snap rails.
-            val landscape=landscapeEditor
-            val sideBySide=landscape && resources.configuration.fontScale<=1.35f
-            val sample=TextView(this).apply{textSize=12f}
-            val longest=films.maxOf{film->dev.filmroom.ui.FilmStockArtwork.cardLabel(film.id,film.name).lines().maxOf{sample.paint.measureText(it)}}
-            val cardWidth=(longest+dp(if(sideBySide)92 else 28)).roundToInt().coerceAtLeast(dp(112))
+            // Width comes from the visible pane, not the longest stock name.
+            val cardWidth=dp(112)
             val carousel=dev.filmroom.ui.FilmStockScrollView(this,cardWidth).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false}
             val cards=row();carousel.addView(cards)
             fun chooseStock(index:Int){
@@ -845,14 +842,13 @@ class MainActivity:ComponentActivity() {
                 val stock=button(dev.filmroom.ui.FilmStockArtwork.cardLabel(film.id,film.name)){
                     chooseStock(films.indexOf(film))
                 }.apply{
-                    tag=film.id;isSelected=chosen;textSize=12f;minimumWidth=dp(112);minimumHeight=dp(48)
+                    tag=film.id;isSelected=chosen;textSize=12f;minimumWidth=dp(48);minimumHeight=dp(48)
                     setPadding(dp(10),dp(6),dp(10),dp(8))
                     val art=dev.filmroom.ui.FilmStockArtwork.drawable(this@MainActivity,film.id)
-                    val edge=dp(if(sideBySide)56 else 72)
+                    val edge=dp(72)
                     art.setBounds(0,0,edge,edge)
-                    if(sideBySide){setPadding(dp(8),dp(4),dp(8),dp(4));setCompoundDrawables(art,null,null,null)}
-                    else setCompoundDrawables(null,art,null,null)
-                    compoundDrawablePadding=dp(if(sideBySide)6 else 2)
+                    setCompoundDrawables(null,art,null,null)
+                    compoundDrawablePadding=dp(2)
                     setTextColor(if(chosen)accent else ink)
                     maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
                     background=shape(if(chosen)raised else Color.TRANSPARENT,if(chosen)accent else null)
