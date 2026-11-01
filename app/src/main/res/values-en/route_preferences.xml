@@ -1,0 +1,5 @@
+<resources>
+    <string name="route_reversal_only">Reversal film supports direct scanning only.</string>
+    <string name="route_print_preference_retained">Your print preference is saved and will return with negative film.</string>
+    <string name="route_correction_preference_retained">Unavailable in this workflow and temporarily off. Your setting is still saved.</string>
+</resources>

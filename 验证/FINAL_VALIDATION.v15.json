@@ -1,0 +1,58 @@
+{
+  "appVersion": "0.1.10",
+  "versionCode": 11,
+  "createdUtc": "2026-10-31T10:59:59.453809+00:00",
+  "hostTests": {
+    "tests": 436,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 5
+  },
+  "independentRealJniTests": {
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "freshJvmPerSuite": true,
+    "engineAndCodecs": "real",
+    "hevcPixelsAndMediaStore": "explicit test doubles"
+  },
+  "lintDebug": "passed",
+  "unsignedReleaseCompiled": true,
+  "instrumentationApkCompiled": true,
+  "androidRuntimeTested": false,
+  "instrumentationExecuted": false,
+  "trustedRootAliasHotfix": true,
+  "fixedImageAreaStatus": true,
+  "nativeLibrariesUnchangedFrom019": true,
+  "roi": {
+    "enabled": true,
+    "maxGridEdge": 1536,
+    "ordinaryPreview": "512/768 retained",
+    "nativeBackend": "CPU fallback",
+    "unsupportedRoutes": "ordinary preview retained without removing effects",
+    "originalPixelDetail": false
+  },
+  "metadata": "bounded standard EXIF snapshot; GPS if available; original capture date retained; modify/export instant consistent; excludes opaque MakerNote/XMP/IPTC and old thumbnails; source rating unavailable",
+  "heicP3SdrBaseFixPreserved": true,
+  "researchGrainParallelIncluded": false,
+  "borderDraftIncluded": false,
+  "nativeLibraries": {
+    "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so": "15917bf771517df5bb4f58341d938d774b1ac038963f0e32285877f903190a95",
+    "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": "8592bbd3d9ca4d6f234ce45c59b73770212c3f24819da2fc511917164b585be3",
+    "app/src/main/jniLibs/x86_64/libfilm_engine.so": "0d94d275948fd2cc4347762c067e64321da7d9b92ba1d0f33de84d092ca8a847",
+    "app/src/main/jniLibs/x86_64/libfilm_codecs.so": "2616f22ee8f0ab6259f1bdaf80b82ce3400b70c60a138ea4063b98e9b64ce682"
+  },
+  "apk": {
+    "bytes": 20475903,
+    "sha256": "8636bbea5ce91c4517bed07cd4244b194f9a0b1874984130c35f627f96c5adc0",
+    "abi": "arm64-v8a",
+    "minSdk": 29,
+    "targetSdk": 35,
+    "dexCompressed": true,
+    "nativeLibrariesStored": true,
+    "signatureVerified": true,
+    "zipalign16KiB": true,
+    "certificateSha256": "4d48147062cf82469b95c0aea85bf739489637e2386eaad47a8150ee780a59d5"
+  },
+  "privatePhotosKeysCachesExcluded": true
+}

@@ -1,0 +1,759 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Filmroom</string>
+    <string name="text_3d05fc7cf7e4" formatted="false">正在清理上次的临时文件</string>
+    <string name="text_5ec95121dc94" formatted="true">上次的临时文件有 %1$s 项未能清理。为避免占满空间，暂不开始编辑。请检查本机空间后点此重试；也可关闭应用稍后重开。原片未修改。</string>
+    <string name="text_b3622bcacaaf" formatted="false">恢复本机编辑</string>
+    <string name="text_cd6fac59a752" formatted="false">上次未完成的导出暂时无法清理，请检查相册或稍后重试。</string>
+    <string name="text_7b50017ae47e" formatted="false">照片</string>
+    <string name="text_063189730acc" formatted="false">上次的临时照片已不可用，请重新导入。</string>
+    <string name="text_1663134e88db" formatted="false">读取照片</string>
+    <string name="text_6dfdd1fe6561" formatted="false">完成导入</string>
+    <string name="text_2416623f6d39" formatted="false">照片已导入，后续处理已取消。</string>
+    <string name="text_d630bd89f6dd" formatted="false">已取消导入，保留原来的照片。</string>
+    <string name="text_3052d04d78c2" formatted="false">这张照片太大，无法安全读取。请选择较小的照片。</string>
+    <string name="text_c976e3b99689" formatted="false">无法读取照片，请重新选择支持的照片格式。</string>
+    <string name="text_c12aefec4f8a" formatted="false">正在取消并清理临时文件…</string>
+    <string name="text_6f25582e0d79" formatted="false">已取消预览更新。</string>
+    <string name="text_acd49b3daba5" formatted="false">本机内存不足，无法生成预览。</string>
+    <string name="text_bc37a5375a5d" formatted="false">本地渲染未完成，请重试或换张照片。</string>
+    <string name="text_be0d9af082d8" formatted="false">加入导出列表</string>
+    <string name="text_bb8990972dce" formatted="false">已加入导出列表，可继续编辑或添加照片。</string>
+    <string name="text_afb4ebeb2c42" formatted="false">已请求取消任务，可在导出列表查看状态。</string>
+    <string name="text_f9957f03a610" formatted="false">任务继续在后台准备，可在导出列表查看状态。</string>
+    <string name="text_9f9e68d602d6" formatted="false">已停止等待，可在导出列表查看是否已接收任务。</string>
+    <string name="text_834295cc897b" formatted="false">任务已加入导出列表，请在列表中查看状态。</string>
+    <string name="text_aeb3f82f0b35" formatted="false">内存不足，未能添加导出任务。</string>
+    <string name="text_420e35e0302a" formatted="false">任务已加入导出列表，请在列表中查看状态或继续。</string>
+    <string name="text_11ee5fdc4a0b" formatted="false">未能添加导出任务，请检查本机空间后重试。</string>
+    <string name="text_16b38790d59b" formatted="false">返回编辑</string>
+    <string name="text_88b41d5ab211" formatted="false">导出列表</string>
+    <string name="text_f361f0328380" formatted="false">正在读取导出列表…</string>
+    <string name="text_3cd263a38563" formatted="false">暂时无法读取导出列表，请返回后重试。</string>
+    <string name="text_b4351becfe47" formatted="false">无法读取导出列表</string>
+    <string name="text_5f44ac2035ae" formatted="true">%1$s 项处理中</string>
+    <string name="text_24d163f0f56e" formatted="true">%1$s 项等待</string>
+    <string name="text_e982159d21f2" formatted="true">%1$s 项暂停</string>
+    <string name="text_b331b1884a29" formatted="false">还没有导出任务\n在编辑页选择导出，即可加入这里。</string>
+    <string name="text_7062447638eb" formatted="false">暂时无法继续，请稍后重试。</string>
+    <string name="text_d0ac5e20f891" formatted="false">取消未完成，请重试。</string>
+    <string name="text_2d968e781718" formatted="false">任务未启动，点击继续</string>
+    <string name="text_916bd97fb66f" formatted="false">缩略图准备中</string>
+    <string name="text_7c9691192f1b" formatted="false">继续</string>
+    <string name="text_2cd0f3be8738" formatted="false">取消</string>
+    <string name="text_4c777c000d4a" formatted="false">取消这项导出？</string>
+    <string name="text_a008667aeb14" formatted="false">将清理这项任务的临时文件，原片不受影响。</string>
+    <string name="text_670ec25af841" formatted="false">保留</string>
+    <string name="text_537d17f1c531" formatted="false">取消任务</string>
+    <string name="text_9c1ea2e60a71" formatted="false">查看照片</string>
+    <string name="text_979a332955c8" formatted="false">详情</string>
+    <string name="text_0ae7312510f4" formatted="false">收起详情</string>
+    <string name="text_a97cb6107f92" formatted="false">胶片</string>
+    <string name="text_1a5219a8272a" formatted="false">不足</string>
+    <string name="text_402590868fff" formatted="false">无法</string>
+    <string name="text_4f2d9c358b11" formatted="false">未能</string>
+    <string name="text_a9ca8eff92c8" formatted="false">待清理</string>
+    <string name="text_b8784c8dd563" formatted="false">重试</string>
+    <string name="text_183e988f1288" formatted="true">照片 %1$s，%2$s</string>
+    <string name="text_38952e7e372e" formatted="true">照片 %1$s，取消导出</string>
+    <string name="text_3f3f6c8c5093" formatted="true">照片 %1$s，查看已保存照片</string>
+    <string name="text_a9e8a732c910" formatted="true">照片 %1$s，展开或收起详情</string>
+    <string name="text_f6a4bb2cb013" formatted="false">请在相册或文件管理器中查看已保存照片。</string>
+    <string name="text_3be614977d5d" formatted="false">\n继续时，未完成的阶段可能重新计算。\n暂停期间保留临时文件；取消任务可释放空间。</string>
+    <string name="text_e3c1f7706839" formatted="false">暂无缩略图</string>
+    <string name="text_8fb3a3261b43" formatted="false">等待处理</string>
+    <string name="text_9aaf67962338" formatted="false">正在导出</string>
+    <string name="text_eb0c326b60ae" formatted="false">已暂停</string>
+    <string name="text_544c342feaf0" formatted="false">正在添加照片</string>
+    <string name="text_1bd91a7d0c53" formatted="false">已保存</string>
+    <string name="text_6e4445df6957" formatted="false">导出失败</string>
+    <string name="text_a37778f17c5f" formatted="false">已取消</string>
+    <string name="text_a15bc3b4bd3e" formatted="true">导出失败\n%1$s · 第 %2$s/7 步</string>
+    <string name="text_1a418b9270f7" formatted="false">导出结果</string>
+    <string name="text_37eb7c18d5ef" formatted="false">负片阶段示意 · 非最终成片</string>
+    <string name="text_0b00a78a5faa" formatted="false">原图 · 非处理结果</string>
+    <string name="text_dde174726d3f" formatted="false">取消当前操作？</string>
+    <string name="text_aa7d5766b326" formatted="false">已经完成保存的照片不会被删除。</string>
+    <string name="text_a7084fcb218d" formatted="false">取消操作</string>
+    <string name="text_576d81bb0631" formatted="false">导入</string>
+    <string name="text_76420433f22d" formatted="false">导出</string>
+    <string name="text_926a50b98ece" formatted="false">撤销</string>
+    <string name="text_03717b6f1070" formatted="false">重做</string>
+    <string name="text_ae384296a4ac" formatted="false">恢复预设</string>
+    <string name="text_df3d58c7d84b" formatted="false">设置</string>
+    <string name="text_1f14f4b50d0b" formatted="false">把照片带进暗房</string>
+    <string name="text_95c277eafaea" formatted="false">真实胶片与相纸处理\n所有计算都在本机完成</string>
+    <string name="text_a7fc4b2dbd50" formatted="false">导入照片</string>
+    <string name="text_ee2241639ab0" formatted="false">照片与已支持的 DNG · 不需要账号</string>
+    <string name="text_c37117eec876" formatted="false">原片</string>
+    <string name="text_002e7216c97a" formatted="false">放大预览加载中</string>
+    <string name="text_36c69988127e" formatted="false">对比原片</string>
+    <string name="text_255cf72e1d8c" formatted="false">调整构图</string>
+    <string name="text_7c3154414c11" formatted="false">照片信息</string>
+    <string name="text_1b0acbdaf172" formatted="false">原片 · 再点对比返回</string>
+    <string name="text_6d05fcab868f" formatted="true">胶片预览 · %1$s × %2$s</string>
+    <string name="text_a21efd19b7df" formatted="false">返回胶片效果</string>
+    <string name="text_c3c12cabaae9" formatted="false">正在更新预览</string>
+    <string name="text_130bb0102047" formatted="false">正在调整构图，请在下方确认或取消</string>
+    <string name="text_168ac579f2fb" formatted="false">需要清理临时文件</string>
+    <string name="text_74edb00b2c95" formatted="false">上次的临时文件未能清理。请检查可用空间后重试，原照片不会被修改。</string>
+    <string name="text_77b9d0a61b6d" formatted="false">重试清理</string>
+    <string name="text_a558cf14eef8" formatted="false">关闭应用</string>
+    <string name="text_bb1d19b85634" formatted="false">诊断日志</string>
+    <string name="text_7eefaaff791f" formatted="false">取消导出</string>
+    <string name="text_25e7efea7600" formatted="false">正在完成导出</string>
+    <string name="text_35e33ec9481e" formatted="false">正在取消\n清理完成后退出</string>
+    <string name="text_461ec432d86f" formatted="true">照片仅在本机处理，正在加入导出列表。已接收的任务可在后台继续，请到导出列表查看状态。\n\n当前步骤：%1$s</string>
+    <string name="text_cd33cfaad6ad" formatted="false">正在清理</string>
+    <string name="text_aacf040ce88a" formatted="false">胶片曝光</string>
+    <string name="text_7ce0c0cf48da" formatted="false">改变胶片曝光量与成像反应，不等同于最终照片明暗。</string>
+    <string name="text_8e2f643ad160" formatted="false">亮度</string>
+    <string name="text_8dbf138761d8" formatted="false">调整最终照片明暗。</string>
+    <string name="text_4cbc753240e5" formatted="false">对比度</string>
+    <string name="text_0a746a522ab4" formatted="false">调整印相明暗反差；默认值保留原效果。直扫不经过此步骤。</string>
+    <string name="text_90f74b4ac6f1" formatted="false">冷暖</string>
+    <string name="text_4bed17be043d" formatted="false">通过印相滤色微调冷暖，不是以 K 为单位的色温设置；直扫不经过此步骤。</string>
+    <string name="text_6045e74dcfa7" formatted="false">显影抑制</string>
+    <string name="text_fa586db5f990" formatted="false">通过显影抑制改变色彩与边缘反差。与“显影”分类中的“显影抑制强度”控制同一效果，两项底层系数相乘。界面刻度表示相对调整量，默认保留原效果；最低值不等于黑白。</string>
+    <string name="text_cda1ea706d23" formatted="false">柔光类型</string>
+    <string name="text_69c47fd991d5" formatted="false">模拟镜头前的柔光滤镜，与胶片光晕分别控制。“柔光/黑柔/白柔/电影柔光”分别对应 Glimmerglass / Black Pro-Mist / Pro-Mist / Cinebloom 模型。</string>
+    <string name="text_7351ad023c8d" formatted="false">柔光强度</string>
+    <string name="text_fc5315fbd6fd" formatted="false">先选择一种柔光滤镜；0 无效果。</string>
+    <string name="text_dfe1ad62ec51" formatted="false">柔光范围</string>
+    <string name="text_93ee12df430c" formatted="false">控制镜头柔光扩散尺度。</string>
+    <string name="text_e8b4d7c5c3d2" formatted="false">光晕强度</string>
+    <string name="text_b89612346534" formatted="false">模拟高光附近的胶片光晕，通常偏暖，也可单独调整颜色；不是整张照片变模糊。</string>
+    <string name="text_f08d365f119c" formatted="false">光晕范围</string>
+    <string name="text_b5034bff2db9" formatted="false">控制胶片高光光晕的扩散尺度。</string>
+    <string name="text_5acbd63667a0" formatted="false">颗粒强度</string>
+    <string name="text_7b7266f68310" formatted="false">0 为关闭；提高数值会增强胶片颗粒。</string>
+    <string name="text_065f01b65731" formatted="false">颗粒粗细</string>
+    <string name="text_6c6bd5cb96c0" formatted="false">控制颗粒尺度，强度为 0 时暂不可调整。</string>
+    <string name="text_813cd5bf9234" formatted="false">相纸</string>
+    <string name="text_14e7fe83afcb" formatted="false">选择相纸或电影拷贝片配置，会改变印相色彩与反应。</string>
+    <string name="text_3fe7b9f3a996" formatted="false">黄色滤色</string>
+    <string name="text_15206742c3a6" formatted="false">改变相纸曝光时的黄色滤色量，0 为原配方，不等同于屏幕色温。</string>
+    <string name="text_5f542cc5a3de" formatted="false">品红滤色</string>
+    <string name="text_0e5ad3c12a0e" formatted="false">改变相纸曝光时的品红滤色量，0 为原配方。</string>
+    <string name="text_469f85e3c561" formatted="false">预曝光</string>
+    <string name="text_7dd11c898748" formatted="false">给相纸或电影拷贝片加入少量均匀曝光（也称预闪），改变反差。0 关闭；数值是额外曝光比例，不是闪光灯功率或画面亮度。</string>
+    <string name="text_23cc75747b5a" formatted="false">锐化强度</string>
+    <string name="text_60d828125725" formatted="false">强调扫描边缘，0 为关闭。过强可能产生亮边，无法恢复原片没有的细节。</string>
+    <string name="text_e9c8b36e09c7" formatted="false">锐化半径</string>
+    <string name="text_cff8983d8e70" formatted="false">控制锐化的像素半径，强度为 0 时暂不可调整。</string>
+    <string name="text_c4d38d9c07cc" formatted="false">胶片型号</string>
+    <string name="text_5f86d5d545f8" formatted="false">选择已打包的胶片档案。反转片默认直接扫描，负片默认印相。</string>
+    <string name="text_9b7a0bf8b525" formatted="false">画幅</string>
+    <string name="text_13d6c864eb05" formatted="false">模拟画幅的长边尺寸（毫米），不是胶卷宽度。影响颗粒与光学效果的尺度；35 mm 不表示标准135画幅的长边。</string>
+    <string name="text_3c14663c1cfa" formatted="false">自动曝光</string>
+    <string name="text_eeb4cdfe3959" formatted="false">选择测光方式即开启自动曝光；关闭后保留上次测光方式。根据已导入照片估算胶片曝光，不是拍摄时的相机曝光。平均、中位数按全图亮度计算；中央重点偏重中央；局部只测中央圆形区域；矩阵为5×5分区加权；多区域为三个同心区域加权；亮部重点偏重较亮像素。这些是模拟测光，不复刻相机厂商的场景识别。</string>
+    <string name="text_be94f251df06" formatted="false">高光提升</string>
+    <string name="text_7b779407bf2a" formatted="false">增加高光区域的曝光，0 关闭。</string>
+    <string name="text_7db1278a003a" formatted="false">高光范围</string>
+    <string name="text_f3e9a635edb2" formatted="false">控制高光提升影响的范围。</string>
+    <string name="text_1eb299c92ae4" formatted="false">高光阈值</string>
+    <string name="text_67ca9c11ac9c" formatted="false">设置高光提升开始生效的亮度，以中灰以上的曝光档数表示。数值越高，只增强更亮的区域；不会恢复已经丢失的高光。</string>
+    <string name="text_35d9afa371aa" formatted="false">镜头柔化</string>
+    <string name="text_a19e8ff37742" formatted="false">模拟镜头模糊，数值单位为胶片平面的微米；0 关闭。</string>
+    <string name="text_1ecfa7339d9b" formatted="false">散射强度</string>
+    <string name="text_df421b8d77b5" formatted="false">胶片内部的光散射，与胶片光晕独立控制。</string>
+    <string name="text_27360875f5af" formatted="false">散射范围</string>
+    <string name="text_ff2824686803" formatted="false">控制胶片散射的范围。</string>
+    <string name="text_67eec7fc23cb" formatted="false">光晕颜色</string>
+    <string name="text_80a38a96456b" formatted="false">改变光晕各色层的分配，保留总强度。</string>
+    <string name="text_96dc8a905d84" formatted="false">光晕反射</string>
+    <string name="text_990e19e16b96" formatted="false">模拟胶片内部光的反射次数；更多次数会增加计算量。</string>
+    <string name="text_d8d39aadba89" formatted="false">反射衰减</string>
+    <string name="text_1b574ccb3dca" formatted="false">控制每次反射后的光晕衰减。</string>
+    <string name="text_901dc35db60c" formatted="false">光晕补偿</string>
+    <string name="text_3aa08a91a7b7" formatted="false">补偿光晕叠加带来的整体增亮；关闭时会保留这部分增亮。</string>
+    <string name="text_1ac007c4cc44" formatted="false">红层颗粒</string>
+    <string name="text_7ee55be9078d" formatted="false">调整此色层颗粒的面积比例，不是饱和度或半径。</string>
+    <string name="text_4178263a7543" formatted="false">绿层颗粒</string>
+    <string name="text_bf4fa10b9092" formatted="false">蓝层颗粒</string>
+    <string name="text_0932a36c793c" formatted="false">分层颗粒</string>
+    <string name="text_18a3261024a9" formatted="false">模拟胶片不同感光层的颗粒。</string>
+    <string name="text_032a197cbdc1" formatted="false">颗粒层数</string>
+    <string name="text_bec5aa3e1052" formatted="false">仅关闭分层颗粒时生效；更多层会增加计算量。</string>
+    <string name="text_10822132628a" formatted="false">颗粒柔化</string>
+    <string name="text_703b12844fd9" formatted="false">调整颗粒成像的模糊程度，以当前处理图像的像素为尺度；默认值为 0.65。</string>
+    <string name="text_7642681245ee" formatted="false">染料云范围</string>
+    <string name="text_697904f75f57" formatted="false">彩色胶片的颗粒外观与微小染料云有关。此项调整模型中的染料云扩散范围，数值是模型系数，不是实际长度。</string>
+    <string name="text_21fab82784d2" formatted="false">颗粒均匀度</string>
+    <string name="text_4e33ce2575ba" formatted="false">改变颗粒均匀度，同时保留原档案各色层比例。</string>
+    <string name="text_bf9837ba9fec" formatted="false">结团尺度</string>
+    <string name="text_9dcf8c3eacb2" formatted="false">模拟颗粒分布不均匀的范围，模型尺度以微米表示；不表示真实颗粒黏结成团。</string>
+    <string name="text_c95615254a6d" formatted="false">结团强度</string>
+    <string name="text_c58fafa690cd" formatted="false">调整颗粒分布不均匀的强弱，模型幅度以纳米表示；不是颗粒的实际位移，也不是百分比。</string>
+    <string name="text_9f9d03c837c2" formatted="false">胶片反差</string>
+    <string name="text_43e5e3a7d83d" formatted="false">调整胶片特性曲线的斜率，1 为档案原值。</string>
+    <string name="text_febdf6716d8a" formatted="false">显影抑制强度</string>
+    <string name="text_2ea45ddd3494" formatted="false">模拟显影抑制剂在同层和不同色层之间的影响。与“调整”分类中的“显影抑制”控制同一效果，两项底层系数相乘。界面刻度表示相对调整量，默认保留原效果。</string>
+    <string name="text_d16c830dd6b9" formatted="false">扩散距离</string>
+    <string name="text_5add1c5c18cc" formatted="false">显影抑制剂在模型中的扩散距离，单位为微米。</string>
+    <string name="text_b52f4f0476c1" formatted="false">同层影响</string>
+    <string name="text_57941e00a8a3" formatted="false">调节同一感光层内的显影相互影响。</string>
+    <string name="text_cad65c0c8168" formatted="false">层间影响</string>
+    <string name="text_44e260b2da07" formatted="false">调节不同感光层之间的显影相互影响。</string>
+    <string name="text_abc2bcc3191e" formatted="false">成像方式</string>
+    <string name="text_0001b8c5d8e1" formatted="false">印相经过所选相纸或电影拷贝片模型。反转片直扫得到正像；负片直扫不反相，会保留负片外观。</string>
+    <string name="text_6a36379e12c4" formatted="false">印相柔光</string>
+    <string name="text_31b721f36494" formatted="false">在印相阶段使用柔光滤镜；直扫时不生效。</string>
+    <string name="text_30e570b25ae8" formatted="false">印相柔光强度</string>
+    <string name="text_35e2151edfde" formatted="false">调节印相柔光的强度。</string>
+    <string name="text_884a4b4a9697" formatted="false">印相柔光范围</string>
+    <string name="text_c7fab338a3d7" formatted="false">调节印相柔光的扩散范围。</string>
+    <string name="text_cf53a2dacdff" formatted="false">自动中和</string>
+    <string name="text_8adffac5e954" formatted="false">使用胶片与相纸数据库的中和滤色。关闭后才能手调青、品红、黄滤色。</string>
+    <string name="text_3369277a249a" formatted="false">中和青色</string>
+    <string name="text_b7bf91e866a3" formatted="false">手动中和滤色；自动中和开启时由数据库决定。</string>
+    <string name="text_d74d21d856e9" formatted="false">中和品红</string>
+    <string name="text_402b841befae" formatted="false">中和黄色</string>
+    <string name="text_7304135c5662" formatted="false">印相反差</string>
+    <string name="text_4362dbdb902d" formatted="false">调整所选相纸或电影拷贝片模型的特性曲线斜率，1 为原配置值。</string>
+    <string name="text_6de4ace73d5d" formatted="false">高感光层反差</string>
+    <string name="text_d586866d607b" formatted="false">调整印相模型中高感光子层的特性曲线斜率；1 为原配置值。</string>
+    <string name="text_948834ada56f" formatted="false">中低感光层反差</string>
+    <string name="text_656f07b65ba1" formatted="false">同时调整印相模型中中感光和低感光两个子层的特性曲线斜率；1 为原配置值。</string>
+    <string name="text_350e57d09710" formatted="false">红层反差</string>
+    <string name="text_6aae1486c3af" formatted="false">调整印相模型中红色通道的特性曲线斜率；1 为原配置值。</string>
+    <string name="text_3ddbae16e340" formatted="false">绿层反差</string>
+    <string name="text_87dcffd01b93" formatted="false">调整印相模型中绿色通道的特性曲线斜率；1 为原配置值。</string>
+    <string name="text_bd27c57099e9" formatted="false">蓝层反差</string>
+    <string name="text_2d22a0ed76a2" formatted="false">调整印相模型中蓝色通道的特性曲线斜率；1 为原配置值。</string>
+    <string name="text_6dfc6e921ae6" formatted="false">显影剂耗竭</string>
+    <string name="text_a04be1d22c78" formatted="false">模拟显影剂耗竭对相纸或电影拷贝片特性曲线的影响，0 关闭；不是局部药液浓度模拟。</string>
+    <string name="text_05af46cca01b" formatted="false">印相曝光</string>
+    <string name="text_b2bf5f41cd45" formatted="false">改变相纸曝光，单位为档。</string>
+    <string name="text_2311d090000f" formatted="false">印相光源</string>
+    <string name="text_555843d03db0" formatted="false">选择印相所用光源。直扫模式不经过印相。</string>
+    <string name="text_6535e9c39c2a" formatted="false">印相补偿</string>
+    <string name="text_ecb5cb67b187" formatted="false">印相时补偿胶片曝光调整造成的明暗变化；实际效果也受印相曝光标准化设置影响。</string>
+    <string name="text_99e0c3ab5f84" formatted="false">曝光标准化</string>
+    <string name="text_a7d5a1c52f90" formatted="false">以中灰为参考统一印相曝光，不等同于分析整张照片自动测光。</string>
+    <string name="text_9d35c4a1f0c8" formatted="false">预曝光黄滤色</string>
+    <string name="text_e5180d3737f5" formatted="false">给印相预曝光单独设置黄色滤色，预曝光关闭时不生效。</string>
+    <string name="text_01894cdc79b1" formatted="false">预曝光品红滤色</string>
+    <string name="text_d08a02a1d17f" formatted="false">给印相预曝光单独设置品红滤色，预曝光关闭时不生效。</string>
+    <string name="text_1a8fd554611b" formatted="false">扫描柔化</string>
+    <string name="text_f45c23864553" formatted="false">模拟扫描成像的轻微模糊，以当前处理图像的像素为尺度；0 关闭。</string>
+    <string name="text_c08900693d28" formatted="false">扫描眩光</string>
+    <string name="text_eeaba0ff1bbe" formatted="false">模拟杂散光造成的发灰和反差降低，不是高光边缘的胶片光晕；0 关闭。</string>
+    <string name="text_f40402359b27" formatted="false">眩光起伏</string>
+    <string name="text_56b172e2135b" formatted="false">控制扫描眩光的局部起伏。</string>
+    <string name="text_65863fca9aa3" formatted="false">眩光柔化</string>
+    <string name="text_73339f074019" formatted="false">平滑扫描眩光的不均匀分布，以当前处理图像的像素为尺度。</string>
+    <string name="text_9c6c44727001" formatted="false">白场校正</string>
+    <string name="text_e4d3654ef963" formatted="false">校正扫描白场。直扫负片时不支持，需选择印相或反转片。</string>
+    <string name="text_391a41ace427" formatted="false">黑场校正</string>
+    <string name="text_a4922750f39f" formatted="false">校正扫描黑场。直扫负片时不支持，需选择印相或反转片。</string>
+    <string name="text_a4e50b0ef643" formatted="false">白场目标</string>
+    <string name="text_4d74dee109f4" formatted="false">白场校正的目标值，必须高于黑场。</string>
+    <string name="text_6654107ffef8" formatted="false">黑场目标</string>
+    <string name="text_f040ad2ae5b5" formatted="false">黑场校正的目标值，必须低于白场。</string>
+    <string name="text_646130986822" formatted="false">色域压缩</string>
+    <string name="text_192216b8cb6d" formatted="false">将超出 sRGB 色域的颜色压缩到可显示范围；宽色域导出会自动关闭。</string>
+    <string name="text_6f16843acab7" formatted="false">GPU加速</string>
+    <string name="text_8d80b85bbd7f" formatted="false">自动尝试 Adreno 部分密度阶段加速，其余阶段仍在 CPU。不可用时回退 CPU，不保证更快。</string>
+    <string name="text_683099bf5b6c" formatted="false">胶片默认</string>
+    <string name="text_789f61dbfcc7" formatted="false">红色</string>
+    <string name="text_d5234258fd84" formatted="false">琥珀色</string>
+    <string name="text_574ce385b86d" formatted="false">中性</string>
+    <string name="text_3fd47edce45b" formatted="false">关闭</string>
+    <string name="text_2eb88a373a7f" formatted="false">柔光</string>
+    <string name="text_adb439547ac9" formatted="false">黑柔</string>
+    <string name="text_3b339febf98c" formatted="false">白柔</string>
+    <string name="text_aaf1818f550f" formatted="false">电影柔光</string>
+    <string name="text_499e8c373806" formatted="false">印相</string>
+    <string name="text_b5ef62893e01" formatted="false">直扫</string>
+    <string name="text_7eb336e42cb5" formatted="false">自动</string>
+    <string name="text_8da97ddda990" formatted="false">开启</string>
+    <string name="text_f65c42a2540b" formatted="false">调整</string>
+    <string name="text_83219449b5eb" formatted="false">光效</string>
+    <string name="text_b82bd426d236" formatted="false">颗粒</string>
+    <string name="text_1b5d3d55ef48" formatted="false">显影</string>
+    <string name="text_c2a291b64f6b" formatted="false">扫描</string>
+    <string name="text_ec00bc673f05" formatted="false">选择相纸</string>
+    <string name="text_3691a3aa4ece" formatted="false">相纸 / 印相风格</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · 电影拷贝片</string>
+    <string name="text_3b789c2037e2" formatted="false"> · 彩色相纸</string>
+    <string name="text_7b528c395978" formatted="false">135 构图</string>
+    <string name="text_e76a25844aa5" formatted="false">重新构图</string>
+    <string name="text_61d5477ed69a" formatted="false">横 135</string>
+    <string name="text_cad49035a99d" formatted="false">竖 135</string>
+    <string name="text_4b1db520af46" formatted="false">原图</string>
+    <string name="text_d1047eed5dd5" formatted="false">自由</string>
+    <string name="text_36f33adaf094" formatted="false">确认</string>
+    <string name="text_f02806d5dc08" formatted="false">构图</string>
+    <string name="text_9634fb0832be" formatted="false">参数</string>
+    <string name="text_06ea736a7066" formatted="true">调整%1$s</string>
+    <string name="text_c0b3fbff51cc" formatted="false">完成</string>
+    <string name="text_657a8c2de63c" formatted="false">，已选择</string>
+    <string name="text_61ea0b0d9ed0" formatted="false">胶片说明</string>
+    <string name="text_74b054e27203" formatted="false">边框水印</string>
+    <string name="text_369143830b0b" formatted="false">边框水印，固定第25格</string>
+    <string name="text_4b96acdd5e96" formatted="false">负片白孔</string>
+    <string name="text_6d2683a65646" formatted="false">负片白孔，反转片始终白孔</string>
+    <string name="text_ffd510bae3ad" formatted="false">%+.2f 档</string>
+    <string name="text_5b1b0d1d80a6" formatted="false">%.2f 倍</string>
+    <string name="text_b6a198a1e6c7" formatted="false">%.2f 像素</string>
+    <string name="text_4e3db4596715" formatted="true">%1$s说明</string>
+    <string name="text_de32e20193ad" formatted="false">知道了</string>
+    <string name="text_f94fbbaa8f93" formatted="true">重置%1$s</string>
+    <string name="text_f2961369ae98" formatted="false">恢复当前胶卷的预设参数？</string>
+    <string name="text_c265e02073e5" formatted="false">恢复曝光、光效、颗粒、相纸等调色参数，保留构图与水印设置。</string>
+    <string name="text_e0534b8a4e46" formatted="false">恢复</string>
+    <string name="text_d1c4835b23ed" formatted="false">\n透明区域以白色合成</string>
+    <string name="text_c96f06693217" formatted="true">%1$s\n%2$s × %3$s\n%4$s\n%5$s KB\n\n本机临时副本，不修改原图。预览为 sRGB SDR；导出可选色彩空间，保留支持的原始拍摄元信息（含原有 GPS）；修改时间更新为导出时刻。私有相机字段与旧缩略图不复制。%6$s%7$s\n\n双指缩放，双击恢复或放大。\n\n放大预览：%8$s%9$s</string>
+    <string name="text_557e29365b35" formatted="true">\n预览尺寸：%1$s × %2$s</string>
+    <string name="text_8824021eb6d7" formatted="false">恢复缩放</string>
+    <string name="text_685f5b4ebdf4" formatted="false">胶片与相纸</string>
+    <string name="text_70e86d94f885" formatted="true">由本机光谱胶片与相纸模型计算，不是套一层颜色滤镜。\n\n配备 %1$s 种拍摄胶片、%2$s 种相纸 / 电影拷贝片档案。反转片默认直扫，负片默认印相。名称用于识别测量档案，不表示品牌合作。\n\n已完成部分云端算法对照与代码测试，尚未经安卓真机运行验证；大图处理可能较慢。\n\n原始项目：Andrea Volpato / spektrafilm。程序依据 GPL-3.0，胶片档案依据 CC BY-SA 4.0。完整声明随应用附带。</string>
+    <string name="text_038ad816c53f" formatted="false">开源许可</string>
+    <string name="text_070a076df57a" formatted="false">程序许可 · GPL-3.0</string>
+    <string name="text_42cec9151c59" formatted="false">胶片档案 · CC BY-SA 4.0 与署名</string>
+    <string name="text_0b3a85a2a436" formatted="false">胶片引擎 · Rust 第三方依赖声明</string>
+    <string name="text_334ca499fe26" formatted="false">图像编解码 · rawler 与其他依赖声明</string>
+    <string name="text_8150d89b6537" formatted="false">齿边素材 · 真实资料参考绘制与署名</string>
+    <string name="text_1a485ac7a998" formatted="false">胶片模型来自 Andrea Volpato 的 spektrafilm 及其 Rust 移植工作；界面与图像处理接线作了修改。程序按 GPL-3.0 提供，胶片资料按 CC BY-SA 4.0 提供。RAW 解码使用 rawler（LGPL-2.1），各依赖保留各自许可。完整对应源码及构建材料随安装包一起提供。法律文本保留原文。</string>
+    <string name="text_200ae4c1c12e" formatted="false">此声明暂时无法读取。请查看安装包随附的对应源码与许可证，不影响照片保存在本机。</string>
+    <string name="text_564eb6dfeaca" formatted="false">开源许可与署名</string>
+    <string name="text_d6d466c03f8e" formatted="false">从哪里导入</string>
+    <string name="text_543b8fb9aa67" formatted="false">从相册选择照片</string>
+    <string name="text_85534f27f5d9" formatted="false">从文件选择照片 / DNG</string>
+    <string name="text_c69504e36552" formatted="true">原片 %1$s × %2$s\nSDR · 保存新文件，不覆盖原图</string>
+    <string name="text_42a85b8d8038" formatted="false">保存格式</string>
+    <string name="text_b4a83add8f8c" formatted="false">JPEG · 通用分享</string>
+    <string name="text_82aa50547f13" formatted="false">PNG · 无损压缩</string>
+    <string name="text_ba4b003cfd7c" formatted="false">TIFF · 16 位后期</string>
+    <string name="text_7a6dd5919b20" formatted="false">JPEG 体积较小，适合相册与分享。</string>
+    <string name="text_8d15e79b0441" formatted="false">PNG 无损压缩本次 8 位输出；不代表保留原 RAW、HDR 或透明通道。</string>
+    <string name="text_128a704b1837" formatted="false">JPEG 质量 · 95</string>
+    <string name="text_8cfce0f46112" formatted="false">JPEG 质量，95</string>
+    <string name="text_7190cce2fd40" formatted="true">JPEG 质量 · %1$s</string>
+    <string name="text_59df7ac272da" formatted="true">JPEG 质量，%1$s</string>
+    <string name="text_6e539699fdb0" formatted="false">16 位 TIFF 适合继续调色，文件较大。保存在“下载/暗房”，部分相册无法显示；不会把 8 位原片恢复成 RAW。</string>
+    <string name="text_20f14d321daa" formatted="false">输出色彩空间</string>
+    <string name="text_df0877ff9634" formatted="false">一般分享选 sRGB。宽色域输出需要支持色彩管理的查看器；预览仍按 sRGB 显示。选择宽色域时自动关闭仅适用于 sRGB 的色域压缩。</string>
+    <string name="text_4a7b0d4654d7" formatted="false">照片尺寸</string>
+    <string name="text_f60066ec4bbf" formatted="false">原尺寸</string>
+    <string name="text_6bea77acefb3" formatted="false">标准</string>
+    <string name="text_d1ee60a322e5" formatted="true">更清晰 · %1$s</string>
+    <string name="text_1018b7d83c8b" formatted="true">原尺寸 · %1$s</string>
+    <string name="text_6d821f237f2f" formatted="false">开启齿边后，照片按当前 135 构图裁切并附加固定外框；原照片文件不变。</string>
+    <string name="text_aabd69bfed16" formatted="false">较小尺寸按比例缩小，不裁剪，不放大原图。</string>
+    <string name="text_597fecd88b25" formatted="false">原尺寸处理可能需要数 GiB 临时空间；空间不足会停止，不会暗中缩图。</string>
+    <string name="text_c767b0ebc50a" formatted="false">全部在本机处理。加入导出列表后，可继续编辑、离开页面或锁屏；后台处理仍受系统限制，可在导出列表查看进度、暂停或取消。</string>
+    <string name="text_cef4e28b1774" formatted="false">导出新照片</string>
+    <string name="text_d14f6e1f0a6f" formatted="false">保存新照片</string>
+    <string name="text_e8e6e48f180e" formatted="false">编辑习惯</string>
+    <string name="text_2413c386102e" formatted="false">导入新照片时重置参数</string>
+    <string name="text_712623100497" formatted="false">开启后恢复当前胶卷预设；关闭则沿用调色参数。新照片始终重新构图。</string>
+    <string name="text_7daa923cc7e5" formatted="false">启动时恢复上次照片</string>
+    <string name="text_5f08fa1da11e" formatted="false">仅影响下次重新启动，不会清除当前编辑或后台导出。</string>
+    <string name="text_84a61a56ecc6" formatted="false">选择最近多久的日志</string>
+    <string name="text_b46da08445e2" formatted="true">最近 %1$s 分钟</string>
+    <string name="text_45809131f9a2" formatted="false">自定义分钟数</string>
+    <string name="text_90d8b0eab93d" formatted="false">1–1440 分钟</string>
+    <string name="text_75a879d2307c" formatted="false">自定义最近分钟数，1到1440</string>
+    <string name="text_1fdccd5c32ea" formatted="false">导出为一个 UTF-8 .txt 文件，包含诊断摘要与完整的脱敏事件详情（参数、尺寸、耗时与内存）。不会包含照片、文件名、GPS、路径或账号信息。只有你选择分享目标后才会发送。</string>
+    <string name="text_546989732ef0" formatted="false">最多保留24小时，容量不足时会更早覆盖；实际覆盖范围会写在中文摘要中。未正常结束的操作只是线索，不代表一定发生崩溃。</string>
+    <string name="text_d09e99fe27d8" formatted="false">分享 TXT 日志</string>
+    <string name="text_dcc63884dad1" formatted="false">请输入1到1440之间的整数</string>
+    <string name="text_f0922cbcaaa2" formatted="false">准备诊断日志</string>
+    <string name="text_13e5bfcd9568" formatted="true">正在整理最近 %1$s 分钟的脱敏 TXT 日志…</string>
+    <string name="text_2cd0039fff3b" formatted="true">分享最近%1$s分钟日志</string>
+    <string name="text_b6ad51ea5ed7" formatted="false">暂时无法分享日志</string>
+    <string name="text_f2df43642219" formatted="false">请检查本机空间和可用的分享应用后重试。照片不会被发送。</string>
+    <string name="text_ad1d18f9d3e5" formatted="true">135 构图 + 齿边 → %1$s × %2$s</string>
+    <string name="text_96fa923afb1a" formatted="true">%1$s × %2$s · 此尺寸暂不支持齿边</string>
+    <string name="text_6e8f80256c84" formatted="true">%1$s × %2$s · 齿边素材尚不可用</string>
+    <string name="text_ff27ed115be8" formatted="false">加齿边后的尺寸超过 JPEG / TIFF 当前8400万像素上限；未缩小原图。请关闭齿边、选择较小尺寸或改用 PNG。</string>
+    <string name="text_022fe563baa4" formatted="false">可用内存不足，无法完成当前构图处理</string>
+    <string name="text_8f256a031a2d" formatted="false">齿边预览尺寸超出上限</string>
+    <string name="text_5c82a6b4a003" formatted="false">齿边素材与任务固定几何不一致</string>
+    <string name="text_1384551c8e44" formatted="false">胶片齿边尚未开放</string>
+    <string name="text_e47ae3f26387" formatted="false">无效线性照片数据</string>
+    <string name="text_5bba0c1f8416" formatted="false">最终构图预览尺寸超出上限</string>
+    <string name="text_bec36dff07be" formatted="false">原导出任务的齿边素材版本不可用；不会替换成其他素材</string>
+    <string name="text_d1c5599a9bff" formatted="false">齿边任务几何与固定素材不一致</string>
+    <string name="text_5c0b4e508a52" formatted="false">边条必须显式合成到已核验底色，不能隐式丢弃透明度</string>
+    <string name="text_a63185c8bf65" formatted="false">照片比例不足以容纳固定齿边文字；不会裁切或拉伸素材</string>
+    <string name="text_b64913db4f1d" formatted="false">导出工作目录校验失败，未保存照片；请更新应用后重试。</string>
+    <string name="text_df30ae362f2b" formatted="false">当前本机可用内存不足，请关闭其他应用后重试；没有缩小原图。</string>
+    <string name="text_2c28d802618b" formatted="false">本机图像编解码组件不可用，请重新安装完整安装包。</string>
+    <string name="text_41db58446aa4" formatted="false">无法启动本机图像编解码组件。</string>
+    <string name="text_93313da164ac" formatted="false">当前本机可用内存不足，请稍后重试；没有缩小原图。</string>
+    <string name="text_c2145ea571e4" formatted="false">本机编解码已取消</string>
+    <string name="text_0105eb1c06a7" formatted="false">这张照片的编码类型暂不支持。DNG 当前支持已验证的 16 位无压缩及无损 JPEG 压缩类型，不使用内嵌预览代替 RAW。</string>
+    <string name="text_46ac8768982e" formatted="false">这张 DNG 包含暂不支持的必需校正步骤；未忽略校正，也未使用内嵌预览代替 RAW。</string>
+    <string name="text_c946e8a02212" formatted="false">这张 DNG 的相机校准矩阵暂不支持，未使用猜测颜色代替。</string>
+    <string name="text_19b3b0255d08" formatted="false">本机照片读写失败，请检查可用存储空间后重新选择原文件。</string>
+    <string name="text_199d9706e7a1" formatted="false">未能读取完整、有效的图像数据，请重新选择原文件；目前不能确认文件是否损坏。</string>
+    <string name="text_e92a0c3cbaef" formatted="false">暂不支持此输出色彩空间，未更改颜色标签代替转换。</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">最终导出尺寸超过当前 8400 万像素范围。</string>
+    <string name="text_5c55db3ba035" formatted="false">这张照片超过编解码组件当前 5200 万像素处理范围。</string>
+    <string name="text_6bceec6d29d6" formatted="false">本机可用空间不足，处理未完成；原照片未修改。</string>
+    <string name="text_d171c3322a9c" formatted="false">当前本机内存预算不足，无法安全处理这张照片。</string>
+    <string name="text_56858cdae70f" formatted="false">这张 RAW 的颜色校准数据暂不支持，未使用猜测颜色代替。</string>
+    <string name="text_aff865b41066" formatted="false">本机图像编解码未完成，请分享诊断日志以便确认原因；原照片未修改。</string>
+    <string name="text_62f3e125a3ce" formatted="false">此 DNG 的部分可选镜头校正未应用，可能保留暗角或畸变。</string>
+    <string name="text_95665116d521" formatted="false">原始数据导入，使用Filmroom胶片色彩，不复刻相机直出。</string>
+    <string name="text_d2d161102e41" formatted="false">未应用相机内置明暗显示曲线。</string>
+    <string name="text_99981a4927ac" formatted="false">采用基础 RAW 显色，未应用文件附带的色相／饱和度校正表，颜色可能与相机相册不同。</string>
+    <string name="text_5f37317ec18e" formatted="false">RAW 解码元数据不完整，未继续处理。</string>
+    <string name="text_34f1a903d47d" formatted="true">暗房_诊断_%1$s分钟_%2$s_%3$s.txt</string>
+    <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n编码：UTF-8；单个文本文件（非 ZIP）\n\n=== 中文摘要 ===\n</string>
+    <string name="text_7af205e83135" formatted="false">\n\n=== 完整脱敏事件明细 ===\n</string>
+    <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
+    <string name="text_60ef08049a72" formatted="true">应用：Filmroom；版本代码：%1$s；引擎构建：4；接口：1\nAndroid API：%2$s；ABI：%3$s；处理器数：%4$s；Java 堆上限：%5$s 字节；内存档位：%6$s MB</string>
+    <string name="text_5c1712cb2d38" formatted="false">本次运行</string>
+    <string name="text_b1336f82fea4" formatted="false">恢复编辑</string>
+    <string name="text_5a9df9227ec6" formatted="false">预览渲染</string>
+    <string name="text_9ced68312ac6" formatted="false">原尺寸解码</string>
+    <string name="text_71cab785c5d9" formatted="false">检查导出预算</string>
+    <string name="text_0a3bbae44150" formatted="false">原尺寸渲染</string>
+    <string name="text_2fa4917d052e" formatted="false">导出编码</string>
+    <string name="text_73fff6a5d6e6" formatted="false">诊断分享</string>
+    <string name="text_f8281de2df36" formatted="false">临时文件清理</string>
+    <string name="text_d2bb025a2e51" formatted="false">开始</string>
+    <string name="text_4077a1f6397d" formatted="false">读取图像信息</string>
+    <string name="text_56e09dd8e1fc" formatted="false">分块解码</string>
+    <string name="text_77f67305d365" formatted="false">进入本地引擎</string>
+    <string name="text_2bd9ae163aa5" formatted="false">本地处理步骤</string>
+    <string name="text_98407f5c987e" formatted="false">本地引擎返回</string>
+    <string name="text_222b0d3c08c4" formatted="false">开始编码</string>
+    <string name="text_9e388ac3f491" formatted="false">逐行编码</string>
+    <string name="text_2560088669b6" formatted="false">创建待写入照片</string>
+    <string name="text_6ef11d1e8c02" formatted="false">照片保存完成</string>
+    <string name="text_2625bda74112" formatted="false">请求取消</string>
+    <string name="text_d43461bfe6fc" formatted="false">清理未完成文件</string>
+    <string name="text_ae173945fb80" formatted="false">处理失败</string>
+    <string name="text_2c4c4e5e32fa" formatted="false">上次运行未正常结束</string>
+    <string name="text_c7b24e7997e9" formatted="false">结束</string>
+    <string name="text_df800a26392c" formatted="false">Filmroom诊断｜版本代码 </string>
+    <string name="text_66e4acfbd6bd" formatted="false">｜最近 </string>
+    <string name="text_5b3a75c53bbd" formatted="false"> 分钟\n</string>
+    <string name="text_2428420e407f" formatted="false">共 </string>
+    <string name="text_e8a56d1c0e70" formatted="false"> 条事件。日志最多保留 24 小时、1 MiB；达到容量后会轮替。\n</string>
+    <string name="text_366712d2d80e" formatted="false">实际首末记录：</string>
+    <string name="text_8727f227e2c6" formatted="false"> 至 </string>
+    <string name="text_0e898ec43b0b" formatted="false">；不是连续监测。\n</string>
+    <string name="text_fa1c6dd0bfc3" formatted="false">本次运行观测到的丢弃：过期 </string>
+    <string name="text_6e94c47fde22" formatted="false">，容量轮替 </string>
+    <string name="text_4af5bd6fb80e" formatted="false">，损坏或未写完 </string>
+    <string name="text_e9d6840052fc" formatted="false">，未来时间不确定 </string>
+    <string name="text_1701c7739625" formatted="false">。跨运行累计未知。\n</string>
+    <string name="text_5bf7bab64ce3" formatted="false">最近的失败/中断记录：</string>
+    <string name="text_e779813b6cc2" formatted="false">最近本地步骤：</string>
+    <string name="text_e5b01c51fa19" formatted="false">；进度计数仅代表当前遍，不是整张照片完成比例。\n</string>
+    <string name="text_4d7c038cbc95" formatted="false">上次操作未正常结束，可能被系统回收、强制关闭或崩溃；不是已捕获的崩溃报告。\n</string>
+    <string name="text_7d01902a70ae" formatted="false">所选时间内没有记录，不能据此判断是否发生过错误。\n</string>
+    <string name="text_aebe06f7e024" formatted="false">含跨运行记录：其时间依赖系统 UTC 时钟，调整系统时间可能影响范围。\n</string>
+    <string name="text_a89d10b60775" formatted="false">部分记录写入失败，内容可能不完整。\n</string>
+    <string name="text_a6a08f5857fd" formatted="false">仅含技术事件和受限数值，不含照片、名称、定位、文件路径或异常原文。分享副本按 24 小时保留策略在下次打开或分享时清理；本次运行用单调时钟防止时间跳变提前删除。系统清理缓存、卸载或跨运行时钟改变可能影响可用时间，接收方请及时保存。</string>
+    <string name="text_1c751a529433" formatted="false">Filmroom诊断 · 过去 </string>
+    <string name="text_79aa64a23d25" formatted="false">生成时间（UTC）：</string>
+    <string name="text_02e29a8a9e56" formatted="false">窗口：</string>
+    <string name="text_73ba3e48606b" formatted="false"> ≤ 事件时间 ≤ </string>
+    <string name="text_4b5117d9bd17" formatted="false">符合窗口的事件：</string>
+    <string name="text_e52827dd4ad4" formatted="false">；跨运行事件：</string>
+    <string name="text_c8768200958b" formatted="false">实际记录首末时间：</string>
+    <string name="text_bf7b123c114d" formatted="false">；事件之间并非连续监测。\n</string>
+    <string name="text_ccc4edebf400" formatted="false">本次运行可观测的丢弃计数：过期=</string>
+    <string name="text_1a58fbf44b39" formatted="false">，容量轮替=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">，损坏/未写完=</string>
+    <string name="text_338aa9ce6405" formatted="false">，未来时间无法确认=</string>
+    <string name="text_b028650697a5" formatted="false">。跨运行累计不可确定。\n</string>
+    <string name="text_bbbde15a1296" formatted="false">仅在本机记录，点击分享后由你选择接收应用；本应用不会上传。\n</string>
+    <string name="text_e78eb8f72096" formatted="false">保留：最多最近 24 小时、1 MiB 事件记录；容量满后较旧记录会被替换。\n</string>
+    <string name="text_0cbe74b0ae0a" formatted="false">本次运行按单调时钟筛选；跨运行只能按 UTC 墙钟筛选，系统时间调整可能造成误差。\n</string>
+    <string name="text_f068c05d35bf" formatted="false">记录 UTC 与单调时间均列出；筛选 UTC 是以本次快照时刻回推的时间。\n</string>
+    <string name="text_de9b9a98a215" formatted="false">不含照片内容、文件名、路径、URI、定位、EXIF、账户、密钥、异常原文或设备唯一标识。\n</string>
+    <string name="text_9e46400a4c40" formatted="false">不捕获原生崩溃堆栈；只能根据未结束记录判断上次操作可能异常中断。\n</string>
+    <string name="text_d93adff8dfc6" formatted="false">上次操作未正常结束，可能被系统回收、强制关闭或崩溃；无法据此确定原因。\n</string>
+    <string name="text_f51871fbed21" formatted="false">警告：部分诊断记录未能写入本机存储，报告可能不完整。\n</string>
+    <string name="text_fd756ca7b128" formatted="false">所选时间内没有可分享的诊断事件；这不代表期间没有发生错误。\n</string>
+    <string name="text_42892fd91f62" formatted="false">\n\n事件（技术代码；不含自由文本）：\n</string>
+    <string name="text_f3650cb3e121" formatted="false">筛选UTC=</string>
+    <string name="text_a6225820802e" formatted="false"> 记录UTC=</string>
+    <string name="text_af560d1154f3" formatted="false"> 单调ms=</string>
+    <string name="text_0d863965cf79" formatted="false"> 运行=</string>
+    <string name="text_da3f4b1e2ad6" formatted="false"> 序号=</string>
+    <string name="text_b3660b2a6a62" formatted="false"> 操作=</string>
+    <string name="text_e564bb482cfa" formatted="false"> 结果=</string>
+    <string name="text_815ce3797ff8" formatted="false"> 错误代码=</string>
+    <string name="text_0a9cd9640dfe" formatted="false">诊断时间范围必须是 1–1440 分钟</string>
+    <string name="text_652bd8e2b42a" formatted="false">准备胶片资料</string>
+    <string name="text_7b5d2a09babd" formatted="false">自动测光</string>
+    <string name="text_6ff3e6e82562" formatted="false">高光增强</string>
+    <string name="text_99ccd913c2c3" formatted="false">镜头模糊</string>
+    <string name="text_28dfadf63de0" formatted="false">颗粒团簇</string>
+    <string name="text_bab826d7cea1" formatted="false">镜头柔光</string>
+    <string name="text_ee5e1f321d0c" formatted="false">胶片受光</string>
+    <string name="text_e29e511b19c8" formatted="false">胶片散射</string>
+    <string name="text_0caa7cb6bf14" formatted="false">胶片光晕</string>
+    <string name="text_a3a8c53854e3" formatted="false">转换为对数曝光量</string>
+    <string name="text_e010cca5a693" formatted="false">形成胶片密度</string>
+    <string name="text_c3d62fb6dc52" formatted="false">显影抑制扩散</string>
+    <string name="text_63dc46ef8527" formatted="false">胶片显影</string>
+    <string name="text_6817024599e0" formatted="false">生成颗粒</string>
+    <string name="text_b6ccbb59ff43" formatted="false">模拟染料云</string>
+    <string name="text_465b9d003092" formatted="false">颗粒成像</string>
+    <string name="text_6534faa7428f" formatted="false">相纸与扫描</string>
+    <string name="text_6fb121b28fdd" formatted="false">扫描锐化</string>
+    <string name="text_93b5664a205f" formatted="false">处理完成</string>
+    <string name="text_94f31f970642" formatted="false">请选择 1–1440 分钟的诊断范围。</string>
+    <string name="text_235ff46182e0" formatted="false">诊断记录尚未初始化，请重新打开应用后重试。</string>
+    <string name="text_2bec26a5c8e2" formatted="false">无法准备诊断分享目录。</string>
+    <string name="text_78d664a50890" formatted="false">无法创建诊断分享文件。</string>
+    <string name="text_c6bddcd61e6b" formatted="true">%1$s\n第 %2$s/7 步</string>
+    <string name="text_d23207c07a82" formatted="false">准备照片</string>
+    <string name="text_ef1ae2c65edd" formatted="false">计算曝光</string>
+    <string name="text_6159fa0e2bb0" formatted="false">处理光效</string>
+    <string name="text_3b490fba1ffc" formatted="false">印相和扫描</string>
+    <string name="text_6c41da9a3395" formatted="false">编码保存</string>
+    <string name="text_af91aee46a69" formatted="false">清理临时文件</string>
+    <string name="text_30fe814c4574" formatted="true"> · 本遍 %1$s%%</string>
+    <string name="text_6c9f62a53f72" formatted="false">未安装本地引擎</string>
+    <string name="text_a4ca69371996" formatted="false">本地胶片引擎尚未就绪</string>
+    <string name="text_6c0813b39bb5" formatted="false">已取消本地处理</string>
+    <string name="text_d5113f613aad" formatted="false">这张照片超出当前处理范围，请选择标准尺寸</string>
+    <string name="text_8bbca1842388" formatted="false">当前尺寸或光晕范围超出本机处理预算。请减小光晕范围或选择标准尺寸；没有缩小原图。</string>
+    <string name="text_e46692a12a54" formatted="false">当前胶片或相纸档案不可用，请换一个档案后重试</string>
+    <string name="text_fda570c695c8" formatted="false">当前调整参数不可用，请重置调整后重试</string>
+    <string name="text_368306bc6068" formatted="false">本机临时空间不足，请选择标准尺寸导出</string>
+    <string name="text_77f7a824adc1" formatted="false">处理结果不完整，未保存照片</string>
+    <string name="text_9695c3a1a61a" formatted="false">导出工作目录校验失败，请更新应用后重试；无需缩小照片</string>
+    <string name="text_4e906ddf82d9" formatted="false">本地胶片处理未完成，请重试；仍失败时请分享诊断日志</string>
+    <string name="text_0a9765e80ef5" formatted="false">本地胶片引擎尚未就绪；可导入查看原片，效果与导出暂不可用。</string>
+    <string name="text_4c0c1ba5f426" formatted="false">无法准备本地胶片资料</string>
+    <string name="text_c7b93a82c0c6" formatted="false">图像超过此版本处理尺寸</string>
+    <string name="text_ba4205340595" formatted="false">本地胶片资料无法加载</string>
+    <string name="text_1c50d5872b77" formatted="false">引擎返回无效颜色</string>
+    <string name="text_ed15a09dd74c" formatted="false">当前版本最多导出4096像素长边</string>
+    <string name="text_84ccf8f71d0d" formatted="false">处理结果读取中断</string>
+    <string name="text_0db55ca8317f" formatted="false">处理结果包含无效颜色</string>
+    <string name="text_3ac8122c5f15" formatted="false">原片尺寸超出安全处理范围</string>
+    <string name="text_ed2785856a9e" formatted="false">原片临时数据不完整，请重新导入</string>
+    <string name="text_a7c774a3bd73" formatted="false">导出数据不完整，未保存照片</string>
+    <string name="text_84fe057f0854" formatted="false">Bitmap 导出只支持 sRGB；宽色域请使用原始线性导出路径</string>
+    <string name="text_236748b3f384" formatted="false">本地光谱资料校验失败</string>
+    <string name="text_bb3e34642ce2" formatted="false">本地光谱资料路径无效</string>
+    <string name="text_837fdb22a021" formatted="false">无法准备本地光谱资料</string>
+    <string name="text_8d11010b3a7b" formatted="false">无法安装本地光谱资料</string>
+    <string name="text_101df955ba5b" formatted="false">裁切队列快照不一致</string>
+    <string name="text_eca4546685f7" formatted="false">构图队列快照不一致</string>
+    <string name="text_02d5c30befc6" formatted="false">齿边队列快照不完整</string>
+    <string name="text_31d5184a31ac" formatted="false">任务记录损坏，请取消后重新添加照片</string>
+    <string name="text_9652b13c1fd3" formatted="false">处理已中断，点击继续；未完成阶段将重新计算</string>
+    <string name="text_e56de4bd4f96" formatted="false">添加未完成，请取消此项后重新添加照片</string>
+    <string name="text_f5923a5ffaa3" formatted="false">无法持久保存导出进度</string>
+    <string name="text_70d544a20512" formatted="false">导出记录丢失</string>
+    <string name="text_704cb65572bc" formatted="false">添加操作已结束</string>
+    <string name="text_0b58e0113da6" formatted="false">正在取消</string>
+    <string name="text_b050569cce69" formatted="false">进度记录未能保存，请释放空间后继续</string>
+    <string name="text_83b39ce89c4f" formatted="false">不支持的最终构图记录版本</string>
+    <string name="text_bb72ee12ba8b" formatted="false">队列已暂停，点击继续</string>
+    <string name="text_ff3d626e1865" formatted="false">已取消，部分暂存待清理</string>
+    <string name="text_29367795aabb" formatted="false">无法清理中断的导出文件</string>
+    <string name="text_25d728831d11" formatted="false">队列照片</string>
+    <string name="text_ba513cd4be11" formatted="false">无法清理中断的输入暂存</string>
+    <string name="text_e0cc395f6b84" formatted="false">照片已保存</string>
+    <string name="text_598870cac16e" formatted="false">已保存，部分暂存待清理</string>
+    <string name="text_3df4e91da12d" formatted="false">处理已暂停，可继续；未完成阶段会重新计算</string>
+    <string name="text_801eccbf436d" formatted="false">恢复数据不完整，无法继续此任务。请取消后重新添加照片；不会静默删除检查点重算。</string>
+    <string name="text_a3290bb56b7f" formatted="false">空间不足，任务已暂停。请释放空间后继续，或取消并选择较小尺寸重新添加。</string>
+    <string name="text_c42a34760d85" formatted="false">导出未完成，保留任务以便重试</string>
+    <string name="text_84d1e185592a" formatted="false">内存不足，任务已保留；可稍后重试或取消</string>
+    <string name="text_31912f0eff0f" formatted="false">启动清理未能完成。请返回编辑器重试清理，再到导出列表继续。</string>
+    <string name="text_89e2a57fd12b" formatted="false">照片导出</string>
+    <string name="text_13a6efbdb2f3" formatted="false">后台胶片处理进度</string>
+    <string name="text_22db9e335155" formatted="false">准备导出队列</string>
+    <string name="text_7faeabb91a25" formatted="false">Filmroom · 后台导出</string>
+    <string name="text_8d12fc0d4eb2" formatted="false">暂停</string>
+    <string name="text_f515de6af876" formatted="false">HEIC 容器数据不完整或不一致。</string>
+    <string name="text_0f079bb732f5" formatted="false">此 HEIC 变体暂不支持；当前仅处理已验证的 sRGB / Display P3 SDR 色彩子集及静态 8 位 HEVC 主图；不支持未知 ICC、辅助图、镜像、裁切或 HDR。</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEIC 元数据或尺寸超过安全处理范围。</string>
+    <string name="text_19e0ce29db17" formatted="false">HEIC ICC 色彩数据不完整或不一致。</string>
+    <string name="text_da9f421ae9ad" formatted="false">此 HEIC ICC 色彩配置暂不支持；未将未知或 HDR 色彩标成 sRGB。</string>
+    <string name="text_9cd4df0f9933" formatted="false">HEIC ICC 色彩数据超过安全读取范围。</string>
+    <string name="text_56e47360aaca" formatted="false">这张 HEIC 超过当前 5200 万编码像素安全范围；没有缩小原图。</string>
+    <string name="text_9ff6012fdde9" formatted="false">这张 HEIC 的原尺寸解码预算超过安全范围；没有缩小原图。</string>
+    <string name="text_58a07dbdf8d7" formatted="false">本机未正确识别这张 HEIC 的源色彩配置，未猜测颜色或直接改成 sRGB 标签。</string>
+    <string name="text_986742c74398" formatted="false">本机未能确认 HEIC 的 8 位 sRGB SDR 底图；未应用 HDR 增益图或自动色调映射。</string>
+    <string name="text_8b96428c13f4" formatted="false">本机 HEIC 解码器报告的主图尺寸或方向不一致，未使用缩略图代替原图。</string>
+    <string name="text_1e6cd3983af1" formatted="false">本机未能按原尺寸 sRGB SDR 解码这张 HEIC，未进行隐式缩图或 HDR 转换。</string>
+    <string name="text_dfe135051811" formatted="false">本机系统没有可用的 HEIC 解码器；原照片未修改。</string>
+    <string name="text_ba94a97c604b" formatted="false">空间不足，无法保存 HEIC 原尺寸工作数据；没有缩小原图。</string>
+    <string name="text_f1632bf9ae5b" formatted="false">当前本机可用内存不足以安全解码这张原尺寸 HEIC；没有缩小原图，请稍后再试。</string>
+    <string name="text_389695202ee7" formatted="false">本机 HEIC 解码器内存不足，已停止；没有缩小原图。</string>
+    <string name="text_86c64f79957e" formatted="false">sRGB 输出不能混用其他色彩配置</string>
+    <string name="text_7e611ddedc63" formatted="false">所选色域缺少色彩配置文件</string>
+    <string name="text_7f988b809315" formatted="false">色彩配置文件无效</string>
+    <string name="text_9f7eee77bb73" formatted="false">色彩配置文件与所选色域不匹配</string>
+    <string name="text_a5d702fd2654" formatted="false">图像包含无效的颜色数值</string>
+    <string name="text_7d7e6c47e8d9" formatted="false">不支持所选输出色域</string>
+    <string name="text_62634ce08e7b" formatted="false">原始拍摄元信息不可用；未补造拍摄时间</string>
+    <string name="text_5de5710e49a1" formatted="false">部分原始元信息的文本编码无法安全解读，未写入</string>
+    <string name="text_97154723b761" formatted="false">部分原始元信息无效或超出安全容量，未写入</string>
+    <string name="text_b778fe908dac" formatted="false">导出已取消，但未能确认未完成文件已清理；请检查存储空间后重启应用。</string>
+    <string name="text_075e5b2e2761" formatted="false">请使用系统照片选择器选择照片。</string>
+    <string name="text_f145e6465120" formatted="false">无法创建本机工作文件，请检查存储空间。</string>
+    <string name="text_9392b8f7c99e" formatted="false">本机空间不足，无法复制这张照片；请释放空间后重新导入。</string>
+    <string name="text_2673ef9ba447" formatted="false">照片文件超过 512 MiB，请选择文件体积较小的照片。</string>
+    <string name="text_276ad5585012" formatted="false">本机剩余空间不足，导入已停止；请释放空间后重试。原照片未被修改。</string>
+    <string name="text_5c2432fd4e78" formatted="false">这张照片较大，当前无法生成预览。请换一张较小的照片。</string>
+    <string name="text_a064cfbab736" formatted="false">读取权限已失效，请重新选择照片。</string>
+    <string name="text_a428b047ad8e" formatted="false">无法读取这张照片：文件可能已损坏、不可用或本机存储不足。</string>
+    <string name="text_b769fd8412bb" formatted="false">本机工作照片已不可用，请重新导入。</string>
+    <string name="text_660bbeffe8d6" formatted="false">这张照片无法以当前尺寸处理，请选择较小的导出尺寸。</string>
+    <string name="text_9c508b3acf89" formatted="false">无法重新读取照片，请重新导入。</string>
+    <string name="text_d408527bac5d" formatted="false">工作照片记录无效，请重新导入。</string>
+    <string name="text_5e9174903275" formatted="false">当前内存不足，无法恢复照片，请稍后重新导入。</string>
+    <string name="text_63b74410c9d6" formatted="false">无法恢复本机照片，请重新导入。</string>
+    <string name="text_0e98e94d0aff" formatted="false">无法读取 HEIC 容器。</string>
+    <string name="text_2f6241f58a5d" formatted="false">HEIC 原尺寸工作数据已不可用，请重新导入。</string>
+    <string name="text_662817bc355b" formatted="false">HEIC 原尺寸工作数据不完整，请重新导入。</string>
+    <string name="text_99d3398d25b4" formatted="false">HEIC Display P3 已转换到 sRGB、8 位 SDR 工作空间；超出 sRGB 色域的颜色不保留；只导入 SDR 底图，不应用或保留 HDR 增益图。</string>
+    <string name="text_21acba32c252" formatted="false">HEIC 按原尺寸 sRGB、8 位 SDR 底图处理；不应用或保留 HDR 增益图。</string>
+    <string name="text_f6e0e231129a" formatted="false">当前支持 JPEG、PNG、普通静态 HEIC 和已验证的 DNG 类型。此文件编码暂不支持。</string>
+    <string name="text_312bb591804d" formatted="false">RAW 临时数据已不可用，请重新导入。</string>
+    <string name="text_52dca03550a9" formatted="false">RAW 解码数据不完整，请重新导入。</string>
+    <string name="text_8f8660561ea5" formatted="false">Filmroom</string>
+    <string name="text_01b0b11fd332" formatted="false">本机可用空间不足，无法保存原尺寸临时数据。</string>
+    <string name="text_5780b5b34a55" formatted="false">当前设备无法分块解码这张原尺寸照片；没有缩小或替换原照片。</string>
+    <string name="text_ee57ab3f6e70" formatted="false">无法读取原尺寸照片，或本机临时空间不足；原照片未被修改。</string>
+    <string name="text_0c0a9b25a114" formatted="false">原尺寸渲染数据不完整，未导出照片。</string>
+    <string name="text_23fcd93377e5" formatted="false">部分拍摄元信息未能写入；成片像素与色彩配置已保留</string>
+    <string name="text_073143680076" formatted="false">暗房_原尺寸</string>
+    <string name="text_a40512c68094" formatted="true">%1$s/暗房</string>
+    <string name="text_b3a7814059d4" formatted="false">内存不足，导出未完成；未能确认临时文件已清理，请检查存储空间后重启应用。</string>
+    <string name="text_4bc6c17bca33" formatted="false">内存不足，无法以当前尺寸导出，请选择较小尺寸。</string>
+    <string name="text_67f346d97344" formatted="false">导出失败，且未能确认临时文件已清理；请检查存储空间后重启应用。原照片未被修改。</string>
+    <string name="text_a1c12237b4d9" formatted="false">导出失败，请检查本机可用空间后重试。原照片未被修改。</string>
+    <string name="text_b447e7ccf3ec" formatted="false">导出行归属不匹配</string>
+    <string name="text_5dc658ae62f8" formatted="false">无法确认已保存照片的状态，请稍后重试</string>
+    <string name="text_d591741a5a6e" formatted="false">照片尺寸超出安全处理范围，请选择较小的照片。</string>
+    <string name="text_3bf690c56856" formatted="false">暂不支持动画照片，请选择静态照片。</string>
+    <string name="text_e9d5f1386eb5" formatted="false">PNG 结构不完整，请重新选择照片。</string>
+    <string name="text_dac02f5d66dd" formatted="false">暂不支持动画 PNG，请选择静态照片。</string>
+    <string name="text_cab3449611ff" formatted="false">PNG 缺少照片数据。</string>
+    <string name="text_d3826ba783c7" formatted="false">这张 PNG 的结构过于复杂，暂不支持。</string>
+    <string name="text_9064bd4b637b" formatted="false">WebP（有损）</string>
+    <string name="text_e0d8c2722d95" formatted="false">WebP（无损）</string>
+    <string name="text_459f5d31c1d5" formatted="false">TIFF（16 位）</string>
+    <string name="text_4f410de4c30b" formatted="false">OpenEXR（浮点）</string>
+    <string name="text_bec7754b9d7d" formatted="false">未知格式不能注册为可用路线</string>
+    <string name="text_19220b804ef8" formatted="false">需要 Android 10 或更高版本</string>
+    <string name="text_a19839fd3ffd" formatted="false">文件头只用于识别候选格式；仍须完整解码，不能保证这张照片可处理。</string>
+    <string name="text_55b7686e7779" formatted="false">平台照片路线按 sRGB、8 位 SDR 处理；高位深、广色域与 HDR 不保证保留。透明区域以白色合成。</string>
+    <string name="text_066d69f4c0e2" formatted="false">仅处理静态照片；动画或图像序列不在此照片路线内。</string>
+    <string name="text_0699e8795e4f" formatted="false">原尺寸须通过方向、内存与空间检查；HEIC 在导入时生成原尺寸线性工作数据，其他平台照片使用分条解码。</string>
+    <string name="text_e12fc1fdd16b" formatted="false">RAW / TIFF / OpenEXR 的位深、色彩与方向规则由实际原生解码器确认，不能由扩展名推断。</string>
+    <string name="text_b1ce081679c3" formatted="false">可尝试导入；仍需检查具体文件</string>
+    <string name="text_27cd59975564" formatted="false">当前版本尚未接入</string>
+    <string name="text_e2c0354dd326" formatted="false">无法确认本机解码能力</string>
+    <string name="text_cb55532a0726" formatted="false">本机尚无可用的解码路线</string>
+    <string name="text_b6b940d93867" formatted="false">已接入原尺寸流式编码</string>
+    <string name="text_e3c99cd869ac" formatted="false">已接入有界尺寸编码（最长边 4096 像素）</string>
+    <string name="text_f3c2509899ee" formatted="false">当前版本尚无可用编码路线</string>
+    <string name="text_f63450b5d12b" formatted="false">相机 RAW</string>
+    <string name="text_c65b3b97b411" formatted="false">未知格式</string>
+    <string name="text_b04a7122dd82" formatted="false">放大预览 · 长边上限1536像素</string>
+    <string name="text_084663d93fc9" formatted="false">等待普通预览</string>
+    <string name="text_fe1ca7194034" formatted="false">等待放大预览</string>
+    <string name="text_2dd14bedbfd6" formatted="false">准备放大预览 · CPU</string>
+    <string name="text_fdaf1df9701c" formatted="true">加载放大预览 · 长边%1$s像素 · CPU</string>
+    <string name="text_e3f7debc58f1" formatted="true">放大预览 · 长边%1$s像素 · 非原尺寸 · CPU</string>
+    <string name="text_328b93c4c2e6" formatted="false">原片对比 · 放大预览已隐藏</string>
+    <string name="text_ccd803200ef6" formatted="false">放大预览暂停</string>
+    <string name="text_9f37f3d6b8c1" formatted="false">普通预览 · </string>
+    <string name="text_b5dc9ebea612" formatted="false">效果暂不支持</string>
+    <string name="text_d4e2c673d344" formatted="false">可用内存不足</string>
+    <string name="text_b9dd18aa35d1" formatted="false">源文件校验失败</string>
+    <string name="text_f5c716cc5054" formatted="false">源文件读取失败</string>
+    <string name="text_dc0ed989d876" formatted="false">放大预览引擎不可用</string>
+    <string name="text_49947c7bfc5f" formatted="false">引擎数据未就绪</string>
+    <string name="text_c6851c16d664" formatted="false">放大预览结果校验失败</string>
+    <string name="text_744e3354f3e5" formatted="false">放大预览未完成</string>
+    <string name="text_a49ffd73bc85" formatted="false">平均</string>
+    <string name="text_1961784db559" formatted="false">中位数</string>
+    <string name="text_1028167558b7" formatted="false">中央重点</string>
+    <string name="text_6d13a74715fd" formatted="false">局部</string>
+    <string name="text_d8b27dee3e23" formatted="false">矩阵</string>
+    <string name="text_513adb42d450" formatted="false">多区域</string>
+    <string name="text_2064d42c9288" formatted="false">亮部重点</string>
+    <string name="text_1b418527923a" formatted="false">当前效果暂不支持放大预览，仍显示普通预览</string>
+    <string name="text_180998ba335a" formatted="false">资源暂时不足，仍显示普通预览</string>
+    <string name="text_3da84d24730f" formatted="false">暂时无法读取放大预览，仍显示普通预览</string>
+    <string name="text_8ceaefb020a7" formatted="false">放大预览暂不可用，仍显示普通预览</string>
+    <string name="text_22a603ffe91d" formatted="true">Filmroom · 最近%1$s分钟诊断日志</string>
+    <string name="text_0dbb0ebd0479" formatted="false">脱敏诊断日志</string>
+    <string name="text_2d58b497cb9d" formatted="false">导出不会因此停止，可在导出列表中查看进度。</string>
+    <string name="text_e1bc9722aab0" formatted="false">在通知栏查看导出进度？</string>
+    <string name="text_597ba8c43d0f" formatted="false">允许通知后，离开Filmroom也能查看进度和暂停。不开启也可以导出，并在导出列表查看进度。</string>
+    <string name="text_3834f9cf9f9b" formatted="false">开启通知</string>
+    <string name="text_a2666f394298" formatted="false">暂不开启</string>
+    <string name="text_945004c4e7d2" formatted="false">导出列表，数量暂不可用</string>
+    <string name="text_52e3c85e1339" formatted="true">导出列表，%1$s 项待完成，正在处理</string>
+    <string name="text_bc35e14dc39d" formatted="true">导出列表，%1$s 项等待处理</string>
+    <string name="text_fc6efd9ef551" formatted="false">导出列表，没有等待或处理中的任务</string>
+    <string name="text_9573f0c13d94" formatted="true">%1$s，有新完成的导出</string>
+    <string name="text_70ceea90cbaf" formatted="false">自由裁剪。拖动边角调整裁剪框，拖动内部移动选区，双指调整选区大小。</string>
+    <string name="text_c8da2b308ae6" formatted="false">构图调整。画框固定，拖动照片，双指缩放照片。</string>
+    <string name="text_c85ef88eb1b1" formatted="false">照片预览。双指缩放，双击恢复或放大。</string>
+    <string name="text_c73702747ef1" formatted="false">准备导出</string>
+    <string name="text_1cb9d4521713" formatted="false">保存照片</string>
+    <string name="text_11f1bec7ceb0" formatted="false">取消并清理</string>
+    <string name="text_2fb03c5fc0b5" formatted="false">生成胶片效果</string>
+    <string name="text_9d2998cca517" formatted="false">清理</string>
+    <string name="text_e66883ffd17e" formatted="false">编码</string>
+    <string name="text_534cb3fa8fbf" formatted="false">读取</string>
+    <string name="text_129547c98a3a" formatted="false">检查本机</string>
+    <string name="text_b65851ed8941" formatted="false">染料云</string>
+    <string name="text_88d9568f838c" formatted="false">光晕</string>
+    <string name="text_4bd29b339038" formatted="false">密度</string>
+    <string name="text_133496718bdc" formatted="false">对数曝光量</string>
+    <string name="text_b88f02974ea0" formatted="false">上一项</string>
+    <string name="text_f8baad25a051" formatted="false">下一项</string>
+    <string name="text_ed42cfc64f18" formatted="false">彩色反转片</string>
+    <string name="text_d60c820b2be8" formatted="false">彩色负片</string>
+    <string name="queue_original_details" formatted="false">原始诊断详情</string>
+    <string name="queue_metadata_warning" formatted="false">部分照片元信息未能完整保留，详情见原始诊断。</string>
+    <string name="export_progress_preview" formatted="false">导出进度预览</string>
+    <string name="toast_failed">操作失败，请重试</string>
+    <string name="toast_queued">已加入导出列表</string>
+    <string name="toast_queued_check">任务已添加，请查看列表</string>
+    <string name="toast_cancel_requested">已请求取消，请查看列表</string>
+    <string name="toast_background">任务仍在后台准备</string>
+    <string name="toast_uncertain">已停止等待，请查看列表</string>
+    <string name="toast_imported_cancel">已导入，后续处理已取消</string>
+    <string name="toast_import_cancel">已取消导入</string>
+    <string name="toast_preview_cancel">已取消预览更新</string>
+    <string name="toast_memory">内存不足，请稍后重试</string>
+    <string name="toast_storage">存储空间不足</string>
+    <string name="toast_size">照片超出处理范围</string>
+    <string name="toast_format">暂不支持此格式</string>
+    <string name="toast_reimport">照片不可用，请重新导入</string>
+    <string name="toast_read">无法读取照片</string>
+    <string name="toast_preview">预览失败，请重试</string>
+    <string name="toast_add_failed">未能添加导出任务</string>
+    <string name="toast_cleanup">临时文件清理失败</string>
+    <string name="toast_engine">本地引擎暂不可用</string>
+    <string name="toast_queue_read">无法读取导出列表</string>
+    <string name="toast_resume">暂时无法继续，请重试</string>
+    <string name="toast_cancel_failed">取消失败，请重试</string>
+    <string name="toast_open">请到相册查看照片</string>
+    <string name="toast_notification">仍可导出，请在列表查看</string>
+    <string name="toast_detail_unsupported">当前效果仅支持普通预览</string>
+    <string name="toast_detail_memory">资源不足，使用普通预览</string>
+    <string name="toast_detail_read">读取失败，使用普通预览</string>
+    <string name="toast_detail_fallback">暂时使用普通预览</string>
+    <string name="toast_cancelled">本地处理已取消</string>
+    <string name="toast_profile">请换一种胶片或相纸</string>
+    <string name="toast_parameters">参数无效，请重置调整</string>
+    <string name="toast_budget">请减小光晕或导出尺寸</string>
+    <string name="toast_incomplete">处理未完成，未保存照片</string>
+    <string name="toast_workdir">工作目录异常，请更新应用</string>
+</resources>

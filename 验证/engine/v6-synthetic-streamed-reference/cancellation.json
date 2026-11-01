@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "cancelAfter": "film_scatter",
+      "errorCode": "CANCELLED",
+      "inputUnchanged": true,
+      "outputRemoved": true,
+      "scratchRemoved": true
+    },
+    {
+      "cancelAfter": "printing_scanning",
+      "errorCode": "CANCELLED",
+      "inputUnchanged": true,
+      "outputRemoved": true,
+      "scratchRemoved": true
+    }
+  ],
+  "fixtureProvenance": "synthetic-spatial-v6-integer-grid-20261031",
+  "status": "passed"
+}

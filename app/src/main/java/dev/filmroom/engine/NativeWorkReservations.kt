@@ -1,0 +1,96 @@
+package dev.filmroom.engine
+
+import android.app.ActivityManager
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+
+/** Admission estimates, not allocator caps or a guarantee against Android killing the process. */
+data class NativeMemorySnapshot(val availableBytes:Long,val thresholdBytes:Long,val lowMemory:Boolean)
+class NativeWorkUnavailable:Exception("Native working-memory admission unavailable")
+
+/** Shared by engine and codec callers. Only heavyweight JNI work holds a lease; planning never does. */
+object NativeWorkReservations {
+    private val limiter=NativeWorkLimiter()
+    val unavailableMemory=NativeMemorySnapshot(0,0,true)
+    fun snapshot(context:Context):NativeMemorySnapshot {
+        val manager=context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info=ActivityManager.MemoryInfo();manager.getMemoryInfo(info)
+        return NativeMemorySnapshot(info.availMem,info.threshold,info.lowMemory)
+    }
+    suspend fun <T> run(estimatedBytes:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T = limiter.run(estimatedBytes,memory,work)
+    /** Passive contexts consume bytes, never worker slots. Admission fails instead of waiting on itself. */
+    fun retain(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPressure:(()->Unit)?=null):AutoCloseable = limiter.retain(estimatedBytes,memory(),onPressure)
+    fun previewEstimate(width:Int,height:Int):Long {
+        require(width in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE && height in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE)
+        // Matches native MEMORY_FIXED_ESTIMATE_BYTES + MEMORY_ESTIMATE_BYTES_PER_PIXEL.
+        // Include direct float input/output and displayed result, although allocated
+        // before JNI. The limiter adds another per-operation safety allowance.
+        return 96L*NativeMemoryPolicy.MIB+width.toLong()*height*(512L+24L+4L)
+    }
+}
+
+/** Tiny process-local ledger. A fresh OS snapshot is checked on every cancellable retry. */
+internal class NativeWorkLimiter {
+    private val lock=Any()
+    private var count=0
+    private var reserved=0L
+    private val passive=mutableMapOf<Long,()->Unit>()
+    private var passiveSerial=0L
+    private val evicting=mutableSetOf<Long>()
+    internal fun activeCount():Int=synchronized(lock){count}
+    internal fun reservedBytes():Long=synchronized(lock){reserved}
+    private sealed class Attempt {
+        class Ready(val lease:Lease):Attempt()
+        object Wait:Attempt()
+        object Reject:Attempt()
+        class Evict(val callbacks:List<()->Unit>):Attempt()
+    }
+    private class Lease(private val release:()->Unit):AutoCloseable {
+        private var closed=false
+        override fun close() {synchronized(this){if(!closed){closed=true;release()}}}
+    }
+    fun retain(estimate:Long,memory:NativeMemorySnapshot,onPressure:(()->Unit)?=null):AutoCloseable=synchronized(lock) {
+        require(estimate in 1..(2L*1024*NativeMemoryPolicy.MIB))
+        val headroom=if(memory.thresholdBytes>=0 && memory.availableBytes>memory.thresholdBytes)
+            memory.availableBytes-memory.thresholdBytes else 0L
+        val capacity=(headroom-64L*NativeMemoryPolicy.MIB).coerceAtLeast(0)/2
+        if(memory.lowMemory || estimate>capacity || reserved>capacity-estimate)throw NativeWorkUnavailable()
+        reserved+=estimate
+        val id=++passiveSerial;if(onPressure!=null)passive[id]=onPressure
+        Lease { synchronized(lock){reserved-=estimate;passive.remove(id);evicting.remove(id);check(reserved>=0)} }
+    }
+    private fun acquire(estimate:Long,memory:NativeMemorySnapshot):Attempt=synchronized(lock) {
+        require(estimate in 1..(2L*1024*NativeMemoryPolicy.MIB))
+        val charge=Math.addExact(estimate,16L*NativeMemoryPolicy.MIB)
+        val headroom=if(memory.thresholdBytes>=0 && memory.availableBytes>memory.thresholdBytes)
+            memory.availableBytes-memory.thresholdBytes else 0L
+        // Keep Android's low-memory threshold plus 64 MiB untouched, then use
+        // at most half the remaining currently available memory. Existing native
+        // RSS may already reduce availMem: counting reservations too is conservative.
+        val capacity=(headroom-64L*NativeMemoryPolicy.MIB).coerceAtLeast(0)/2
+        if(memory.lowMemory || count>=2 || charge>capacity || reserved>capacity-charge) {
+            val callbacks=passive.filterKeys { it !in evicting }
+            if(callbacks.isNotEmpty()){evicting.addAll(callbacks.keys);return@synchronized Attempt.Evict(callbacks.values.toList())}
+            return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait else Attempt.Reject
+        }
+        count++;reserved+=charge
+        Attempt.Ready(Lease {synchronized(lock){count--;reserved-=charge;check(count>=0&&reserved>=0)}})
+    }
+    suspend fun <T> run(estimate:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
+        var lease:Lease?=null
+        while(lease==null) {
+            currentCoroutineContext().ensureActive()
+            when(val result=acquire(estimate,memory())) {
+                is Attempt.Ready->lease=result.lease
+                Attempt.Wait->delay(100)
+                Attempt.Reject->throw NativeWorkUnavailable()
+                is Attempt.Evict->{result.callbacks.forEach{it()};delay(25)}
+            }
+        }
+        try {currentCoroutineContext().ensureActive();work()} finally {lease.close()}
+    }
+}

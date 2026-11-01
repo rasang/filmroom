@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 2,
+  "createdUtc": "2026-10-31T01:19:26.452053+00:00",
+  "component": "film-photo-codecs",
+  "appRevision": "0.1.1",
+  "androidRuntimeTested": false,
+  "rustReleaseTestsPassed": 27,
+  "hostJniChecksPassed": 19,
+  "privateSampleValidation": {
+    "sensorDimensions": [
+      4096,
+      3072
+    ],
+    "outputDimensions": [
+      3072,
+      4096
+    ],
+    "baselineExposureAppliedEv": 2,
+    "fullRawDecoded": true,
+    "embeddedPreviewUsed": false,
+    "visuallyInspected": true,
+    "sampleIncludedInSource": false,
+    "ok": true,
+    "elapsedSeconds": 2.3786106490006205,
+    "nativePeakKiB": 23300,
+    "outputBytes": 150994944
+  },
+  "independentReview": "Two read-only reviews; cancellation-cost issue fixed and latest baseline/metadata reviewed; no remaining known P1/P2. Not a guarantee of absence of defects.",
+  "supportedCompressedSubset": "DNG >=1.1, integer U16 SOF3 lossless JPEG tiles/strips, 1-4 packed components, predictors1-7, pointtransform0, no subsampling/restarts/multiscan; max4M scalar samples and8MiB encoded per block.",
+  "metadataPolicy": "Typed DNG baseline exposure once in linear RGB. Validated camera display tone curve not applied; fixed Chinese warning. Unsupported mandatory opcodes/calibration still rejected.",
+  "sources": {
+    "src/lossless.rs": "be9f8e5183bb3867d367ea6f1fabd5a1fa49f2b83450573f36be87c8791ece48",
+    "src/lib.rs": "8488697bb4a784d487985e01857cc5425071e453ffd99904d5c92e8504adba6b",
+    "src/dng.rs": "c162d265d945243bc3f8b3634964116ae5dd988ad785170273cda293f7bc9027",
+    "src/export.rs": "5940f9911a19853d850608c1c50489849d358454364256ef7e25a4c8b62648a1",
+    "src/error.rs": "8c2cd33fc228a7d757efa0cfa1b593a403db6a09aebdf5b791b9e68546f80075",
+    "src/develop.rs": "654c7322387ad0e87e7aff6e21828b24c01ad656c3a227479e4da3e64c34399e",
+    "src/opcodes.rs": "0476934187e53da7c7f3725b4378d774c180fac2642b1285532b820346160cfb",
+    "src/tiff.rs": "aa52532724ac7ab1d897f421c6ac316d20145e2b65717bb88c5f126bd6d02424",
+    "src/jni_bridge.rs": "4f89649a343da33bebb305d1b6255fb11da7e62e54c84b991e5a3d8aa8fa28e2",
+    "src/bin/codec_probe.rs": "d28003848bb37f3472e7a1b9b06bf69b1d9ff46baeb9dee6f93b7e64c71aa578",
+    "tests/dng_test.rs": "5c6673d420b88c89e63951ef964eb0ac841c1e0d4afac7b948365b4843c1ae5a",
+    "tests/lossless_dng_test.rs": "798e0a5a8d68952d2280e62f49fb5c4e9b8499f2736671bc8f9e81eeb54b22f6",
+    "tests/export_test.rs": "23fddade733f2b80e7d61389e5771f026577152c799e5c5079e3c68ecd56d6bf",
+    "tests/jni/CodecSmoke.java": "7e4a5d5d472762c8e89215debd986068de6f0e87c9f64fe19939016d80578469",
+    "tests/jni/dev/filmroom/codec/NativeCodecBridge.java": "146e82409b95a47dbb83828800ec909e71c2297216e2b093733613f87de8cff9",
+    "tools/generate_lossless_dng.py": "a1fdeb5b8c8e80d92403338da4f7755d314a6b5ad46cbb60fc46470d134238bf",
+    "tools/measure_process.py": "aae71f87bb42ceb535314debefd0df5c2d39db63b4b595cc4ff2eb26be152d02",
+    "tools/generate_dng.py": "80622ca0c36fc15c64b3e697d5ac27c27cd5c429eaccb802d9719b6bc2dffbb2"
+  },
+  "binaries": {
+    "arm64-v8a": {
+      "sha256": "bcce9f84656b5daed07d3745559e49888461c0b0a17117f3a06013b4dd311f5d",
+      "bytes": 1896856,
+      "loadSegmentAlignment": 16384,
+      "exportedJniMethods": 6
+    },
+    "x86_64": {
+      "sha256": "d43bd0719ae3f55c1ebc6ccf4369d21fcf27255a265d76c0994f0b32ec7d22ea",
+      "bytes": 1964376,
+      "loadSegmentAlignment": 16384,
+      "exportedJniMethods": 6
+    }
+  }
+}

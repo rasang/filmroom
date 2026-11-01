@@ -1,0 +1,11 @@
+Google Material Symbols — reset_settings
+Source: https://github.com/google/material-design-icons/blob/master/symbols/web/reset_settings/materialsymbolsoutlined/reset_settings_24px.svg
+Upstream project: https://github.com/google/material-design-icons
+License: Apache License, Version 2.0 (see LICENSE).
+Source SVG SHA-256: 53389cf18267975ae6e0a8ca1aa060c57e7b174aac2dfa538cf526a66c81851f
+
+Conversion: unchanged original filled path; translated Y by +960 to map the
+SVG viewBox into Android VectorDrawable viewport 960 x 960. Displayed using
+the existing 22dp toolbar sizing and app tint. No path simplification, stroke
+redraw or aspect-ratio change. This attribution file was added by Filmroom;
+it does not purport to be an upstream NOTICE file.

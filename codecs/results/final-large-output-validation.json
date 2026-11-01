@@ -1,0 +1,28 @@
+{
+  "decoded-50mp.f32le": {
+    "bytes": 603979776,
+    "sha256": "8d004708916eb227157d2992f4fc4b7903db3d95d1d0b58995624ee403732001",
+    "sameAsPrevious": true
+  },
+  "encoded-50mp.jpg": {
+    "bytes": 20895476,
+    "sha256": "53c073a34edca86473c96384c0b90de4097cf4457c21bf02a02d0bdf0f11dbd6",
+    "sameAsPrevious": false,
+    "decodedHeaderSize": [
+      6144,
+      8192
+    ],
+    "iccBytes": 612
+  },
+  "encoded-50mp.tif": {
+    "bytes": 301992782,
+    "sha256": "f63ee2c4ef9cfc342bf59a5ea19a854ba072a3da45e033899492cd3a447fe305",
+    "sameAsPrevious": false,
+    "decodedHeaderSize": [
+      6144,
+      8192
+    ],
+    "iccBytes": 612
+  },
+  "encodedHashNote": "moxcms ColorDateTime::now() sets generated ICC profile timestamp; prior encoded hashes may differ, not evidence of pixel mutation. Raw float output hash unchanged."
+}

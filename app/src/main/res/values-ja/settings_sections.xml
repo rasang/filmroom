@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_language">言語</string>
+    <string name="settings_group_photos">写真と調整</string>
+    <string name="settings_group_diagnostics">診断</string>
+    <string name="settings_show_log_notes">診断ログについて ▾</string>
+    <string name="settings_hide_log_notes">ログの説明を閉じる ▴</string>
+    <string name="settings_log_privacy_summary">個人情報を除いた診断情報のみを出力します。写真や位置情報は含まれず、共有先を選ぶまで送信されません。</string>
+</resources>

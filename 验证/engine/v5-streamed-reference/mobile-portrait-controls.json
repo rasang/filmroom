@@ -1,0 +1,492 @@
+{
+  "cases": [
+    {
+      "case": "gold-default",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 2837.827972,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1430.7849959999999,
+        "spatialBytesRead": 17504784,
+        "spatialBytesWritten": 17504784,
+        "spatialPassCount": 33,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 54.534326,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 344.972552,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 456.940756,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 367.970719,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 165.267102,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": 0.0,
+        "contrast": 1.0,
+        "filmExposureEv": 0.0,
+        "filmStock": "kodak_gold_200",
+        "grainAmount": 1.0,
+        "grainSize": 1.0,
+        "halationAmount": 1.0,
+        "halationSize": 1.0,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "kodak_portra_endura",
+        "saturation": 1.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": 0.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    },
+    {
+      "case": "fuji-default",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 3345.171074,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1995.125152,
+        "spatialBytesRead": 17504784,
+        "spatialBytesWritten": 17504784,
+        "spatialPassCount": 33,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 91.001055,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 390.71792,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 369.035076,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 356.514286,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 127.01741999999999,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": 0.0,
+        "contrast": 1.0,
+        "filmExposureEv": 0.0,
+        "filmStock": "fujifilm_c200",
+        "grainAmount": 1.0,
+        "grainSize": 1.0,
+        "halationAmount": 1.0,
+        "halationSize": 1.0,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "fujifilm_crystal_archive_typeii",
+        "saturation": 1.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": 0.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    },
+    {
+      "case": "gold-upper-controls",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 2648.7329019999997,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1363.5860790000002,
+        "spatialBytesRead": 17504784,
+        "spatialBytesWritten": 17504784,
+        "spatialPassCount": 33,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 47.515388,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 393.799341,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 369.94286,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 306.803222,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 142.240926,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": -2.0,
+        "contrast": 1.5,
+        "filmExposureEv": 4.0,
+        "filmStock": "kodak_gold_200",
+        "grainAmount": 2.0,
+        "grainSize": 3.0,
+        "halationAmount": 2.0,
+        "halationSize": 3.0,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "kodak_supra_endura",
+        "saturation": 2.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": 0.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    },
+    {
+      "case": "fuji-lower-controls",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 2337.7810839999997,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1713.0837649999999,
+        "spatialBytesRead": 6365376,
+        "spatialBytesWritten": 6365376,
+        "spatialPassCount": 12,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 74.323236,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 0.000205,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 381.76519399999995,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 0.00104,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 154.53217,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": 2.0,
+        "contrast": 0.5,
+        "filmExposureEv": -4.0,
+        "filmStock": "fujifilm_c200",
+        "grainAmount": 0.0,
+        "grainSize": 1.0,
+        "halationAmount": 0.0,
+        "halationSize": 1.0,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "fujifilm_crystal_archive_typeii",
+        "saturation": 0.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": 0.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    },
+    {
+      "case": "gold-small-grain-halo-warm",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 2744.152177,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1504.017354,
+        "spatialBytesRead": 17504784,
+        "spatialBytesWritten": 17504784,
+        "spatialPassCount": 33,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 66.33671,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 319.410257,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 389.491296,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 300.8741,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 148.46487199999999,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": 0.0,
+        "contrast": 1.0,
+        "filmExposureEv": 0.0,
+        "filmStock": "kodak_gold_200",
+        "grainAmount": 2.0,
+        "grainSize": 0.25,
+        "halationAmount": 2.0,
+        "halationSize": 0.25,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "fujifilm_crystal_archive_typeii",
+        "saturation": 1.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": 1.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    },
+    {
+      "case": "fuji-blended-grain-halo-cool",
+      "coordinateOrigin": [
+        0,
+        0
+      ],
+      "differingSamples": 0,
+      "finite": true,
+      "firstDifference": null,
+      "fullImagePitchUm": 136.186767578125,
+      "height": 257,
+      "inputUnchanged": true,
+      "lutResolution": 33,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image separable FIR/IIR with disk-backed intermediate planes; no finite halo",
+        "elapsedMs": 2751.385989,
+        "estimatedScratchBytes": 71352448,
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 257,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 2917464,
+        "pixelCount": 33153,
+        "pointwiseChunkRows": 254,
+        "setupMs": 1423.31686,
+        "spatialBytesRead": 17504784,
+        "spatialBytesWritten": 17504784,
+        "spatialPassCount": 33,
+        "spatialPeakExplicitBufferBytes": 795672,
+        "stages": [
+          {
+            "elapsedMs": 54.873962999999996,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 388.00973,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 369.702917,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 337.88826500000005,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 161.89854300000002,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 129
+      },
+      "mobileParams": {
+        "brightnessEv": 0.0,
+        "contrast": 1.0,
+        "filmExposureEv": 0.0,
+        "filmStock": "fujifilm_c200",
+        "grainAmount": 0.5,
+        "grainSize": 3.0,
+        "halationAmount": 0.5,
+        "halationSize": 3.0,
+        "memoryBudgetMiB": 384,
+        "mode": "export",
+        "paperStock": "kodak_portra_endura",
+        "saturation": 1.0,
+        "schemaVersion": 1,
+        "seed": 42,
+        "warmth": -1.0
+      },
+      "pointwiseRows": [
+        254,
+        3
+      ],
+      "samples": 99459,
+      "scratchRemoved": true,
+      "width": 129
+    }
+  ],
+  "reference": "whole Pipeline::process with identical test-side MobileParams mapping; not a JNI/API mapping test",
+  "status": "passed"
+}

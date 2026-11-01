@@ -1,0 +1,11 @@
+{
+  "coordinate": "androidx.exifinterface:exifinterface:1.4.2",
+  "license": "Apache-2.0",
+  "modified": false,
+  "sourceUrl": "https://dl.google.com/dl/android/maven2/androidx/exifinterface/exifinterface/1.4.2/exifinterface-1.4.2-sources.jar",
+  "files": {
+    "exifinterface-1.4.2-sources.jar": "dc69c04f03e72ad38ed43774554e6612dd9ffe7299eacaab62a38df8ac2c7767",
+    "exifinterface-1.4.2.pom": "b11c0763f3094d28664412b7d3316bb5d1a785810fb7b4fe5f356cd5cbcd1725",
+    "LICENSE.txt": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+  }
+}

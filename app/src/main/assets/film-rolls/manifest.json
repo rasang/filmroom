@@ -1,0 +1,242 @@
+{
+  "revision": 1,
+  "dimensions": [
+    240,
+    240
+  ],
+  "encoding": "Lossless WebP RGBA",
+  "original_artwork": true,
+  "profiles": [
+    {
+      "profile_id": "kodak_portra_160",
+      "physical_stock_id": "kodak_portra_160",
+      "ui_badge": null,
+      "source_url": "https://www.rapideye.uk.com/products/35mm-kodak-portra-160"
+    },
+    {
+      "profile_id": "kodak_portra_400",
+      "physical_stock_id": "kodak_portra_400",
+      "ui_badge": null,
+      "source_url": "https://www.rapideye.uk.com/products/35mm-kodak-portra-400"
+    },
+    {
+      "profile_id": "kodak_portra_800",
+      "physical_stock_id": "kodak_portra_800",
+      "ui_badge": null,
+      "source_url": "https://www.rapideye.uk.com/products/35mm-kodak-portra-800"
+    },
+    {
+      "profile_id": "kodak_portra_800_push1",
+      "physical_stock_id": "kodak_portra_800",
+      "ui_badge": "+1 PUSH",
+      "source_url": "https://www.rapideye.uk.com/products/35mm-kodak-portra-800"
+    },
+    {
+      "profile_id": "kodak_portra_800_push2",
+      "physical_stock_id": "kodak_portra_800",
+      "ui_badge": "+2 PUSH",
+      "source_url": "https://www.rapideye.uk.com/products/35mm-kodak-portra-800"
+    },
+    {
+      "profile_id": "kodak_gold_200",
+      "physical_stock_id": "kodak_gold_200",
+      "ui_badge": null,
+      "source_url": "https://theduckroom.com/products/kodak-gold-200-color-negative-film-36-exp"
+    },
+    {
+      "profile_id": "kodak_ultramax_400",
+      "physical_stock_id": "kodak_ultramax_400",
+      "ui_badge": null,
+      "source_url": "https://prettyrad.com.au/products/35mm-co-kodak-colourplus-400-film-24-shots"
+    },
+    {
+      "profile_id": "kodak_ektar_100",
+      "physical_stock_id": "kodak_ektar_100",
+      "ui_badge": null,
+      "source_url": "https://arcanes-labo.photo/photographie-argentique-1/pellicules-films-recharges-argentiques-49/pellicules-films-135-71/pellicule-films-135-couleurs-50/pellicule-kodak-ektar-100-135-5.html"
+    },
+    {
+      "profile_id": "fujifilm_c200",
+      "physical_stock_id": "fujifilm_c200",
+      "ui_badge": null,
+      "source_url": "https://www.fujifilm.com/at/en/consumer/films/negative-and-reversal"
+    },
+    {
+      "profile_id": "fujifilm_xtra_400",
+      "physical_stock_id": "fujifilm_xtra_400",
+      "ui_badge": null,
+      "source_url": "https://www.fotoimpex.de/shop/filme/fuji-superia-x-tra-400-13536.html"
+    },
+    {
+      "profile_id": "fujifilm_pro_400h",
+      "physical_stock_id": "fujifilm_pro_400h",
+      "ui_badge": null,
+      "source_url": "https://www.fotoimpex.com/films/fuji-pro-400-h-13536.html"
+    },
+    {
+      "profile_id": "fujifilm_provia_100f",
+      "physical_stock_id": "fujifilm_provia_100f",
+      "ui_badge": null,
+      "source_url": "https://www.fotoimpex.com/films/fuji-provia-f-100-13536.html"
+    },
+    {
+      "profile_id": "fujifilm_velvia_100",
+      "physical_stock_id": "fujifilm_velvia_100",
+      "ui_badge": null,
+      "source_url": "https://www.fotoimpex.com/films/fuji-velvia-100-13536.html"
+    },
+    {
+      "profile_id": "kodak_ektachrome_100",
+      "physical_stock_id": "kodak_ektachrome_100",
+      "ui_badge": null,
+      "source_url": "https://www.rapideye.uk.com/products/ektachrome-e100-35mm"
+    },
+    {
+      "profile_id": "kodak_kodachrome_64",
+      "physical_stock_id": "kodak_kodachrome_64",
+      "ui_badge": null,
+      "source_url": "https://www.kwconsignment.com/products/vintage-kodak-35mm-film-lot-kodachrome-200-plus-x-pan-rolls-w-box-afc7"
+    },
+    {
+      "profile_id": "kodak_vision3_50d",
+      "physical_stock_id": "kodak_vision3_50d",
+      "ui_badge": null,
+      "source_url": "https://www.kodak.com/en/motion/product/camera-films/50d-5203-7203/"
+    },
+    {
+      "profile_id": "kodak_vision3_200t",
+      "physical_stock_id": "kodak_vision3_200t",
+      "ui_badge": null,
+      "source_url": "https://www.kodak.com/en/motion/product/camera-films/200t-5213-7213/"
+    },
+    {
+      "profile_id": "kodak_vision3_250d",
+      "physical_stock_id": "kodak_vision3_250d",
+      "ui_badge": null,
+      "source_url": "https://www.kodak.com/en/motion/product/camera-films/250d-5207-7207/"
+    },
+    {
+      "profile_id": "kodak_vision3_500t",
+      "physical_stock_id": "kodak_vision3_500t",
+      "ui_badge": null,
+      "source_url": "https://www.kodak.com/en/motion/product/camera-films/500t-5219-7219/"
+    },
+    {
+      "profile_id": "kodak_verita_200d",
+      "physical_stock_id": "kodak_verita_200d",
+      "ui_badge": null,
+      "source_url": "https://www.kodak.com/en/motion/product/camera-films/verita-200d-5206-7206/"
+    }
+  ],
+  "assets": [
+    {
+      "physical_stock_id": "fujifilm_c200",
+      "path": "fujifilm_c200.webp",
+      "sha256": "8efc3b361c2fbb53830c19e5c5ae8ea45cbfc3987d116d6e65d829c4bb742bd2",
+      "bytes": 25586
+    },
+    {
+      "physical_stock_id": "fujifilm_pro_400h",
+      "path": "fujifilm_pro_400h.webp",
+      "sha256": "ec3589f2e2bca1188604a1bcc1c8f8d51762410b213f1dc1696d2c288242a537",
+      "bytes": 27622
+    },
+    {
+      "physical_stock_id": "fujifilm_provia_100f",
+      "path": "fujifilm_provia_100f.webp",
+      "sha256": "9579a9040a46103f6243f7a896d3533525fe6994f3111b37ce5812605e392727",
+      "bytes": 29468
+    },
+    {
+      "physical_stock_id": "fujifilm_velvia_100",
+      "path": "fujifilm_velvia_100.webp",
+      "sha256": "531c60e6b07553d25560fc02c5d55b8ad72c4a0a373e4ee35531295266accc73",
+      "bytes": 28694
+    },
+    {
+      "physical_stock_id": "fujifilm_xtra_400",
+      "path": "fujifilm_xtra_400.webp",
+      "sha256": "dbd7eee0efc5c85bac09ff0e1c31bff28c411d43bff2b0b7046d039e5bd9eab2",
+      "bytes": 24388
+    },
+    {
+      "physical_stock_id": "kodak_ektachrome_100",
+      "path": "kodak_ektachrome_100.webp",
+      "sha256": "7dd6c2f1838071cb25b3c3556dc4680bbf4b48052561e892823c3fb4b58f0a0f",
+      "bytes": 25584
+    },
+    {
+      "physical_stock_id": "kodak_ektar_100",
+      "path": "kodak_ektar_100.webp",
+      "sha256": "2f9fa064190d10a2dcd3249556051ff37dd671fd652fb6ff379e3e9c35859002",
+      "bytes": 24408
+    },
+    {
+      "physical_stock_id": "kodak_gold_200",
+      "path": "kodak_gold_200.webp",
+      "sha256": "9afbdad3cd766207f49f71daa26fe6d6150019815849b8149a3181b99337c952",
+      "bytes": 27366
+    },
+    {
+      "physical_stock_id": "kodak_kodachrome_64",
+      "path": "kodak_kodachrome_64.webp",
+      "sha256": "1ef8b9735596fb6d1088ad44c43649260133de5fce013232babd27047263f13e",
+      "bytes": 27018
+    },
+    {
+      "physical_stock_id": "kodak_portra_160",
+      "path": "kodak_portra_160.webp",
+      "sha256": "d512bccacc6efc7f8429adbc9831c0fcf66bb58bd02c6983d3a7ee5861c8c1fe",
+      "bytes": 24810
+    },
+    {
+      "physical_stock_id": "kodak_portra_400",
+      "path": "kodak_portra_400.webp",
+      "sha256": "71271434b8c8a0d9547e81c0bd077cf3a1f2dcec57d1b045db0d05aa87104bd2",
+      "bytes": 25052
+    },
+    {
+      "physical_stock_id": "kodak_portra_800",
+      "path": "kodak_portra_800.webp",
+      "sha256": "d2d9f95c984dcf2ae195a92943f81154e8cdbf806de4939f3413f81d626e238f",
+      "bytes": 24968
+    },
+    {
+      "physical_stock_id": "kodak_ultramax_400",
+      "path": "kodak_ultramax_400.webp",
+      "sha256": "891d62de0f535d542a6fd1e267913ecf3bcb7d0e146323fdeee873fb0162c4d6",
+      "bytes": 27512
+    },
+    {
+      "physical_stock_id": "kodak_verita_200d",
+      "path": "kodak_verita_200d.webp",
+      "sha256": "42a482ec86fd2c166c7efd0b949aeaf16128bc4da5f298c2e6e1e4c1873cfae6",
+      "bytes": 34130
+    },
+    {
+      "physical_stock_id": "kodak_vision3_200t",
+      "path": "kodak_vision3_200t.webp",
+      "sha256": "cd1fd41de78dfbcbf66bfda4476303d5a790bc57382278e9c3fc2f38c47ea007",
+      "bytes": 33868
+    },
+    {
+      "physical_stock_id": "kodak_vision3_250d",
+      "path": "kodak_vision3_250d.webp",
+      "sha256": "03360f8b9279912d269c79904f6e54005528d535e110771e87aa7aec014442ba",
+      "bytes": 33930
+    },
+    {
+      "physical_stock_id": "kodak_vision3_500t",
+      "path": "kodak_vision3_500t.webp",
+      "sha256": "0f64a6caf57ab575e2428802fc8a611baefac19f2819b95b0795960c57e7a52d",
+      "bytes": 33320
+    },
+    {
+      "physical_stock_id": "kodak_vision3_50d",
+      "path": "kodak_vision3_50d.webp",
+      "sha256": "101d20d412a7371def3fabd7af276ce58b4fa142b6fda3014b1d2c9332c3dd7b",
+      "bytes": 33828
+    }
+  ],
+  "model_source_revision": 4
+}

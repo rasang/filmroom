@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "createdUtc": "2026-10-31T01:46:25.063822+00:00",
+  "appVersion": "0.1.1",
+  "versionCode": 2,
+  "applicationId": "dev.filmroom",
+  "minSdk": 29,
+  "targetSdk": 35,
+  "androidRuntimeTested": false,
+  "androidEmulatorUsed": false,
+  "userComputerUsed": false,
+  "androidHostTests": {
+    "passed": 133,
+    "failed": 0,
+    "skipped": 0
+  },
+  "lintDebug": "passed",
+  "codecReleaseTests": 31,
+  "codecColorAdditionalFocusedTests": 5,
+  "codecHostJniChecks": 19,
+  "nativeLibraryTests": 41,
+  "mobileEffectsTests": 15,
+  "catalogRoutesTests": 10,
+  "gpuFocusedTests": 9,
+  "gpuHardwareRuntimeTest": "not run; no Adreno device",
+  "sourceUsesPrivatePhoto": false,
+  "signing": "new debug key; old installed signature cannot be retained",
+  "abi16KiBAlignment": true,
+  "apkSignatureVerification": "v2 passed",
+  "apkZipAlignment": "16KiB passed",
+  "fullEffects50MPBenchmark": {
+    "pixelCount": 50331648,
+    "width": 8192,
+    "height": 6144,
+    "elapsedSeconds": 774.2,
+    "nativePeakKiB": 38880,
+    "scratchPeakBytes": 6643777536,
+    "scratchReservationBytes": 6710886400,
+    "finiteOutputSamples": 150994944,
+    "scratchCleaned": true,
+    "inputUnchanged": true,
+    "context": "shared cloud host with concurrent workloads, not Android phone performance",
+    "printDiffusionSeconds": 436.62
+  },
+  "artifacts": {
+    "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so": {
+      "bytes": 7830216,
+      "sha256": "5796d0643447d1ed5c9778fb22dd786cf21862a752f4565beb872b37af11bf29"
+    },
+    "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": {
+      "bytes": 1907216,
+      "sha256": "60bf552972d54d8e1aa743573dceaf0edccdc3f44b6b88c942d3c2d6dc741e6d"
+    },
+    "app/src/main/jniLibs/x86_64/libfilm_engine.so": {
+      "bytes": 8748720,
+      "sha256": "824ac0e95aa2f1feb0d48514990e8ad66416644aec2793edce97857932e5cca0"
+    },
+    "app/src/main/jniLibs/x86_64/libfilm_codecs.so": {
+      "bytes": 1975496,
+      "sha256": "d70dbeb6777db3b1721c876d86b9122288f8638613f50f5c5cbb90f34ae4ba4e"
+    },
+    "暗房-0.1.1-ARM64.apk": {
+      "bytes": 19085238,
+      "sha256": "37dda585f3d492e7eb98f6c920efb1283c393052af93204be4c599d97c977b01"
+    }
+  },
+  "distributionAbi": "arm64-v8a",
+  "sourceBuildDefaultAbis": [
+    "arm64-v8a",
+    "x86_64"
+  ],
+  "original12MPFullEffects": {
+    "width": 3072,
+    "height": 4096,
+    "elapsedSeconds": 131.14,
+    "nativePeakKiB": 38828,
+    "scratchPeakBytes": 2868903936,
+    "allSamplesFinite": true,
+    "scratchCleaned": true,
+    "privateInputExcluded": true
+  },
+  "independentApkReview": "parent signature/alignment/permissions/arm64/hash verification passed",
+  "dependencyLicenseAudit": "126 actual Android dependencies source+notices complete; APK bundled new notices",
+  "independentCrashCleanupReview": "two reviewers no blocking findings; responsive process IO startup gate and failure retry tested",
+  "packaging": "AGP dex.useLegacyPackaging=true: only DEX compression changed; every decompressed APK entry byte-identical to prior validated package; native SO remain stored/16KiB mmap aligned"
+}

@@ -1,0 +1,1058 @@
+[
+  {
+    "stock": "fujifilm_c200",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.00013078006030349705,
+      -0.0007119002156128639,
+      -0.0008258820150207076
+    ],
+    "valid_wavelength_count": 64,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3591752014242322,
+        0.31245973151210427,
+        0.15456813370890907
+      ],
+      "linear_srgb": [
+        0.6065623869876983,
+        0.24452168925938628,
+        0.11964279082117735
+      ],
+      "srgb8": [
+        204,
+        136,
+        97
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.7039116837244785,
+        2.0405283670507677,
+        2.643089598545579
+      ],
+      "xyz": [
+        0.006738091387810977,
+        0.004278971430818578,
+        0.00048557631704233546
+      ],
+      "linear_srgb": [
+        0.015015715716208624,
+        0.001518109281436691,
+        1.5655685527830084e-05
+      ],
+      "srgb8": [
+        33,
+        5,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/fujifilm_c200.json": "30db07d88090aadc62e03d18c2c51f67a20a1673390c69f99933b7ed5406d2c8",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "fujifilm_pro_400h",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0006311603583742372,
+      -0.0005904330768466683,
+      -0.0006809338408443301
+    ],
+    "valid_wavelength_count": 64,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3445968499072578,
+        0.2760825282027323,
+        0.11601612937935527
+      ],
+      "linear_srgb": [
+        0.634460847347673,
+        0.18881038789678645,
+        0.08550225754045537
+      ],
+      "srgb8": [
+        209,
+        120,
+        83
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.5817671629318264,
+        1.605388198969167,
+        2.1262136512627285
+      ],
+      "xyz": [
+        0.013079406852058885,
+        0.008513911210859109,
+        0.000871245300788979
+      ],
+      "linear_srgb": [
+        0.02886313862447602,
+        0.003333914030352405,
+        -8.740864242162737e-05
+      ],
+      "srgb8": [
+        47,
+        11,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/fujifilm_pro_400h.json": "da1be731ab79fb5535c43042494fa7298c942179abb68270b928aa012c629b31",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "fujifilm_xtra_400",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0006236028794837748,
+      -0.000809063847691063,
+      -0.0008267750406870173
+    ],
+    "valid_wavelength_count": 64,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3673061493337094,
+        0.32463770866771086,
+        0.1714022466755567
+      ],
+      "linear_srgb": [
+        0.6057980615743811,
+        0.2601856790664965,
+        0.13540503468573803
+      ],
+      "srgb8": [
+        204,
+        139,
+        103
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        2.1328906703698873,
+        2.250179521252354,
+        2.86267049328632
+      ],
+      "xyz": [
+        0.003430295941768252,
+        0.0023686897304096076,
+        0.00034203125678582667
+      ],
+      "linear_srgb": [
+        0.0073045303906751355,
+        0.0011337687554796938,
+        6.938181737555044e-05
+      ],
+      "srgb8": [
+        21,
+        4,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/fujifilm_xtra_400.json": "5f2a3642c7c8db5e750d7366c34b47d24b89ad78d2abe41da4b5282fd4286e58",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_ektar_100",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0007381419889066706,
+      -0.0006682582063381493,
+      -0.0007895119592313875
+    ],
+    "valid_wavelength_count": 56,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3618532977360011,
+        0.3091813286366767,
+        0.1688345533843107
+      ],
+      "linear_srgb": [
+        0.6131673499455685,
+        0.23636931004571557,
+        0.1355403605692296
+      ],
+      "srgb8": [
+        205,
+        133,
+        103
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.890858686370014,
+        1.7810740582065376,
+        2.2706851344707704
+      ],
+      "xyz": [
+        0.012509204518159425,
+        0.008811297574625312,
+        0.0009414730186920346
+      ],
+      "linear_srgb": [
+        0.026523183082713557,
+        0.004447134863113212,
+        -0.00010560503280460294
+      ],
+      "srgb8": [
+        45,
+        14,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_ektar_100.json": "60acbd46c75005771569eafb97f534a4495e9d4e1e9c1e419b90cea2676ec7cf",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_gold_200",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0006589118522932989,
+      -0.0005300180508195697,
+      -0.0005780066098952391
+    ],
+    "valid_wavelength_count": 61,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3434374986942531,
+        0.30052279495412554,
+        0.14228531283468268
+      ],
+      "linear_srgb": [
+        0.5800364608857421,
+        0.2368689067727262,
+        0.10821839417288787
+      ],
+      "srgb8": [
+        200,
+        134,
+        92
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.627895335404784,
+        1.5144094243835815,
+        1.6873796666710414
+      ],
+      "xyz": [
+        0.019282965800578245,
+        0.013919424992912164,
+        0.0024657887529264625
+      ],
+      "linear_srgb": [
+        0.03986199660204016,
+        0.00752912207077082,
+        0.0008408372083813977
+      ],
+      "srgb8": [
+        56,
+        21,
+        3
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_gold_200.json": "aa8a0c1c7851fface3752f968cdf6c6d74a26fc9756a4460d3155d2382506b7c",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_portra_160",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0006850198618030009,
+      -0.0006180263534972733,
+      -0.0006453122812277507
+    ],
+    "valid_wavelength_count": 59,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.4101875693892431,
+        0.3349343296563879,
+        0.17724094873847898
+      ],
+      "linear_srgb": [
+        0.7260204487739762,
+        0.23819457896086163,
+        0.14186452718165
+      ],
+      "srgb8": [
+        221,
+        134,
+        105
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.6710729573882097,
+        1.7446796477309925,
+        2.0252573234784546
+      ],
+      "xyz": [
+        0.019119686752414704,
+        0.012456527468157239,
+        0.001454785676359068
+      ],
+      "linear_srgb": [
+        0.04208572672759116,
+        0.004901263335923641,
+        6.154340851695752e-05
+      ],
+      "srgb8": [
+        58,
+        15,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_portra_160.json": "1bc9b65a6940f3a4381e8d14d0ac43594aff9495051992ce4d7408e761549992",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_portra_400",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.000731113838226926,
+      -0.0006521335905529248,
+      -0.0006930420347450416
+    ],
+    "valid_wavelength_count": 61,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3952822057070909,
+        0.32593367825874814,
+        0.1775991969397307
+      ],
+      "linear_srgb": [
+        0.6913753060009014,
+        0.23576783124115816,
+        0.1432490996583957
+      ],
+      "srgb8": [
+        217,
+        133,
+        106
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.99179637953822,
+        1.7988370707022954,
+        2.1639109464828126
+      ],
+      "xyz": [
+        0.011642778468804084,
+        0.008132384679014695,
+        0.0010886708686726582
+      ],
+      "linear_srgb": [
+        0.02468567488230494,
+        0.004019218963521402,
+        0.0001402213943803895
+      ],
+      "srgb8": [
+        44,
+        13,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_portra_400.json": "b5cdc73dbec8f462f488bca70bedf23fd13ce79969c0457e8ac2a2565d92bf5d",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_portra_800",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0007797055013099174,
+      -0.0006124054956894949,
+      -0.0006089286277385339
+    ],
+    "valid_wavelength_count": 59,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.37858286855847,
+        0.33063914624531615,
+        0.13852747404729712
+      ],
+      "linear_srgb": [
+        0.6495073496822956,
+        0.25915285935362525,
+        0.10006022001265534
+      ],
+      "srgb8": [
+        211,
+        139,
+        89
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.8987394930336976,
+        1.731481964102859,
+        2.0255250839659222
+      ],
+      "xyz": [
+        0.013277817100991681,
+        0.009628830431065865,
+        0.0011261573885765705
+      ],
+      "linear_srgb": [
+        0.02766515388489492,
+        0.0052436186650684355,
+        -3.4358635686764904e-05
+      ],
+      "srgb8": [
+        46,
+        16,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_portra_800.json": "5b0c6e861c6273a2ecdf552525e80738037918e650a0dc206e095acfd02f8b43",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_portra_800_push1",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0008070132215772623,
+      -0.0007506013651137928,
+      -0.0006807868930522567
+    ],
+    "valid_wavelength_count": 59,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.37858286855847,
+        0.33063914624531615,
+        0.13852747404729712
+      ],
+      "linear_srgb": [
+        0.6495073496822956,
+        0.25915285935362525,
+        0.10006022001265534
+      ],
+      "srgb8": [
+        211,
+        139,
+        89
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        2.297316668822496,
+        1.9598268202836522,
+        2.257048261724801
+      ],
+      "xyz": [
+        0.007695599093143794,
+        0.005685388915325974,
+        0.000640361470139696
+      ],
+      "linear_srgb": [
+        0.01587949435159104,
+        0.003234961567032237,
+        -5.4312395300730725e-05
+      ],
+      "srgb8": [
+        34,
+        11,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_portra_800_push1.json": "dac9cbcd2442442d9dee90bd2d6a28dcc4b996635dcac0b44ac8ecd32c4b3a4f",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_portra_800_push2",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0008217570922595648,
+      -0.0007763499037413453,
+      -0.0007626979557106746
+    ],
+    "valid_wavelength_count": 59,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.37858286855847,
+        0.33063914624531615,
+        0.13852747404729712
+      ],
+      "linear_srgb": [
+        0.6495073496822956,
+        0.25915285935362525,
+        0.10006022001265534
+      ],
+      "srgb8": [
+        211,
+        139,
+        89
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        2.5188322563684507,
+        2.011061974993803,
+        2.5239315363952826
+      ],
+      "xyz": [
+        0.006030726786654861,
+        0.004603490089895567,
+        0.0003772571506201442
+      ],
+      "linear_srgb": [
+        0.012278587843347075,
+        0.0028077116987869446,
+        -0.00020443968811652735
+      ],
+      "srgb8": [
+        29,
+        9,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_portra_800_push2.json": "5ee01e4a00c157721738314313a43b46fcd5dae62ed3a7e4730f9054b66f6282",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_ultramax_400",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0007390318558699444,
+      -0.0005943721100034317,
+      -0.0006193966996262054
+    ],
+    "valid_wavelength_count": 60,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3833257502248254,
+        0.3364058157257664,
+        0.14467395070824596
+      ],
+      "linear_srgb": [
+        0.6529479744217899,
+        0.26562967869995147,
+        0.1056448237780824
+      ],
+      "srgb8": [
+        211,
+        141,
+        91
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.8038501847142148,
+        1.7038919481062718,
+        2.0570917644991815
+      ],
+      "xyz": [
+        0.014954135630602097,
+        0.01066432234927609,
+        0.0011123234119096398
+      ],
+      "linear_srgb": [
+        0.031512571156043806,
+        0.005561235271875967,
+        -0.00016685055823929633
+      ],
+      "srgb8": [
+        50,
+        17,
+        0
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_ultramax_400.json": "248b78bdcc4fdbe864e30f193f900059ecd98cbdb276c88ad8f6f5b520137901",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_verita_200d",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0007911927965757046,
+      -0.0006341091418869214,
+      -0.0006201069433422297
+    ],
+    "valid_wavelength_count": 59,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.33845428766105706,
+        0.27816253622957143,
+        0.13303964624614792
+      ],
+      "linear_srgb": [
+        0.6028699462839949,
+        0.19937007146384697,
+        0.10272965251406664
+      ],
+      "srgb8": [
+        204,
+        123,
+        90
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.8035682793641967,
+        1.6820522310666655,
+        1.979879489611552
+      ],
+      "xyz": [
+        0.010007205329118847,
+        0.007454414868750826,
+        0.001562624598849857
+      ],
+      "linear_srgb": [
+        0.02019129842831223,
+        0.0043518590882718165,
+        0.0006883949045910501
+      ],
+      "srgb8": [
+        39,
+        14,
+        2
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_verita_200d.json": "5d71a3f544721a71cfa0b0671ce1b5eda6dc1e6a09273810793d4bc821b272fc",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_vision3_200t",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0006702934448667252,
+      -0.0005283451961382887,
+      -0.0005408367493270701
+    ],
+    "valid_wavelength_count": 76,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.3836456543933631,
+        0.33460883400263025,
+        0.17349361836224653
+      ],
+      "linear_srgb": [
+        0.6423774898828731,
+        0.26314496144243754,
+        0.1364916154220683
+      ],
+      "srgb8": [
+        210,
+        140,
+        103
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.667853656068814,
+        1.6354616295988478,
+        1.8457940971255007
+      ],
+      "xyz": [
+        0.012824115115627545,
+        0.008837007692902066,
+        0.0019425331671934227
+      ],
+      "linear_srgb": [
+        0.027005032181010927,
+        0.0042317890212526955,
+        0.0009648112003118807
+      ],
+      "srgb8": [
+        46,
+        14,
+        3
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_vision3_200t.json": "4a28f049fd6bad67be98efdb058b413c6b3c022e2932b357b346d902c4c393c8",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_vision3_250d",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.0004797264060930059,
+      -0.00031282583328134326,
+      -0.00027887084391403497
+    ],
+    "valid_wavelength_count": 76,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.37271929777163487,
+        0.333549794949901,
+        0.16156213299925878
+      ],
+      "linear_srgb": [
+        0.6145465320483418,
+        0.27124980627555645,
+        0.12348748129631679
+      ],
+      "srgb8": [
+        206,
+        142,
+        99
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.6950271718633059,
+        1.7770826018972445,
+        1.9075981467334033
+      ],
+      "xyz": [
+        0.01105483822280192,
+        0.00765058656075662,
+        0.0016409618213436329
+      ],
+      "linear_srgb": [
+        0.023245643519494895,
+        0.0037080374321802477,
+        0.0007895314757759363
+      ],
+      "srgb8": [
+        42,
+        12,
+        3
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_vision3_250d.json": "9ab85c8627c0533beb925b747e441e93beabe9e98c2429695b0a53866b56fcc7",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_vision3_500t",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.00035192379825857244,
+      -0.0001412313033157696,
+      -0.0003144199188186782
+    ],
+    "valid_wavelength_count": 76,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.37297410338698783,
+        0.3296146233168256,
+        0.16914513850620483
+      ],
+      "linear_srgb": [
+        0.6176405144140548,
+        0.26393602489405643,
+        0.1323196858030813
+      ],
+      "srgb8": [
+        206,
+        140,
+        102
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.7451490461850756,
+        1.6390085727640848,
+        1.921321758099494
+      ],
+      "xyz": [
+        0.010851078537950476,
+        0.007482490335973878,
+        0.0016850872911030926
+      ],
+      "linear_srgb": [
+        0.02282173644227927,
+        0.0035919764993803628,
+        0.0008591143127211393
+      ],
+      "srgb8": [
+        42,
+        12,
+        3
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_vision3_500t.json": "d7beca68bf16db88dbb7373fd13a6a1150a57a911a54bb0309a760a6f9883329",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  },
+  {
+    "stock": "kodak_vision3_50d",
+    "status": "model_endpoint_study_not_factory_edge_measurement",
+    "normalization": "Subtract finite per-channel density-curve minima, matching normalize_density_curves_f64; zero normalized dye is the minimum endpoint, not zero raw spectral density.",
+    "curve_minima": [
+      -0.00069785241004135,
+      -0.0005907120570516446,
+      -0.0005814040139144896
+    ],
+    "valid_wavelength_count": 71,
+    "missing_wavelength_rule": "Skip nonfinite base/dye; keep full D65 Y normalization, matching negative_preview.rs.",
+    "base_minimum": {
+      "normalized_cmy_density": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "xyz": [
+        0.4133407972234662,
+        0.35313886339733935,
+        0.17453442076841227
+      ],
+      "linear_srgb": [
+        0.7096042644728444,
+        0.2691751599928018,
+        0.1354656370245016
+      ],
+      "srgb8": [
+        219,
+        142,
+        103
+      ]
+    },
+    "maximum_density_bound": {
+      "normalized_cmy_density": [
+        1.624952361617231,
+        1.6957494774761939,
+        1.9128300410677601
+      ],
+      "xyz": [
+        0.013441848135445533,
+        0.00935215270431158,
+        0.0018490987183105434
+      ],
+      "linear_srgb": [
+        0.0282615633097074,
+        0.004595698981124371,
+        0.0007953691347189982
+      ],
+      "srgb8": [
+        47,
+        15,
+        3
+      ]
+    },
+    "limitations": [
+      "No measured factory lettering exposure or spectrum in profile. Maximum-density endpoint is only a contrast bound, not an established lettering color.",
+      "D65 fixed light-table model; not identical to configurable final scanner, viewing illuminant, or real calibrated scan.",
+      "No new frame assets or runtime contracts approved by this output."
+    ],
+    "input_sha256": {
+      "/workspace/shared/filmroom-repair/filmroom-android/app/src/main/assets/engine-data/profiles/kodak_vision3_50d.json": "fd426abc9de911682080db222020978dee4e8df7ca939bfcd5c9d0f6df249fa1",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+      "/workspace/shared/filmroom-repair/filmroom-android/native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+    }
+  }
+]

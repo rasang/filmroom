@@ -1,0 +1,7 @@
+/target/
+/results/large-fixtures/
+/results/*.f32le
+/results/*.jpg
+/results/*.tif
+/results/rawpixls-*.html
+/results/rawpixls-repository.json

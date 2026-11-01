@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.1.0",
+  "versionCode": 1,
+  "apkSha256": "0ed757eaa1436ce7dafa8c9f3a7dc1f20550bdcf6e2eced6e2ae95e8278293f0",
+  "apkBytes": 20274056,
+  "nativeLibraries": {
+    "arm64-v8a/libfilm_engine.so": "191a5f4092c8b833d1b6f833aedb0193353e28041fc652b747cb411bbb442a92",
+    "x86_64/libfilm_engine.so": "81d14d15c2e9d0e13599ea5b8142365d3cdeff9d7e14be40a47578b20fe266b2",
+    "arm64-v8a/libfilm_codecs.so": "7360298a87e654dfae46956de4c244e9bf8585cbe22eccc5149e451440ceb30a",
+    "x86_64/libfilm_codecs.so": "32adc877b791b5fafb911d4067cba6bdf2dcf0153842009e3784e268fef776bf"
+  },
+  "hostTests": {
+    "tests": 89,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "hostTestSuites": [
+    {
+      "name": "dev.filmroom.io.PhotoLimitsTest",
+      "tests": 7
+    },
+    {
+      "name": "dev.filmroom.HighResolutionCodecCapabilityHostTest",
+      "tests": 1
+    },
+    {
+      "name": "dev.filmroom.io.formats.PhotoHeadersTest",
+      "tests": 8
+    },
+    {
+      "name": "dev.filmroom.io.LinearRgbPngTest",
+      "tests": 7
+    },
+    {
+      "name": "dev.filmroom.PrivateWorkRecoveryTest",
+      "tests": 5
+    },
+    {
+      "name": "dev.filmroom.RawOwnershipHostTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.io.formats.FormatCapabilitiesTest",
+      "tests": 8
+    },
+    {
+      "name": "dev.filmroom.io.StaticPngTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.DownloadsExportHostTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.io.LinearSpoolTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.ExportStoragePolicyTest",
+      "tests": 3
+    },
+    {
+      "name": "dev.filmroom.DiagnosticShareHostTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.EditHistoryTest",
+      "tests": 3
+    },
+    {
+      "name": "dev.filmroom.HighResolutionImportHostTest",
+      "tests": 9
+    },
+    {
+      "name": "dev.filmroom.NativeScreenHostTest",
+      "tests": 2
+    },
+    {
+      "name": "dev.filmroom.diagnostics.DiagnosticStoreTest",
+      "tests": 18
+    },
+    {
+      "name": "dev.filmroom.codec.PhotoCodecsTest",
+      "tests": 3
+    },
+    {
+      "name": "dev.filmroom.codec.JniContractTest",
+      "tests": 3
+    },
+    {
+      "name": "dev.filmroom.NativeMemoryPolicyTest",
+      "tests": 2
+    }
+  ],
+  "lint": {
+    "Error": 0,
+    "Fatal": 0,
+    "Warning": 30,
+    "Information": 0
+  },
+  "androidInstrumentedTests": "compiled, not run",
+  "androidDeviceOrEmulatorRuntime": "not run",
+  "signatureCertificateSha256": "eb185f8c722d4883daac17dbd9b9e6a0f5bf854839fe8ff28f2cd55030e5d8ed",
+  "sourceHashes": {
+    "gradle.properties": "d83e273790ac248fa6c70b82fbdeec7d8146773136a9028845247cb63873ffee",
+    "settings.gradle.kts": "8a6468cab912dac826bdb3dda995b377511f4165684c83309426b4f792d5feb6",
+    "build.gradle.kts": "50425357e4449207a6e3098fa4f4dc66864a870859025051fc809589ddb858df",
+    "app/build.gradle.kts": "5f6939c4016259b58897eeb3e2d97739a531f1588524576c620d12a5db0f6a29",
+    "app/src/main/AndroidManifest.xml": "dcf5421d93958fc1fca1cffc9afe1f29dac393958c10f055ee6a1ead3deb73d6",
+    "app/src/androidTest/java/dev/filmroom/EditorFlowTest.kt": "af6a453bf809556415509a57e419ddec2f7b3980cf65af2cf6e458b46cb6f944",
+    "app/src/androidTest/java/dev/filmroom/io/PhotoRepositoryInstrumentedTest.kt": "5bc16dfc8411413f8f11e9356680f0c66dee7bba7919eb65d2283422cd053203",
+    "app/src/test/java/dev/filmroom/HighResolutionCodecCapabilityHostTest.kt": "baa1e741aea8f9093024698e28c3e0bbf3ec55337bad17b972ce802c7cff32e9",
+    "app/src/test/java/dev/filmroom/ExportStoragePolicyTest.kt": "4cc5f98cbcd3e073f0fbc1925aab376dd32a8d3dd669736bbb8ead9dafde3bf7",
+    "app/src/test/java/dev/filmroom/HighResolutionImportHostTest.kt": "14b69b0751cc16e1a11f5aebb46cffdacc67d355da950ce8ccde8ec3887a532f",
+    "app/src/test/java/dev/filmroom/EditHistoryTest.kt": "360e7207717fcc206acf9d54eace4f98c962c7b317d19a755e14aea117ee3c3b",
+    "app/src/test/java/dev/filmroom/DownloadsExportHostTest.kt": "b0ab42542a9f2535f7bb7d75e8da2501be3d35a91d1c42ae8e15fe79e6f69447",
+    "app/src/test/java/dev/filmroom/DiagnosticShareHostTest.kt": "db8d9e9efef85d076a987b1bc52afae19874e6c9fb751155a39ec215472758b0",
+    "app/src/test/java/dev/filmroom/NativeScreenHostTest.kt": "283904ab756bc29638f5dc3c87cbea07508753ec1098bf17da9ebcff80f15e39",
+    "app/src/test/java/dev/filmroom/NativeMemoryPolicyTest.kt": "f8d2c8dc738e341c95c27a8e04e0effff8d162700241f2bca25446a96ae01467",
+    "app/src/test/java/dev/filmroom/PrivateWorkRecoveryTest.kt": "e610c3011f29aea7fc006add23e5985cd0a68cb41694ff106b731ccda7988546",
+    "app/src/test/java/dev/filmroom/RawOwnershipHostTest.kt": "2bdadfcebae2c1c82edc35857f4d8fd8c863f3e7ec8a892c8c57e4944a3c842f",
+    "app/src/test/java/dev/filmroom/codec/JniContractTest.kt": "4c6c893cdddd4d4d2daf42a82e3c393980814b219042a24f4f6d6ca4ddedc5b0",
+    "app/src/test/java/dev/filmroom/codec/PhotoCodecsTest.kt": "d3d814db3b41a9341570b1f2ffc269ecc88f58a932317f8242f74630c29da75d",
+    "app/src/test/java/dev/filmroom/diagnostics/DiagnosticStoreTest.kt": "7785d8a725448962bb479a3c49bf1b1fcf05ff77600c363d7962a7e93a9ba840",
+    "app/src/test/java/dev/filmroom/io/LinearSpoolTest.kt": "95b78181692e3a37fd48eef6b2d6779a55063ddac1dc6414c69f847aac49149b",
+    "app/src/test/java/dev/filmroom/io/PhotoLimitsTest.kt": "99d0cd22d4316503ae75a2bad920478166e36776877125c6784e17b41bb68341",
+    "app/src/test/java/dev/filmroom/io/LinearRgbPngTest.kt": "f23da6ed5f07be4aa4b7e70511c1579729ca6501bf7ea99ddb6d0537285e8dea",
+    "app/src/test/java/dev/filmroom/io/StaticPngTest.kt": "de7aa3dd9076f9dd1ceba7700fdeb724db1a65f1b76b731e145e10dd890a3758",
+    "app/src/test/java/dev/filmroom/io/formats/FormatCapabilitiesTest.kt": "b908f599a3682dbc851d3c161af16ef844b6f80a5510317895f340bbc8c930e7",
+    "app/src/test/java/dev/filmroom/io/formats/PhotoHeadersTest.kt": "35ad3e9e2a8144c62473b13ff427bedae17ef4e00c44415b162efedbb0bbc9df",
+    "app/src/test/resources/codec-jni/jni-encode-TIFF16-success.json": "234f7e80e15564a2c48b96a0fd657888cdeb66ccdb6880bf0e15f9c0eb2c806e",
+    "app/src/test/resources/codec-jni/jni-probe-success.json": "106c9aaf43267e4216d5fba14bf3932756075f7f7167ae79d2e11e5b2c2d747d",
+    "app/src/test/resources/codec-jni/jni-decode-success.json": "f51f776a7ab515203c21088d0460e36fb117085929212eedc699e55c167ef925",
+    "app/src/test/resources/codec-jni/jni-encode-JPEG-success.json": "a357485202585f9f06572dc39b43bb5038569a96c75321ff495dd1b6e6d2e9d7",
+    "app/src/test/resources/codec-jni/jni-error.json": "081ddd88d795c2a0a030523cf88f36726f6be76c083963eec95938eb51f384a4",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "9137642568eba268917309bee6b645300070a000bba4213da60bda3e197c376a",
+    "app/src/main/res/drawable/ic_compare.xml": "b3e7fe8e03b76f1902472534fa7ad83cad7c3ec671a68ef8f4557de9df4d5133",
+    "app/src/main/res/drawable/ic_more.xml": "24dafe069c5b0f5957330b5d2a296c697abf3b90954b6c8762de37f367c25ce7",
+    "app/src/main/res/drawable/ic_border.xml": "d7b0eb6339b918706324b6a087222defbec1fddf337bb3ef7e3356c63fcf337b",
+    "app/src/main/res/drawable/ic_info.xml": "c6116350680efe95ca6646baf05f58198a1f1d93f019a60db12f0434668acd25",
+    "app/src/main/res/drawable/ic_brand.xml": "9533325507f48e584349e88417c1daf83736cb95b97b1eef955b441ae66968c3",
+    "app/src/main/res/drawable/ic_film.xml": "41b5c48d20a373fa00ef169ec9ce18db5dbbe30e20e0da394038bbcc26ef58a0",
+    "app/src/main/res/drawable/ic_back.xml": "0b23f1f5e7c6616a03277cd7da3c1339757da9899440478ba4a8cacc077ece57",
+    "app/src/main/res/drawable/ic_reset.xml": "9a4ffc33d32341ac9da0b0a82670647def1ed3bf7450ad7a5c638a7f81cf6fd3",
+    "app/src/main/res/drawable/ic_launcher_background.xml": "b4b3754b26af40760399842348bf69f4ae1bd660d98ca2d86c9652daf531efd8",
+    "app/src/main/res/drawable/ic_adjust.xml": "9008204d4ef1e6b7f0c83fd5b7546cdfbc244c181b5e25711382fc17406992e1",
+    "app/src/main/res/drawable/ic_local.xml": "bf7debc77ed26f8bcfacc2453f4a577c5b0c3798e89caad3a27cc4cd52d4150e",
+    "app/src/main/res/drawable/ic_undo.xml": "e6f02d6563b5fbff7cf619d19b334925d84ca7097bec8c1ae0b4d75b23d6ec89",
+    "app/src/main/res/drawable/ic_grain.xml": "f4f68dc054899b9c9c38a5eaae18b3f2b8eb46543d25e486108dd160c5a9411f",
+    "app/src/main/res/drawable/ic_halation.xml": "d7cfe3a7b56aa0e6d90ce98994d09e7e03cc6a8377a532c1477bd09c93bf2d17",
+    "app/src/main/res/drawable/ic_close.xml": "5e0817fc1c010955f005b191b655e4bf955d7dd835c4787954ca388e87ac23c9",
+    "app/src/main/res/drawable/ic_expand.xml": "67ec485bf7aedd698f96e0b0b01176f68ed2b93ca4090b6a29b154bf18c62989",
+    "app/src/main/res/drawable/ic_launcher_monochrome.xml": "c56c6fc1f29a008c9f8dd994d4eaad2cf961c3c6eb95b2de0931ae32f83c33be",
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": "c784ebfa1da002b16ed128bd177a6d7796ae84ee7debd696dca83a3bb40df9ae",
+    "app/src/main/res/drawable/ic_gallery.xml": "4565fa3a3494249cc7d95680b5e8dffd935683f06d35594c0b8d5b03fcae463a",
+    "app/src/main/res/drawable/ic_redo.xml": "689fcfee579fcf75f29eb542593393234e8f4413d1adf4b9140f3004820984a1",
+    "app/src/main/res/drawable/ic_warning.xml": "5b65f1a64a95c67f8e87d4efdac4ecb99cd69ac24413ea39dcc185d49c5ca90e",
+    "app/src/main/res/drawable/ic_export.xml": "fd6f66ef8eef9499104bb380fe812dfc33937f1e47936ac46132e4916f5c4bb0",
+    "app/src/main/res/drawable/ic_import.xml": "6f76773d9eabeb5098ca1da291416da99e3ddffd4f4a55f7e55c06540300a241",
+    "app/src/main/res/drawable/ic_check.xml": "131565a7f183019d1bd5b7575e37fa43789e42bd019c80d890dd42784819c9bb",
+    "app/src/main/res/drawable/ic_brightness.xml": "d6930db52340aaf802ca0494fe40df4660461a6a567e6e8afbe92f4a60804c57",
+    "app/src/main/res/xml/data_extraction_rules.xml": "6776a6a01f449fd8dcd49a6fdd63429ea883dca62304b9bc345808494c7c2f8e",
+    "app/src/main/res/xml/backup_rules.xml": "76ea632b93a3e96dc37ad3801632168217c67c8a6dddeb1c9809c4cff89ff7de",
+    "app/src/main/res/xml/diagnostic_paths.xml": "defc244eeafba9ade87d7b398a16c46d3f2a6062b8927dafb1a8c1412cb167c6",
+    "app/src/main/res/values/styles.xml": "3da58245afa94cb5a6f5662b2a691a09cdc2243ed47170831a0c1fd59ccdb214",
+    "app/src/main/res/mipmap-anydpi-v33/ic_launcher.xml": "2a0862c77470ea46a0afe4438a91220f6394353673d80160005b8f51dbf9e79f",
+    "app/src/main/jniLibs/x86_64/libfilm_engine.so": "81d14d15c2e9d0e13599ea5b8142365d3cdeff9d7e14be40a47578b20fe266b2",
+    "app/src/main/jniLibs/x86_64/libfilm_codecs.so": "32adc877b791b5fafb911d4067cba6bdf2dcf0153842009e3784e268fef776bf",
+    "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so": "191a5f4092c8b833d1b6f833aedb0193353e28041fc652b747cb411bbb442a92",
+    "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": "7360298a87e654dfae46956de4c244e9bf8585cbe22eccc5149e451440ceb30a",
+    "app/src/main/assets/licenses/GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "app/src/main/assets/licenses/SPEKTRAFILM_LICENSE.txt": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9",
+    "app/src/main/assets/licenses/CODEC_NOTICES.txt": "01deda6a2e6848621078daf8bd4df52a345dfc5f1c6672e5877f1aababf219a2",
+    "app/src/main/assets/licenses/THIRD_PARTY_RUST_NOTICES.txt": "436c22038352c48cc587838ec48a2d8bda5eeec651faea402bada1de55d302e0",
+    "app/src/main/assets/engine-data/manifest.json": "368954ad6c51f2a1b1f2eb4ca906c085ea75519476e0dab461a07bccd7b2bd9c",
+    "app/src/main/assets/engine-data/SPEKTRAFILM_LICENSE.txt": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9",
+    "app/src/main/assets/engine-data/profiles/kodak_portra_endura.json": "e3bb6069e02d088d8080d38ce28035816038f62786e2aff9176bf4aeeb4820a0",
+    "app/src/main/assets/engine-data/profiles/kodak_supra_endura.json": "3a0928013effbb33e81acd01db426937faa3a12021a267c54b4d96e916286bd6",
+    "app/src/main/assets/engine-data/profiles/fujifilm_crystal_archive_typeii.json": "0db98e5b8e2ed5248696e62bc39b7f21459a8812d64049b1275d7be995af873b",
+    "app/src/main/assets/engine-data/profiles/kodak_portra_400.json": "b5cdc73dbec8f462f488bca70bedf23fd13ce79969c0457e8ac2a2565d92bf5d",
+    "app/src/main/assets/engine-data/profiles/fujifilm_c200.json": "30db07d88090aadc62e03d18c2c51f67a20a1673390c69f99933b7ed5406d2c8",
+    "app/src/main/assets/engine-data/profiles/kodak_gold_200.json": "aa8a0c1c7851fface3752f968cdf6c6d74a26fc9756a4460d3155d2382506b7c",
+    "app/src/main/assets/engine-data/filters/neutral_print_filters.json": "8bbf8d8db76aecdc9e94bc0b1e31f3329553eeda56d210ab36294fa5e4bf3b13",
+    "app/src/main/java/dev/filmroom/FilmroomApplication.kt": "657bfe28f900ff787818e1c9c20970bd33b67b77f121930055cbb0fe1f1d62fb",
+    "app/src/main/java/dev/filmroom/MainActivity.kt": "8c2f4268d0de402556efc647b357db2376c915c1e58e29a474cef9433931546d",
+    "app/src/main/java/dev/filmroom/EditorViewModel.kt": "adfa48eaec2a561a5570de86cd12e8ed8753b767c800d2119017366fa5a46315",
+    "app/src/main/java/dev/filmroom/OperationTrace.kt": "0b20d172749baed9a02bd423382b0f4ff0df08ee92d0230421e06f68cdbd6571",
+    "app/src/main/java/dev/filmroom/codec/NativeCodecBridge.kt": "e85124a34b1e9c7548acf5c2b3ff428f0db692fc535b29c8c47a80dda2053c6f",
+    "app/src/main/java/dev/filmroom/codec/RawMetadata.kt": "dc9d2df4cd93230b0a5553397b9bf9125e6532b26ec28076409ee3fcfffa6a27",
+    "app/src/main/java/dev/filmroom/model/EditorState.kt": "59e146c48048d37eda7ebadf053c3b8d2d455f646b3e4f4688a3cba90d748fe1",
+    "app/src/main/java/dev/filmroom/diagnostics/DiagnosticReport.kt": "fcb9ecd3b324cc68e2adfd71041d72b9dc5dff378a95d03b03cbba497898129f",
+    "app/src/main/java/dev/filmroom/diagnostics/Diagnostics.kt": "e79b31457a94e10132ac5d34b2561fc9cb085ad9179da63cc168e1d91c921e84",
+    "app/src/main/java/dev/filmroom/diagnostics/DiagnosticTypes.kt": "44523040fd5885d3566fca7a78a7812d50f07a514b1321d63800e8c9cb27658f",
+    "app/src/main/java/dev/filmroom/diagnostics/DiagnosticArchive.kt": "8752b6d0f322d186d3ffdcda157a3932fc28cd4e9d859f697df581df1daec4c3",
+    "app/src/main/java/dev/filmroom/diagnostics/DiagnosticStore.kt": "eac70a7232dab04a70bd158cf232a194b69ec7cd8893e46986afdf0e653b3a8f",
+    "app/src/main/java/dev/filmroom/io/PhotoRepository.kt": "e86c78ea9666ba815f30b1de8f97a1e01fe50dde7ee6ae98c91e1269ea74c3ac",
+    "app/src/main/java/dev/filmroom/io/OriginalSpool.kt": "e26bceeb9a5e752b967a853b6e98d09fcec2abd934534f4902a3eda47ac45db9",
+    "app/src/main/java/dev/filmroom/io/PhotoLimits.kt": "8b7efc931fd69027abc3733bfb16c3c2883e095a693e315c8b91b3a21406a950",
+    "app/src/main/java/dev/filmroom/io/StaticPng.kt": "8667f10a37bc82f4ac4ac173225cec6117383b2ef5c32bffb81cde004eaceb7a",
+    "app/src/main/java/dev/filmroom/io/LinearRgbPng.kt": "1eb5cd3ba53daecf1151b4124a3131b18a036f261b3b0ff3bf88f919cddbf599",
+    "app/src/main/java/dev/filmroom/io/ExifMapping.kt": "f52e1e1f262ef7d19471d6ecb66fdb26caa1a1778e696af8d85db9bbe1f3c445",
+    "app/src/main/java/dev/filmroom/io/LinearSpool.kt": "6b0390b6d3bd8e4dd8ebe3eed0747f01aeb67a499e5cb6ba51b741ada14b2ab7",
+    "app/src/main/java/dev/filmroom/ui/PhotoView.kt": "355436b510827a917ae8342fa9d7064f1f0b07711fc5c219529b872da3b75d7a",
+    "app/src/main/java/dev/filmroom/ui/DiagnosticShareIntents.kt": "7f46edd5262f9b80b032c20168efade914cff319273610eaa75321064b4cb808",
+    "app/src/main/java/dev/filmroom/engine/ExportPlanning.kt": "5566a45ce632242fe517e004786175501cc9e73139b5a6730f6f68cd9d9b88e6",
+    "app/src/main/java/dev/filmroom/engine/FilmEngine.kt": "eeb149b3d86225fd90e148299677b4ffb97a6350c4e849ae4913da28d0a704c0",
+    "app/src/main/java/dev/filmroom/engine/NativeMemoryPolicy.kt": "da0aef8d6b408941baa53818fb9778b5a7c580ce553a14bfff3f7b42df2bb104",
+    "app/src/main/java/dev/filmroom/lifecycle/PrivateWorkRecovery.kt": "c7074ecf5e5b6289c20628d895f3f25385ad823089bc08c3989cf21e84a02316",
+    "app/src/main/java/dev/filmroom/io/formats/PhotoFormat.kt": "3d79cd214c1a941756b50b3bb31a598e0de02f8925db6a1cca6cb9f60c8c4040",
+    "app/src/main/java/dev/filmroom/io/formats/FormatCapabilities.kt": "b083379df1290a2255a1071e8706a2a3a877faad7aea8f22e0bbf19cf34925a3",
+    "app/src/main/java/dev/filmroom/io/formats/AndroidFormatCapabilities.kt": "53ddf6731c010cbc8a6ee0d96cfe128dbc10264d026141b748a4dcbec3f410c9"
+  },
+  "verifiedNoNetworkPermission": true,
+  "zipAlignment16KiB": true,
+  "sourceBuildScope": "Codec vendor fully offline; engine exact compiled dependency sources included, full optional lockfile may require registry during initial resolution."
+}

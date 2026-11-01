@@ -1,0 +1,850 @@
+{
+  "coordinates": "Native1520x1400. Module16; tracks40. Data nominalcenter1361; clock nominalcenter1321 is nearholeedge, so test explicit multipleunobscuredrows, notsinglecenter.",
+  "symbol_shape": [
+    31,
+    2
+  ],
+  "sampling_note": "On resizedoutputs map nativecenters through actualgeometry; distinguishlogicalverificationfromexternalscannercertification",
+  "stocks": [
+    {
+      "physical_stock": "kodak_portra_160",
+      "asset_sha256": "b87293938178550e5f81b23c736acaea35d767e851b7b227830ac8b022f9b8c1",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 95,
+          "generation": 14,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111011100110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 95,
+          "generation": 14,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111011100110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "original_RGBA_mean_threshold": 90,
+      "perturbed_native_readback": {
+        "bits_checked": 1860,
+        "failed_reads": 0
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_400",
+      "asset_sha256": "a244bfcb44058417beadacb16654e99ceb83a2b68e01eedf5846d127db9dc5df",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 95,
+          "generation": 13,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111011010110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 95,
+          "generation": 13,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111011010110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "original_RGBA_mean_threshold": 90,
+      "perturbed_native_readback": {
+        "bits_checked": 1860,
+        "failed_reads": 0
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_800",
+      "asset_sha256": "b52a12b7c8c5ef17f5c3350977ab03f79b0f22fc149f6a0932d591a37a42ef80",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 43,
+          "generation": 9,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100101011010010110010010101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 43,
+          "generation": 9,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100101011010010110011000101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "color_revision": "reference-positive-portra800-r1",
+      "native_linear_midpoint": 0.18103886321244878,
+      "native_readback": "fullnonzeroalpha logicalclass PASS; actualencoded pending"
+    },
+    {
+      "physical_stock": "kodak_gold_200",
+      "asset_sha256": "061d23960e03bcf7fca9e725c1bc4620047f1a2e22792dc17850057ae06522e3",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 96,
+          "generation": 12,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101100000011000110010010101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "native full nonzero-alpha logical mask PASS; actual encoded gate PENDING",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 96,
+          "generation": 12,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101100000011000110011000101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "native full nonzero-alpha logical mask PASS; actual encoded gate PENDING",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "color_revision": "reference-positive-rebate-r2",
+      "native_linear_midpoint": 0.06429016977304076,
+      "native_readback": "full nonzeroalpha expectedlogicalclass at new linear midpoint PASS; actual encoded gate PENDING"
+    },
+    {
+      "physical_stock": "kodak_ultramax_400",
+      "asset_sha256": "11f9910d57da5be8f37c5681a53f2b78eb2e3ddc830ae7ebb646e6319d46599c",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 95,
+          "generation": 7,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111001110110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 95,
+          "generation": 7,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111001110110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "color_revision": "reference-positive-ultramax-r1",
+      "native_linear_midpoint": 0.037695046541329304,
+      "native_readback": "fullnonzeroalpha logicalclass PASS; actualencoded pending"
+    },
+    {
+      "physical_stock": "kodak_ektar_100",
+      "asset_sha256": "518f75715209bcee43f5ca338c6f5918dd7ec198f5fc62c65607fa2f7c1d47c6",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 95,
+          "generation": 11,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111010110110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "native full nonzero-alpha logical mask PASS; actual encoded gate PENDING",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 95,
+          "generation": 11,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010101011111010110110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "native full nonzero-alpha logical mask PASS; actual encoded gate PENDING",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "color_revision": "reference-positive-rebate-r2",
+      "native_linear_midpoint": 0.1640311748249124,
+      "native_readback": "full nonzeroalpha expectedlogicalclass at new linear midpoint PASS; actual encoded gate PENDING"
+    },
+    {
+      "physical_stock": "fujifilm_c200",
+      "asset_sha256": "d494f916448a391fd7aefc51642b6214c64bf672e366b68ccea513e901ee73c3",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 39,
+          "generation": 1,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100111000010110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 39,
+          "generation": 1,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100111000010110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "original_RGBA_mean_threshold": 90,
+      "perturbed_native_readback": {
+        "bits_checked": 1860,
+        "failed_reads": 0
+      }
+    },
+    {
+      "physical_stock": "fujifilm_xtra_400",
+      "asset_sha256": "412d2047d4dcd8e3ac33f3a197a1f7d296c33a4057a85c0fceff92d455a3c0de",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 39,
+          "generation": 2,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100111000100110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 39,
+          "generation": 2,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100111000100110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "original_RGBA_mean_threshold": 90,
+      "perturbed_native_readback": {
+        "bits_checked": 1860,
+        "failed_reads": 0
+      },
+      "contrast_cleanup": {
+        "fixed_threshold": 0.4170967915343734,
+        "policy": "entireDXnonzeroalpha inspect; replaceonlyincorrectclassRGB with medianofsame-stock samebit originalcorrectpixels",
+        "replacement_rgb": {
+          "0": [
+            14,
+            15,
+            14
+          ],
+          "1": [
+            237,
+            225,
+            201
+          ]
+        },
+        "changed_rgb_pixels": 270
+      }
+    },
+    {
+      "physical_stock": "fujifilm_pro_400h",
+      "asset_sha256": "1f0be548162288794ca9d5b52beb34456eeee60bfa9d03aa4e547c844eb667d4",
+      "symbols": [
+        {
+          "label": "25",
+          "product": 36,
+          "generation": 8,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100100010000110010000101",
+          "placement": [
+            230,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        },
+        {
+          "label": "25A",
+          "product": 36,
+          "generation": 8,
+          "clock31": "1111101010101010101010101010111",
+          "data31": "1010100100100010000110011010101",
+          "placement": [
+            990,
+            1301,
+            16,
+            40
+          ],
+          "module_per_pitch": 0.08421052631578947,
+          "phase_note": "text then symbol; two groups4perfs apart; appphase choice notclaimedfactoryregistration",
+          "quietzone": "clear margins retained, no inventedminimum",
+          "independent_saved_finalRGBA_center_readback": "PASS",
+          "unobscured_sample_rows": {
+            "clock": [
+              1325,
+              1328,
+              1330,
+              1333,
+              1336
+            ],
+            "data": [
+              1348,
+              1354,
+              1361,
+              1368,
+              1375
+            ]
+          },
+          "horizontal_center_offsets": [
+            -3,
+            0,
+            3
+          ],
+          "height_change": "48to40 pertrack; total80; bottomexclusive1381;19pxmaterialmargin",
+          "margin_status": "visual reconstruction choice, not uniformmanufacturingstandard"
+        }
+      ],
+      "bit1_polarity": "lighter_than_material",
+      "original_RGBA_mean_threshold": 90,
+      "perturbed_native_readback": {
+        "bits_checked": 1860,
+        "failed_reads": 0
+      }
+    }
+  ],
+  "minimum_output_scale": "No universalminimum certified. Native clockrowcenter1325 is5px beyond lowerholeend1320; actualresampling footprints and encodings must be tested. At384/1536/3072 use actualrenderer, report results not presumption.",
+  "asset_package_version": "typography-v0114-r2",
+  "previous_contract": "v9-positive4-matte10; all DX pixels/alpha/thresholds unchanged, only Portra800 top lettering hash renewed"
+}

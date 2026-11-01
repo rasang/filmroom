@@ -1,0 +1,47 @@
+//! Entirely local, memory-admitted photo codecs. No network code or telemetry.
+pub mod develop;
+pub mod dng;
+mod compat;
+pub mod error;
+pub mod tiff;
+
+mod jni_bridge;
+
+pub mod export;
+pub mod export_limits;
+
+pub const MAX_PIXELS: u64 = 52_000_000;
+pub fn validate_dimensions(width: u32, height: u32) -> error::Result<u64> {
+    let n = u64::from(width)
+        .checked_mul(u64::from(height))
+        .ok_or_else(|| error::err("PIXEL_LIMIT", "admission"))?;
+    if width == 0 || height == 0 || width > 32768 || height > 32768 || n > MAX_PIXELS {
+        return Err(error::err("PIXEL_LIMIT", "admission"));
+    }
+    Ok(n)
+}
+#[cfg(test)]
+mod dimension_tests {
+    #[test]
+    fn marketed_50mp_and_exact_guard() {
+        assert_eq!(super::validate_dimensions(8192, 6144).unwrap(), 50_331_648);
+        assert_eq!(super::validate_dimensions(10000, 5200).unwrap(), 52_000_000);
+        assert_eq!(
+            super::validate_dimensions(5311, 9791).unwrap_err().code,
+            "PIXEL_LIMIT"
+        );
+        assert!(super::validate_dimensions(u32::MAX, u32::MAX).is_err());
+    }
+}
+
+pub mod opcodes;
+
+mod lossless;
+
+pub mod output_color;
+
+mod technical;
+
+pub mod gainmap;
+
+pub mod cfa_gainmap;

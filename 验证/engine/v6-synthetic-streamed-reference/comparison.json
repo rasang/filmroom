@@ -1,0 +1,363 @@
+{
+  "cases": [
+    {
+      "case": "effects_off",
+      "differingSamples": 0,
+      "film": "kodak_portra_400",
+      "finite": true,
+      "firstDifference": null,
+      "height": 64,
+      "inputUnchanged": true,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+        "elapsedMs": 528.819618,
+        "estimatedScratchBytes": 67633152,
+        "gpu": {
+          "acceleratedStage": "density_curve_interp",
+          "active": false,
+          "adapter": "",
+          "available": false,
+          "backend": "cpu",
+          "cpuFallbacks": 1,
+          "gpuBatches": 0,
+          "reason": "Disabled by user",
+          "requested": false,
+          "startupSelfTestPassed": false
+        },
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 64,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 196608,
+        "pixelCount": 4096,
+        "pointwiseChunkRows": 512,
+        "setupMs": 480.311445,
+        "spatialBytesRead": 0,
+        "spatialBytesWritten": 0,
+        "spatialPassCount": 0,
+        "spatialPeakExplicitBufferBytes": 0,
+        "stages": [
+          {
+            "elapsedMs": 4.406152,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 0.000752,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 3.279049,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 0.00023999999999999998,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 39.105914999999996,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 64
+      },
+      "paper": "kodak_portra_endura",
+      "progressEvents": 6,
+      "samples": 12288,
+      "scratchRemoved": true,
+      "width": 64
+    },
+    {
+      "case": "halation_only",
+      "differingSamples": 0,
+      "film": "kodak_portra_400",
+      "finite": true,
+      "firstDifference": null,
+      "height": 64,
+      "inputUnchanged": true,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+        "elapsedMs": 324.10831099999996,
+        "estimatedScratchBytes": 67633152,
+        "gpu": {
+          "acceleratedStage": "density_curve_interp",
+          "active": false,
+          "adapter": "",
+          "available": false,
+          "backend": "cpu",
+          "cpuFallbacks": 1,
+          "gpuBatches": 0,
+          "reason": "Disabled by user",
+          "requested": false,
+          "startupSelfTestPassed": false
+        },
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 64,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 229376,
+        "pixelCount": 4096,
+        "pointwiseChunkRows": 512,
+        "setupMs": 311.96008800000004,
+        "spatialBytesRead": 1179648,
+        "spatialBytesWritten": 1179648,
+        "spatialPassCount": 18,
+        "spatialPeakExplicitBufferBytes": 98304,
+        "stages": [
+          {
+            "elapsedMs": 1.178312,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 4.977097,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 1.015856,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 0.000651,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 4.800439,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 64
+      },
+      "paper": "kodak_portra_endura",
+      "progressEvents": 78,
+      "samples": 12288,
+      "scratchRemoved": true,
+      "width": 64
+    },
+    {
+      "case": "grain_only",
+      "differingSamples": 0,
+      "film": "kodak_portra_400",
+      "finite": true,
+      "firstDifference": null,
+      "height": 64,
+      "inputUnchanged": true,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+        "elapsedMs": 386.644989,
+        "estimatedScratchBytes": 67633152,
+        "gpu": {
+          "acceleratedStage": "density_curve_interp",
+          "active": false,
+          "adapter": "",
+          "available": false,
+          "backend": "cpu",
+          "cpuFallbacks": 1,
+          "gpuBatches": 0,
+          "reason": "Disabled by user",
+          "requested": false,
+          "startupSelfTestPassed": false
+        },
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 64,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 229376,
+        "pixelCount": 4096,
+        "pointwiseChunkRows": 512,
+        "setupMs": 366.022892,
+        "spatialBytesRead": 458752,
+        "spatialBytesWritten": 458752,
+        "spatialPassCount": 7,
+        "spatialPeakExplicitBufferBytes": 98304,
+        "stages": [
+          {
+            "elapsedMs": 1.883108,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 0.000782,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 0.639537,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 13.570242,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 4.277679,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 64
+      },
+      "paper": "kodak_portra_endura",
+      "progressEvents": 43,
+      "samples": 12288,
+      "scratchRemoved": true,
+      "width": 64
+    },
+    {
+      "case": "physical_all",
+      "differingSamples": 0,
+      "film": "kodak_portra_400",
+      "finite": true,
+      "firstDifference": null,
+      "height": 64,
+      "inputUnchanged": true,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+        "elapsedMs": 247.30506699999998,
+        "estimatedScratchBytes": 67633152,
+        "gpu": {
+          "acceleratedStage": "density_curve_interp",
+          "active": false,
+          "adapter": "",
+          "available": false,
+          "backend": "cpu",
+          "cpuFallbacks": 4,
+          "gpuBatches": 0,
+          "reason": "Disabled by user",
+          "requested": false,
+          "startupSelfTestPassed": false
+        },
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 64,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 360448,
+        "pixelCount": 4096,
+        "pointwiseChunkRows": 512,
+        "setupMs": 204.176825,
+        "spatialBytesRead": 2424832,
+        "spatialBytesWritten": 2424832,
+        "spatialPassCount": 37,
+        "spatialPeakExplicitBufferBytes": 98304,
+        "stages": [
+          {
+            "elapsedMs": 4.938459,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 7.159648,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 15.474511999999999,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 9.785587999999999,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 5.497504,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 64
+      },
+      "paper": "kodak_portra_endura",
+      "progressEvents": 166,
+      "samples": 12288,
+      "scratchRemoved": true,
+      "width": 64
+    },
+    {
+      "case": "grain_single_layer",
+      "differingSamples": 0,
+      "film": "kodak_portra_400",
+      "finite": true,
+      "firstDifference": null,
+      "height": 64,
+      "inputUnchanged": true,
+      "maxAbs": 0.0,
+      "meanAbs": 0.0,
+      "metrics": {
+        "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+        "elapsedMs": 142.958635,
+        "estimatedScratchBytes": 67633152,
+        "gpu": {
+          "acceleratedStage": "density_curve_interp",
+          "active": false,
+          "adapter": "",
+          "available": false,
+          "backend": "cpu",
+          "cpuFallbacks": 1,
+          "gpuBatches": 0,
+          "reason": "Disabled by user",
+          "requested": false,
+          "startupSelfTestPassed": false
+        },
+        "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+        "height": 64,
+        "lutStorageBytes": 10045632,
+        "memoryBudgetMiB": 384,
+        "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+        "peakLogicalScratchBytes": 196608,
+        "pixelCount": 4096,
+        "pointwiseChunkRows": 512,
+        "setupMs": 135.211039,
+        "spatialBytesRead": 196608,
+        "spatialBytesWritten": 196608,
+        "spatialPassCount": 3,
+        "spatialPeakExplicitBufferBytes": 98304,
+        "stages": [
+          {
+            "elapsedMs": 0.56201,
+            "stage": "film_exposure"
+          },
+          {
+            "elapsedMs": 0.000701,
+            "stage": "film_scatter_halation"
+          },
+          {
+            "elapsedMs": 0.28458,
+            "stage": "film_density_dir"
+          },
+          {
+            "elapsedMs": 2.7485370000000002,
+            "stage": "grain"
+          },
+          {
+            "elapsedMs": 3.9120559999999998,
+            "stage": "printing_scanning"
+          }
+        ],
+        "width": 64
+      },
+      "paper": "kodak_portra_endura",
+      "progressEvents": 21,
+      "samples": 12288,
+      "scratchRemoved": true,
+      "width": 64
+    }
+  ],
+  "fixtureProvenance": "synthetic-spatial-v6-integer-grid-20261031",
+  "matchingSettings": {
+    "coordinateOrigin": [
+      0,
+      0
+    ],
+    "fullImagePitchUm": 8.75,
+    "lutResolution": 33,
+    "useEnlargerLut": true,
+    "useScannerLut": true
+  },
+  "precision": "f64 internals, f32 input/output",
+  "reference": "whole Pipeline::process, same V6 source with documented synthetic physical settings",
+  "status": "passed"
+}

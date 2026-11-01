@@ -1,0 +1,758 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="text_3d05fc7cf7e4" formatted="false">지난 작업의 임시 파일 정리 중</string>
+    <string name="text_5ec95121dc94" formatted="true">지난 작업의 임시 파일 %1$s개를 정리하지 못했습니다. 저장 공간이 가득 차지 않도록 편집을 시작하지 않습니다. 기기의 저장 공간을 확인한 뒤 여기를 눌러 다시 시도하거나, 앱을 종료한 뒤 나중에 다시 열어 주세요. 원본은 변경되지 않았습니다.</string>
+    <string name="text_b3622bcacaaf" formatted="false">기기 내 편집 복원</string>
+    <string name="text_cd6fac59a752" formatted="false">지난번에 완료하지 못한 내보내기를 지금은 정리할 수 없습니다. 갤러리를 확인하거나 나중에 다시 시도해 주세요.</string>
+    <string name="text_7b50017ae47e" formatted="false">사진</string>
+    <string name="text_063189730acc" formatted="false">지난 작업의 임시 사진을 더 이상 사용할 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_1663134e88db" formatted="false">사진 읽기</string>
+    <string name="text_6dfdd1fe6561" formatted="false">가져오기 완료</string>
+    <string name="text_2416623f6d39" formatted="false">사진을 가져왔으며 이후 처리는 취소되었습니다.</string>
+    <string name="text_d630bd89f6dd" formatted="false">가져오기를 취소했습니다. 기존 사진은 유지됩니다.</string>
+    <string name="text_3052d04d78c2" formatted="false">안전하게 읽기에는 사진이 너무 큽니다. 더 작은 사진을 선택해 주세요.</string>
+    <string name="text_c976e3b99689" formatted="false">사진을 읽을 수 없습니다. 지원되는 형식의 사진을 다시 선택해 주세요.</string>
+    <string name="text_c12aefec4f8a" formatted="false">취소하고 임시 파일을 정리하는 중…</string>
+    <string name="text_6f25582e0d79" formatted="false">미리보기 업데이트를 취소했습니다.</string>
+    <string name="text_acd49b3daba5" formatted="false">기기 메모리가 부족하여 미리보기를 생성할 수 없습니다.</string>
+    <string name="text_bc37a5375a5d" formatted="false">기기 내 렌더링을 완료하지 못했습니다. 다시 시도하거나 다른 사진을 선택해 주세요.</string>
+    <string name="text_be0d9af082d8" formatted="false">내보내기 목록에 추가</string>
+    <string name="text_bb8990972dce" formatted="false">내보내기 목록에 추가했습니다. 계속 편집하거나 사진을 추가할 수 있습니다.</string>
+    <string name="text_afb4ebeb2c42" formatted="false">작업 취소를 요청했습니다. 내보내기 목록에서 상태를 확인할 수 있습니다.</string>
+    <string name="text_f9957f03a610" formatted="false">백그라운드에서 작업을 계속 준비합니다. 내보내기 목록에서 상태를 확인할 수 있습니다.</string>
+    <string name="text_9f9e68d602d6" formatted="false">대기를 중지했습니다. 내보내기 목록에서 작업 접수 여부를 확인해 주세요.</string>
+    <string name="text_834295cc897b" formatted="false">작업을 내보내기 목록에 추가했습니다. 목록에서 상태를 확인해 주세요.</string>
+    <string name="text_aeb3f82f0b35" formatted="false">메모리가 부족하여 내보내기 작업을 추가하지 못했습니다.</string>
+    <string name="text_420e35e0302a" formatted="false">작업을 내보내기 목록에 추가했습니다. 목록에서 상태를 확인하거나 계속 진행해 주세요.</string>
+    <string name="text_11ee5fdc4a0b" formatted="false">내보내기 작업을 추가하지 못했습니다. 기기의 저장 공간을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="text_16b38790d59b" formatted="false">편집으로 돌아가기</string>
+    <string name="text_88b41d5ab211" formatted="false">내보내기 목록</string>
+    <string name="text_f361f0328380" formatted="false">내보내기 목록을 불러오는 중…</string>
+    <string name="text_3cd263a38563" formatted="false">지금은 내보내기 목록을 불러올 수 없습니다. 돌아간 뒤 다시 시도해 주세요.</string>
+    <string name="text_b4351becfe47" formatted="false">내보내기 목록을 읽을 수 없음</string>
+    <string name="text_5f44ac2035ae" formatted="true">%1$s개 처리 중</string>
+    <string name="text_24d163f0f56e" formatted="true">%1$s개 대기 중</string>
+    <string name="text_e982159d21f2" formatted="true">%1$s개 일시 정지됨</string>
+    <string name="text_b331b1884a29" formatted="false">아직 내보내기 작업이 없습니다\n편집 화면에서 내보내기를 선택하면 여기에 추가됩니다.</string>
+    <string name="text_7062447638eb" formatted="false">지금은 계속 진행할 수 없습니다. 나중에 다시 시도해 주세요.</string>
+    <string name="text_d0ac5e20f891" formatted="false">취소를 완료하지 못했습니다. 다시 시도해 주세요.</string>
+    <string name="text_2d968e781718" formatted="false">작업이 시작되지 않았습니다. 눌러서 계속 진행</string>
+    <string name="text_916bd97fb66f" formatted="false">썸네일 준비 중</string>
+    <string name="text_7c9691192f1b" formatted="false">계속</string>
+    <string name="text_2cd0f3be8738" formatted="false">취소</string>
+    <string name="text_4c777c000d4a" formatted="false">이 내보내기를 취소할까요?</string>
+    <string name="text_a008667aeb14" formatted="false">이 작업의 임시 파일을 정리합니다. 원본에는 영향을 주지 않습니다.</string>
+    <string name="text_670ec25af841" formatted="false">유지</string>
+    <string name="text_537d17f1c531" formatted="false">작업 취소</string>
+    <string name="text_9c1ea2e60a71" formatted="false">사진 보기</string>
+    <string name="text_979a332955c8" formatted="false">상세 정보</string>
+    <string name="text_0ae7312510f4" formatted="false">상세 정보 접기</string>
+    <string name="text_a97cb6107f92" formatted="false">필름</string>
+    <string name="text_1a5219a8272a" formatted="false">부족</string>
+    <string name="text_402590868fff" formatted="false">불가</string>
+    <string name="text_4f2d9c358b11" formatted="false">실패</string>
+    <string name="text_a9ca8eff92c8" formatted="false">정리 대기</string>
+    <string name="text_b8784c8dd563" formatted="false">다시 시도</string>
+    <string name="text_183e988f1288" formatted="true">사진 %1$s, %2$s</string>
+    <string name="text_38952e7e372e" formatted="true">사진 %1$s, 내보내기 취소</string>
+    <string name="text_3f3f6c8c5093" formatted="true">사진 %1$s, 저장된 사진 보기</string>
+    <string name="text_a9e8a732c910" formatted="true">사진 %1$s, 상세 정보 펼치기 또는 접기</string>
+    <string name="text_f6a4bb2cb013" formatted="false">갤러리나 파일 관리자에서 저장된 사진을 확인해 주세요.</string>
+    <string name="text_3be614977d5d" formatted="false">\n다시 진행하면 완료되지 않은 단계를 다시 계산할 수 있습니다.\n일시 정지 중에는 임시 파일이 유지됩니다. 작업을 취소하면 저장 공간을 확보할 수 있습니다.</string>
+    <string name="text_e3c1f7706839" formatted="false">썸네일 없음</string>
+    <string name="text_8fb3a3261b43" formatted="false">처리 대기 중</string>
+    <string name="text_9aaf67962338" formatted="false">내보내는 중</string>
+    <string name="text_eb0c326b60ae" formatted="false">일시 정지됨</string>
+    <string name="text_544c342feaf0" formatted="false">사진 추가 중</string>
+    <string name="text_1bd91a7d0c53" formatted="false">저장됨</string>
+    <string name="text_6e4445df6957" formatted="false">내보내기 실패</string>
+    <string name="text_a37778f17c5f" formatted="false">취소됨</string>
+    <string name="text_a15bc3b4bd3e" formatted="true">내보내기 실패\n%1$s · %2$s/7단계</string>
+    <string name="text_1a418b9270f7" formatted="false">내보내기 결과</string>
+    <string name="text_37eb7c18d5ef" formatted="false">네거티브 단계 예시 · 최종 결과물 아님</string>
+    <string name="text_0b00a78a5faa" formatted="false">원본 이미지 · 처리 결과 아님</string>
+    <string name="text_dde174726d3f" formatted="false">현재 작업을 취소할까요?</string>
+    <string name="text_aa7d5766b326" formatted="false">이미 저장이 완료된 사진은 삭제되지 않습니다.</string>
+    <string name="text_a7084fcb218d" formatted="false">작업 취소</string>
+    <string name="text_576d81bb0631" formatted="false">가져오기</string>
+    <string name="text_76420433f22d" formatted="false">내보내기</string>
+    <string name="text_926a50b98ece" formatted="false">실행 취소</string>
+    <string name="text_03717b6f1070" formatted="false">다시 실행</string>
+    <string name="text_ae384296a4ac" formatted="false">프리셋 복원</string>
+    <string name="text_df3d58c7d84b" formatted="false">설정</string>
+    <string name="text_1f14f4b50d0b" formatted="false">사진을 Filmroom으로 가져오세요</string>
+    <string name="text_95c277eafaea" formatted="false">실제 필름과 인화지의 특성을 반영한 처리\n모든 계산은 기기에서 수행됩니다</string>
+    <string name="text_a7fc4b2dbd50" formatted="false">사진 가져오기</string>
+    <string name="text_ee2241639ab0" formatted="false">사진 및 지원되는 DNG · 계정 불필요</string>
+    <string name="text_c37117eec876" formatted="false">원본</string>
+    <string name="text_002e7216c97a" formatted="false">확대 미리보기 불러오는 중</string>
+    <string name="text_36c69988127e" formatted="false">원본과 비교</string>
+    <string name="text_255cf72e1d8c" formatted="false">구도 조정</string>
+    <string name="text_7c3154414c11" formatted="false">사진 정보</string>
+    <string name="text_1b0acbdaf172" formatted="false">원본 · 비교를 다시 누르면 돌아갑니다</string>
+    <string name="text_6d05fcab868f" formatted="true">필름 미리보기 · %1$s × %2$s</string>
+    <string name="text_a21efd19b7df" formatted="false">필름 효과로 돌아가기</string>
+    <string name="text_c3c12cabaae9" formatted="false">미리보기 업데이트 중</string>
+    <string name="text_130bb0102047" formatted="false">구도 조정 중입니다. 아래에서 확인하거나 취소해 주세요</string>
+    <string name="text_168ac579f2fb" formatted="false">임시 파일 정리 필요</string>
+    <string name="text_74edb00b2c95" formatted="false">지난 작업의 임시 파일을 정리하지 못했습니다. 사용 가능한 저장 공간을 확인한 뒤 다시 시도해 주세요. 원본 사진은 변경되지 않습니다.</string>
+    <string name="text_77b9d0a61b6d" formatted="false">정리 다시 시도</string>
+    <string name="text_a558cf14eef8" formatted="false">앱 종료</string>
+    <string name="text_bb1d19b85634" formatted="false">진단 로그</string>
+    <string name="text_7eefaaff791f" formatted="false">내보내기 취소</string>
+    <string name="text_25e7efea7600" formatted="false">내보내기 마무리 중</string>
+    <string name="text_35e33ec9481e" formatted="false">취소 중\n정리 후 종료합니다</string>
+    <string name="text_461ec432d86f" formatted="true">사진은 기기에서만 처리되며, 내보내기 목록에 추가하는 중입니다. 접수된 작업은 백그라운드에서 계속 진행할 수 있습니다. 내보내기 목록에서 상태를 확인해 주세요.\n\n현재 단계: %1$s</string>
+    <string name="text_cd33cfaad6ad" formatted="false">정리 중</string>
+    <string name="text_aacf040ce88a" formatted="false">필름 노출</string>
+    <string name="text_7ce0c0cf48da" formatted="false">필름의 노출량과 감광 반응을 변경합니다. 최종 사진의 밝기를 조절하는 것과는 다릅니다.</string>
+    <string name="text_8e2f643ad160" formatted="false">밝기</string>
+    <string name="text_8dbf138761d8" formatted="false">최종 사진의 밝기를 조절합니다.</string>
+    <string name="text_4cbc753240e5" formatted="false">대비</string>
+    <string name="text_0a746a522ab4" formatted="false">인화 시 명암 대비를 조절합니다. 기본값은 원래 효과를 유지합니다. 직접 스캔에서는 이 단계를 거치지 않습니다.</string>
+    <string name="text_90f74b4ac6f1" formatted="false">따뜻함</string>
+    <string name="text_4bed17be043d" formatted="false">인화 필터로 색의 차갑고 따뜻한 정도를 미세 조정합니다. K 단위의 색온도 설정이 아닙니다. 직접 스캔에서는 적용되지 않습니다.</string>
+    <string name="text_6045e74dcfa7" formatted="false">현상 억제</string>
+    <string name="text_fa586db5f990" formatted="false">현상 억제를 통해 색과 가장자리 대비를 변경합니다. \'현상\'의 \'현상 억제 강도\'와 같은 효과를 제어하며, 두 내부 계수는 서로 곱해집니다. 화면 눈금은 상대적인 조정량이며 기본값은 원래 효과를 유지합니다. 최솟값이 흑백을 의미하지는 않습니다.</string>
+    <string name="text_cda1ea706d23" formatted="false">디퓨전 필터 종류</string>
+    <string name="text_69c47fd991d5" formatted="false">렌즈 앞의 디퓨전 필터를 시뮬레이션하며 필름 할레이션과 별도로 제어합니다. Glimmerglass / Black Pro-Mist / Pro-Mist / Cinebloom은 각각 해당 필터 모델에 대응합니다.</string>
+    <string name="text_7351ad023c8d" formatted="false">디퓨전 강도</string>
+    <string name="text_fc5315fbd6fd" formatted="false">먼저 디퓨전 필터를 선택해 주세요. 0은 효과 없음입니다.</string>
+    <string name="text_dfe1ad62ec51" formatted="false">디퓨전 범위</string>
+    <string name="text_93ee12df430c" formatted="false">렌즈 디퓨전의 확산 범위를 제어합니다.</string>
+    <string name="text_e8b4d7c5c3d2" formatted="false">할레이션 강도</string>
+    <string name="text_b89612346534" formatted="false">밝은 부분 주변의 필름 할레이션을 시뮬레이션합니다. 보통 따뜻한 색이며 색상은 별도로 조절할 수 있습니다. 사진 전체를 흐리게 만드는 효과가 아닙니다.</string>
+    <string name="text_f08d365f119c" formatted="false">할레이션 범위</string>
+    <string name="text_b5034bff2db9" formatted="false">필름의 밝은 부분 주변에서 할레이션이 퍼지는 범위를 제어합니다.</string>
+    <string name="text_5acbd63667a0" formatted="false">입자 강도</string>
+    <string name="text_7b7266f68310" formatted="false">0은 끄기입니다. 값을 높이면 필름 입자가 강해집니다.</string>
+    <string name="text_065f01b65731" formatted="false">입자 크기</string>
+    <string name="text_6c6bd5cb96c0" formatted="false">입자의 크기를 제어합니다. 강도가 0이면 조절할 수 없습니다.</string>
+    <string name="text_813cd5bf9234" formatted="false">인화지</string>
+    <string name="text_14e7fe83afcb" formatted="false">인화지 또는 영화용 프린트 필름 프로파일을 선택하여 인화 색상과 반응을 변경합니다.</string>
+    <string name="text_3fe7b9f3a996" formatted="false">옐로 필터</string>
+    <string name="text_15206742c3a6" formatted="false">인화지 노출 시 옐로 필터량을 변경합니다. 0은 원래 설정이며 화면 색온도와는 다릅니다.</string>
+    <string name="text_5f542cc5a3de" formatted="false">마젠타 필터</string>
+    <string name="text_0e5ad3c12a0e" formatted="false">인화지 노출 시 마젠타 필터량을 변경합니다. 0은 원래 설정입니다.</string>
+    <string name="text_469f85e3c561" formatted="false">사전 노광</string>
+    <string name="text_7dd11c898748" formatted="false">인화지나 영화용 프린트 필름에 소량의 균일한 노광을 추가하여 대비를 바꿉니다. 프리플래싱이라고도 합니다. 0은 끄기이며, 값은 추가 노광 비율이지 플래시 출력이나 이미지 밝기가 아닙니다.</string>
+    <string name="text_23cc75747b5a" formatted="false">샤프닝 강도</string>
+    <string name="text_60d828125725" formatted="false">스캔된 가장자리를 강조합니다. 0은 끄기입니다. 너무 강하면 밝은 테두리가 생길 수 있으며, 원본에 없는 디테일을 복원할 수는 없습니다.</string>
+    <string name="text_e9c8b36e09c7" formatted="false">샤프닝 반경</string>
+    <string name="text_cff8983d8e70" formatted="false">샤프닝 반경을 픽셀 단위로 제어합니다. 강도가 0이면 조절할 수 없습니다.</string>
+    <string name="text_c4d38d9c07cc" formatted="false">필름 종류</string>
+    <string name="text_5f86d5d545f8" formatted="false">앱에 포함된 필름 프로파일을 선택합니다. 리버설 필름은 기본적으로 직접 스캔, 네거티브 필름은 인화를 사용합니다.</string>
+    <string name="text_9b7a0bf8b525" formatted="false">필름 포맷</string>
+    <string name="text_13d6c864eb05" formatted="false">시뮬레이션하는 화면의 긴 변 길이(밀리미터)이며 필름 롤의 폭이 아닙니다. 입자와 광학 효과의 크기에 영향을 줍니다. 35 mm는 표준 135 화면의 긴 변을 의미하지 않습니다.</string>
+    <string name="text_3c14663c1cfa" formatted="false">자동 노출</string>
+    <string name="text_eeb4cdfe3959" formatted="false">측광 방식을 선택하면 자동 노출이 켜집니다. 끄면 마지막 측광 방식은 유지됩니다. 가져온 사진으로 필름 노출을 추정하며 촬영 당시 카메라 노출을 설정하는 기능은 아닙니다. 평균과 중앙값은 전체 이미지의 밝기를 사용합니다. 중앙 중점은 중앙에 가중치를 두고, 부분 측광은 중앙 원형 영역만 측정합니다. 매트릭스는 5×5 구역에, 다중 영역은 동심원 형태의 세 영역에 가중치를 적용합니다. 하이라이트 중점은 밝은 픽셀을 중시합니다. 카메라 제조사의 장면 인식을 재현하는 것이 아닌 시뮬레이션 측광입니다.</string>
+    <string name="text_be94f251df06" formatted="false">하이라이트 강화</string>
+    <string name="text_7b779407bf2a" formatted="false">밝은 영역의 노출을 높입니다. 0은 끄기입니다.</string>
+    <string name="text_7db1278a003a" formatted="false">하이라이트 범위</string>
+    <string name="text_f3e9a635edb2" formatted="false">하이라이트 강화가 영향을 주는 범위를 제어합니다.</string>
+    <string name="text_1eb299c92ae4" formatted="false">하이라이트 임계값</string>
+    <string name="text_67ca9c11ac9c" formatted="false">하이라이트 강화가 시작되는 밝기를 중간 회색보다 높은 노출 스톱 수로 설정합니다. 값이 높을수록 더 밝은 부분만 강화합니다. 이미 손실된 하이라이트를 복원하지는 않습니다.</string>
+    <string name="text_35d9afa371aa" formatted="false">렌즈 소프트닝</string>
+    <string name="text_a19e8ff37742" formatted="false">렌즈 흐림을 시뮬레이션합니다. 단위는 필름 면에서의 마이크로미터입니다. 0은 끄기입니다.</string>
+    <string name="text_1ecfa7339d9b" formatted="false">산란 강도</string>
+    <string name="text_df421b8d77b5" formatted="false">필름 내부의 빛 산란입니다. 필름 할레이션과 별도로 제어합니다.</string>
+    <string name="text_27360875f5af" formatted="false">산란 범위</string>
+    <string name="text_ff2824686803" formatted="false">필름 산란의 범위를 제어합니다.</string>
+    <string name="text_67eec7fc23cb" formatted="false">할레이션 색상</string>
+    <string name="text_80a38a96456b" formatted="false">전체 강도를 유지하면서 각 색상층의 할레이션 분배를 변경합니다.</string>
+    <string name="text_96dc8a905d84" formatted="false">할레이션 반사</string>
+    <string name="text_990e19e16b96" formatted="false">필름 내부에서 빛이 반사되는 횟수를 시뮬레이션합니다. 횟수가 많을수록 계산량이 늘어납니다.</string>
+    <string name="text_d8d39aadba89" formatted="false">반사 감쇠</string>
+    <string name="text_1b574ccb3dca" formatted="false">반사할 때마다 할레이션이 감소하는 정도를 제어합니다.</string>
+    <string name="text_901dc35db60c" formatted="false">할레이션 보정</string>
+    <string name="text_3aa08a91a7b7" formatted="false">할레이션이 더해지면서 생기는 전체적인 밝기 증가를 보정합니다. 끄면 이 밝기 증가가 유지됩니다.</string>
+    <string name="text_1ac007c4cc44" formatted="false">적색층 입자</string>
+    <string name="text_7ee55be9078d" formatted="false">이 색상층의 입자 면적 비율을 조절합니다. 채도나 반경이 아닙니다.</string>
+    <string name="text_4178263a7543" formatted="false">녹색층 입자</string>
+    <string name="text_bf4fa10b9092" formatted="false">청색층 입자</string>
+    <string name="text_0932a36c793c" formatted="false">다층 입자</string>
+    <string name="text_18a3261024a9" formatted="false">필름의 서로 다른 감광층에 있는 입자를 시뮬레이션합니다.</string>
+    <string name="text_032a197cbdc1" formatted="false">입자 층 수</string>
+    <string name="text_bec5aa3e1052" formatted="false">다층 입자를 껐을 때만 적용됩니다. 층이 많을수록 계산량이 늘어납니다.</string>
+    <string name="text_10822132628a" formatted="false">입자 소프트닝</string>
+    <string name="text_703b12844fd9" formatted="false">입자 이미지의 흐림 정도를 현재 처리 중인 이미지의 픽셀 단위로 조절합니다. 기본값은 0.65입니다.</string>
+    <string name="text_7642681245ee" formatted="false">염료 구름 범위</string>
+    <string name="text_697904f75f57" formatted="false">컬러 필름 입자의 외형은 미세한 염료 구름과 관련이 있습니다. 모델에서 염료 구름의 확산 범위를 조절합니다. 값은 모델 계수이며 실제 길이가 아닙니다.</string>
+    <string name="text_21fab82784d2" formatted="false">입자 균일도</string>
+    <string name="text_4e33ce2575ba" formatted="false">원래 프로파일의 색상층 비율을 유지하면서 입자 균일도를 변경합니다.</string>
+    <string name="text_bf9837ba9fec" formatted="false">군집 크기</string>
+    <string name="text_9dcf8c3eacb2" formatted="false">입자가 불균일하게 분포하는 범위를 시뮬레이션합니다. 모델 크기는 마이크로미터 단위이며 실제 입자가 서로 달라붙는다는 의미는 아닙니다.</string>
+    <string name="text_c95615254a6d" formatted="false">군집 강도</string>
+    <string name="text_c58fafa690cd" formatted="false">입자 분포의 불균일한 정도를 조절합니다. 모델 진폭은 나노미터 단위이며 입자의 실제 이동 거리나 백분율이 아닙니다.</string>
+    <string name="text_9f9d03c837c2" formatted="false">필름 대비</string>
+    <string name="text_43e5e3a7d83d" formatted="false">필름 특성 곡선의 기울기를 조절합니다. 1은 프로파일의 원래 값입니다.</string>
+    <string name="text_febdf6716d8a" formatted="false">현상 억제 강도</string>
+    <string name="text_2ea45ddd3494" formatted="false">동일 층 및 서로 다른 색상층 사이의 현상 억제제 영향을 시뮬레이션합니다. \'조정\'의 \'현상 억제\'와 같은 효과를 제어하며 두 내부 계수는 서로 곱해집니다. 화면 눈금은 상대적인 조정량이며 기본값은 원래 효과를 유지합니다.</string>
+    <string name="text_d16c830dd6b9" formatted="false">확산 거리</string>
+    <string name="text_5add1c5c18cc" formatted="false">모델에서 현상 억제제의 확산 거리입니다. 단위는 마이크로미터입니다.</string>
+    <string name="text_b52f4f0476c1" formatted="false">동일 층 영향</string>
+    <string name="text_57941e00a8a3" formatted="false">같은 감광층 안에서 현상이 서로 영향을 주는 정도를 조절합니다.</string>
+    <string name="text_cad65c0c8168" formatted="false">층간 영향</string>
+    <string name="text_44e260b2da07" formatted="false">서로 다른 감광층 사이에서 현상이 서로 영향을 주는 정도를 조절합니다.</string>
+    <string name="text_abc2bcc3191e" formatted="false">이미지 형성 방식</string>
+    <string name="text_0001b8c5d8e1" formatted="false">인화는 선택한 인화지 또는 영화용 프린트 필름 모델을 거칩니다. 리버설 필름을 직접 스캔하면 포지티브 이미지가 됩니다. 네거티브 필름을 직접 스캔하면 반전하지 않아 네거티브 모습이 유지됩니다.</string>
+    <string name="text_6a36379e12c4" formatted="false">인화 디퓨전</string>
+    <string name="text_31b721f36494" formatted="false">인화 단계에서 디퓨전 필터를 사용합니다. 직접 스캔에는 적용되지 않습니다.</string>
+    <string name="text_30e570b25ae8" formatted="false">인화 디퓨전 강도</string>
+    <string name="text_35e2151edfde" formatted="false">인화 디퓨전의 강도를 조절합니다.</string>
+    <string name="text_884a4b4a9697" formatted="false">인화 디퓨전 범위</string>
+    <string name="text_c7fab338a3d7" formatted="false">인화 디퓨전의 확산 범위를 조절합니다.</string>
+    <string name="text_cf53a2dacdff" formatted="false">자동 중화</string>
+    <string name="text_8adffac5e954" formatted="false">필름 및 인화지 데이터베이스의 중화 필터를 사용합니다. 꺼야 시안, 마젠타, 옐로 필터를 수동으로 조절할 수 있습니다.</string>
+    <string name="text_3369277a249a" formatted="false">시안 중화</string>
+    <string name="text_b7bf91e866a3" formatted="false">수동 중화 필터입니다. 자동 중화가 켜져 있으면 데이터베이스에서 결정합니다.</string>
+    <string name="text_d74d21d856e9" formatted="false">마젠타 중화</string>
+    <string name="text_402b841befae" formatted="false">옐로 중화</string>
+    <string name="text_7304135c5662" formatted="false">인화 대비</string>
+    <string name="text_4362dbdb902d" formatted="false">선택한 인화지 또는 영화용 프린트 필름 모델의 특성 곡선 기울기를 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_6de4ace73d5d" formatted="false">고감도층 대비</string>
+    <string name="text_d586866d607b" formatted="false">인화 모델의 고감도 하위층 특성 곡선 기울기를 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_948834ada56f" formatted="false">중·저감도층 대비</string>
+    <string name="text_656f07b65ba1" formatted="false">인화 모델의 중감도 및 저감도 하위층 특성 곡선 기울기를 함께 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_350e57d09710" formatted="false">적색층 대비</string>
+    <string name="text_6aae1486c3af" formatted="false">인화 모델의 적색 채널 특성 곡선 기울기를 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_3ddbae16e340" formatted="false">녹색층 대비</string>
+    <string name="text_87dcffd01b93" formatted="false">인화 모델의 녹색 채널 특성 곡선 기울기를 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_bd27c57099e9" formatted="false">청색층 대비</string>
+    <string name="text_2d22a0ed76a2" formatted="false">인화 모델의 청색 채널 특성 곡선 기울기를 조절합니다. 1은 원래 프로파일 값입니다.</string>
+    <string name="text_6dfc6e921ae6" formatted="false">현상액 고갈</string>
+    <string name="text_a04be1d22c78" formatted="false">현상액 고갈이 인화지나 영화용 프린트 필름의 특성 곡선에 미치는 영향을 시뮬레이션합니다. 0은 끄기입니다. 국소적인 약액 농도 시뮬레이션은 아닙니다.</string>
+    <string name="text_05af46cca01b" formatted="false">인화 노출</string>
+    <string name="text_b2bf5f41cd45" formatted="false">인화지 노출을 스톱 단위로 변경합니다.</string>
+    <string name="text_2311d090000f" formatted="false">인화 광원</string>
+    <string name="text_555843d03db0" formatted="false">인화에 사용할 광원을 선택합니다. 직접 스캔 모드는 인화 단계를 거치지 않습니다.</string>
+    <string name="text_6535e9c39c2a" formatted="false">인화 보정</string>
+    <string name="text_ecb5cb67b187" formatted="false">필름 노출 조정으로 생기는 밝기 변화를 인화 시 보정합니다. 실제 효과는 인화 노출 정규화 설정에도 영향을 받습니다.</string>
+    <string name="text_99e0c3ab5f84" formatted="false">노출 정규화</string>
+    <string name="text_a7d5a1c52f90" formatted="false">중간 회색을 기준으로 인화 노출을 통일합니다. 사진 전체를 분석하는 자동 측광과는 다릅니다.</string>
+    <string name="text_9d35c4a1f0c8" formatted="false">사전 노광 옐로 필터</string>
+    <string name="text_e5180d3737f5" formatted="false">인화 사전 노광에 별도의 옐로 필터를 설정합니다. 사전 노광이 꺼져 있으면 적용되지 않습니다.</string>
+    <string name="text_01894cdc79b1" formatted="false">사전 노광 마젠타 필터</string>
+    <string name="text_d08a02a1d17f" formatted="false">인화 사전 노광에 별도의 마젠타 필터를 설정합니다. 사전 노광이 꺼져 있으면 적용되지 않습니다.</string>
+    <string name="text_1a8fd554611b" formatted="false">스캔 소프트닝</string>
+    <string name="text_f45c23864553" formatted="false">스캔 시 생기는 미세한 흐림을 현재 처리 중인 이미지의 픽셀 단위로 시뮬레이션합니다. 0은 끄기입니다.</string>
+    <string name="text_c08900693d28" formatted="false">스캔 글레어</string>
+    <string name="text_eeaba0ff1bbe" formatted="false">산란광으로 인한 뿌연 느낌과 대비 감소를 시뮬레이션합니다. 하이라이트 가장자리의 필름 할레이션이 아닙니다. 0은 끄기입니다.</string>
+    <string name="text_f40402359b27" formatted="false">글레어 변동</string>
+    <string name="text_56b172e2135b" formatted="false">스캔 글레어의 국소적인 변동을 제어합니다.</string>
+    <string name="text_65863fca9aa3" formatted="false">글레어 소프트닝</string>
+    <string name="text_73339f074019" formatted="false">불균일한 스캔 글레어 분포를 현재 처리 중인 이미지의 픽셀 단위로 부드럽게 만듭니다.</string>
+    <string name="text_9c6c44727001" formatted="false">화이트 포인트 보정</string>
+    <string name="text_e4d3654ef963" formatted="false">스캔의 화이트 포인트를 보정합니다. 네거티브 직접 스캔에는 지원되지 않습니다. 인화 또는 리버설 필름을 선택해 주세요.</string>
+    <string name="text_391a41ace427" formatted="false">블랙 포인트 보정</string>
+    <string name="text_a4922750f39f" formatted="false">스캔의 블랙 포인트를 보정합니다. 네거티브 직접 스캔에는 지원되지 않습니다. 인화 또는 리버설 필름을 선택해 주세요.</string>
+    <string name="text_a4e50b0ef643" formatted="false">화이트 포인트 목표</string>
+    <string name="text_4d74dee109f4" formatted="false">화이트 포인트 보정의 목표값입니다. 블랙 포인트보다 높아야 합니다.</string>
+    <string name="text_6654107ffef8" formatted="false">블랙 포인트 목표</string>
+    <string name="text_f040ad2ae5b5" formatted="false">블랙 포인트 보정의 목표값입니다. 화이트 포인트보다 낮아야 합니다.</string>
+    <string name="text_646130986822" formatted="false">색역 압축</string>
+    <string name="text_192216b8cb6d" formatted="false">sRGB 색역을 벗어난 색을 표시 가능한 범위로 압축합니다. 넓은 색역으로 내보낼 때는 자동으로 꺼집니다.</string>
+    <string name="text_6f16843acab7" formatted="false">GPU 가속</string>
+    <string name="text_8d80b85bbd7f" formatted="false">일부 농도 단계에서 Adreno 가속을 자동으로 시도하며 나머지는 CPU에서 처리합니다. 사용할 수 없으면 CPU로 전환합니다. 더 빠른 처리를 보장하지는 않습니다.</string>
+    <string name="text_683099bf5b6c" formatted="false">필름 기본값</string>
+    <string name="text_789f61dbfcc7" formatted="false">빨강</string>
+    <string name="text_d5234258fd84" formatted="false">호박색</string>
+    <string name="text_574ce385b86d" formatted="false">중립</string>
+    <string name="text_3fd47edce45b" formatted="false">끄기</string>
+    <string name="text_2eb88a373a7f" formatted="false">Glimmerglass</string>
+    <string name="text_adb439547ac9" formatted="false">Black Pro-Mist</string>
+    <string name="text_3b339febf98c" formatted="false">Pro-Mist</string>
+    <string name="text_aaf1818f550f" formatted="false">Cinebloom</string>
+    <string name="text_499e8c373806" formatted="false">인화</string>
+    <string name="text_b5ef62893e01" formatted="false">직접 스캔</string>
+    <string name="text_7eb336e42cb5" formatted="false">자동</string>
+    <string name="text_8da97ddda990" formatted="false">켜기</string>
+    <string name="text_f65c42a2540b" formatted="false">조정</string>
+    <string name="text_83219449b5eb" formatted="false">광학 효과</string>
+    <string name="text_b82bd426d236" formatted="false">입자</string>
+    <string name="text_1b5d3d55ef48" formatted="false">현상</string>
+    <string name="text_c2a291b64f6b" formatted="false">스캔</string>
+    <string name="text_ec00bc673f05" formatted="false">인화지 선택</string>
+    <string name="text_3691a3aa4ece" formatted="false">인화지 / 인화 스타일</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · 영화용 프린트 필름</string>
+    <string name="text_3b789c2037e2" formatted="false"> · 컬러 인화지</string>
+    <string name="text_7b528c395978" formatted="false">135 구도</string>
+    <string name="text_e76a25844aa5" formatted="false">구도 다시 잡기</string>
+    <string name="text_61d5477ed69a" formatted="false">가로 135</string>
+    <string name="text_cad49035a99d" formatted="false">세로 135</string>
+    <string name="text_4b1db520af46" formatted="false">원본 이미지</string>
+    <string name="text_d1047eed5dd5" formatted="false">자유</string>
+    <string name="text_36f33adaf094" formatted="false">확인</string>
+    <string name="text_f02806d5dc08" formatted="false">구도</string>
+    <string name="text_9634fb0832be" formatted="false">매개변수</string>
+    <string name="text_06ea736a7066" formatted="true">%1$s 조정</string>
+    <string name="text_c0b3fbff51cc" formatted="false">완료</string>
+    <string name="text_657a8c2de63c" formatted="false">, 선택됨</string>
+    <string name="text_61ea0b0d9ed0" formatted="false">필름 설명</string>
+    <string name="text_74b054e27203" formatted="false">프레임 워터마크</string>
+    <string name="text_369143830b0b" formatted="false">프레임 워터마크, 25번 프레임 고정</string>
+    <string name="text_4b96acdd5e96" formatted="false">네거티브 흰색 홀</string>
+    <string name="text_6d2683a65646" formatted="false">네거티브 흰색 스프로킷 홀, 리버설 필름은 항상 흰색</string>
+    <string name="text_ffd510bae3ad" formatted="false">%+.2f스톱</string>
+    <string name="text_5b1b0d1d80a6" formatted="false">%.2f배</string>
+    <string name="text_b6a198a1e6c7" formatted="false">%.2f픽셀</string>
+    <string name="text_4e3db4596715" formatted="true">%1$s 설명</string>
+    <string name="text_de32e20193ad" formatted="false">확인</string>
+    <string name="text_f94fbbaa8f93" formatted="true">%1$s 초기화</string>
+    <string name="text_f2961369ae98" formatted="false">현재 필름의 프리셋 설정을 복원할까요?</string>
+    <string name="text_c265e02073e5" formatted="false">노출, 광학 효과, 입자, 인화지 등의 색 조정 설정을 복원합니다. 구도와 워터마크 설정은 유지됩니다.</string>
+    <string name="text_e0534b8a4e46" formatted="false">복원</string>
+    <string name="text_d1c4835b23ed" formatted="false">\n투명 영역은 흰색 배경에 합성됩니다</string>
+    <string name="text_c96f06693217" formatted="true">%1$s\n%2$s × %3$s\n%4$s\n%5$s KB\n\n기기 내 임시 사본이며 원본은 변경되지 않습니다. 미리보기는 sRGB SDR입니다. 내보내기 시 색 공간을 선택할 수 있으며 지원되는 원본 촬영 메타데이터(기존 GPS 포함)를 유지합니다. 수정 시간은 내보낸 시점으로 갱신됩니다. 카메라 전용 필드와 기존 썸네일은 복사하지 않습니다.%6$s%7$s\n\n두 손가락으로 확대·축소하고 두 번 눌러 원래 크기로 복원하거나 확대하세요.\n\n확대 미리보기: %8$s%9$s</string>
+    <string name="text_557e29365b35" formatted="true">\n미리보기 크기: %1$s × %2$s</string>
+    <string name="text_8824021eb6d7" formatted="false">확대·축소 초기화</string>
+    <string name="text_685f5b4ebdf4" formatted="false">필름과 인화지</string>
+    <string name="text_70e86d94f885" formatted="true">단순히 색 필터를 덧씌우는 것이 아니라 기기 내 분광 필름 및 인화지 모델로 계산합니다.\n\n촬영용 필름 %1$s종과 인화지 / 영화용 프린트 필름 프로파일 %2$s종이 포함되어 있습니다. 리버설 필름은 기본적으로 직접 스캔, 네거티브 필름은 인화를 사용합니다. 명칭은 측정 프로파일을 식별하기 위한 것이며 브랜드 제휴를 의미하지 않습니다.\n\n일부 클라우드 알고리즘 비교 및 코드 테스트를 완료했지만 Android 실제 기기 실행 검증은 아직 진행되지 않았습니다. 큰 이미지는 처리 시간이 오래 걸릴 수 있습니다.\n\n원본 프로젝트: Andrea Volpato / spektrafilm. 프로그램은 GPL-3.0, 필름 프로파일은 CC BY-SA 4.0을 따릅니다. 전체 고지문은 앱에 포함되어 있습니다.</string>
+    <string name="text_038ad816c53f" formatted="false">오픈소스 라이선스</string>
+    <string name="text_070a076df57a" formatted="false">프로그램 라이선스 · GPL-3.0</string>
+    <string name="text_42cec9151c59" formatted="false">필름 프로파일 · CC BY-SA 4.0 및 출처 표시</string>
+    <string name="text_0b3a85a2a436" formatted="false">필름 엔진 · Rust 타사 의존성 고지</string>
+    <string name="text_334ca499fe26" formatted="false">이미지 코덱 · rawler 및 기타 의존성 고지</string>
+    <string name="text_8150d89b6537" formatted="false">스프로킷 테두리 소재 · 실제 자료를 참고한 제작 및 출처 표시</string>
+    <string name="text_1a485ac7a998" formatted="false">필름 모델은 Andrea Volpato의 spektrafilm과 Rust 이식 작업을 기반으로 합니다. 인터페이스와 이미지 처리 연결 부분은 수정되었습니다. 프로그램은 GPL-3.0, 필름 자료는 CC BY-SA 4.0에 따라 제공됩니다. RAW 디코딩에는 rawler(LGPL-2.1)를 사용하며 각 의존성은 자체 라이선스를 유지합니다. 완전한 대응 소스 코드와 빌드 자료가 설치 패키지와 함께 제공됩니다. 법률 문서는 원문으로 유지됩니다.</string>
+    <string name="text_200ae4c1c12e" formatted="false">지금은 이 고지문을 읽을 수 없습니다. 설치 패키지에 포함된 대응 소스 코드와 라이선스를 확인해 주세요. 기기에 사진을 저장하는 데는 영향이 없습니다.</string>
+    <string name="text_564eb6dfeaca" formatted="false">오픈소스 라이선스 및 출처 표시</string>
+    <string name="text_d6d466c03f8e" formatted="false">가져올 위치</string>
+    <string name="text_543b8fb9aa67" formatted="false">갤러리에서 사진 선택</string>
+    <string name="text_85534f27f5d9" formatted="false">파일에서 사진 / DNG 선택</string>
+    <string name="text_c69504e36552" formatted="true">원본 %1$s × %2$s\nSDR · 원본을 덮어쓰지 않고 새 파일로 저장</string>
+    <string name="text_42a85b8d8038" formatted="false">저장 형식</string>
+    <string name="text_b4a83add8f8c" formatted="false">JPEG · 일반 공유용</string>
+    <string name="text_82aa50547f13" formatted="false">PNG · 무손실 압축</string>
+    <string name="text_ba4b003cfd7c" formatted="false">TIFF · 16비트 후편집용</string>
+    <string name="text_7a6dd5919b20" formatted="false">JPEG는 파일이 작아 갤러리 및 공유에 적합합니다.</string>
+    <string name="text_8d15e79b0441" formatted="false">PNG는 이번 8비트 출력을 무손실 압축합니다. 원본 RAW, HDR 또는 알파 채널을 보존한다는 의미는 아닙니다.</string>
+    <string name="text_128a704b1837" formatted="false">JPEG 품질 · 95</string>
+    <string name="text_8cfce0f46112" formatted="false">JPEG 품질, 95</string>
+    <string name="text_7190cce2fd40" formatted="true">JPEG 품질 · %1$s</string>
+    <string name="text_59df7ac272da" formatted="true">JPEG 품질, %1$s</string>
+    <string name="text_6e539699fdb0" formatted="false">16비트 TIFF는 추가 색 보정에 적합하며 파일이 큽니다. Downloads/暗房에 저장되며 일부 갤러리에서는 표시되지 않을 수 있습니다. 8비트 원본을 RAW로 복원하지는 않습니다.</string>
+    <string name="text_20f14d321daa" formatted="false">출력 색 공간</string>
+    <string name="text_df0877ff9634" formatted="false">일반 공유에는 sRGB를 선택하세요. 넓은 색역 출력은 색 관리를 지원하는 뷰어가 필요합니다. 미리보기는 계속 sRGB로 표시됩니다. 넓은 색역을 선택하면 sRGB 전용 색역 압축이 자동으로 꺼집니다.</string>
+    <string name="text_4a7b0d4654d7" formatted="false">사진 크기</string>
+    <string name="text_f60066ec4bbf" formatted="false">원본 크기</string>
+    <string name="text_6bea77acefb3" formatted="false">표준</string>
+    <string name="text_d1ee60a322e5" formatted="true">더 선명하게 · %1$s</string>
+    <string name="text_1018b7d83c8b" formatted="true">원본 크기 · %1$s</string>
+    <string name="text_6d821f237f2f" formatted="false">스프로킷 테두리를 켜면 현재 135 구도에 맞게 사진을 자르고 고정 외곽 프레임을 추가합니다. 원본 사진 파일은 바뀌지 않습니다.</string>
+    <string name="text_aabd69bfed16" formatted="false">작은 크기는 비율을 유지하여 축소합니다. 원본을 자르거나 확대하지 않습니다.</string>
+    <string name="text_597fecd88b25" formatted="false">원본 크기 처리에는 수 GiB의 임시 저장 공간이 필요할 수 있습니다. 공간이 부족하면 중지하며 사진을 몰래 축소하지 않습니다.</string>
+    <string name="text_c767b0ebc50a" formatted="false">모든 처리는 기기에서 이루어집니다. 내보내기 목록에 추가한 뒤 계속 편집하거나 화면을 떠나거나 기기를 잠글 수 있습니다. 백그라운드 처리는 시스템 제한을 받습니다. 내보내기 목록에서 진행 상황을 확인하고 일시 정지하거나 취소할 수 있습니다.</string>
+    <string name="text_cef4e28b1774" formatted="false">새 사진 내보내기</string>
+    <string name="text_d14f6e1f0a6f" formatted="false">새 사진 저장</string>
+    <string name="text_e8e6e48f180e" formatted="false">편집 환경 설정</string>
+    <string name="text_2413c386102e" formatted="false">새 사진을 가져올 때 설정 초기화</string>
+    <string name="text_712623100497" formatted="false">켜면 현재 필름의 프리셋으로 복원하고, 끄면 색 조정 설정을 유지합니다. 새 사진의 구도는 항상 다시 설정됩니다.</string>
+    <string name="text_7daa923cc7e5" formatted="false">시작 시 마지막 사진 복원</string>
+    <string name="text_5f08fa1da11e" formatted="false">다음 앱 시작에만 적용됩니다. 현재 편집이나 백그라운드 내보내기는 지워지지 않습니다.</string>
+    <string name="text_84a61a56ecc6" formatted="false">로그에 포함할 최근 시간 선택</string>
+    <string name="text_b46da08445e2" formatted="true">최근 %1$s분</string>
+    <string name="text_45809131f9a2" formatted="false">분 단위 직접 입력</string>
+    <string name="text_90d8b0eab93d" formatted="false">1–1440분</string>
+    <string name="text_75a879d2307c" formatted="false">최근 시간 직접 입력, 1~1440분</string>
+    <string name="text_1fdccd5c32ea" formatted="false">진단 요약과 전체 비식별 이벤트 상세 정보(매개변수, 크기, 소요 시간, 메모리)를 담은 UTF-8 .txt 파일 하나로 내보냅니다. 사진, 파일명, GPS, 경로, 계정 정보는 포함되지 않습니다. 공유 대상을 선택한 뒤에만 전송됩니다.</string>
+    <string name="text_546989732ef0" formatted="false">최대 24시간 보관하며 용량이 부족하면 더 일찍 덮어씁니다. 실제 기록 범위는 요약에 표시됩니다. 정상 종료되지 않은 작업은 단서일 뿐, 반드시 충돌이 발생했다는 뜻은 아닙니다.</string>
+    <string name="text_d09e99fe27d8" formatted="false">TXT 로그 공유</string>
+    <string name="text_dcc63884dad1" formatted="false">1~1440 사이의 정수를 입력해 주세요</string>
+    <string name="text_f0922cbcaaa2" formatted="false">진단 로그 준비</string>
+    <string name="text_13e5bfcd9568" formatted="true">최근 %1$s분의 비식별 TXT 로그를 정리하는 중…</string>
+    <string name="text_2cd0039fff3b" formatted="true">최근 %1$s분 로그 공유</string>
+    <string name="text_b6ad51ea5ed7" formatted="false">지금은 로그를 공유할 수 없음</string>
+    <string name="text_f2df43642219" formatted="false">기기의 저장 공간과 사용 가능한 공유 앱을 확인한 뒤 다시 시도해 주세요. 사진은 전송되지 않습니다.</string>
+    <string name="text_ad1d18f9d3e5" formatted="true">135 구도 + 스프로킷 테두리 → %1$s × %2$s</string>
+    <string name="text_96fa923afb1a" formatted="true">%1$s × %2$s · 이 크기는 스프로킷 테두리를 지원하지 않습니다</string>
+    <string name="text_6e8f80256c84" formatted="true">%1$s × %2$s · 스프로킷 테두리 소재를 사용할 수 없습니다</string>
+    <string name="text_ff27ed115be8" formatted="false">스프로킷 테두리를 추가한 크기가 JPEG / TIFF의 현재 8,400만 픽셀 한도를 초과합니다. 원본은 축소하지 않았습니다. 테두리를 끄거나 더 작은 크기 또는 PNG를 선택해 주세요.</string>
+    <string name="text_022fe563baa4" formatted="false">사용 가능한 메모리가 부족하여 현재 구도 처리를 완료할 수 없습니다.</string>
+    <string name="text_8f256a031a2d" formatted="false">스프로킷 테두리 미리보기 크기가 한도를 초과함</string>
+    <string name="text_5c82a6b4a003" formatted="false">스프로킷 테두리 소재와 작업의 고정 기하 정보가 일치하지 않음</string>
+    <string name="text_1384551c8e44" formatted="false">필름 스프로킷 테두리는 아직 사용할 수 없음</string>
+    <string name="text_e47ae3f26387" formatted="false">유효하지 않은 선형 사진 데이터</string>
+    <string name="text_5bba0c1f8416" formatted="false">최종 구도 미리보기 크기가 한도를 초과함</string>
+    <string name="text_bec36dff07be" formatted="false">원래 내보내기 작업의 스프로킷 테두리 소재 버전을 사용할 수 없습니다. 다른 소재로 대체하지 않습니다</string>
+    <string name="text_d1c5599a9bff" formatted="false">스프로킷 테두리 작업의 기하 정보와 고정 소재가 일치하지 않음</string>
+    <string name="text_5c0b4e508a52" formatted="false">테두리 스트립은 검증된 배경색에 명시적으로 합성해야 합니다. 투명도를 임의로 버릴 수 없습니다</string>
+    <string name="text_a63185c8bf65" formatted="false">사진 비율에 고정 스프로킷 테두리 문구가 들어가지 않습니다. 소재를 자르거나 늘리지 않습니다</string>
+    <string name="text_b64913db4f1d" formatted="false">내보내기 작업 폴더 검증에 실패하여 사진을 저장하지 않았습니다. 앱을 업데이트한 뒤 다시 시도해 주세요.</string>
+    <string name="text_df30ae362f2b" formatted="false">현재 기기의 사용 가능한 메모리가 부족합니다. 다른 앱을 종료한 뒤 다시 시도해 주세요. 원본은 축소하지 않았습니다.</string>
+    <string name="text_2c28d802618b" formatted="false">기기 내 이미지 코덱 구성 요소를 사용할 수 없습니다. 전체 설치 패키지를 다시 설치해 주세요.</string>
+    <string name="text_41db58446aa4" formatted="false">기기 내 이미지 코덱 구성 요소를 시작할 수 없습니다.</string>
+    <string name="text_93313da164ac" formatted="false">현재 기기의 사용 가능한 메모리가 부족합니다. 나중에 다시 시도해 주세요. 원본은 축소하지 않았습니다.</string>
+    <string name="text_c2145ea571e4" formatted="false">기기 내 인코딩/디코딩 취소됨</string>
+    <string name="text_0105eb1c06a7" formatted="false">이 사진의 인코딩 유형은 아직 지원하지 않습니다. DNG는 검증된 16비트 비압축 및 무손실 JPEG 압축 유형을 지원합니다. 내장 미리보기를 RAW 대신 사용하지 않습니다.</string>
+    <string name="text_46ac8768982e" formatted="false">이 DNG에는 아직 지원하지 않는 필수 보정 단계가 있습니다. 보정을 무시하거나 내장 미리보기를 RAW 대신 사용하지 않았습니다.</string>
+    <string name="text_c946e8a02212" formatted="false">이 DNG의 카메라 보정 행렬은 아직 지원하지 않습니다. 추정한 색으로 대체하지 않았습니다.</string>
+    <string name="text_19b3b0255d08" formatted="false">기기 내 사진 읽기/쓰기에 실패했습니다. 사용 가능한 저장 공간을 확인한 뒤 원본 파일을 다시 선택해 주세요.</string>
+    <string name="text_199d9706e7a1" formatted="false">완전하고 유효한 이미지 데이터를 읽지 못했습니다. 원본 파일을 다시 선택해 주세요. 현재 파일 손상 여부는 확인할 수 없습니다.</string>
+    <string name="text_e92a0c3cbaef" formatted="false">이 출력 색 공간은 아직 지원하지 않습니다. 변환 대신 색상 태그만 바꾸지 않았습니다.</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">최종 내보내기 크기가 현재 8,400만 픽셀 한도를 초과합니다.</string>
+    <string name="text_5c55db3ba035" formatted="false">이 사진은 코덱 구성 요소의 현재 5,200만 픽셀 처리 한도를 초과합니다.</string>
+    <string name="text_6bceec6d29d6" formatted="false">기기의 저장 공간이 부족하여 처리를 완료하지 못했습니다. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_d171c3322a9c" formatted="false">현재 기기 메모리 예산으로는 이 사진을 안전하게 처리할 수 없습니다.</string>
+    <string name="text_56858cdae70f" formatted="false">이 RAW의 색상 보정 데이터는 아직 지원하지 않습니다. 추정한 색으로 대체하지 않았습니다.</string>
+    <string name="text_aff865b41066" formatted="false">기기 내 이미지 인코딩/디코딩을 완료하지 못했습니다. 원인 확인을 위해 진단 로그를 공유해 주세요. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_62f3e125a3ce" formatted="false">이 DNG의 일부 선택적 렌즈 보정이 적용되지 않았습니다. 비네팅이나 왜곡이 남아 있을 수 있습니다.</string>
+    <string name="text_95665116d521" formatted="false">원시 데이터를 가져와 Filmroom의 필름 색상을 사용합니다. 카메라 자체 출력 색상을 재현하지 않습니다.</string>
+    <string name="text_d2d161102e41" formatted="false">카메라 내장 표시용 톤 곡선을 적용하지 않았습니다.</string>
+    <string name="text_99981a4927ac" formatted="false">기본 RAW 발색을 사용하며 파일에 포함된 색조/채도 보정표를 적용하지 않았습니다. 색상이 카메라 갤러리와 다를 수 있습니다.</string>
+    <string name="text_5f37317ec18e" formatted="false">RAW 디코딩 메타데이터가 불완전하여 처리를 중지했습니다.</string>
+    <string name="text_34f1a903d47d" formatted="true">暗房_诊断_%1$s分钟_%2$s_%3$s.txt</string>
+    <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n인코딩: UTF-8; 단일 텍스트 파일(ZIP 아님)\n\n=== 요약 ===\n</string>
+    <string name="text_7af205e83135" formatted="false">\n\n=== 전체 비식별 이벤트 상세 정보 ===\n</string>
+    <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
+    <string name="text_60ef08049a72" formatted="true">앱: Filmroom; 버전 코드: %1$s; 엔진 빌드: 4; 인터페이스: 1\nAndroid API: %2$s; ABI: %3$s; 프로세서 수: %4$s; Java 힙 한도: %5$s바이트; 메모리 등급: %6$s MB</string>
+    <string name="text_5c1712cb2d38" formatted="false">이번 실행</string>
+    <string name="text_b1336f82fea4" formatted="false">편집 복원</string>
+    <string name="text_5a9df9227ec6" formatted="false">미리보기 렌더링</string>
+    <string name="text_9ced68312ac6" formatted="false">원본 크기 디코딩</string>
+    <string name="text_71cab785c5d9" formatted="false">내보내기 예산 확인</string>
+    <string name="text_0a3bbae44150" formatted="false">원본 크기 렌더링</string>
+    <string name="text_2fa4917d052e" formatted="false">내보내기 인코딩</string>
+    <string name="text_73fff6a5d6e6" formatted="false">진단 공유</string>
+    <string name="text_f8281de2df36" formatted="false">임시 파일 정리</string>
+    <string name="text_d2bb025a2e51" formatted="false">시작</string>
+    <string name="text_4077a1f6397d" formatted="false">이미지 정보 읽기</string>
+    <string name="text_56e09dd8e1fc" formatted="false">타일 단위 디코딩</string>
+    <string name="text_77f67305d365" formatted="false">네이티브 엔진 진입</string>
+    <string name="text_2bd9ae163aa5" formatted="false">기기 내 처리 단계</string>
+    <string name="text_98407f5c987e" formatted="false">네이티브 엔진 반환</string>
+    <string name="text_222b0d3c08c4" formatted="false">인코딩 시작</string>
+    <string name="text_9e388ac3f491" formatted="false">행 단위 인코딩</string>
+    <string name="text_2560088669b6" formatted="false">저장 대기 사진 생성</string>
+    <string name="text_6ef11d1e8c02" formatted="false">사진 저장 완료</string>
+    <string name="text_2625bda74112" formatted="false">취소 요청</string>
+    <string name="text_d43461bfe6fc" formatted="false">미완료 파일 정리</string>
+    <string name="text_ae173945fb80" formatted="false">처리 실패</string>
+    <string name="text_2c4c4e5e32fa" formatted="false">이전 실행이 정상 종료되지 않음</string>
+    <string name="text_c7b24e7997e9" formatted="false">종료</string>
+    <string name="text_df800a26392c" formatted="false">Filmroom 진단 | 버전 코드 </string>
+    <string name="text_66e4acfbd6bd" formatted="false"> | 최근 </string>
+    <string name="text_5b3a75c53bbd" formatted="false">분\n</string>
+    <string name="text_2428420e407f" formatted="false">총 </string>
+    <string name="text_e8a56d1c0e70" formatted="false">개 이벤트. 로그는 최대 24시간, 1 MiB까지 보관하며 용량이 차면 오래된 기록부터 교체합니다.\n</string>
+    <string name="text_366712d2d80e" formatted="false">실제 첫 기록과 마지막 기록: </string>
+    <string name="text_8727f227e2c6" formatted="false"> ~ </string>
+    <string name="text_0e898ec43b0b" formatted="false">; 연속 모니터링이 아닙니다.\n</string>
+    <string name="text_fa1c6dd0bfc3" formatted="false">이번 실행에서 관측된 폐기: 만료 </string>
+    <string name="text_6e94c47fde22" formatted="false">, 용량 순환 </string>
+    <string name="text_4af5bd6fb80e" formatted="false">, 손상 또는 미완료 </string>
+    <string name="text_e9d6840052fc" formatted="false">, 불확실한 미래 시간 </string>
+    <string name="text_1701c7739625" formatted="false">. 실행 간 누적 합계는 알 수 없습니다.\n</string>
+    <string name="text_5bf7bab64ce3" formatted="false">최근 실패/중단 기록: </string>
+    <string name="text_e779813b6cc2" formatted="false">최근 기기 내 단계: </string>
+    <string name="text_e5b01c51fa19" formatted="false">; 진행 수치는 현재 패스만 나타내며 사진 전체의 완료 비율이 아닙니다.\n</string>
+    <string name="text_4d7c038cbc95" formatted="false">마지막 작업이 정상 종료되지 않았습니다. 시스템에 의한 회수, 강제 종료 또는 충돌 가능성이 있습니다. 수집된 충돌 보고서는 아닙니다.\n</string>
+    <string name="text_7d01902a70ae" formatted="false">선택한 시간 범위에 기록이 없습니다. 이 사실만으로 오류 발생 여부를 판단할 수 없습니다.\n</string>
+    <string name="text_aebe06f7e024" formatted="false">다른 실행의 기록이 포함되어 있습니다. 해당 시간은 시스템 UTC 시계에 의존하므로 시스템 시간 변경이 범위에 영향을 줄 수 있습니다.\n</string>
+    <string name="text_a89d10b60775" formatted="false">일부 기록을 쓰지 못하여 내용이 불완전할 수 있습니다.\n</string>
+    <string name="text_a6a08f5857fd" formatted="false">기술 이벤트와 제한된 수치만 포함하며 사진, 이름, 위치, 파일 경로, 예외 원문은 포함하지 않습니다. 공유 사본은 24시간 보관 정책에 따라 다음 앱 실행 또는 공유 시 정리됩니다. 이번 실행에서는 단조 시계를 사용하여 시간 변경에 따른 조기 삭제를 방지합니다. 시스템 캐시 정리, 앱 제거, 실행 간 시계 변경으로 사용 가능한 시간이 달라질 수 있으니 받는 사람은 신속하게 저장해 주세요.</string>
+    <string name="text_1c751a529433" formatted="false">Filmroom 진단 · 최근 </string>
+    <string name="text_79aa64a23d25" formatted="false">생성 시간(UTC): </string>
+    <string name="text_02e29a8a9e56" formatted="false">시간 범위: </string>
+    <string name="text_73ba3e48606b" formatted="false"> ≤ 이벤트 시간 ≤ </string>
+    <string name="text_4b5117d9bd17" formatted="false">범위에 포함된 이벤트: </string>
+    <string name="text_e52827dd4ad4" formatted="false">; 다른 실행의 이벤트: </string>
+    <string name="text_c8768200958b" formatted="false">실제 첫 기록과 마지막 기록 시간: </string>
+    <string name="text_bf7b123c114d" formatted="false">; 이벤트 사이를 연속 모니터링하지 않습니다.\n</string>
+    <string name="text_ccc4edebf400" formatted="false">이번 실행에서 관측 가능한 폐기 수: 만료=</string>
+    <string name="text_1a58fbf44b39" formatted="false">, 용량 순환=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">, 손상/미완료=</string>
+    <string name="text_338aa9ce6405" formatted="false">, 확인할 수 없는 미래 시간=</string>
+    <string name="text_b028650697a5" formatted="false">. 실행 간 누적 합계는 확인할 수 없습니다.\n</string>
+    <string name="text_bbbde15a1296" formatted="false">기기에만 기록됩니다. 공유를 누르면 받을 앱을 직접 선택합니다. 이 앱은 업로드하지 않습니다.\n</string>
+    <string name="text_e78eb8f72096" formatted="false">보관: 최근 최대 24시간, 1 MiB의 이벤트 기록. 용량이 차면 오래된 기록을 교체합니다.\n</string>
+    <string name="text_0cbe74b0ae0a" formatted="false">이번 실행은 단조 시계로 필터링합니다. 다른 실행은 UTC 벽시계로만 필터링할 수 있으므로 시스템 시간 변경으로 오차가 생길 수 있습니다.\n</string>
+    <string name="text_f068c05d35bf" formatted="false">기록된 UTC와 단조 시간을 모두 표시합니다. 필터 UTC는 이번 스냅샷 시점에서 역산한 시간입니다.\n</string>
+    <string name="text_de9b9a98a215" formatted="false">사진 내용, 파일명, 경로, URI, 위치, EXIF, 계정, 키, 예외 원문, 기기 고유 식별자는 포함하지 않습니다.\n</string>
+    <string name="text_9e46400a4c40" formatted="false">네이티브 충돌 스택은 수집하지 않습니다. 미종료 기록으로 이전 작업의 비정상 중단 가능성만 판단할 수 있습니다.\n</string>
+    <string name="text_d93adff8dfc6" formatted="false">마지막 작업이 정상 종료되지 않았습니다. 시스템에 의한 회수, 강제 종료 또는 충돌 가능성이 있으나 이 기록만으로 원인을 확인할 수는 없습니다.\n</string>
+    <string name="text_f51871fbed21" formatted="false">경고: 일부 진단 기록을 기기 저장소에 쓰지 못하여 보고서가 불완전할 수 있습니다.\n</string>
+    <string name="text_fd756ca7b128" formatted="false">선택한 시간 범위에 공유할 수 있는 진단 이벤트가 없습니다. 해당 기간에 오류가 없었다는 뜻은 아닙니다.\n</string>
+    <string name="text_42892fd91f62" formatted="false">\n\n이벤트(기술 코드, 자유 텍스트 없음):\n</string>
+    <string name="text_f3650cb3e121" formatted="false">필터UTC=</string>
+    <string name="text_a6225820802e" formatted="false"> 기록UTC=</string>
+    <string name="text_af560d1154f3" formatted="false"> 단조ms=</string>
+    <string name="text_0d863965cf79" formatted="false"> 실행=</string>
+    <string name="text_da3f4b1e2ad6" formatted="false"> 순번=</string>
+    <string name="text_b3660b2a6a62" formatted="false"> 작업=</string>
+    <string name="text_e564bb482cfa" formatted="false"> 결과=</string>
+    <string name="text_815ce3797ff8" formatted="false"> 오류코드=</string>
+    <string name="text_0a9cd9640dfe" formatted="false">진단 시간 범위는 1–1440분이어야 합니다</string>
+    <string name="text_652bd8e2b42a" formatted="false">필름 자료 준비</string>
+    <string name="text_7b5d2a09babd" formatted="false">자동 측광</string>
+    <string name="text_6ff3e6e82562" formatted="false">하이라이트 향상</string>
+    <string name="text_99ccd913c2c3" formatted="false">렌즈 흐림</string>
+    <string name="text_28dfadf63de0" formatted="false">입자 군집</string>
+    <string name="text_bab826d7cea1" formatted="false">렌즈 디퓨전</string>
+    <string name="text_ee5e1f321d0c" formatted="false">필름 수광</string>
+    <string name="text_e29e511b19c8" formatted="false">필름 산란</string>
+    <string name="text_0caa7cb6bf14" formatted="false">필름 할레이션</string>
+    <string name="text_a3a8c53854e3" formatted="false">로그 노광량으로 변환</string>
+    <string name="text_e010cca5a693" formatted="false">필름 농도 형성</string>
+    <string name="text_c3d62fb6dc52" formatted="false">현상 억제제 확산</string>
+    <string name="text_63dc46ef8527" formatted="false">필름 현상</string>
+    <string name="text_6817024599e0" formatted="false">입자 생성</string>
+    <string name="text_b6ccbb59ff43" formatted="false">염료 구름 시뮬레이션</string>
+    <string name="text_465b9d003092" formatted="false">입자 이미지 형성</string>
+    <string name="text_6534faa7428f" formatted="false">인화지 및 스캔</string>
+    <string name="text_6fb121b28fdd" formatted="false">스캔 샤프닝</string>
+    <string name="text_93b5664a205f" formatted="false">처리 완료</string>
+    <string name="text_94f31f970642" formatted="false">진단 범위를 1–1440분으로 선택해 주세요.</string>
+    <string name="text_235ff46182e0" formatted="false">진단 기록이 아직 초기화되지 않았습니다. 앱을 다시 연 뒤 시도해 주세요.</string>
+    <string name="text_2bec26a5c8e2" formatted="false">진단 공유 폴더를 준비할 수 없습니다.</string>
+    <string name="text_78d664a50890" formatted="false">진단 공유 파일을 만들 수 없습니다.</string>
+    <string name="text_c6bddcd61e6b" formatted="true">%1$s\n%2$s/7단계</string>
+    <string name="text_d23207c07a82" formatted="false">사진 준비</string>
+    <string name="text_ef1ae2c65edd" formatted="false">노출 계산</string>
+    <string name="text_6159fa0e2bb0" formatted="false">광학 효과 처리</string>
+    <string name="text_3b490fba1ffc" formatted="false">인화 및 스캔</string>
+    <string name="text_6c41da9a3395" formatted="false">인코딩 및 저장</string>
+    <string name="text_af91aee46a69" formatted="false">임시 파일 정리</string>
+    <string name="text_30fe814c4574" formatted="true"> · 현재 패스 %1$s%%</string>
+    <string name="text_6c9f62a53f72" formatted="false">기기 내 엔진이 설치되지 않음</string>
+    <string name="text_a4ca69371996" formatted="false">기기 내 필름 엔진이 아직 준비되지 않음</string>
+    <string name="text_6c0813b39bb5" formatted="false">기기 내 처리 취소됨</string>
+    <string name="text_d5113f613aad" formatted="false">이 사진은 현재 처리 범위를 초과합니다. 표준 크기를 선택해 주세요</string>
+    <string name="text_8bbca1842388" formatted="false">현재 크기 또는 할레이션 범위가 기기의 처리 예산을 초과합니다. 할레이션 범위를 줄이거나 표준 크기를 선택해 주세요. 원본은 축소하지 않았습니다.</string>
+    <string name="text_e46692a12a54" formatted="false">현재 필름 또는 인화지 프로파일을 사용할 수 없습니다. 다른 프로파일을 선택한 뒤 다시 시도해 주세요</string>
+    <string name="text_fda570c695c8" formatted="false">현재 조정 설정을 사용할 수 없습니다. 조정값을 초기화한 뒤 다시 시도해 주세요</string>
+    <string name="text_368306bc6068" formatted="false">기기의 임시 저장 공간이 부족합니다. 표준 크기로 내보내 주세요</string>
+    <string name="text_77f7a824adc1" formatted="false">처리 결과가 불완전하여 사진을 저장하지 않았습니다</string>
+    <string name="text_9695c3a1a61a" formatted="false">내보내기 작업 폴더 검증에 실패했습니다. 앱을 업데이트한 뒤 다시 시도해 주세요. 사진 크기를 줄일 필요는 없습니다</string>
+    <string name="text_4e906ddf82d9" formatted="false">기기 내 필름 처리를 완료하지 못했습니다. 다시 시도하고 계속 실패하면 진단 로그를 공유해 주세요</string>
+    <string name="text_0a9765e80ef5" formatted="false">기기 내 필름 엔진이 아직 준비되지 않았습니다. 원본을 가져와 볼 수 있지만 효과와 내보내기는 현재 사용할 수 없습니다.</string>
+    <string name="text_4c0c1ba5f426" formatted="false">기기 내 필름 자료를 준비할 수 없음</string>
+    <string name="text_c7b93a82c0c6" formatted="false">이미지가 이 버전의 처리 크기 한도를 초과함</string>
+    <string name="text_ba4205340595" formatted="false">기기 내 필름 자료를 불러올 수 없음</string>
+    <string name="text_1c50d5872b77" formatted="false">엔진이 유효하지 않은 색상을 반환함</string>
+    <string name="text_ed15a09dd74c" formatted="false">이 버전은 긴 변 최대 4096픽셀까지 내보낼 수 있습니다</string>
+    <string name="text_84ccf8f71d0d" formatted="false">처리 결과 읽기가 중단됨</string>
+    <string name="text_0db55ca8317f" formatted="false">처리 결과에 유효하지 않은 색상이 포함됨</string>
+    <string name="text_3ac8122c5f15" formatted="false">원본 크기가 안전한 처리 범위를 초과함</string>
+    <string name="text_ed2785856a9e" formatted="false">원본 임시 데이터가 불완전합니다. 다시 가져와 주세요</string>
+    <string name="text_a7c774a3bd73" formatted="false">내보내기 데이터가 불완전하여 사진을 저장하지 않았습니다</string>
+    <string name="text_84fe057f0854" formatted="false">Bitmap 내보내기는 sRGB만 지원합니다. 넓은 색역은 원시 선형 내보내기 경로를 사용해 주세요</string>
+    <string name="text_236748b3f384" formatted="false">기기 내 분광 자료 검증 실패</string>
+    <string name="text_bb3e34642ce2" formatted="false">기기 내 분광 자료 경로가 유효하지 않음</string>
+    <string name="text_837fdb22a021" formatted="false">기기 내 분광 자료를 준비할 수 없음</string>
+    <string name="text_8d11010b3a7b" formatted="false">기기 내 분광 자료를 설치할 수 없음</string>
+    <string name="text_101df955ba5b" formatted="false">자르기 대기열 스냅샷이 일치하지 않음</string>
+    <string name="text_eca4546685f7" formatted="false">구도 대기열 스냅샷이 일치하지 않음</string>
+    <string name="text_02d5c30befc6" formatted="false">스프로킷 테두리 대기열 스냅샷이 불완전함</string>
+    <string name="text_31d5184a31ac" formatted="false">작업 기록이 손상되었습니다. 취소한 뒤 사진을 다시 추가해 주세요</string>
+    <string name="text_9652b13c1fd3" formatted="false">처리가 중단되었습니다. 눌러서 계속 진행하세요. 미완료 단계는 다시 계산합니다</string>
+    <string name="text_e56de4bd4f96" formatted="false">추가를 완료하지 못했습니다. 이 항목을 취소한 뒤 사진을 다시 추가해 주세요</string>
+    <string name="text_f5923a5ffaa3" formatted="false">내보내기 진행 상황을 영구 저장할 수 없음</string>
+    <string name="text_70d544a20512" formatted="false">내보내기 기록이 없음</string>
+    <string name="text_704cb65572bc" formatted="false">추가 작업이 종료됨</string>
+    <string name="text_0b58e0113da6" formatted="false">취소 중</string>
+    <string name="text_b050569cce69" formatted="false">진행 상황을 저장하지 못했습니다. 저장 공간을 확보한 뒤 계속 진행해 주세요</string>
+    <string name="text_83b39ce89c4f" formatted="false">지원하지 않는 최종 구도 기록 버전</string>
+    <string name="text_bb72ee12ba8b" formatted="false">대기열이 일시 정지되었습니다. 눌러서 계속 진행</string>
+    <string name="text_ff3d626e1865" formatted="false">취소됨, 일부 임시 파일 정리 대기</string>
+    <string name="text_29367795aabb" formatted="false">중단된 내보내기 파일을 정리할 수 없음</string>
+    <string name="text_25d728831d11" formatted="false">대기열 사진</string>
+    <string name="text_ba513cd4be11" formatted="false">중단된 입력 임시 파일을 정리할 수 없음</string>
+    <string name="text_e0cc395f6b84" formatted="false">사진 저장됨</string>
+    <string name="text_598870cac16e" formatted="false">저장됨, 일부 임시 파일 정리 대기</string>
+    <string name="text_3df4e91da12d" formatted="false">처리가 일시 정지되었습니다. 계속 진행할 수 있으며 미완료 단계는 다시 계산합니다</string>
+    <string name="text_801eccbf436d" formatted="false">복구 데이터가 불완전하여 이 작업을 계속할 수 없습니다. 취소한 뒤 사진을 다시 추가해 주세요. 체크포인트를 알리지 않고 삭제하여 다시 계산하지 않습니다.</string>
+    <string name="text_a3290bb56b7f" formatted="false">저장 공간이 부족하여 작업을 일시 정지했습니다. 공간을 확보한 뒤 계속 진행하거나, 취소한 뒤 더 작은 크기로 다시 추가해 주세요.</string>
+    <string name="text_c42a34760d85" formatted="false">내보내기를 완료하지 못했습니다. 다시 시도할 수 있도록 작업을 유지합니다</string>
+    <string name="text_84d1e185592a" formatted="false">메모리가 부족합니다. 작업은 유지되며 나중에 다시 시도하거나 취소할 수 있습니다</string>
+    <string name="text_31912f0eff0f" formatted="false">시작 시 정리를 완료하지 못했습니다. 편집기로 돌아가 정리를 다시 시도한 뒤 내보내기 목록에서 계속 진행해 주세요.</string>
+    <string name="text_89e2a57fd12b" formatted="false">사진 내보내기</string>
+    <string name="text_13a6efbdb2f3" formatted="false">백그라운드 필름 처리 진행 상황</string>
+    <string name="text_22db9e335155" formatted="false">내보내기 대기열 준비</string>
+    <string name="text_7faeabb91a25" formatted="false">Filmroom · 백그라운드 내보내기</string>
+    <string name="text_8d12fc0d4eb2" formatted="false">일시 정지</string>
+    <string name="text_f515de6af876" formatted="false">HEIC 컨테이너 데이터가 불완전하거나 일치하지 않습니다.</string>
+    <string name="text_0f079bb732f5" formatted="false">이 HEIC 변형은 아직 지원하지 않습니다. 현재는 검증된 sRGB / Display P3 SDR 색상 하위 집합과 정적 8비트 HEVC 기본 이미지만 처리합니다. 알 수 없는 ICC, 보조 이미지, 미러링, 자르기, HDR은 지원하지 않습니다.</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEIC 메타데이터 또는 크기가 안전한 처리 범위를 초과합니다.</string>
+    <string name="text_19e0ce29db17" formatted="false">HEIC ICC 색상 데이터가 불완전하거나 일치하지 않습니다.</string>
+    <string name="text_da9f421ae9ad" formatted="false">이 HEIC ICC 색상 프로파일은 아직 지원하지 않습니다. 알 수 없는 색상이나 HDR 색상을 sRGB로 표시하지 않았습니다.</string>
+    <string name="text_9cd4df0f9933" formatted="false">HEIC ICC 색상 데이터가 안전한 읽기 범위를 초과합니다.</string>
+    <string name="text_56e47360aaca" formatted="false">이 HEIC는 현재 5,200만 인코딩 픽셀 안전 한도를 초과합니다. 원본은 축소하지 않았습니다.</string>
+    <string name="text_9ff6012fdde9" formatted="false">이 HEIC의 원본 크기 디코딩 예산이 안전 범위를 초과합니다. 원본은 축소하지 않았습니다.</string>
+    <string name="text_58a07dbdf8d7" formatted="false">기기에서 이 HEIC의 원본 색상 프로파일을 올바르게 식별하지 못했습니다. 색상을 추정하거나 sRGB 태그로만 바꾸지 않았습니다.</string>
+    <string name="text_986742c74398" formatted="false">기기에서 HEIC의 8비트 sRGB SDR 기본 이미지를 확인하지 못했습니다. HDR 게인 맵이나 자동 톤 매핑은 적용하지 않았습니다.</string>
+    <string name="text_8b96428c13f4" formatted="false">기기 HEIC 디코더가 보고한 기본 이미지의 크기 또는 방향이 일치하지 않습니다. 원본 대신 썸네일을 사용하지 않았습니다.</string>
+    <string name="text_1e6cd3983af1" formatted="false">기기에서 이 HEIC를 원본 크기의 sRGB SDR로 디코딩하지 못했습니다. 암묵적인 축소나 HDR 변환은 수행하지 않았습니다.</string>
+    <string name="text_dfe135051811" formatted="false">기기 시스템에 사용 가능한 HEIC 디코더가 없습니다. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_ba94a97c604b" formatted="false">HEIC 원본 크기 작업 데이터를 저장할 공간이 부족합니다. 원본은 축소하지 않았습니다.</string>
+    <string name="text_f1632bf9ae5b" formatted="false">현재 사용 가능한 기기 메모리로는 이 원본 크기 HEIC를 안전하게 디코딩할 수 없습니다. 원본은 축소하지 않았습니다. 나중에 다시 시도해 주세요.</string>
+    <string name="text_389695202ee7" formatted="false">기기 HEIC 디코더의 메모리가 부족하여 중지했습니다. 원본은 축소하지 않았습니다.</string>
+    <string name="text_86c64f79957e" formatted="false">sRGB 출력에 다른 색상 프로파일을 혼용할 수 없음</string>
+    <string name="text_7e611ddedc63" formatted="false">선택한 색역의 색상 프로파일이 없음</string>
+    <string name="text_7f988b809315" formatted="false">유효하지 않은 색상 프로파일</string>
+    <string name="text_9f7eee77bb73" formatted="false">색상 프로파일과 선택한 색역이 일치하지 않음</string>
+    <string name="text_a5d702fd2654" formatted="false">이미지에 유효하지 않은 색상 값이 포함됨</string>
+    <string name="text_7d7e6c47e8d9" formatted="false">선택한 출력 색역을 지원하지 않음</string>
+    <string name="text_62634ce08e7b" formatted="false">원본 촬영 메타데이터를 사용할 수 없음. 촬영 시간을 임의로 생성하지 않았습니다</string>
+    <string name="text_5de5710e49a1" formatted="false">일부 원본 메타데이터의 텍스트 인코딩을 안전하게 해석할 수 없어 저장하지 않았습니다</string>
+    <string name="text_97154723b761" formatted="false">일부 원본 메타데이터가 유효하지 않거나 안전 용량을 초과하여 저장하지 않았습니다</string>
+    <string name="text_b778fe908dac" formatted="false">내보내기는 취소되었지만 미완료 파일 정리 여부를 확인하지 못했습니다. 저장 공간을 확인한 뒤 앱을 다시 시작해 주세요.</string>
+    <string name="text_075e5b2e2761" formatted="false">시스템 사진 선택기를 사용하여 사진을 선택해 주세요.</string>
+    <string name="text_f145e6465120" formatted="false">기기 내 작업 파일을 만들 수 없습니다. 저장 공간을 확인해 주세요.</string>
+    <string name="text_9392b8f7c99e" formatted="false">이 사진을 복사할 기기 저장 공간이 부족합니다. 공간을 확보한 뒤 다시 가져와 주세요.</string>
+    <string name="text_2673ef9ba447" formatted="false">사진 파일이 512 MiB를 초과합니다. 파일 용량이 더 작은 사진을 선택해 주세요.</string>
+    <string name="text_276ad5585012" formatted="false">기기의 남은 저장 공간이 부족하여 가져오기를 중지했습니다. 공간을 확보한 뒤 다시 시도해 주세요. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_5c2432fd4e78" formatted="false">사진이 커서 현재 미리보기를 생성할 수 없습니다. 더 작은 사진을 선택해 주세요.</string>
+    <string name="text_a064cfbab736" formatted="false">읽기 권한이 만료되었습니다. 사진을 다시 선택해 주세요.</string>
+    <string name="text_a428b047ad8e" formatted="false">이 사진을 읽을 수 없습니다. 파일이 손상되었거나 사용할 수 없거나 기기 저장 공간이 부족할 수 있습니다.</string>
+    <string name="text_b769fd8412bb" formatted="false">기기 내 작업 사진을 더 이상 사용할 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_660bbeffe8d6" formatted="false">이 사진을 현재 크기로 처리할 수 없습니다. 더 작은 내보내기 크기를 선택해 주세요.</string>
+    <string name="text_9c508b3acf89" formatted="false">사진을 다시 읽을 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_d408527bac5d" formatted="false">작업 사진 기록이 유효하지 않습니다. 다시 가져와 주세요.</string>
+    <string name="text_5e9174903275" formatted="false">현재 메모리가 부족하여 사진을 복원할 수 없습니다. 나중에 다시 가져와 주세요.</string>
+    <string name="text_63b74410c9d6" formatted="false">기기 내 사진을 복원할 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_0e98e94d0aff" formatted="false">HEIC 컨테이너를 읽을 수 없습니다.</string>
+    <string name="text_2f6241f58a5d" formatted="false">HEIC 원본 크기 작업 데이터를 더 이상 사용할 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_662817bc355b" formatted="false">HEIC 원본 크기 작업 데이터가 불완전합니다. 다시 가져와 주세요.</string>
+    <string name="text_99d3398d25b4" formatted="false">HEIC Display P3를 sRGB, 8비트 SDR 작업 공간으로 변환했습니다. sRGB 색역 밖의 색상은 보존하지 않습니다. SDR 기본 이미지만 가져오며 HDR 게인 맵은 적용하거나 보존하지 않습니다.</string>
+    <string name="text_21acba32c252" formatted="false">HEIC를 원본 크기의 sRGB, 8비트 SDR 기본 이미지로 처리합니다. HDR 게인 맵은 적용하거나 보존하지 않습니다.</string>
+    <string name="text_f6e0e231129a" formatted="false">현재 JPEG, PNG, 일반 정적 HEIC 및 검증된 DNG 유형을 지원합니다. 이 파일의 인코딩은 아직 지원하지 않습니다.</string>
+    <string name="text_312bb591804d" formatted="false">RAW 임시 데이터를 더 이상 사용할 수 없습니다. 다시 가져와 주세요.</string>
+    <string name="text_52dca03550a9" formatted="false">RAW 디코딩 데이터가 불완전합니다. 다시 가져와 주세요.</string>
+    <string name="text_8f8660561ea5" formatted="false">Filmroom</string>
+    <string name="text_01b0b11fd332" formatted="false">원본 크기 임시 데이터를 저장할 기기 공간이 부족합니다.</string>
+    <string name="text_5780b5b34a55" formatted="false">현재 기기는 이 원본 크기 사진을 타일 단위로 디코딩할 수 없습니다. 원본 사진을 축소하거나 대체하지 않았습니다.</string>
+    <string name="text_ee57ab3f6e70" formatted="false">원본 크기 사진을 읽을 수 없거나 기기의 임시 저장 공간이 부족합니다. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_0c0a9b25a114" formatted="false">원본 크기 렌더링 데이터가 불완전하여 사진을 내보내지 않았습니다.</string>
+    <string name="text_23fcd93377e5" formatted="false">일부 촬영 메타데이터를 저장하지 못했습니다. 이미지 픽셀과 색상 프로파일은 유지되었습니다</string>
+    <string name="text_073143680076" formatted="false">暗房_原尺寸</string>
+    <string name="text_a40512c68094" formatted="true">%1$s/暗房</string>
+    <string name="text_b3a7814059d4" formatted="false">메모리가 부족하여 내보내기를 완료하지 못했습니다. 임시 파일 정리 여부도 확인하지 못했습니다. 저장 공간을 확인한 뒤 앱을 다시 시작해 주세요.</string>
+    <string name="text_4bc6c17bca33" formatted="false">메모리가 부족하여 현재 크기로 내보낼 수 없습니다. 더 작은 크기를 선택해 주세요.</string>
+    <string name="text_67f346d97344" formatted="false">내보내기에 실패했으며 임시 파일 정리 여부도 확인하지 못했습니다. 저장 공간을 확인한 뒤 앱을 다시 시작해 주세요. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_a1c12237b4d9" formatted="false">내보내기에 실패했습니다. 사용 가능한 기기 저장 공간을 확인한 뒤 다시 시도해 주세요. 원본 사진은 변경되지 않았습니다.</string>
+    <string name="text_b447e7ccf3ec" formatted="false">내보내기 행의 소유 정보가 일치하지 않음</string>
+    <string name="text_5dc658ae62f8" formatted="false">저장된 사진의 상태를 확인할 수 없습니다. 나중에 다시 시도해 주세요</string>
+    <string name="text_d591741a5a6e" formatted="false">사진 크기가 안전한 처리 범위를 초과합니다. 더 작은 사진을 선택해 주세요.</string>
+    <string name="text_3bf690c56856" formatted="false">움직이는 사진은 아직 지원하지 않습니다. 정지 사진을 선택해 주세요.</string>
+    <string name="text_e9d5f1386eb5" formatted="false">PNG 구조가 불완전합니다. 사진을 다시 선택해 주세요.</string>
+    <string name="text_dac02f5d66dd" formatted="false">애니메이션 PNG는 아직 지원하지 않습니다. 정지 사진을 선택해 주세요.</string>
+    <string name="text_cab3449611ff" formatted="false">PNG 이미지 데이터가 없습니다.</string>
+    <string name="text_d3826ba783c7" formatted="false">이 PNG는 구조가 너무 복잡하여 아직 지원하지 않습니다.</string>
+    <string name="text_9064bd4b637b" formatted="false">WebP(손실)</string>
+    <string name="text_e0d8c2722d95" formatted="false">WebP(무손실)</string>
+    <string name="text_459f5d31c1d5" formatted="false">TIFF(16비트)</string>
+    <string name="text_4f410de4c30b" formatted="false">OpenEXR(부동 소수점)</string>
+    <string name="text_bec7754b9d7d" formatted="false">알 수 없는 형식은 사용 가능한 처리 경로로 등록할 수 없음</string>
+    <string name="text_19220b804ef8" formatted="false">Android 10 이상 필요</string>
+    <string name="text_a19839fd3ffd" formatted="false">파일 헤더는 후보 형식을 식별하는 데만 사용됩니다. 전체 디코딩이 여전히 필요하며 이 사진의 처리 가능 여부를 보장하지 않습니다.</string>
+    <string name="text_55b7686e7779" formatted="false">플랫폼 이미지 경로는 sRGB, 8비트 SDR로 처리합니다. 높은 비트 심도, 넓은 색역, HDR의 보존은 보장하지 않습니다. 투명 영역은 흰색 배경에 합성됩니다.</string>
+    <string name="text_066d69f4c0e2" formatted="false">정지 사진만 처리합니다. 애니메이션이나 이미지 시퀀스는 이 이미지 경로에 포함되지 않습니다.</string>
+    <string name="text_0699e8795e4f" formatted="false">원본 크기 처리는 방향, 메모리, 저장 공간 검사를 통과해야 합니다. HEIC는 가져올 때 원본 크기의 선형 작업 데이터를 생성하고, 다른 플랫폼 이미지는 스트립 단위로 디코딩합니다.</string>
+    <string name="text_e12fc1fdd16b" formatted="false">RAW / TIFF / OpenEXR의 비트 심도, 색상, 방향 규칙은 실제 네이티브 디코더가 확인하며 확장자로 추정할 수 없습니다.</string>
+    <string name="text_b1ce081679c3" formatted="false">가져오기를 시도할 수 있으나 개별 파일 확인이 필요함</string>
+    <string name="text_27cd59975564" formatted="false">현재 버전에는 아직 연동되지 않음</string>
+    <string name="text_e2c0354dd326" formatted="false">기기의 디코딩 능력을 확인할 수 없음</string>
+    <string name="text_cb55532a0726" formatted="false">기기에 사용 가능한 디코딩 경로가 아직 없음</string>
+    <string name="text_b6b940d93867" formatted="false">원본 크기 스트리밍 인코딩 연동됨</string>
+    <string name="text_e3c99cd869ac" formatted="false">크기 제한 인코딩 연동됨(긴 변 최대 4096픽셀)</string>
+    <string name="text_f3c2509899ee" formatted="false">현재 버전에 사용 가능한 인코딩 경로가 아직 없음</string>
+    <string name="text_f63450b5d12b" formatted="false">카메라 RAW</string>
+    <string name="text_c65b3b97b411" formatted="false">알 수 없는 형식</string>
+    <string name="text_b04a7122dd82" formatted="false">확대 미리보기 · 긴 변 최대 1536픽셀</string>
+    <string name="text_084663d93fc9" formatted="false">일반 미리보기 대기 중</string>
+    <string name="text_fe1ca7194034" formatted="false">확대 미리보기 대기 중</string>
+    <string name="text_2dd14bedbfd6" formatted="false">확대 미리보기 준비 · CPU</string>
+    <string name="text_fdaf1df9701c" formatted="true">확대 미리보기 불러오기 · 긴 변 %1$s픽셀 · CPU</string>
+    <string name="text_e3f7debc58f1" formatted="true">확대 미리보기 · 긴 변 %1$s픽셀 · 원본 크기 아님 · CPU</string>
+    <string name="text_328b93c4c2e6" formatted="false">원본 비교 · 확대 미리보기 숨김</string>
+    <string name="text_ccd803200ef6" formatted="false">확대 미리보기 일시 정지</string>
+    <string name="text_9f37f3d6b8c1" formatted="false">일반 미리보기 · </string>
+    <string name="text_b5dc9ebea612" formatted="false">아직 지원하지 않는 효과</string>
+    <string name="text_d4e2c673d344" formatted="false">사용 가능한 메모리 부족</string>
+    <string name="text_b9dd18aa35d1" formatted="false">원본 파일 검증 실패</string>
+    <string name="text_f5c716cc5054" formatted="false">원본 파일 읽기 실패</string>
+    <string name="text_dc0ed989d876" formatted="false">확대 미리보기 엔진 사용 불가</string>
+    <string name="text_49947c7bfc5f" formatted="false">엔진 데이터가 준비되지 않음</string>
+    <string name="text_c6851c16d664" formatted="false">확대 미리보기 결과 검증 실패</string>
+    <string name="text_744e3354f3e5" formatted="false">확대 미리보기 미완료</string>
+    <string name="text_a49ffd73bc85" formatted="false">평균</string>
+    <string name="text_1961784db559" formatted="false">중앙값</string>
+    <string name="text_1028167558b7" formatted="false">중앙 중점</string>
+    <string name="text_6d13a74715fd" formatted="false">부분</string>
+    <string name="text_d8b27dee3e23" formatted="false">매트릭스</string>
+    <string name="text_513adb42d450" formatted="false">다중 영역</string>
+    <string name="text_2064d42c9288" formatted="false">하이라이트 중점</string>
+    <string name="text_1b418527923a" formatted="false">현재 효과는 확대 미리보기를 지원하지 않아 일반 미리보기를 표시합니다</string>
+    <string name="text_180998ba335a" formatted="false">일시적으로 리소스가 부족하여 일반 미리보기를 표시합니다</string>
+    <string name="text_3da84d24730f" formatted="false">지금은 확대 미리보기를 읽을 수 없어 일반 미리보기를 표시합니다</string>
+    <string name="text_8ceaefb020a7" formatted="false">확대 미리보기를 일시적으로 사용할 수 없어 일반 미리보기를 표시합니다</string>
+    <string name="text_22a603ffe91d" formatted="true">Filmroom · 최근 %1$s분 진단 로그</string>
+    <string name="text_0dbb0ebd0479" formatted="false">비식별 진단 로그</string>
+    <string name="text_2d58b497cb9d" formatted="false">이로 인해 내보내기가 중지되지는 않습니다. 내보내기 목록에서 진행 상황을 확인할 수 있습니다.</string>
+    <string name="text_e1bc9722aab0" formatted="false">알림에서 내보내기 진행 상황을 확인할까요?</string>
+    <string name="text_597ba8c43d0f" formatted="false">알림을 허용하면 Filmroom을 떠나도 진행 상황을 확인하고 일시 정지할 수 있습니다. 알림을 켜지 않아도 내보낼 수 있으며 내보내기 목록에서 진행 상황을 확인할 수 있습니다.</string>
+    <string name="text_3834f9cf9f9b" formatted="false">알림 켜기</string>
+    <string name="text_a2666f394298" formatted="false">나중에</string>
+    <string name="text_945004c4e7d2" formatted="false">내보내기 목록, 현재 개수 확인 불가</string>
+    <string name="text_52e3c85e1339" formatted="true">내보내기 목록, 미완료 %1$s개, 처리 중</string>
+    <string name="text_bc35e14dc39d" formatted="true">내보내기 목록, %1$s개 처리 대기 중</string>
+    <string name="text_fc6efd9ef551" formatted="false">내보내기 목록, 대기 중이거나 처리 중인 작업 없음</string>
+    <string name="text_9573f0c13d94" formatted="true">%1$s, 새로 완료된 내보내기 있음</string>
+    <string name="text_70ceea90cbaf" formatted="false">자유 자르기. 가장자리나 모서리를 끌어 자르기 프레임을 조정하고, 안쪽을 끌어 선택 영역을 이동하며, 두 손가락으로 선택 영역 크기를 조절하세요.</string>
+    <string name="text_c8da2b308ae6" formatted="false">구도 조정. 프레임은 고정되어 있습니다. 사진을 끌어 이동하고 두 손가락으로 확대·축소하세요.</string>
+    <string name="text_c85ef88eb1b1" formatted="false">사진 미리보기. 두 손가락으로 확대·축소하고, 두 번 눌러 원래 크기로 복원하거나 확대하세요.</string>
+    <string name="text_c73702747ef1" formatted="false">내보내기 준비</string>
+    <string name="text_1cb9d4521713" formatted="false">사진 저장</string>
+    <string name="text_11f1bec7ceb0" formatted="false">취소 및 정리</string>
+    <string name="text_2fb03c5fc0b5" formatted="false">필름 효과 생성</string>
+    <string name="text_9d2998cca517" formatted="false">정리</string>
+    <string name="text_e66883ffd17e" formatted="false">인코딩</string>
+    <string name="text_534cb3fa8fbf" formatted="false">읽기</string>
+    <string name="text_129547c98a3a" formatted="false">기기 확인</string>
+    <string name="text_b65851ed8941" formatted="false">염료 구름</string>
+    <string name="text_88d9568f838c" formatted="false">할레이션</string>
+    <string name="text_4bd29b339038" formatted="false">농도</string>
+    <string name="text_133496718bdc" formatted="false">로그 노광량</string>
+    <string name="text_b88f02974ea0" formatted="false">이전 항목</string>
+    <string name="text_f8baad25a051" formatted="false">다음 항목</string>
+    <string name="text_ed42cfc64f18" formatted="false">컬러 리버설 필름</string>
+    <string name="text_d60c820b2be8" formatted="false">컬러 네거티브 필름</string>
+    <string name="queue_original_details" formatted="false">원본 진단 정보</string>
+    <string name="queue_metadata_warning" formatted="false">사진 메타데이터 일부를 보존하지 못했습니다. 원본 진단 정보를 확인하세요.</string>
+    <string name="export_progress_preview" formatted="false">내보내기 진행 상황 미리보기</string>
+    <string name="toast_failed">작업 실패. 다시 시도하세요</string>
+    <string name="toast_queued">내보내기 목록에 추가됨</string>
+    <string name="toast_queued_check">작업 추가됨. 목록을 확인하세요</string>
+    <string name="toast_cancel_requested">취소 요청됨. 목록을 확인하세요</string>
+    <string name="toast_background">백그라운드에서 작업 준비 중</string>
+    <string name="toast_uncertain">대기 종료. 목록을 확인하세요</string>
+    <string name="toast_imported_cancel">가져옴. 후속 처리는 취소됨</string>
+    <string name="toast_import_cancel">가져오기 취소됨</string>
+    <string name="toast_preview_cancel">미리보기 갱신 취소됨</string>
+    <string name="toast_memory">메모리 부족. 나중에 다시 시도하세요</string>
+    <string name="toast_storage">저장 공간 부족</string>
+    <string name="toast_size">사진이 처리 범위를 초과함</string>
+    <string name="toast_format">지원하지 않는 형식</string>
+    <string name="toast_reimport">사진을 다시 가져오세요</string>
+    <string name="toast_read">사진을 읽을 수 없음</string>
+    <string name="toast_preview">미리보기 실패. 다시 시도하세요</string>
+    <string name="toast_add_failed">내보내기 작업 추가 실패</string>
+    <string name="toast_cleanup">임시 파일 정리 실패</string>
+    <string name="toast_engine">로컬 엔진을 사용할 수 없음</string>
+    <string name="toast_queue_read">내보내기 목록을 읽을 수 없음</string>
+    <string name="toast_resume">계속할 수 없음. 다시 시도하세요</string>
+    <string name="toast_cancel_failed">취소 실패. 다시 시도하세요</string>
+    <string name="toast_open">갤러리에서 사진을 확인하세요</string>
+    <string name="toast_notification">내보내기 가능. 목록에서 확인하세요</string>
+    <string name="toast_detail_unsupported">이 효과는 일반 미리보기만 지원</string>
+    <string name="toast_detail_memory">리소스 부족. 일반 미리보기 사용</string>
+    <string name="toast_detail_read">읽기 실패. 일반 미리보기 사용</string>
+    <string name="toast_detail_fallback">일반 미리보기 사용 중</string>
+    <string name="toast_cancelled">처리 취소됨</string>
+    <string name="toast_profile">다른 필름이나 인화지를 선택하세요</string>
+    <string name="toast_parameters">설정을 초기화하세요</string>
+    <string name="toast_budget">처리 한도 초과. 설정을 낮추세요</string>
+    <string name="toast_incomplete">처리 미완료. 저장되지 않음</string>
+    <string name="toast_workdir">작업 폴더 오류. 앱을 업데이트하세요</string>
+</resources>

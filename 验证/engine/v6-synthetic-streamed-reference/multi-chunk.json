@@ -1,0 +1,73 @@
+{
+  "case": "physical_all_chunk_boundary",
+  "differingSamples": 0,
+  "film": "kodak_portra_400",
+  "finite": true,
+  "fixtureProvenance": "synthetic-spatial-v6-integer-grid-20261031",
+  "height": 129,
+  "inputUnchanged": true,
+  "maxAbs": 0.0,
+  "meanAbs": 0.0,
+  "metrics": {
+    "algorithm": "Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",
+    "elapsedMs": 466.382144,
+    "estimatedScratchBytes": 71352448,
+    "gpu": {
+      "acceleratedStage": "density_curve_interp",
+      "active": false,
+      "adapter": "",
+      "available": false,
+      "backend": "cpu",
+      "cpuFallbacks": 8,
+      "gpuBatches": 0,
+      "reason": "Disabled by user",
+      "requested": false,
+      "startupSelfTestPassed": false
+    },
+    "grainMode": "Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",
+    "height": 129,
+    "lutStorageBytes": 10045632,
+    "memoryBudgetMiB": 384,
+    "memoryPolicy": "Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee",
+    "peakLogicalScratchBytes": 2917464,
+    "pixelCount": 33153,
+    "pointwiseChunkRows": 127,
+    "setupMs": 217.466462,
+    "spatialBytesRead": 22278816,
+    "spatialBytesWritten": 22278816,
+    "spatialPassCount": 42,
+    "spatialPeakExplicitBufferBytes": 795672,
+    "stages": [
+      {
+        "elapsedMs": 5.066922,
+        "stage": "film_exposure"
+      },
+      {
+        "elapsedMs": 70.70069099999999,
+        "stage": "film_scatter_halation"
+      },
+      {
+        "elapsedMs": 30.539675,
+        "stage": "film_density_dir"
+      },
+      {
+        "elapsedMs": 90.616858,
+        "stage": "grain"
+      },
+      {
+        "elapsedMs": 50.381902,
+        "stage": "printing_scanning"
+      }
+    ],
+    "width": 257
+  },
+  "paper": "kodak_portra_endura",
+  "pointwiseRows": [
+    127,
+    2
+  ],
+  "samples": 99459,
+  "scratchRemoved": true,
+  "status": "passed",
+  "width": 257
+}

@@ -1,0 +1,634 @@
+{
+  "scope": "Reference-informed generatedfilm artwork with programmatic geometry/code correction; not originalfilm scans",
+  "rights_note": "No source photographs or manufacturerPDFs are included. References identify evidence, not a blanketlicenseto sourceimages. Trademarks identify the depictedfilmstock, noendorsement. No exclusivecopyright or universalrights-clearanceclaim.",
+  "stocks": [
+    {
+      "physical_stock": "kodak_portra_160",
+      "references": [
+        "https://www.kodakprofessional.com/photographers/film/color/kodak-professional-portra-160-film/529",
+        "https://note.com/misonog/n/nb744b02da81d",
+        "https://www.shawphotoco.com/sprocket-photography-how-to-load-35mm-film-into-a-medium-format-camera/",
+        "https://www.shawphotoco.com/wp-content/uploads/2023/05/Sprocket-Photography_0053.jpg",
+        "https://www.shawphotoco.com/wp-content/uploads/2023/05/Sprocket-Photography_0054.jpg",
+        "https://www.shawphotoco.com/wp-content/uploads/2023/05/Sprocket-Photography_0055.jpg"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author positive scan of35mm exposed inmediumformatcamera",
+        "source": "https://www.shawphotoco.com/sprocket-photography-how-to-load-35mm-film-into-a-medium-format-camera/",
+        "image": "https://www.shawphotoco.com/wp-content/uploads/2023/05/Sprocket-Photography_0053.jpg",
+        "observed": "blackholes",
+        "boundary": "Exposure extendsinto sprocketrail, so cannot calibrate ordinaryunexposedmaterialcolor; matteonly correction, PNG unchanged."
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_400",
+      "references": [
+        "https://www.kodakprofessional.com/photographers/film/color/kodak-professional-portra-400-film/516",
+        "https://filmis.fun/cdn/shop/files/Screenshot2023-10-20at10.21.27AM.png?v=1697823220&width=1100",
+        "https://filmis.fun/cdn/shop/files/P400-1.jpg?v=1697823220&width=1100"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "merchant film-border overlay product preview, NOTauthenticatedrawscan",
+        "source": "https://filmis.fun/cdn/shop/files/P400-1.jpg?v=1697823220&width=1100",
+        "observed": "darkholes in existingreference",
+        "boundary": "Onlyalign holematte withexistingreference. Doesnot establish independentlyverifiedoriginalscan, uniformcolor ormanufacturerstandard. PNGunchanged."
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_800",
+      "references": [
+        "https://www.kodakprofessional.com/photographers/film/color/kodak-professional-portra-800-film/528",
+        "https://statefilm.com/digital-contact-sheets",
+        "https://statefilm.com/digital-contact-sheets/sample-crop.jpg",
+        "https://www.analog.cafe/r/the-biggest-film-test-and-a-new-film-inversion-app-h4w9",
+        "https://res.cloudinary.com/analog-cafe/image/upload/c_fill%2Cfl_progressive%2Cw_480/image-froth_680572_-dDb4iFhZ.avif"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged.",
+        "First-party editorial positive reference, mediumconfidence. Scanner/retouching unknown, not authenticated originalscan. Geometry/lettering/logicalcode unchanged; push1/push2 sharephysicalframe. Newlightbit1 requiresfreshencodedtests."
+      ],
+      "attribution": null,
+      "display_revision": "Own-stock first-party editorial positive reference, medium-confidence, darkgrayblack/orange-yellow; scan/retouching unknown; blackholematte; actualcodec pending",
+      "positive_display_sources": [
+        "https://www.tinorieger.de/bella-umag24/",
+        "https://cdnc.heyzine.com/files/uploaded/be808fa6d9398e14c1e1e77ebb2497bc34053919.pdf"
+      ]
+    },
+    {
+      "physical_stock": "kodak_gold_200",
+      "references": [
+        "https://35milly.com/en/how-to-identify-the-emulsion-side-of-the-film-with-photos/",
+        "https://35milly.com/wp-content/uploads/2023/04/IMG_1238-Large-1024x768.jpg",
+        "https://imaging.kodakalaris.com/sites/default/files/files/resources/E7022_Gold_200.pdf"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged.",
+        "Per-stock colors follow independently viewed positive-image scanning references; texture is reconstructed, not original scan. Existing geometry/lettering/25 logicalcodes unchanged. DX polarity changes to light bit1; new encoded verification required."
+      ],
+      "attribution": null,
+      "display_revision": "Positive-image scan reference-backed reconstruction; dark holes via per-asset [0,0,0] matte; not universal calibrated color.",
+      "positive_display_sources": [
+        "https://www.blazsemprimoznik.com/okto35-mk2/"
+      ]
+    },
+    {
+      "physical_stock": "kodak_ultramax_400",
+      "references": [
+        "https://emulsive.org/reviews/film-reviews/fuji-film-reviews/film-stock-review-three-rolls-with-made-in-usa-fujifilm-400"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged.",
+        "Reference border scan author disliked center-image color/exposure; palette is observed colorfamily, not ideal scanner calibration. Geometry/lettering/logicalcode unchanged; new light-bit1 polarity requires fresh encoded tests."
+      ],
+      "attribution": null,
+      "display_revision": "Own-stock positive scan evidence, verydarkgreenblack/ochre, black hole matte; actual codec validation PENDING",
+      "positive_display_sources": [
+        "https://www.myfavouritelens.com/needed-negs-re-scanning/"
+      ]
+    },
+    {
+      "physical_stock": "kodak_ektar_100",
+      "references": [
+        "https://www.kodakprofessional.com/photographers/film/color/kodak-professional-ektar-100-film/530",
+        "https://commons.wikimedia.org/wiki/File:Color_print_film_strip_01_-_negative.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/6/61/Color_print_film_strip_01_-_negative.jpg"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged.",
+        "Per-stock colors follow independently viewed positive-image scanning references; texture is reconstructed, not original scan. Existing geometry/lettering/25 logicalcodes unchanged. DX polarity changes to light bit1; new encoded verification required."
+      ],
+      "attribution": {
+        "creator": "LoMit (Hubert Sieminski)",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Color_print_film_strip_01_-_negative.jpg",
+        "changes": "Border appearance reference used for image generation; generatedtexture and ink extracted; physicalgeometryregularized; frame numbers customized25."
+      },
+      "display_revision": "Positive-image scan reference-backed reconstruction; dark holes via per-asset [0,0,0] matte; not universal calibrated color.",
+      "positive_display_sources": [
+        "https://filmspeedlab.com/pages/faq",
+        "https://drive.google.com/file/d/1YbIwmlvt340kpfkXwZJDgaFfRF5XgA3z/view"
+      ]
+    },
+    {
+      "physical_stock": "fujifilm_c200",
+      "references": [
+        "https://asset.fujifilm.com/www/us/files/2019-09/cce1e1943550fc3e76c22411066f0100/films_c200_datasheet_01.pdf",
+        "https://www.flickr.com/photos/v-tran/51643618770/"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5382\u5bb6135\u56fe\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author positive35mm scan with exposedperforationtracks",
+        "source": "https://www.flickr.com/photos/v-tran/51643618770/",
+        "image": "https://live.staticflickr.com/65535/51643618770_c479120ff5_b.jpg",
+        "author": "V Tran",
+        "observed": "Normal-color positive, black KS holes, FUJI / 200 / C82 / 26 / 26A readable; orange text and red/cyan lines",
+        "boundary": "Scene exposes sprocket tracks: supports its own black-hole example, not ordinary unexposed rebate RGB. C82 differs from manufacturer CA24 diagram era.",
+        "change": "matte-only dark; PNGallbytesunchanged"
+      }
+    },
+    {
+      "physical_stock": "fujifilm_xtra_400",
+      "references": [
+        "https://asset.fujifilm.com/www/hu/files/2019-09/af234c58ab3d3b67b41cde22b1155309/films_superia-xtra400_datasheet_01.pdf",
+        "https://www.flickr.com/photos/ullam/44347826851"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5382\u5bb6135\u56fe\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged.",
+        "Sparse DX material/ink pixels of insufficient contrast were replaced with the same-stock same-bit median nativeRGB; logicalcode, geometry, alpha and predominantcolor retained. This ensures testedcodelegibility, not exactoriginalscantexture."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author positive35mm scan with exposedperforationtracks",
+        "source": "https://www.flickr.com/photos/ullam/44347826851",
+        "image": "https://live.staticflickr.com/1895/44347826851_7b5c61a7e6.jpg",
+        "author": "Ulla M",
+        "observed": "Normal-color positive, black KS holes; S-400 / FUJI / H76 / 21 / 21A; yellow lettering",
+        "boundary": "Exposure into hole tracks; cannot treat exposed track colors as ordinary rebate; small 500x234 preview.",
+        "change": "matte-only dark; PNGallbytesunchanged"
+      }
+    },
+    {
+      "physical_stock": "fujifilm_pro_400h",
+      "references": [
+        "https://asset.fujifilm.com/master/emea/files/2020-10/a6cb96275e4957ddc7b3ca932b7755e5/films_pro-400h_datasheet_01.pdf"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5382\u5bb6135\u56fe\u53c2\u8003\u91cd\u5efa"
+        },
+        "dx": "Verified stock/product/generation fields with customized25/25A, guards/parity; independently reread from savedRGBA samplepositions"
+      },
+      "retained_differences": [
+        "Typeface/color/texture generatedreconstruction",
+        "DX logicalbits verified and finalPNGsampled; physicalsize/phase approximate reference-informed",
+        "App36x24 apertureandphase remainlayoutchoice",
+        "DX tracks40px each at40px/mm,19px outermaterialmargin: intentional visual reconstruction, not a universalphysicalfilmstandard; horizontalbits andtopposition unchanged."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "manufacturerdiagram/officialgeometry; no currentfullpositiveholecolorverification",
+        "boundary": "Current whitehole presentation is provisional displaychoice, notauthenticatedactualscancolor. No newcolor inferredfromotherstocks."
+      }
+    },
+    {
+      "physical_stock": "fujifilm_velvia_100",
+      "references": [
+        "https://asset.fujifilm.com/master/emea/files/2020-10/2f3c7f90a0b0c6e605e84f98b7d489c2/films_velvia-100_datasheet_01.pdf",
+        "https://tallboy.blog.fc2.com/blog-entry-679.html"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5382\u5bb6135\u56fe\u53c2\u8003\u91cd\u5efa"
+        }
+      },
+      "retained_differences": [
+        "Typeface, filmtexture and scan color are reference-informed reconstructions, not pixel-identical scans.",
+        "No consumer DX barcode is depicted or required for this reversal design.",
+        "Symmetric phase and centered36x24 aperture are app layout choices."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author photograph of actual processed135colortransparency",
+        "source": "https://tallboy.blog.fc2.com/blog-entry-679.html",
+        "image": "https://blog-imgs-77.fc2.com/t/a/l/tallboy/20180407-P4070094.jpg",
+        "author": "T\uff65B\uff65",
+        "observed": "FUJI RVP100; frame5/5A/6 andsmall36+hollowarrow; darkblackcoolrebate orange-yellowletters; holes showwhitebackground",
+        "boundary": "Photograph of developedfilm on whitebackground, not flat calibratedscan. Slight perspective, focus variation, reflectedlight. Only supports observed appearance family, not exactRGB or manufacturingtolerance.",
+        "change": "nochange; observedwhitebackgroundthroughholes supports retainedlightmatte, not universalRGB"
+      }
+    },
+    {
+      "physical_stock": "fujifilm_provia_100f",
+      "references": [
+        "https://asset.fujifilm.com/www/us/files/2025-06/76ccbf624f1b5db023c093c94917708f/films_provia-100f_datasheet_01.pdf",
+        "https://www.bilibili.com/video/BV1Mb411N7DT/"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5382\u5bb6135\u56fe\u53c2\u8003\u91cd\u5efa"
+        }
+      },
+      "retained_differences": [
+        "Typeface, filmtexture and scan color are reference-informed reconstructions, not pixel-identical scans.",
+        "No consumer DX barcode is depicted or required for this reversal design.",
+        "Symmetric phase and centered36x24 aperture are app layout choices."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author photograph of actual processed135colortransparency",
+        "source": "https://www.bilibili.com/video/BV1Mb411N7DT/",
+        "image": "https://i1.hdslb.com/bfs/archive/b9e7bb3d3f2c542077768dac45f646188e274c5b.jpg",
+        "author": "\u4f60\u662f\u96f6",
+        "observed": "dark slightlycoolblackrebate, yellowochreletters, holes show pale whitebackground; positivepictures",
+        "boundary": "Video page open returned412; indexed originaldescription and publiclyavailable3480x2175cover viewed only, not fullvideo. Photograph throughsleeve, no calibratedscan. No actualscanworkflow proof; actual physicalpositivefilm visible. Do notredistribute sourcephotograph asAppasset.",
+        "change": "nochange; observedwhitebackgroundthroughholes supports retainedlightmatte, not universalRGB"
+      }
+    },
+    {
+      "physical_stock": "kodak_ektachrome_100",
+      "references": [
+        "https://emulsive.org/featured/film-review-kodak-ektachrome-e100-shot-at-ei-100-200-400-800-first-impressions"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        }
+      },
+      "retained_differences": [
+        "Typeface, filmtexture and scan color are reference-informed reconstructions, not pixel-identical scans.",
+        "No consumer DX barcode is depicted or required for this reversal design.",
+        "Symmetric phase and centered36x24 aperture are app layout choices."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "viewedactualpositive/transparencyreference",
+        "observed": "lightholes",
+        "boundary": "retainexistingwhitepresentation; not universalRGB calibration"
+      }
+    },
+    {
+      "physical_stock": "kodak_kodachrome_64",
+      "references": [
+        "https://www.pacificrimcamera.com/rl/00606/00606.pdf",
+        "https://petapixel.com/2012/07/17/shooting-kodachrome-film-in-2012/",
+        "https://petapixel.com/assets/uploads/2012/07/2_mini1.jpeg",
+        "https://empiricalnon.com/kra.html",
+        "https://empiricalnon.com/Resources/krf112000sp12b5d.jpeg"
+      ],
+      "confirmed": {
+        "geometry": "KS-long-compatible135",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "25/25A custom frame fields",
+        "edge_markings": {
+          "source_type": "\u5b9e\u7269\u53c2\u8003\u91cd\u5efa"
+        }
+      },
+      "retained_differences": [
+        "Typeface, filmtexture and scan color are reference-informed reconstructions, not pixel-identical scans.",
+        "No consumer DX barcode is depicted or required for this reversal design.",
+        "Symmetric phase and centered36x24 aperture are app layout choices.",
+        "KR64 reference is330x292; colortransparency is evidenced, normalK14 inferred rather than chemicallydocumented; illegible overprint omitted."
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "viewedactualpositive/transparencyreference",
+        "observed": "lightholes",
+        "boundary": "retainexistingwhitepresentation; not universalRGB calibration"
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_50d",
+      "references": [
+        "https://www.kodak.com/content/products-brochures/motion-picture/KODAK-VISION3-50D-5203-7203-technical-information.pdf",
+        "https://www.kodak.com/en/motion/page/keykode-id-table/",
+        "https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf",
+        "https://www.kodak.com/content/pdfs/motion/Kodak-Motion-Picture-Products-Price-Catalog-US.pdf",
+        "https://www.photrio.com/forum/threads/what-do-you-know-about-the-edge-printing-on-kodak-vision3-films.202974/"
+      ],
+      "confirmed": {
+        "geometry": "BH-1866",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "topcenter decoration separate fromfactoryID, no25A",
+        "edge_markings": {
+          "shown": [
+            "5203",
+            "ER"
+          ],
+          "manufacturer_word": "omitted, not specimenverified",
+          "custom25": {
+            "visible": true,
+            "position": "topcenter, oppositebottomfactoryfragments",
+            "factorymark": false
+          },
+          "unknown_fields": "omitted, no invented barcode/batch/footage/25A"
+        }
+      },
+      "retained_differences": [
+        "OfficialmodelID/BH geometry reconstruction, not actualfullscan",
+        "Grayviolet generatedappearance informed by250D microcode, not claimed eachstock calibratedcolor",
+        "Appcustom25 and condensed fragmentplacement nonfactory"
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "manufacturerdiagram/officialgeometry; no currentfullpositiveholecolorverification",
+        "boundary": "Current whitehole presentation is provisional displaychoice, notauthenticatedactualscancolor. No newcolor inferredfromotherstocks."
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_200t",
+      "references": [
+        "https://www.kodak.com/content/pdfs/motion/KODAK-VISION3-200T-5213-7213-technical-information.pdf",
+        "https://www.kodak.com/en/motion/page/keykode-id-table/",
+        "https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf",
+        "https://www.kodak.com/content/pdfs/motion/Kodak-Motion-Picture-Products-Price-Catalog-US.pdf",
+        "https://www.photrio.com/forum/threads/what-do-you-know-about-the-edge-printing-on-kodak-vision3-films.202974/",
+        "https://www.flickr.com/photos/32681588@N03/30694275102/"
+      ],
+      "confirmed": {
+        "geometry": "BH-1866",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "topcenter decoration separate fromfactoryID, no25A",
+        "edge_markings": {
+          "shown": [
+            "5213",
+            "EO"
+          ],
+          "manufacturer_word": "omitted, not specimenverified",
+          "custom25": {
+            "visible": true,
+            "position": "topcenter, oppositebottomfactoryfragments",
+            "factorymark": false
+          },
+          "unknown_fields": "omitted, no invented barcode/batch/footage/25A"
+        }
+      },
+      "retained_differences": [
+        "OfficialmodelID/BH geometry reconstruction, not actualfullscan",
+        "Grayviolet generatedappearance informed by250D microcode, not claimed eachstock calibratedcolor",
+        "Appcustom25 and condensed fragmentplacement nonfactory"
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author-attributed200T own positive scan, C41crossprocessed NOTstandardECN2",
+        "source": "https://www.flickr.com/photos/32681588@N03/30694275102/",
+        "image": "https://live.staticflickr.com/5689/30694275102_541ec43be3_c.jpg",
+        "author": "Matt Osborne",
+        "workflow": "FujiGA645 with35mm120adapter; authorKodakVision3200T+85B; homeC41developed, EpsonV800scan",
+        "observed": "blackBHholes in a positiveimage",
+        "boundary": "Onlyholebrightnessreference. Exposedtracks andcroppedstockcode; identityfromauthorattribution. Cannotcalibrate standardECN2rebate/letteringorindependentlyreadstockcode. PNGallbytesunchanged."
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_250d",
+      "references": [
+        "https://www.kodak.com/en/motion/page/keykode-id-table/",
+        "https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf",
+        "https://www.kodak.com/content/pdfs/motion/Kodak-Motion-Picture-Products-Price-Catalog-US.pdf",
+        "https://www.photrio.com/forum/threads/what-do-you-know-about-the-edge-printing-on-kodak-vision3-films.202974/",
+        "https://www.photrio.com/forum/attachments/1700044975491-png.353456/",
+        "https://www.photrio.com/forum/attachments/1700045565745-png.353461/",
+        "https://www.flickr.com/photo.gne?id=51256034159"
+      ],
+      "confirmed": {
+        "geometry": "BH-1866",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "topcenter decoration separate fromfactoryID, no25A",
+        "edge_markings": {
+          "shown": [
+            "EASTMAN 5207",
+            "EN"
+          ],
+          "not_shown": [
+            "unknownroll",
+            "batch",
+            "year",
+            "footage",
+            "KEYKODEbarcodedata",
+            "consumerDX",
+            "25A",
+            "arrows"
+          ],
+          "keykode_structure": "officialKodak35mm diagram informed distinction of stockmanufacturingfragment vs keycodeID; separate excerpts condensed intooneappframe, notfull35mmrepeatregistration",
+          "custom_frame25": {
+            "value": 25,
+            "visible": true,
+            "factorymark": false,
+            "position": "topcenter, separatefrombottomKEYKODEfragments"
+          }
+        }
+      },
+      "retained_differences": [
+        "Manufacturer geometry plus realtextfragments, notfullfilmphotoreplica",
+        "Fontscale/color generated approximate",
+        "UnknownKEYKODE fields omitted, no usablebarcoderepresentation"
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "author positive35mm scan with exposedperforationtracks",
+        "source": "https://www.flickr.com/photo.gne?id=51256034159",
+        "image": "https://live.staticflickr.com/65535/51256034159_7a9f6fc1a1_b.jpg",
+        "author": "Thomas Vogt",
+        "observed": "Normal-color positive; black BH holes; EN prefix, further batch/footage digits and KEYKODE; pale pink/gray letters",
+        "boundary": "Exposed hole tracks, edge partially clipped. Does not calibrate unexposed rebate color.",
+        "change": "matte-only dark; PNGallbytesunchanged",
+        "attribution_reference": {
+          "author": "Thomas Vogt",
+          "title": "Mil Mi 6 A",
+          "source": "https://commons.wikimedia.org/wiki/File:Mil_Mi_6_A_(51256034159).jpg",
+          "license": "https://creativecommons.org/licenses/by/2.0/",
+          "use": "visualreference ofholedarkness only; no sourceimagepixels copied; newcompositor matte0; no newbatchdigits orKEYKODE drawn"
+        }
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_500t",
+      "references": [
+        "https://www.kodak.com/en/motion/page/keykode-id-table/",
+        "https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf",
+        "https://www.kodak.com/content/pdfs/motion/Kodak-Motion-Picture-Products-Price-Catalog-US.pdf",
+        "https://www.photrio.com/forum/threads/what-do-you-know-about-the-edge-printing-on-kodak-vision3-films.202974/"
+      ],
+      "confirmed": {
+        "geometry": "BH-1866",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "topcenter decoration separate fromfactoryID, no25A",
+        "edge_markings": {
+          "shown": [
+            "5219",
+            "EJ"
+          ],
+          "manufacturer_word": "omitted, not specimenverified",
+          "custom25": {
+            "visible": true,
+            "position": "topcenter, oppositebottomfactoryfragments",
+            "factorymark": false
+          },
+          "unknown_fields": "omitted, no invented barcode/batch/footage/25A"
+        }
+      },
+      "retained_differences": [
+        "OfficialmodelID/BH geometry reconstruction, not actualfullscan",
+        "Grayviolet generatedappearance informed by250D microcode, not claimed eachstock calibratedcolor",
+        "Appcustom25 and condensed fragmentplacement nonfactory"
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "manufacturerdiagram/officialgeometry; no currentfullpositiveholecolorverification",
+        "boundary": "Current whitehole presentation is provisional displaychoice, notauthenticatedactualscancolor. No newcolor inferredfromotherstocks."
+      }
+    },
+    {
+      "physical_stock": "kodak_verita_200d",
+      "references": [
+        "https://www.kodak.com/content/pdfs/motion/KODAK-VERITA-200D-5206-7206-technical-information.pdf",
+        "https://www.kodak.com/en/motion/page/keykode-id-table/",
+        "https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf",
+        "https://www.kodak.com/content/pdfs/motion/Kodak-Motion-Picture-Products-Price-Catalog-US.pdf",
+        "https://www.photrio.com/forum/threads/what-do-you-know-about-the-edge-printing-on-kodak-vision3-films.202974/"
+      ],
+      "confirmed": {
+        "geometry": "BH-1866",
+        "image_window": "36x24mm app layout; crop phase is designchoice",
+        "custom25": "topcenter decoration separate fromfactoryID, no25A",
+        "edge_markings": {
+          "shown": [
+            "5206",
+            "ET"
+          ],
+          "manufacturer_word": "omitted, not specimenverified",
+          "custom25": {
+            "visible": true,
+            "position": "topcenter, oppositebottomfactoryfragments",
+            "factorymark": false
+          },
+          "unknown_fields": "omitted, no invented barcode/batch/footage/25A"
+        }
+      },
+      "retained_differences": [
+        "OfficialmodelID/BH geometry reconstruction, not actualfullscan",
+        "Grayviolet generatedappearance informed by250D microcode, not claimed eachstock calibratedcolor",
+        "Appcustom25 and condensed fragmentplacement nonfactory"
+      ],
+      "attribution": null,
+      "hole_presentation_evidence": {
+        "source_kind": "manufacturerdiagram/officialgeometry; no currentfullpositiveholecolorverification",
+        "boundary": "Current whitehole presentation is provisional displaychoice, notauthenticatedactualscancolor. No newcolor inferredfromotherstocks."
+      }
+    }
+  ],
+  "current_hole_presentation_policy": {
+    "policy": "Negative white-hole preference default ON: pure white #FFFFFF. OFF: negative black #000000. Reversals stay white.",
+    "basis": "Explicit user aesthetic choice, not evidence of original scan appearance",
+    "scope": "Hole matte only; material/lettering/geometry/feather unchanged; historical queued contracts preserved"
+  },
+  "approved_typography_revision": {
+    "package": "typography-v0114-r2",
+    "stocks": [
+      "kodak_portra_800",
+      "fujifilm_provia_100f"
+    ],
+    "scope": "top lettering only; no alpha/hole/DX/geometry changes",
+    "references": "TYPOGRAPHY-SOURCES-AND-LIMITS.md",
+    "historical_contracts_preserved": 42
+  }
+}

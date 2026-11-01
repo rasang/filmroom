@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_group_photos">Photos &amp; adjustments</string>
+    <string name="settings_group_diagnostics">Diagnostics</string>
+    <string name="settings_show_log_notes">About diagnostic logs ▾</string>
+    <string name="settings_hide_log_notes">Hide log details ▴</string>
+    <string name="settings_log_privacy_summary">Logs contain redacted diagnostics, not photos or location data. Nothing is sent until you choose where to share.</string>
+</resources>

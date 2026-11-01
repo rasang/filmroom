@@ -1,0 +1,260 @@
+{
+  "status": "passed",
+  "recordedUtc": "2026-10-30T17:34:52.429864+00:00",
+  "testsPassed": 4,
+  "testsFailed": 0,
+  "comparisonCases": 12,
+  "finalFloat32Samples": 757653,
+  "differingSamples": 0,
+  "maxAbs": 0.0,
+  "meanAbs": 0,
+  "cancelCases": [
+    "film_scatter",
+    "printing_scanning"
+  ],
+  "testProfile": "host debug, precision-f64, RAYON_NUM_THREADS=2, test-threads=1",
+  "command": "cargo test -p film-engine --features precision-f64 --test streamed_reference -- --nocapture --test-threads=1",
+  "sourceSnapshotAtRecordTime": [
+    {
+      "path": "native-v5/crates/film-engine/tests/streamed_reference.rs",
+      "bytes": 16584,
+      "sha256": "ddea2ad11b040cd7657b2ce15ca8a4cc89a36863e711336c59940d35878fa0f7"
+    },
+    {
+      "path": "native-v5/crates/film-engine/src/streamed.rs",
+      "bytes": 23956,
+      "sha256": "9522c4c42e48367f0df31db424921e91a8947237e19d529eca7bac525a2f7229"
+    },
+    {
+      "path": "native-v5/crates/film-engine/src/disk_spatial.rs",
+      "bytes": 10181,
+      "sha256": "8f01b8a5321c94b38843f18bea6abcadddc802cfdeda512e3a7e5c4e4f2122bc"
+    },
+    {
+      "path": "native-v5/crates/film-engine/src/mobile.rs",
+      "bytes": 26651,
+      "sha256": "7e5396e7f5dbb5f2237e6ef759ea0a0258f162bc5d06c7f7dc1231e326cd8388"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-math/src/gaussian.rs",
+      "bytes": 11787,
+      "sha256": "3ca8a50469aa5f2722d7a3518ba3523d31c5ee36a9fd5c156835c88547480821"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-core/src/pipeline.rs",
+      "bytes": 58419,
+      "sha256": "c30950ab5169a20095f47662fd800ac9321ee43d3a50586586416802c430c8c6"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-core/src/stages/printing.rs",
+      "bytes": 20921,
+      "sha256": "e0153fbb0d094e9063e58be2a48ec10d7d6eaf84c13141f0a3058d8b1b8224a9"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-core/src/stages/scanning.rs",
+      "bytes": 26609,
+      "sha256": "f6be805dd8ebcaf57756db15d82f9c67ec2a3133cade151cdb26b6b6c1585679"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-core/src/stages/filming.rs",
+      "bytes": 23390,
+      "sha256": "3ef682277acd59d16e45f0e369d32c76406949be195a71f94e6fcaf34c8efb68"
+    },
+    {
+      "path": "native-v5/crates/spektrafilm-model/src/grain.rs",
+      "bytes": 13385,
+      "sha256": "f065b209571163a05bd922cb192c2c9277cc86afcdbcce1d4d773a4a83084ae9"
+    }
+  ],
+  "executable": {
+    "path": "target-v5-shared/debug/deps/streamed_reference-e468a5f742d0d15c",
+    "bytes": 109298608,
+    "sha256": "f0a57c4b70bc886e1f5ad2d841eddbe713a1798f38ec9aca7f8cdd1bb62f1ec6"
+  },
+  "inputFixtures": [
+    {
+      "path": "results/python_final/spatial_diagnostic64/input.f64le",
+      "bytes": 98304,
+      "sha256": "c5aa72c9ea7338f65b75c189a388910b99b3a5d315bb7fd2e287536ba11981ae"
+    },
+    {
+      "path": "results/python_final/spatial_diagnostic64/effects_off.params.json",
+      "bytes": 5426,
+      "sha256": "63ca76def612cfb83d7d6a47231389e67770929e9d0be504b9e5a87816ffe0ba"
+    },
+    {
+      "path": "results/python_final/spatial_diagnostic64/halation_only.params.json",
+      "bytes": 5425,
+      "sha256": "f43176a48c87c28f191e4c620756f55fbc06a9fcb57a8605ec6bea7ca48c897a"
+    },
+    {
+      "path": "results/python_final/spatial_diagnostic64/grain_only.params.json",
+      "bytes": 5425,
+      "sha256": "cc7ffdeaff287901965a19f7a1ee47737473842bddbf94bc6ae724570ca8b3f1"
+    },
+    {
+      "path": "results/python_final/spatial_diagnostic64/physical_all.params.json",
+      "bytes": 5427,
+      "sha256": "cf3388c62b9a3202a8adda7b4f282b3ab0fdae689793a2d16890075993fdf8f6"
+    },
+    {
+      "path": "results/python_final/spatial_diagnostic64/grain_single_layer.params.json",
+      "bytes": 5426,
+      "sha256": "c72f879cea36706436d49af218126f9f0194ee5936f465c65a0c09a6f2b68ab9"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "results/v5-streamed-reference/cancellation.json",
+      "bytes": 386,
+      "sha256": "059244e9d1a51bd0a022db6406e35789b0d9bc99a4967e6eccf922206ebce7d4"
+    },
+    {
+      "path": "results/v5-streamed-reference/comparison.json",
+      "bytes": 9187,
+      "sha256": "73599100f210dff36d7ee58e1f8a78ef8c1373179f59ab49bc4042d183dcf70c"
+    },
+    {
+      "path": "results/v5-streamed-reference/effects_off.streamed.f32le",
+      "bytes": 49152,
+      "sha256": "56ac780d7ce1d677179bddbcd407f65cd00d52bbb47dabfe52bdc8a3a2be855b"
+    },
+    {
+      "path": "results/v5-streamed-reference/effects_off.whole.f32le",
+      "bytes": 49152,
+      "sha256": "56ac780d7ce1d677179bddbcd407f65cd00d52bbb47dabfe52bdc8a3a2be855b"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-blended-grain-halo-cool.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "e716cbf306d135fe878fdfe8475fc17a74f1073dbd5e594cb20552ee4f95577b"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-blended-grain-halo-cool.whole.f32le",
+      "bytes": 397836,
+      "sha256": "e716cbf306d135fe878fdfe8475fc17a74f1073dbd5e594cb20552ee4f95577b"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-default.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "9901b2c5cb072c518c49917229fd3ec350a3b072ae84afb60ec9e6f6d7638faf"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-default.whole.f32le",
+      "bytes": 397836,
+      "sha256": "9901b2c5cb072c518c49917229fd3ec350a3b072ae84afb60ec9e6f6d7638faf"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-lower-controls.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "85524f3c659fdbbe78d2464c367f64061494105ab104494667a21b226915ee86"
+    },
+    {
+      "path": "results/v5-streamed-reference/fuji-lower-controls.whole.f32le",
+      "bytes": 397836,
+      "sha256": "85524f3c659fdbbe78d2464c367f64061494105ab104494667a21b226915ee86"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-default.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "2d2ec2f4f86269954b5cdff6b2696c409d76e97132eb229028a9e7940c2634e7"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-default.whole.f32le",
+      "bytes": 397836,
+      "sha256": "2d2ec2f4f86269954b5cdff6b2696c409d76e97132eb229028a9e7940c2634e7"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-small-grain-halo-warm.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "8503dd6ddf348656597fd8f495778d58fb4ac27e4452d5cf0e04b06045ff4b13"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-small-grain-halo-warm.whole.f32le",
+      "bytes": 397836,
+      "sha256": "8503dd6ddf348656597fd8f495778d58fb4ac27e4452d5cf0e04b06045ff4b13"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-upper-controls.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "57ef250eed1d1762dd90459dd827ed6b1144d4a956ea1b48e7178a89d782a5b1"
+    },
+    {
+      "path": "results/v5-streamed-reference/gold-upper-controls.whole.f32le",
+      "bytes": 397836,
+      "sha256": "57ef250eed1d1762dd90459dd827ed6b1144d4a956ea1b48e7178a89d782a5b1"
+    },
+    {
+      "path": "results/v5-streamed-reference/grain_only.streamed.f32le",
+      "bytes": 49152,
+      "sha256": "ab624375ee2886dcb2fd477dd2b7a9ae555bd3b73df75035a597e35e0d2e5156"
+    },
+    {
+      "path": "results/v5-streamed-reference/grain_only.whole.f32le",
+      "bytes": 49152,
+      "sha256": "ab624375ee2886dcb2fd477dd2b7a9ae555bd3b73df75035a597e35e0d2e5156"
+    },
+    {
+      "path": "results/v5-streamed-reference/grain_single_layer.streamed.f32le",
+      "bytes": 49152,
+      "sha256": "d10141de6bc802c226985304054fb037755bef24f251676f0644df97273a17d7"
+    },
+    {
+      "path": "results/v5-streamed-reference/grain_single_layer.whole.f32le",
+      "bytes": 49152,
+      "sha256": "d10141de6bc802c226985304054fb037755bef24f251676f0644df97273a17d7"
+    },
+    {
+      "path": "results/v5-streamed-reference/halation_only.streamed.f32le",
+      "bytes": 49152,
+      "sha256": "1517332f779ac6f0cd6eb1df6b69305ea8ed54ee9b765be9dba52e9751a36684"
+    },
+    {
+      "path": "results/v5-streamed-reference/halation_only.whole.f32le",
+      "bytes": 49152,
+      "sha256": "1517332f779ac6f0cd6eb1df6b69305ea8ed54ee9b765be9dba52e9751a36684"
+    },
+    {
+      "path": "results/v5-streamed-reference/mobile-portrait-controls.json",
+      "bytes": 14221,
+      "sha256": "486541cc686cf8308605e498797b952ef71c63fdc2863a7a86432e70bdf4f89c"
+    },
+    {
+      "path": "results/v5-streamed-reference/multi-chunk.json",
+      "bytes": 1580,
+      "sha256": "009c645f89869e1bd6d65e3a3ed8375d7f682a9009acc02e3215cd5727dee566"
+    },
+    {
+      "path": "results/v5-streamed-reference/multi-chunk.streamed.f32le",
+      "bytes": 397836,
+      "sha256": "2a6b8e0563d1fbaa4b849cf677de74ba457de0fd969b36e18a3c03ba8303a7b8"
+    },
+    {
+      "path": "results/v5-streamed-reference/multi-chunk.whole.f32le",
+      "bytes": 397836,
+      "sha256": "2a6b8e0563d1fbaa4b849cf677de74ba457de0fd969b36e18a3c03ba8303a7b8"
+    },
+    {
+      "path": "results/v5-streamed-reference/physical_all.streamed.f32le",
+      "bytes": 49152,
+      "sha256": "deecfa9c37c59502d52649b97a429ad92231547740c95612954f54b33082a852"
+    },
+    {
+      "path": "results/v5-streamed-reference/physical_all.whole.f32le",
+      "bytes": 49152,
+      "sha256": "deecfa9c37c59502d52649b97a429ad92231547740c95612954f54b33082a852"
+    }
+  ],
+  "log": {
+    "path": "logs/v5-streamed-reference.log",
+    "bytes": 39580,
+    "sha256": "fca9bec3642398ccf802bff0a665e6374b8b50878c69ac15fc6005e5a8df7bb1"
+  },
+  "limits": [
+    "Not an Android ABI/device runtime test or a benchmark.",
+    "Reference is whole Pipeline on same V5 source with identical float/LUT/RNG settings, not a fresh Python comparison.",
+    "Twelve small comparisons do not prove 12/50MP throughput, RAM or disk feasibility; those are separately measured by the parent.",
+    "Six new cases transcribe validated MobileParams mapping in the test; this does not independently verify JNI/UI parameter mapping.",
+    "No arbitrary scientific RuntimeParams compatibility claim."
+  ]
+}

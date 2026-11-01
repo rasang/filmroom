@@ -1,0 +1,42 @@
+[package]
+name = "rand_mt"
+version = "5.0.0" # remember to set `html_root_url` in `src/lib.rs`.
+authors = [
+    "David Creswick <dcrewi@gyrae.net>",
+    "Ryan Lopopolo <rjl@hyperbo.la>",
+]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+rust-version = "1.81.0"
+readme = "README.md"
+repository = "https://github.com/artichoke/rand_mt"
+documentation = "https://docs.rs/rand_mt"
+homepage = "https://github.com/artichoke/rand_mt"
+description = "Reference Mersenne Twister random number generators."
+keywords = ["random", "rand", "rng", "mt"]
+categories = ["algorithms", "no-std", "no-std::no-alloc"]
+include = ["/src/**/*", "/tests/**/*", "/LICENSE-*", "/README.md"]
+
+[features]
+default = ["rand-traits"]
+rand-traits = ["dep:rand_core"]
+
+[dependencies]
+rand_core = { version = "0.9.0", default-features = false, optional = true }
+
+[dev-dependencies]
+getrandom = { version = "0.3.1", default-features = false }
+
+# Check that crate versions are properly updated in documentation and code when
+# bumping the version.
+[dev-dependencies.version-sync]
+version = "0.9.3"
+default-features = false
+features = ["markdown_deps_updated", "html_root_url_updated"]
+
+[package.metadata.docs.rs]
+# This sets the default target to `x86_64-unknown-linux-gnu` and only builds
+# that target. `rand_mt` has the same API and code on all targets.
+default-target = "x86_64-unknown-linux-gnu"
+targets = []
+rustdoc-args = ["--cfg", "docsrs"]

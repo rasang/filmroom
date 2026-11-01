@@ -1,0 +1,758 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="text_3d05fc7cf7e4" formatted="false">前回の一時ファイルを削除しています</string>
+    <string name="text_5ec95121dc94" formatted="true">前回の一時ファイル %1$s 件を削除できませんでした。空き容量の不足を防ぐため、編集を開始できません。端末の空き容量を確認してここをタップし、再試行してください。アプリを閉じて後で開き直すこともできます。元の写真は変更されていません。</string>
+    <string name="text_b3622bcacaaf" formatted="false">端末内の編集を復元</string>
+    <string name="text_cd6fac59a752" formatted="false">前回未完了の書き出しを削除できません。フォトライブラリを確認するか、後で再試行してください。</string>
+    <string name="text_7b50017ae47e" formatted="false">写真</string>
+    <string name="text_063189730acc" formatted="false">前回の一時保存された写真は利用できません。もう一度読み込んでください。</string>
+    <string name="text_1663134e88db" formatted="false">写真を読み込み</string>
+    <string name="text_6dfdd1fe6561" formatted="false">読み込みを完了</string>
+    <string name="text_2416623f6d39" formatted="false">写真を読み込みました。その後の処理はキャンセルされました。</string>
+    <string name="text_d630bd89f6dd" formatted="false">読み込みをキャンセルしました。以前の写真を保持しています。</string>
+    <string name="text_3052d04d78c2" formatted="false">この写真は大きすぎるため、安全に読み込めません。小さい写真を選択してください。</string>
+    <string name="text_c976e3b99689" formatted="false">写真を読み込めません。対応する形式の写真を選択し直してください。</string>
+    <string name="text_c12aefec4f8a" formatted="false">キャンセルして一時ファイルを削除しています…</string>
+    <string name="text_6f25582e0d79" formatted="false">プレビューの更新をキャンセルしました。</string>
+    <string name="text_acd49b3daba5" formatted="false">端末のメモリが不足しているため、プレビューを生成できません。</string>
+    <string name="text_bc37a5375a5d" formatted="false">端末内でのレンダリングが完了しませんでした。再試行するか、別の写真を選択してください。</string>
+    <string name="text_be0d9af082d8" formatted="false">書き出しリストに追加</string>
+    <string name="text_bb8990972dce" formatted="false">書き出しリストに追加しました。編集を続けたり、写真を追加したりできます。</string>
+    <string name="text_afb4ebeb2c42" formatted="false">タスクのキャンセルを要求しました。書き出しリストで状態を確認できます。</string>
+    <string name="text_f9957f03a610" formatted="false">バックグラウンドで準備を続けています。書き出しリストで状態を確認できます。</string>
+    <string name="text_9f9e68d602d6" formatted="false">待機を終了しました。タスクが受け付けられたか、書き出しリストで確認できます。</string>
+    <string name="text_834295cc897b" formatted="false">書き出しリストにタスクを追加しました。リストで状態を確認してください。</string>
+    <string name="text_aeb3f82f0b35" formatted="false">メモリ不足のため、書き出しタスクを追加できませんでした。</string>
+    <string name="text_420e35e0302a" formatted="false">書き出しリストにタスクを追加しました。リストで状態を確認するか、処理を再開してください。</string>
+    <string name="text_11ee5fdc4a0b" formatted="false">書き出しタスクを追加できませんでした。端末の空き容量を確認して再試行してください。</string>
+    <string name="text_16b38790d59b" formatted="false">編集に戻る</string>
+    <string name="text_88b41d5ab211" formatted="false">書き出しリスト</string>
+    <string name="text_f361f0328380" formatted="false">書き出しリストを読み込んでいます…</string>
+    <string name="text_3cd263a38563" formatted="false">書き出しリストを読み込めません。一度戻って再試行してください。</string>
+    <string name="text_b4351becfe47" formatted="false">書き出しリストを読み込めません</string>
+    <string name="text_5f44ac2035ae" formatted="true">%1$s 件処理中</string>
+    <string name="text_24d163f0f56e" formatted="true">%1$s 件待機中</string>
+    <string name="text_e982159d21f2" formatted="true">%1$s 件一時停止中</string>
+    <string name="text_b331b1884a29" formatted="false">書き出しタスクはまだありません\n編集画面で「書き出し」を選択すると、ここに追加されます。</string>
+    <string name="text_7062447638eb" formatted="false">現在再開できません。後で再試行してください。</string>
+    <string name="text_d0ac5e20f891" formatted="false">キャンセルが完了しませんでした。再試行してください。</string>
+    <string name="text_2d968e781718" formatted="false">タスクは未開始です。タップして再開</string>
+    <string name="text_916bd97fb66f" formatted="false">サムネイルを準備中</string>
+    <string name="text_7c9691192f1b" formatted="false">再開</string>
+    <string name="text_2cd0f3be8738" formatted="false">キャンセル</string>
+    <string name="text_4c777c000d4a" formatted="false">この書き出しをキャンセルしますか？</string>
+    <string name="text_a008667aeb14" formatted="false">このタスクの一時ファイルを削除します。元の写真には影響しません。</string>
+    <string name="text_670ec25af841" formatted="false">保持</string>
+    <string name="text_537d17f1c531" formatted="false">タスクをキャンセル</string>
+    <string name="text_9c1ea2e60a71" formatted="false">写真を見る</string>
+    <string name="text_979a332955c8" formatted="false">詳細</string>
+    <string name="text_0ae7312510f4" formatted="false">詳細を閉じる</string>
+    <string name="text_a97cb6107f92" formatted="false">フィルム</string>
+    <string name="text_1a5219a8272a" formatted="false">不足</string>
+    <string name="text_402590868fff" formatted="false">できません</string>
+    <string name="text_4f2d9c358b11" formatted="false">できませんでした</string>
+    <string name="text_a9ca8eff92c8" formatted="false">削除待ち</string>
+    <string name="text_b8784c8dd563" formatted="false">再試行</string>
+    <string name="text_183e988f1288" formatted="true">写真 %1$s、%2$s</string>
+    <string name="text_38952e7e372e" formatted="true">写真 %1$s、書き出しをキャンセル</string>
+    <string name="text_3f3f6c8c5093" formatted="true">写真 %1$s、保存済みの写真を見る</string>
+    <string name="text_a9e8a732c910" formatted="true">写真 %1$s、詳細を開く／閉じる</string>
+    <string name="text_f6a4bb2cb013" formatted="false">保存した写真はフォトライブラリまたはファイルマネージャーで確認してください。</string>
+    <string name="text_3be614977d5d" formatted="false">\n再開時に未完了の段階が再計算される場合があります。\n一時停止中は一時ファイルを保持します。タスクをキャンセルすると空き容量を確保できます。</string>
+    <string name="text_e3c1f7706839" formatted="false">サムネイルなし</string>
+    <string name="text_8fb3a3261b43" formatted="false">処理待ち</string>
+    <string name="text_9aaf67962338" formatted="false">書き出し中</string>
+    <string name="text_eb0c326b60ae" formatted="false">一時停止中</string>
+    <string name="text_544c342feaf0" formatted="false">写真を追加中</string>
+    <string name="text_1bd91a7d0c53" formatted="false">保存済み</string>
+    <string name="text_6e4445df6957" formatted="false">書き出し失敗</string>
+    <string name="text_a37778f17c5f" formatted="false">キャンセル済み</string>
+    <string name="text_a15bc3b4bd3e" formatted="true">書き出し失敗\n%1$s · ステップ %2$s/7</string>
+    <string name="text_1a418b9270f7" formatted="false">書き出し結果</string>
+    <string name="text_37eb7c18d5ef" formatted="false">ネガ段階のイメージ · 最終画像ではありません</string>
+    <string name="text_0b00a78a5faa" formatted="false">元の画像 · 処理結果ではありません</string>
+    <string name="text_dde174726d3f" formatted="false">現在の操作をキャンセルしますか？</string>
+    <string name="text_aa7d5766b326" formatted="false">保存が完了した写真は削除されません。</string>
+    <string name="text_a7084fcb218d" formatted="false">操作をキャンセル</string>
+    <string name="text_576d81bb0631" formatted="false">読み込み</string>
+    <string name="text_76420433f22d" formatted="false">書き出し</string>
+    <string name="text_926a50b98ece" formatted="false">取り消す</string>
+    <string name="text_03717b6f1070" formatted="false">やり直す</string>
+    <string name="text_ae384296a4ac" formatted="false">プリセットに戻す</string>
+    <string name="text_df3d58c7d84b" formatted="false">設定</string>
+    <string name="text_1f14f4b50d0b" formatted="false">写真をFilmroomへ</string>
+    <string name="text_95c277eafaea" formatted="false">リアルなフィルムと印画紙の処理\nすべての計算を端末内で実行</string>
+    <string name="text_a7fc4b2dbd50" formatted="false">写真を読み込む</string>
+    <string name="text_ee2241639ab0" formatted="false">写真と対応するDNG · アカウント不要</string>
+    <string name="text_c37117eec876" formatted="false">元の写真</string>
+    <string name="text_002e7216c97a" formatted="false">拡大プレビューを読み込み中</string>
+    <string name="text_36c69988127e" formatted="false">元の写真と比較</string>
+    <string name="text_255cf72e1d8c" formatted="false">構図を調整</string>
+    <string name="text_7c3154414c11" formatted="false">写真情報</string>
+    <string name="text_1b0acbdaf172" formatted="false">元の写真 · もう一度比較をタップすると戻ります</string>
+    <string name="text_6d05fcab868f" formatted="true">フィルムプレビュー · %1$s × %2$s</string>
+    <string name="text_a21efd19b7df" formatted="false">フィルム効果に戻る</string>
+    <string name="text_c3c12cabaae9" formatted="false">プレビューを更新中</string>
+    <string name="text_130bb0102047" formatted="false">構図を調整中です。下のボタンで確定またはキャンセルしてください</string>
+    <string name="text_168ac579f2fb" formatted="false">一時ファイルの削除が必要です</string>
+    <string name="text_74edb00b2c95" formatted="false">前回の一時ファイルを削除できませんでした。空き容量を確認して再試行してください。元の写真は変更されません。</string>
+    <string name="text_77b9d0a61b6d" formatted="false">削除を再試行</string>
+    <string name="text_a558cf14eef8" formatted="false">アプリを閉じる</string>
+    <string name="text_bb1d19b85634" formatted="false">診断ログ</string>
+    <string name="text_7eefaaff791f" formatted="false">書き出しをキャンセル</string>
+    <string name="text_25e7efea7600" formatted="false">書き出しを完了しています</string>
+    <string name="text_35e33ec9481e" formatted="false">キャンセル中\n削除完了後に終了します</string>
+    <string name="text_461ec432d86f" formatted="true">写真は端末内でのみ処理されます。書き出しリストに追加しています。受け付け済みのタスクはバックグラウンドで続行できます。書き出しリストで状態を確認してください。\n\n現在のステップ：%1$s</string>
+    <string name="text_cd33cfaad6ad" formatted="false">削除中</string>
+    <string name="text_aacf040ce88a" formatted="false">フィルム露光</string>
+    <string name="text_7ce0c0cf48da" formatted="false">フィルムの露光量と発色の反応を変えます。最終画像の明るさとは異なります。</string>
+    <string name="text_8e2f643ad160" formatted="false">明るさ</string>
+    <string name="text_8dbf138761d8" formatted="false">最終画像の明るさを調整します。</string>
+    <string name="text_4cbc753240e5" formatted="false">コントラスト</string>
+    <string name="text_0a746a522ab4" formatted="false">プリントの明暗差を調整します。初期値では元の効果を保持します。ダイレクトスキャンでは適用されません。</string>
+    <string name="text_90f74b4ac6f1" formatted="false">暖かさ</string>
+    <string name="text_4bed17be043d" formatted="false">プリント時の色補正フィルターで色の暖かさを微調整します。K単位の色温度設定ではありません。ダイレクトスキャンでは適用されません。</string>
+    <string name="text_6045e74dcfa7" formatted="false">現像抑制</string>
+    <string name="text_fa586db5f990" formatted="false">現像抑制によって色とエッジのコントラストを変えます。「現像」の「現像抑制の強さ」と同じ効果を制御し、内部の係数は乗算されます。目盛りは相対的な調整量で、初期値では元の効果を保持します。最小値でも白黒にはなりません。</string>
+    <string name="text_cda1ea706d23" formatted="false">拡散フィルターの種類</string>
+    <string name="text_69c47fd991d5" formatted="false">レンズ前の拡散フィルターを再現します。フィルムのハレーションとは独立した設定です。「グリマーグラス／ブラックプロミスト／プロミスト／シネブルーム」は、それぞれGlimmerglass / Black Pro-Mist / Pro-Mist / Cinebloomモデルに対応します。</string>
+    <string name="text_7351ad023c8d" formatted="false">拡散の強さ</string>
+    <string name="text_fc5315fbd6fd" formatted="false">先に拡散フィルターを選択してください。0では効果なし。</string>
+    <string name="text_dfe1ad62ec51" formatted="false">拡散の範囲</string>
+    <string name="text_93ee12df430c" formatted="false">レンズの拡散効果の広がりを調整します。</string>
+    <string name="text_e8b4d7c5c3d2" formatted="false">ハレーションの強さ</string>
+    <string name="text_b89612346534" formatted="false">ハイライト周辺のフィルムのハレーションを再現します。通常は暖色ですが、色も個別に調整できます。写真全体をぼかす効果ではありません。</string>
+    <string name="text_f08d365f119c" formatted="false">ハレーションの範囲</string>
+    <string name="text_b5034bff2db9" formatted="false">フィルムのハイライト周辺に広がるハレーションの範囲を調整します。</string>
+    <string name="text_5acbd63667a0" formatted="false">粒子の強さ</string>
+    <string name="text_7b7266f68310" formatted="false">0でオフ。値を上げるとフィルム粒子が強くなります。</string>
+    <string name="text_065f01b65731" formatted="false">粒子の大きさ</string>
+    <string name="text_6c6bd5cb96c0" formatted="false">粒子のサイズを調整します。強さが0の場合は調整できません。</string>
+    <string name="text_813cd5bf9234" formatted="false">印画紙</string>
+    <string name="text_14e7fe83afcb" formatted="false">印画紙または映画用プリントフィルムのプロファイルを選択します。プリントの色と反応が変わります。</string>
+    <string name="text_3fe7b9f3a996" formatted="false">イエローフィルター</string>
+    <string name="text_15206742c3a6" formatted="false">印画紙露光時のイエローフィルター量を変えます。0は元の配合です。画面の色温度とは異なります。</string>
+    <string name="text_5f542cc5a3de" formatted="false">マゼンタフィルター</string>
+    <string name="text_0e5ad3c12a0e" formatted="false">印画紙露光時のマゼンタフィルター量を変えます。0は元の配合です。</string>
+    <string name="text_469f85e3c561" formatted="false">プレフラッシュ</string>
+    <string name="text_7dd11c898748" formatted="false">印画紙や映画用プリントフィルムに少量の均一な露光を加え、コントラストを変えます。0でオフ。値は追加露光の割合であり、ストロボの光量や画像の明るさではありません。</string>
+    <string name="text_23cc75747b5a" formatted="false">シャープの強さ</string>
+    <string name="text_60d828125725" formatted="false">スキャンのエッジを強調します。0でオフ。強すぎると明るい縁が生じることがあります。元の写真にないディテールは復元できません。</string>
+    <string name="text_e9c8b36e09c7" formatted="false">シャープの半径</string>
+    <string name="text_cff8983d8e70" formatted="false">シャープ処理の半径をピクセル単位で調整します。強さが0の場合は調整できません。</string>
+    <string name="text_c4d38d9c07cc" formatted="false">フィルム銘柄</string>
+    <string name="text_5f86d5d545f8" formatted="false">同梱のフィルムプロファイルを選択します。リバーサルフィルムはダイレクトスキャン、ネガフィルムはプリントが標準です。</string>
+    <string name="text_9b7a0bf8b525" formatted="false">フォーマット</string>
+    <string name="text_13d6c864eb05" formatted="false">再現する画面の長辺サイズ（mm）です。フィルムの幅ではありません。粒子と光学効果のスケールに影響します。35 mmは標準的な135判の長辺を示すものではありません。</string>
+    <string name="text_3c14663c1cfa" formatted="false">自動露出</string>
+    <string name="text_eeb4cdfe3959" formatted="false">測光方式を選択すると自動露出が有効になります。オフにしても前回の測光方式は保持されます。読み込んだ写真からフィルム露光量を推定するもので、撮影時のカメラ露出ではありません。平均・中央値は画像全体の輝度、中央部重点は中央を重視、部分測光は中央の円形領域のみを測定します。マトリクスは5×5の区画、多領域は3つの同心領域に重みを付け、ハイライト重点は明るい画素を重視します。測光のシミュレーションであり、カメラメーカーのシーン認識を再現するものではありません。</string>
+    <string name="text_be94f251df06" formatted="false">ハイライト増強</string>
+    <string name="text_7b779407bf2a" formatted="false">ハイライト領域の露光量を増やします。0でオフ。</string>
+    <string name="text_7db1278a003a" formatted="false">ハイライトの範囲</string>
+    <string name="text_f3e9a635edb2" formatted="false">ハイライト増強が影響する範囲を調整します。</string>
+    <string name="text_1eb299c92ae4" formatted="false">ハイライトのしきい値</string>
+    <string name="text_67ca9c11ac9c" formatted="false">ハイライト増強が始まる明るさを、中間グレーより何段上かで設定します。値が高いほど、より明るい部分だけを増強します。失われたハイライトは復元しません。</string>
+    <string name="text_35d9afa371aa" formatted="false">レンズぼかし</string>
+    <string name="text_a19e8ff37742" formatted="false">レンズのぼけを再現します。単位はフィルム面上のµmです。0でオフ。</string>
+    <string name="text_1ecfa7339d9b" formatted="false">散乱の強さ</string>
+    <string name="text_df421b8d77b5" formatted="false">フィルム内部の光の散乱です。ハレーションとは独立して調整できます。</string>
+    <string name="text_27360875f5af" formatted="false">散乱の範囲</string>
+    <string name="text_ff2824686803" formatted="false">フィルム内部の光の散乱範囲を調整します。</string>
+    <string name="text_67eec7fc23cb" formatted="false">ハレーションの色</string>
+    <string name="text_80a38a96456b" formatted="false">全体の強さを保持しながら、各色層へのハレーションの配分を変えます。</string>
+    <string name="text_96dc8a905d84" formatted="false">ハレーションの反射回数</string>
+    <string name="text_990e19e16b96" formatted="false">フィルム内部の光の反射回数を再現します。回数が多いほど計算量が増えます。</string>
+    <string name="text_d8d39aadba89" formatted="false">反射の減衰</string>
+    <string name="text_1b574ccb3dca" formatted="false">反射ごとのハレーションの減衰を調整します。</string>
+    <string name="text_901dc35db60c" formatted="false">ハレーション補正</string>
+    <string name="text_3aa08a91a7b7" formatted="false">ハレーションの重なりによる全体の明るさの上昇を補正します。オフではその明るさの上昇が残ります。</string>
+    <string name="text_1ac007c4cc44" formatted="false">赤層の粒子</string>
+    <string name="text_7ee55be9078d" formatted="false">この色層の粒子の面積比を調整します。彩度や半径ではありません。</string>
+    <string name="text_4178263a7543" formatted="false">緑層の粒子</string>
+    <string name="text_bf4fa10b9092" formatted="false">青層の粒子</string>
+    <string name="text_0932a36c793c" formatted="false">層別粒子</string>
+    <string name="text_18a3261024a9" formatted="false">フィルムの異なる感光層の粒子を再現します。</string>
+    <string name="text_032a197cbdc1" formatted="false">粒子の層数</string>
+    <string name="text_bec5aa3e1052" formatted="false">層別粒子をオフにした場合のみ有効です。層数が多いほど計算量が増えます。</string>
+    <string name="text_10822132628a" formatted="false">粒子のぼかし</string>
+    <string name="text_703b12844fd9" formatted="false">粒子像のぼかし量を、処理中の画像のピクセルを基準に調整します。初期値は0.65です。</string>
+    <string name="text_7642681245ee" formatted="false">色素雲の範囲</string>
+    <string name="text_697904f75f57" formatted="false">カラーフィルムの粒状感は微小な色素雲と関係しています。モデル内の色素雲の広がりを調整します。値はモデルの係数であり、実際の長さではありません。</string>
+    <string name="text_21fab82784d2" formatted="false">粒子の均一性</string>
+    <string name="text_4e33ce2575ba" formatted="false">元のプロファイルの各色層の比率を保持しながら、粒子の均一性を変えます。</string>
+    <string name="text_bf9837ba9fec" formatted="false">粒子の偏りのスケール</string>
+    <string name="text_9dcf8c3eacb2" formatted="false">粒子分布の不均一さの範囲を再現します。モデルのスケールはµm単位です。実際の粒子が塊になることを示すものではありません。</string>
+    <string name="text_c95615254a6d" formatted="false">粒子の偏りの強さ</string>
+    <string name="text_c58fafa690cd" formatted="false">粒子分布の不均一さの強さを調整します。モデルの振幅はnm単位です。粒子の実際の移動量やパーセントではありません。</string>
+    <string name="text_9f9d03c837c2" formatted="false">フィルムコントラスト</string>
+    <string name="text_43e5e3a7d83d" formatted="false">フィルム特性曲線の傾きを調整します。1はプロファイルの元の値です。</string>
+    <string name="text_febdf6716d8a" formatted="false">現像抑制の強さ</string>
+    <string name="text_2ea45ddd3494" formatted="false">現像抑制剤が同じ層や異なる色層に及ぼす影響を再現します。「調整」の「現像抑制」と同じ効果を制御し、内部の係数は乗算されます。目盛りは相対的な調整量で、初期値では元の効果を保持します。</string>
+    <string name="text_d16c830dd6b9" formatted="false">拡散距離</string>
+    <string name="text_5add1c5c18cc" formatted="false">モデル内での現像抑制剤の拡散距離です。単位はµmです。</string>
+    <string name="text_b52f4f0476c1" formatted="false">同一層への影響</string>
+    <string name="text_57941e00a8a3" formatted="false">同じ感光層内の現像の相互作用を調整します。</string>
+    <string name="text_cad65c0c8168" formatted="false">層間への影響</string>
+    <string name="text_44e260b2da07" formatted="false">異なる感光層間の現像の相互作用を調整します。</string>
+    <string name="text_abc2bcc3191e" formatted="false">出力方式</string>
+    <string name="text_0001b8c5d8e1" formatted="false">プリントは選択した印画紙または映画用プリントフィルムのモデルを経由します。リバーサルフィルムのダイレクトスキャンはポジ像になります。ネガのダイレクトスキャンでは反転せず、ネガの外観を保持します。</string>
+    <string name="text_6a36379e12c4" formatted="false">プリント拡散フィルター</string>
+    <string name="text_31b721f36494" formatted="false">プリント段階で拡散フィルターを適用します。ダイレクトスキャンでは無効です。</string>
+    <string name="text_30e570b25ae8" formatted="false">プリント拡散の強さ</string>
+    <string name="text_35e2151edfde" formatted="false">プリント時の拡散効果の強さを調整します。</string>
+    <string name="text_884a4b4a9697" formatted="false">プリント拡散の範囲</string>
+    <string name="text_c7fab338a3d7" formatted="false">プリント時の拡散効果の広がりを調整します。</string>
+    <string name="text_cf53a2dacdff" formatted="false">自動ニュートラル補正</string>
+    <string name="text_8adffac5e954" formatted="false">フィルム・印画紙データベースの色補正フィルターを使用します。シアン・マゼンタ・イエローの手動調整はオフにすると可能です。</string>
+    <string name="text_3369277a249a" formatted="false">シアン補正</string>
+    <string name="text_b7bf91e866a3" formatted="false">色補正フィルターを手動調整します。自動ニュートラル補正がオンの場合はデータベースの値を使用します。</string>
+    <string name="text_d74d21d856e9" formatted="false">マゼンタ補正</string>
+    <string name="text_402b841befae" formatted="false">イエロー補正</string>
+    <string name="text_7304135c5662" formatted="false">プリントコントラスト</string>
+    <string name="text_4362dbdb902d" formatted="false">選択した印画紙または映画用プリントフィルムの特性曲線の傾きを調整します。1は元の設定値です。</string>
+    <string name="text_6de4ace73d5d" formatted="false">高感度層のコントラスト</string>
+    <string name="text_d586866d607b" formatted="false">プリントモデルの高感度サブレイヤーの特性曲線の傾きを調整します。1は元の設定値です。</string>
+    <string name="text_948834ada56f" formatted="false">中・低感度層のコントラスト</string>
+    <string name="text_656f07b65ba1" formatted="false">プリントモデルの中感度・低感度の2つのサブレイヤーの特性曲線の傾きを同時に調整します。1は元の設定値です。</string>
+    <string name="text_350e57d09710" formatted="false">赤層のコントラスト</string>
+    <string name="text_6aae1486c3af" formatted="false">プリントモデルの赤チャンネルの特性曲線の傾きを調整します。1は元の設定値です。</string>
+    <string name="text_3ddbae16e340" formatted="false">緑層のコントラスト</string>
+    <string name="text_87dcffd01b93" formatted="false">プリントモデルの緑チャンネルの特性曲線の傾きを調整します。1は元の設定値です。</string>
+    <string name="text_bd27c57099e9" formatted="false">青層のコントラスト</string>
+    <string name="text_2d22a0ed76a2" formatted="false">プリントモデルの青チャンネルの特性曲線の傾きを調整します。1は元の設定値です。</string>
+    <string name="text_6dfc6e921ae6" formatted="false">現像液の疲労</string>
+    <string name="text_a04be1d22c78" formatted="false">現像液の疲労が印画紙や映画用プリントフィルムの特性曲線に及ぼす影響を再現します。0でオフ。局所的な薬液濃度の再現ではありません。</string>
+    <string name="text_05af46cca01b" formatted="false">プリント露光</string>
+    <string name="text_b2bf5f41cd45" formatted="false">印画紙の露光量を段単位で変えます。</string>
+    <string name="text_2311d090000f" formatted="false">プリント光源</string>
+    <string name="text_555843d03db0" formatted="false">プリントに使用する光源を選択します。ダイレクトスキャンではプリントを経由しません。</string>
+    <string name="text_6535e9c39c2a" formatted="false">プリント補正</string>
+    <string name="text_ecb5cb67b187" formatted="false">フィルム露光調整による明るさの変化をプリント時に補正します。実際の効果はプリント露光の正規化設定にも影響されます。</string>
+    <string name="text_99e0c3ab5f84" formatted="false">露光の正規化</string>
+    <string name="text_a7d5a1c52f90" formatted="false">中間グレーを基準にプリント露光を統一します。写真全体を分析する自動測光とは異なります。</string>
+    <string name="text_9d35c4a1f0c8" formatted="false">プレフラッシュのイエロー</string>
+    <string name="text_e5180d3737f5" formatted="false">プリントのプレフラッシュ用イエローフィルターを個別に設定します。プレフラッシュがオフの場合は無効です。</string>
+    <string name="text_01894cdc79b1" formatted="false">プレフラッシュのマゼンタ</string>
+    <string name="text_d08a02a1d17f" formatted="false">プリントのプレフラッシュ用マゼンタフィルターを個別に設定します。プレフラッシュがオフの場合は無効です。</string>
+    <string name="text_1a8fd554611b" formatted="false">スキャンぼかし</string>
+    <string name="text_f45c23864553" formatted="false">スキャン像のわずかなぼけを再現します。処理中の画像のピクセルを基準とします。0でオフ。</string>
+    <string name="text_c08900693d28" formatted="false">スキャンフレア</string>
+    <string name="text_eeaba0ff1bbe" formatted="false">迷光による白っぽさとコントラストの低下を再現します。ハイライト周辺のハレーションとは異なります。0でオフ。</string>
+    <string name="text_f40402359b27" formatted="false">フレアの変動</string>
+    <string name="text_56b172e2135b" formatted="false">スキャンフレアの局所的な変動を調整します。</string>
+    <string name="text_65863fca9aa3" formatted="false">フレアのぼかし</string>
+    <string name="text_73339f074019" formatted="false">スキャンフレアの不均一な分布を滑らかにします。処理中の画像のピクセルを基準とします。</string>
+    <string name="text_9c6c44727001" formatted="false">白レベル補正</string>
+    <string name="text_e4d3654ef963" formatted="false">スキャンの白レベルを補正します。ネガのダイレクトスキャンでは非対応です。プリントまたはリバーサルフィルムを選択してください。</string>
+    <string name="text_391a41ace427" formatted="false">黒レベル補正</string>
+    <string name="text_a4922750f39f" formatted="false">スキャンの黒レベルを補正します。ネガのダイレクトスキャンでは非対応です。プリントまたはリバーサルフィルムを選択してください。</string>
+    <string name="text_a4e50b0ef643" formatted="false">白レベル目標値</string>
+    <string name="text_4d74dee109f4" formatted="false">白レベル補正の目標値です。黒レベルより高い値にしてください。</string>
+    <string name="text_6654107ffef8" formatted="false">黒レベル目標値</string>
+    <string name="text_f040ad2ae5b5" formatted="false">黒レベル補正の目標値です。白レベルより低い値にしてください。</string>
+    <string name="text_646130986822" formatted="false">色域圧縮</string>
+    <string name="text_192216b8cb6d" formatted="false">sRGB色域外の色を表示可能な範囲に圧縮します。広色域で書き出す場合は自動的にオフになります。</string>
+    <string name="text_6f16843acab7" formatted="false">GPUアクセラレーション</string>
+    <string name="text_8d80b85bbd7f" formatted="false">Adrenoで密度処理の一部の高速化を自動的に試みます。他の段階はCPUで処理します。利用できない場合はCPUに戻ります。高速化を保証するものではありません。</string>
+    <string name="text_683099bf5b6c" formatted="false">フィルム標準</string>
+    <string name="text_789f61dbfcc7" formatted="false">赤</string>
+    <string name="text_d5234258fd84" formatted="false">アンバー</string>
+    <string name="text_574ce385b86d" formatted="false">ニュートラル</string>
+    <string name="text_3fd47edce45b" formatted="false">オフ</string>
+    <string name="text_2eb88a373a7f" formatted="false">グリマーグラス</string>
+    <string name="text_adb439547ac9" formatted="false">ブラックプロミスト</string>
+    <string name="text_3b339febf98c" formatted="false">プロミスト</string>
+    <string name="text_aaf1818f550f" formatted="false">シネブルーム</string>
+    <string name="text_499e8c373806" formatted="false">プリント</string>
+    <string name="text_b5ef62893e01" formatted="false">ダイレクトスキャン</string>
+    <string name="text_7eb336e42cb5" formatted="false">自動</string>
+    <string name="text_8da97ddda990" formatted="false">オン</string>
+    <string name="text_f65c42a2540b" formatted="false">調整</string>
+    <string name="text_83219449b5eb" formatted="false">光学効果</string>
+    <string name="text_b82bd426d236" formatted="false">粒子</string>
+    <string name="text_1b5d3d55ef48" formatted="false">現像</string>
+    <string name="text_c2a291b64f6b" formatted="false">スキャン</string>
+    <string name="text_ec00bc673f05" formatted="false">印画紙を選択</string>
+    <string name="text_3691a3aa4ece" formatted="false">印画紙／プリントスタイル</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · 映画用プリントフィルム</string>
+    <string name="text_3b789c2037e2" formatted="false"> · カラー印画紙</string>
+    <string name="text_7b528c395978" formatted="false">135判の構図</string>
+    <string name="text_e76a25844aa5" formatted="false">構図を変更</string>
+    <string name="text_61d5477ed69a" formatted="false">135判 横</string>
+    <string name="text_cad49035a99d" formatted="false">135判 縦</string>
+    <string name="text_4b1db520af46" formatted="false">元の画像</string>
+    <string name="text_d1047eed5dd5" formatted="false">自由</string>
+    <string name="text_36f33adaf094" formatted="false">確定</string>
+    <string name="text_f02806d5dc08" formatted="false">構図</string>
+    <string name="text_9634fb0832be" formatted="false">パラメーター</string>
+    <string name="text_06ea736a7066" formatted="true">%1$sを調整</string>
+    <string name="text_c0b3fbff51cc" formatted="false">完了</string>
+    <string name="text_657a8c2de63c" formatted="false">、選択済み</string>
+    <string name="text_61ea0b0d9ed0" formatted="false">フィルムの説明</string>
+    <string name="text_74b054e27203" formatted="false">フィルム枠の透かし</string>
+    <string name="text_369143830b0b" formatted="false">フィルム枠の透かし、25コマ目に固定</string>
+    <string name="text_4b96acdd5e96" formatted="false">ネガの白い穴</string>
+    <string name="text_6d2683a65646" formatted="false">ネガの白いパーフォレーション。リバーサルは常に白</string>
+    <string name="text_ffd510bae3ad" formatted="false">%+.2f 段</string>
+    <string name="text_5b1b0d1d80a6" formatted="false">%.2f 倍</string>
+    <string name="text_b6a198a1e6c7" formatted="false">%.2f ピクセル</string>
+    <string name="text_4e3db4596715" formatted="true">%1$sの説明</string>
+    <string name="text_de32e20193ad" formatted="false">OK</string>
+    <string name="text_f94fbbaa8f93" formatted="true">%1$sをリセット</string>
+    <string name="text_f2961369ae98" formatted="false">現在のフィルムのプリセット設定に戻しますか？</string>
+    <string name="text_c265e02073e5" formatted="false">露光、光学効果、粒子、印画紙などの色調設定を元に戻します。構図と透かしの設定は保持します。</string>
+    <string name="text_e0534b8a4e46" formatted="false">元に戻す</string>
+    <string name="text_d1c4835b23ed" formatted="false">\n透明部分は白で合成されます</string>
+    <string name="text_c96f06693217" formatted="true">%1$s\n%2$s × %3$s\n%4$s\n%5$s KB\n\n端末内の一時コピーを使用し、元の画像は変更しません。プレビューはsRGB SDRです。書き出し時は色空間を選択でき、対応する元の撮影メタデータ（既存のGPS情報を含む）を保持します。更新日時は書き出し時刻に更新されます。カメラ固有の項目と古いサムネイルはコピーされません。%6$s%7$s\n\n2本指でズーム、ダブルタップでリセットまたは拡大。\n\n拡大プレビュー：%8$s%9$s</string>
+    <string name="text_557e29365b35" formatted="true">\nプレビューサイズ：%1$s × %2$s</string>
+    <string name="text_8824021eb6d7" formatted="false">ズームをリセット</string>
+    <string name="text_685f5b4ebdf4" formatted="false">フィルムと印画紙</string>
+    <string name="text_70e86d94f885" formatted="true">端末内の分光フィルム・印画紙モデルで計算します。単に色フィルターを重ねるものではありません。\n\n撮影用フィルム%1$s種類、印画紙／映画用プリントフィルム%2$s種類のプロファイルを搭載。リバーサルはダイレクトスキャン、ネガはプリントが標準です。名称は測定プロファイルを識別するためのもので、ブランドとの提携を示すものではありません。\n\nクラウド上で一部のアルゴリズム比較とコードテストを実施済みですが、Android実機での動作は未検証です。大きな画像の処理には時間がかかる場合があります。\n\n原プロジェクト：Andrea Volpato / spektrafilm。プログラムはGPL-3.0、フィルムプロファイルはCC BY-SA 4.0に基づきます。声明の全文はアプリに同梱されています。</string>
+    <string name="text_038ad816c53f" formatted="false">オープンソースライセンス</string>
+    <string name="text_070a076df57a" formatted="false">プログラムライセンス · GPL-3.0</string>
+    <string name="text_42cec9151c59" formatted="false">フィルムプロファイル · CC BY-SA 4.0とクレジット</string>
+    <string name="text_0b3a85a2a436" formatted="false">フィルムエンジン · Rustサードパーティ依存関係の声明</string>
+    <string name="text_334ca499fe26" formatted="false">画像コーデック · rawlerとその他の依存関係の声明</string>
+    <string name="text_8150d89b6537" formatted="false">パーフォレーション素材 · 実資料を参考にした描画とクレジット</string>
+    <string name="text_1a485ac7a998" formatted="false">フィルムモデルはAndrea VolpatoのspektrafilmおよびそのRust移植に基づきます。UIと画像処理の接続部分を変更しています。プログラムはGPL-3.0、フィルムデータはCC BY-SA 4.0で提供されます。RAWデコードにはrawler（LGPL-2.1）を使用し、各依存関係はそれぞれのライセンスを保持します。完全な対応ソースコードとビルド資料をインストールパッケージとともに提供しています。法的文書は原文のまま掲載しています。</string>
+    <string name="text_200ae4c1c12e" formatted="false">この声明を読み込めません。インストールパッケージに付属する対応ソースコードとライセンスをご確認ください。端末への写真の保存には影響しません。</string>
+    <string name="text_564eb6dfeaca" formatted="false">オープンソースライセンスとクレジット</string>
+    <string name="text_d6d466c03f8e" formatted="false">読み込み元</string>
+    <string name="text_543b8fb9aa67" formatted="false">フォトライブラリから写真を選択</string>
+    <string name="text_85534f27f5d9" formatted="false">ファイルから写真／DNGを選択</string>
+    <string name="text_c69504e36552" formatted="true">元の写真 %1$s × %2$s\nSDR · 新しいファイルに保存し、元の画像は上書きしません</string>
+    <string name="text_42a85b8d8038" formatted="false">保存形式</string>
+    <string name="text_b4a83add8f8c" formatted="false">JPEG · 共有に最適</string>
+    <string name="text_82aa50547f13" formatted="false">PNG · 可逆圧縮</string>
+    <string name="text_ba4b003cfd7c" formatted="false">TIFF · 16ビットの後処理用</string>
+    <string name="text_7a6dd5919b20" formatted="false">JPEGはファイルサイズが小さく、フォトライブラリや共有に適しています。</string>
+    <string name="text_8d15e79b0441" formatted="false">PNGは今回の8ビット出力を可逆圧縮します。元のRAW、HDR、アルファチャンネルを保持するわけではありません。</string>
+    <string name="text_128a704b1837" formatted="false">JPEG品質 · 95</string>
+    <string name="text_8cfce0f46112" formatted="false">JPEG品質、95</string>
+    <string name="text_7190cce2fd40" formatted="true">JPEG品質 · %1$s</string>
+    <string name="text_59df7ac272da" formatted="true">JPEG品質、%1$s</string>
+    <string name="text_6e539699fdb0" formatted="false">16ビットTIFFは引き続き色調整をする場合に適していますが、ファイルが大きくなります。「ダウンロード/暗房」に保存され、一部のギャラリーアプリでは表示できません。8ビットの元画像をRAWに復元するものではありません。</string>
+    <string name="text_20f14d321daa" formatted="false">出力色空間</string>
+    <string name="text_df0877ff9634" formatted="false">通常の共有にはsRGBを選択してください。広色域出力にはカラーマネジメント対応のビューアーが必要です。プレビューは引き続きsRGBで表示します。広色域を選択すると、sRGB専用の色域圧縮は自動的にオフになります。</string>
+    <string name="text_4a7b0d4654d7" formatted="false">写真サイズ</string>
+    <string name="text_f60066ec4bbf" formatted="false">元のサイズ</string>
+    <string name="text_6bea77acefb3" formatted="false">標準</string>
+    <string name="text_d1ee60a322e5" formatted="true">高精細 · %1$s</string>
+    <string name="text_1018b7d83c8b" formatted="true">元のサイズ · %1$s</string>
+    <string name="text_6d821f237f2f" formatted="false">パーフォレーションを有効にすると、現在の135判の構図で写真を切り抜き、固定の外枠を追加します。元の写真ファイルは変更しません。</string>
+    <string name="text_aabd69bfed16" formatted="false">小さいサイズでは縦横比を維持して縮小します。切り抜きや元画像の拡大は行いません。</string>
+    <string name="text_597fecd88b25" formatted="false">元のサイズでの処理には数GiBの一時領域が必要な場合があります。空き容量が不足すると停止し、無断で縮小しません。</string>
+    <string name="text_c767b0ebc50a" formatted="false">すべて端末内で処理します。書き出しリストに追加した後は、編集を続けたり、画面を離れたり、端末をロックしたりできます。バックグラウンド処理にはシステムの制限が適用されます。書き出しリストで進捗の確認、一時停止、キャンセルができます。</string>
+    <string name="text_cef4e28b1774" formatted="false">新しい写真を書き出す</string>
+    <string name="text_d14f6e1f0a6f" formatted="false">新しい写真を保存</string>
+    <string name="text_e8e6e48f180e" formatted="false">編集設定</string>
+    <string name="text_2413c386102e" formatted="false">新しい写真の読み込み時に設定をリセット</string>
+    <string name="text_712623100497" formatted="false">オンにすると現在のフィルムのプリセットに戻します。オフでは色調整設定を引き継ぎます。新しい写真の構図は常にリセットされます。</string>
+    <string name="text_7daa923cc7e5" formatted="false">起動時に前回の写真を復元</string>
+    <string name="text_5f08fa1da11e" formatted="false">次回の起動にのみ適用されます。現在の編集やバックグラウンドの書き出しは消去されません。</string>
+    <string name="text_84a61a56ecc6" formatted="false">ログの対象期間を選択</string>
+    <string name="text_b46da08445e2" formatted="true">直近%1$s分</string>
+    <string name="text_45809131f9a2" formatted="false">分数を指定</string>
+    <string name="text_90d8b0eab93d" formatted="false">1–1440分</string>
+    <string name="text_75a879d2307c" formatted="false">直近の分数を指定、1から1440</string>
+    <string name="text_1fdccd5c32ea" formatted="false">診断の概要と、個人情報を除いた完全なイベント詳細（パラメーター、サイズ、所要時間、メモリ）を、1つのUTF-8 .txtファイルに書き出します。写真、ファイル名、GPS、パス、アカウント情報は含まれません。共有先を選択した場合のみ送信されます。</string>
+    <string name="text_546989732ef0" formatted="false">最大24時間保持しますが、容量不足の場合はそれより早く上書きされます。実際の記録範囲は概要に表示されます。正常に終了しなかった操作は手がかりにすぎず、必ずしもクラッシュを意味しません。</string>
+    <string name="text_d09e99fe27d8" formatted="false">TXTログを共有</string>
+    <string name="text_dcc63884dad1" formatted="false">1から1440の整数を入力してください</string>
+    <string name="text_f0922cbcaaa2" formatted="false">診断ログを準備</string>
+    <string name="text_13e5bfcd9568" formatted="true">直近%1$s分の匿名化したTXTログを整理しています…</string>
+    <string name="text_2cd0039fff3b" formatted="true">直近%1$s分のログを共有</string>
+    <string name="text_b6ad51ea5ed7" formatted="false">現在ログを共有できません</string>
+    <string name="text_f2df43642219" formatted="false">端末の空き容量と利用可能な共有アプリを確認して再試行してください。写真は送信されません。</string>
+    <string name="text_ad1d18f9d3e5" formatted="true">135判の構図 + パーフォレーション → %1$s × %2$s</string>
+    <string name="text_96fa923afb1a" formatted="true">%1$s × %2$s · このサイズはパーフォレーション非対応です</string>
+    <string name="text_6e8f80256c84" formatted="true">%1$s × %2$s · パーフォレーション素材はまだ利用できません</string>
+    <string name="text_ff27ed115be8" formatted="false">パーフォレーション追加後のサイズがJPEG / TIFFの現在の上限8400万画素を超えます。元の画像は縮小していません。パーフォレーションをオフにするか、小さいサイズまたはPNGを選択してください。</string>
+    <string name="text_022fe563baa4" formatted="false">使用可能なメモリが不足しているため、この構図の処理を完了できません。</string>
+    <string name="text_8f256a031a2d" formatted="false">パーフォレーションのプレビューサイズが上限を超えています</string>
+    <string name="text_5c82a6b4a003" formatted="false">パーフォレーション素材とタスクの固定寸法が一致しません</string>
+    <string name="text_1384551c8e44" formatted="false">フィルムのパーフォレーションはまだ利用できません</string>
+    <string name="text_e47ae3f26387" formatted="false">無効なリニア画像データ</string>
+    <string name="text_5bba0c1f8416" formatted="false">最終構図のプレビューサイズが上限を超えています</string>
+    <string name="text_bec36dff07be" formatted="false">元の書き出しタスクのパーフォレーション素材バージョンは利用できません。別の素材には置き換えません</string>
+    <string name="text_d1c5599a9bff" formatted="false">パーフォレーションのタスク寸法が固定素材と一致しません</string>
+    <string name="text_5c0b4e508a52" formatted="false">縁の素材は検証済みの背景色に明示的に合成する必要があります。透過情報を暗黙に破棄することはできません</string>
+    <string name="text_a63185c8bf65" formatted="false">写真の縦横比では固定の縁文字を収められません。素材の切り抜きや引き伸ばしは行いません</string>
+    <string name="text_b64913db4f1d" formatted="false">書き出し作業フォルダーの検証に失敗しました。写真は保存されていません。アプリを更新して再試行してください。</string>
+    <string name="text_df30ae362f2b" formatted="false">端末の空きメモリが不足しています。他のアプリを閉じて再試行してください。元の画像は縮小していません。</string>
+    <string name="text_2c28d802618b" formatted="false">端末内の画像コーデックを利用できません。完全なインストールパッケージを再インストールしてください。</string>
+    <string name="text_41db58446aa4" formatted="false">端末内の画像コーデックを起動できません。</string>
+    <string name="text_93313da164ac" formatted="false">端末の空きメモリが不足しています。後で再試行してください。元の画像は縮小していません。</string>
+    <string name="text_c2145ea571e4" formatted="false">端末内のエンコード／デコードをキャンセルしました</string>
+    <string name="text_0105eb1c06a7" formatted="false">この写真の符号化方式は未対応です。DNGは現在、検証済みの16ビット非圧縮およびロスレスJPEG圧縮に対応しています。RAWの代わりに埋め込みプレビューを使用することはありません。</string>
+    <string name="text_46ac8768982e" formatted="false">このDNGには未対応の必須補正処理が含まれています。補正を無視したり、RAWの代わりに埋め込みプレビューを使用したりしていません。</string>
+    <string name="text_c946e8a02212" formatted="false">このDNGのカメラキャリブレーション行列は未対応です。推測した色への置き換えは行っていません。</string>
+    <string name="text_19b3b0255d08" formatted="false">端末内での写真の読み書きに失敗しました。空き容量を確認して元のファイルを選択し直してください。</string>
+    <string name="text_199d9706e7a1" formatted="false">完全で有効な画像データを読み込めませんでした。元のファイルを選択し直してください。ファイルが破損しているかは現時点では確認できません。</string>
+    <string name="text_e92a0c3cbaef" formatted="false">この出力色空間は未対応です。変換の代わりに色のタグを書き換えることはしていません。</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">最終書き出しサイズが現在の上限8400万画素を超えています。</string>
+    <string name="text_5c55db3ba035" formatted="false">この写真はコーデックの現在の処理上限5200万画素を超えています。</string>
+    <string name="text_6bceec6d29d6" formatted="false">端末の空き容量が不足し、処理が完了しませんでした。元の写真は変更されていません。</string>
+    <string name="text_d171c3322a9c" formatted="false">この写真を安全に処理するためのメモリが不足しています。</string>
+    <string name="text_56858cdae70f" formatted="false">このRAWのカラーキャリブレーションデータは未対応です。推測した色への置き換えは行っていません。</string>
+    <string name="text_aff865b41066" formatted="false">端末内の画像エンコード／デコードが完了しませんでした。原因を調べるため診断ログを共有してください。元の写真は変更されていません。</string>
+    <string name="text_62f3e125a3ce" formatted="false">このDNGの一部の任意のレンズ補正は適用されていません。周辺光量落ちや歪曲が残る場合があります。</string>
+    <string name="text_95665116d521" formatted="false">RAWデータを読み込み、Filmroomのフィルムカラーを適用します。カメラのJPEG出力を再現するものではありません。</string>
+    <string name="text_d2d161102e41" formatted="false">カメラ内蔵のトーンカーブは適用していません。</string>
+    <string name="text_99981a4927ac" formatted="false">基本的なRAW発色を使用しています。ファイルに付属する色相／彩度補正テーブルは適用していないため、カメラのギャラリーと色が異なる場合があります。</string>
+    <string name="text_5f37317ec18e" formatted="false">RAWデコードのメタデータが不完全なため、処理を続行しませんでした。</string>
+    <string name="text_34f1a903d47d" formatted="true">暗房_诊断_%1$s分钟_%2$s_%3$s.txt</string>
+    <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n文字コード：UTF-8；単一のテキストファイル（ZIPではありません）\n\n=== 概要 ===\n</string>
+    <string name="text_7af205e83135" formatted="false">\n\n=== 匿名化したイベントの全詳細 ===\n</string>
+    <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
+    <string name="text_60ef08049a72" formatted="true">アプリ：Filmroom；バージョンコード：%1$s；エンジンビルド：4；インターフェース：1\nAndroid API：%2$s；ABI：%3$s；プロセッサー数：%4$s；Javaヒープ上限：%5$sバイト；メモリクラス：%6$s MB</string>
+    <string name="text_5c1712cb2d38" formatted="false">今回の起動</string>
+    <string name="text_b1336f82fea4" formatted="false">編集の復元</string>
+    <string name="text_5a9df9227ec6" formatted="false">プレビューのレンダリング</string>
+    <string name="text_9ced68312ac6" formatted="false">元のサイズでデコード</string>
+    <string name="text_71cab785c5d9" formatted="false">書き出しリソースの確認</string>
+    <string name="text_0a3bbae44150" formatted="false">元のサイズでレンダリング</string>
+    <string name="text_2fa4917d052e" formatted="false">書き出しエンコード</string>
+    <string name="text_73fff6a5d6e6" formatted="false">診断の共有</string>
+    <string name="text_f8281de2df36" formatted="false">一時ファイルの削除</string>
+    <string name="text_d2bb025a2e51" formatted="false">開始</string>
+    <string name="text_4077a1f6397d" formatted="false">画像情報の読み込み</string>
+    <string name="text_56e09dd8e1fc" formatted="false">分割デコード</string>
+    <string name="text_77f67305d365" formatted="false">ローカルエンジンに移行</string>
+    <string name="text_2bd9ae163aa5" formatted="false">ローカル処理ステップ</string>
+    <string name="text_98407f5c987e" formatted="false">ローカルエンジンから復帰</string>
+    <string name="text_222b0d3c08c4" formatted="false">エンコード開始</string>
+    <string name="text_9e388ac3f491" formatted="false">行単位のエンコード</string>
+    <string name="text_2560088669b6" formatted="false">書き込み待ちの写真を作成</string>
+    <string name="text_6ef11d1e8c02" formatted="false">写真の保存完了</string>
+    <string name="text_2625bda74112" formatted="false">キャンセル要求</string>
+    <string name="text_d43461bfe6fc" formatted="false">未完了ファイルの削除</string>
+    <string name="text_ae173945fb80" formatted="false">処理失敗</string>
+    <string name="text_2c4c4e5e32fa" formatted="false">前回の実行が正常に終了しませんでした</string>
+    <string name="text_c7b24e7997e9" formatted="false">終了</string>
+    <string name="text_df800a26392c" formatted="false">Filmroom診断｜バージョンコード </string>
+    <string name="text_66e4acfbd6bd" formatted="false">｜直近 </string>
+    <string name="text_5b3a75c53bbd" formatted="false"> 分\n</string>
+    <string name="text_2428420e407f" formatted="false">合計 </string>
+    <string name="text_e8a56d1c0e70" formatted="false"> 件のイベント。ログは最大24時間、1 MiB保持し、容量に達すると古い記録を置き換えます。\n</string>
+    <string name="text_366712d2d80e" formatted="false">実際の最初と最後の記録：</string>
+    <string name="text_8727f227e2c6" formatted="false"> ～ </string>
+    <string name="text_0e898ec43b0b" formatted="false">；継続的な監視ではありません。\n</string>
+    <string name="text_fa1c6dd0bfc3" formatted="false">今回の起動中に確認した破棄数：期限切れ </string>
+    <string name="text_6e94c47fde22" formatted="false">、容量による入れ替え </string>
+    <string name="text_4af5bd6fb80e" formatted="false">、破損または書き込み未完了 </string>
+    <string name="text_e9d6840052fc" formatted="false">、未来の時刻で確認不能 </string>
+    <string name="text_1701c7739625" formatted="false">。起動をまたいだ累計は不明です。\n</string>
+    <string name="text_5bf7bab64ce3" formatted="false">直近の失敗／中断記録：</string>
+    <string name="text_e779813b6cc2" formatted="false">直近のローカル処理ステップ：</string>
+    <string name="text_e5b01c51fa19" formatted="false">；進捗カウントは現在のパスのみを示し、写真全体の完了率ではありません。\n</string>
+    <string name="text_4d7c038cbc95" formatted="false">前回の操作は正常に終了しませんでした。システムによる終了、強制終了、クラッシュの可能性がありますが、捕捉されたクラッシュレポートではありません。\n</string>
+    <string name="text_7d01902a70ae" formatted="false">選択した期間に記録がありません。エラーが発生したかどうかは判断できません。\n</string>
+    <string name="text_aebe06f7e024" formatted="false">起動をまたいだ記録を含みます。時刻はシステムのUTC時計に依存するため、時刻の変更が範囲に影響する場合があります。\n</string>
+    <string name="text_a89d10b60775" formatted="false">一部の記録の書き込みに失敗しました。内容が不完全な場合があります。\n</string>
+    <string name="text_a6a08f5857fd" formatted="false">技術イベントと制限された数値のみを含み、写真、名前、位置情報、ファイルパス、例外の原文は含みません。共有用コピーは24時間の保持方針に従い、次回の起動時または共有時に削除されます。今回の起動中は単調増加時計を使い、時刻変更による早期削除を防ぎます。システムによるキャッシュ削除、アンインストール、起動をまたぐ時刻変更により利用可能期間が変わる場合があるため、受信者は速やかに保存してください。</string>
+    <string name="text_1c751a529433" formatted="false">Filmroom診断 · 過去 </string>
+    <string name="text_79aa64a23d25" formatted="false">生成日時（UTC）：</string>
+    <string name="text_02e29a8a9e56" formatted="false">期間：</string>
+    <string name="text_73ba3e48606b" formatted="false"> ≤ イベント時刻 ≤ </string>
+    <string name="text_4b5117d9bd17" formatted="false">期間内のイベント：</string>
+    <string name="text_e52827dd4ad4" formatted="false">；起動をまたいだイベント：</string>
+    <string name="text_c8768200958b" formatted="false">実際の記録の開始・終了時刻：</string>
+    <string name="text_bf7b123c114d" formatted="false">；イベント間を継続的に監視しているわけではありません。\n</string>
+    <string name="text_ccc4edebf400" formatted="false">今回の起動中に確認できた破棄数：期限切れ=</string>
+    <string name="text_1a58fbf44b39" formatted="false">、容量による入れ替え=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">、破損／書き込み未完了=</string>
+    <string name="text_338aa9ce6405" formatted="false">、未来の時刻で確認不能=</string>
+    <string name="text_b028650697a5" formatted="false">。起動をまたいだ累計は確定できません。\n</string>
+    <string name="text_bbbde15a1296" formatted="false">端末内でのみ記録します。共有をタップした後、受信アプリを選択します。このアプリがアップロードすることはありません。\n</string>
+    <string name="text_e78eb8f72096" formatted="false">保持：最大で直近24時間、1 MiBのイベント記録。容量がいっぱいになると古い記録を置き換えます。\n</string>
+    <string name="text_0cbe74b0ae0a" formatted="false">今回の起動内は単調増加時計で抽出します。起動をまたぐ場合はUTCの実時間時計でのみ抽出するため、システム時刻の変更により誤差が生じる場合があります。\n</string>
+    <string name="text_f068c05d35bf" formatted="false">記録時のUTCと単調増加時刻を両方表示します。抽出用UTCは今回のスナップショット時刻から遡って算出した時刻です。\n</string>
+    <string name="text_de9b9a98a215" formatted="false">写真の内容、ファイル名、パス、URI、位置情報、EXIF、アカウント、鍵、例外の原文、端末固有IDは含みません。\n</string>
+    <string name="text_9e46400a4c40" formatted="false">ネイティブクラッシュのスタックは取得しません。未終了の記録から、前回の操作が異常中断した可能性のみを判断できます。\n</string>
+    <string name="text_d93adff8dfc6" formatted="false">前回の操作は正常に終了しませんでした。システムによる終了、強制終了、クラッシュの可能性がありますが、原因は特定できません。\n</string>
+    <string name="text_f51871fbed21" formatted="false">警告：一部の診断記録を端末ストレージに書き込めませんでした。レポートが不完全な場合があります。\n</string>
+    <string name="text_fd756ca7b128" formatted="false">選択した期間に共有可能な診断イベントはありません。期間中にエラーが発生しなかったことを意味するものではありません。\n</string>
+    <string name="text_42892fd91f62" formatted="false">\n\nイベント（技術コード；自由記述なし）：\n</string>
+    <string name="text_f3650cb3e121" formatted="false">抽出UTC=</string>
+    <string name="text_a6225820802e" formatted="false"> 記録UTC=</string>
+    <string name="text_af560d1154f3" formatted="false"> 単調増加ms=</string>
+    <string name="text_0d863965cf79" formatted="false"> 起動=</string>
+    <string name="text_da3f4b1e2ad6" formatted="false"> 連番=</string>
+    <string name="text_b3660b2a6a62" formatted="false"> 操作=</string>
+    <string name="text_e564bb482cfa" formatted="false"> 結果=</string>
+    <string name="text_815ce3797ff8" formatted="false"> エラーコード=</string>
+    <string name="text_0a9cd9640dfe" formatted="false">診断の対象期間は1–1440分で指定してください</string>
+    <string name="text_652bd8e2b42a" formatted="false">フィルムデータを準備</string>
+    <string name="text_7b5d2a09babd" formatted="false">自動測光</string>
+    <string name="text_6ff3e6e82562" formatted="false">ハイライト増強</string>
+    <string name="text_99ccd913c2c3" formatted="false">レンズぼかし</string>
+    <string name="text_28dfadf63de0" formatted="false">粒子のクラスター</string>
+    <string name="text_bab826d7cea1" formatted="false">レンズ拡散</string>
+    <string name="text_ee5e1f321d0c" formatted="false">フィルムへの露光</string>
+    <string name="text_e29e511b19c8" formatted="false">フィルム内の散乱</string>
+    <string name="text_0caa7cb6bf14" formatted="false">フィルムのハレーション</string>
+    <string name="text_a3a8c53854e3" formatted="false">対数露光量に変換</string>
+    <string name="text_e010cca5a693" formatted="false">フィルム濃度を生成</string>
+    <string name="text_c3d62fb6dc52" formatted="false">現像抑制剤の拡散</string>
+    <string name="text_63dc46ef8527" formatted="false">フィルム現像</string>
+    <string name="text_6817024599e0" formatted="false">粒子を生成</string>
+    <string name="text_b6ccbb59ff43" formatted="false">色素雲を再現</string>
+    <string name="text_465b9d003092" formatted="false">粒子の描画</string>
+    <string name="text_6534faa7428f" formatted="false">印画紙とスキャン</string>
+    <string name="text_6fb121b28fdd" formatted="false">スキャンのシャープ処理</string>
+    <string name="text_93b5664a205f" formatted="false">処理完了</string>
+    <string name="text_94f31f970642" formatted="false">診断の対象期間を1–1440分で指定してください。</string>
+    <string name="text_235ff46182e0" formatted="false">診断記録がまだ初期化されていません。アプリを開き直して再試行してください。</string>
+    <string name="text_2bec26a5c8e2" formatted="false">診断共有用のフォルダーを準備できません。</string>
+    <string name="text_78d664a50890" formatted="false">診断共有用のファイルを作成できません。</string>
+    <string name="text_c6bddcd61e6b" formatted="true">%1$s\nステップ %2$s/7</string>
+    <string name="text_d23207c07a82" formatted="false">写真を準備</string>
+    <string name="text_ef1ae2c65edd" formatted="false">露光量を計算</string>
+    <string name="text_6159fa0e2bb0" formatted="false">光学効果を処理</string>
+    <string name="text_3b490fba1ffc" formatted="false">プリントとスキャン</string>
+    <string name="text_6c41da9a3395" formatted="false">エンコードして保存</string>
+    <string name="text_af91aee46a69" formatted="false">一時ファイルを削除</string>
+    <string name="text_30fe814c4574" formatted="true"> · 現在のパス %1$s%%</string>
+    <string name="text_6c9f62a53f72" formatted="false">ローカルエンジンがインストールされていません</string>
+    <string name="text_a4ca69371996" formatted="false">ローカルのフィルムエンジンがまだ準備できていません</string>
+    <string name="text_6c0813b39bb5" formatted="false">端末内の処理をキャンセルしました</string>
+    <string name="text_d5113f613aad" formatted="false">この写真は現在の処理範囲を超えています。標準サイズを選択してください</string>
+    <string name="text_8bbca1842388" formatted="false">現在のサイズまたはハレーションの範囲が端末の処理リソース上限を超えています。ハレーションの範囲を狭めるか、標準サイズを選択してください。元の画像は縮小していません。</string>
+    <string name="text_e46692a12a54" formatted="false">現在のフィルムまたは印画紙のプロファイルは利用できません。別のプロファイルで再試行してください</string>
+    <string name="text_fda570c695c8" formatted="false">現在の調整値は使用できません。調整をリセットして再試行してください</string>
+    <string name="text_368306bc6068" formatted="false">端末の一時領域が不足しています。標準サイズで書き出してください</string>
+    <string name="text_77f7a824adc1" formatted="false">処理結果が不完全です。写真は保存されていません</string>
+    <string name="text_9695c3a1a61a" formatted="false">書き出し作業フォルダーの検証に失敗しました。アプリを更新して再試行してください。写真を縮小する必要はありません</string>
+    <string name="text_4e906ddf82d9" formatted="false">端末内のフィルム処理が完了しませんでした。再試行してください。再び失敗する場合は診断ログを共有してください</string>
+    <string name="text_0a9765e80ef5" formatted="false">ローカルのフィルムエンジンがまだ準備できていません。元の写真を読み込んで見ることはできますが、効果と書き出しは利用できません。</string>
+    <string name="text_4c0c1ba5f426" formatted="false">ローカルのフィルムデータを準備できません</string>
+    <string name="text_c7b93a82c0c6" formatted="false">画像がこのバージョンの処理サイズ上限を超えています</string>
+    <string name="text_ba4205340595" formatted="false">ローカルのフィルムデータを読み込めません</string>
+    <string name="text_1c50d5872b77" formatted="false">エンジンが無効な色を返しました</string>
+    <string name="text_ed15a09dd74c" formatted="false">現在のバージョンで書き出せる長辺は最大4096ピクセルです</string>
+    <string name="text_84ccf8f71d0d" formatted="false">処理結果の読み込みが中断されました</string>
+    <string name="text_0db55ca8317f" formatted="false">処理結果に無効な色が含まれています</string>
+    <string name="text_3ac8122c5f15" formatted="false">元の写真のサイズが安全な処理範囲を超えています</string>
+    <string name="text_ed2785856a9e" formatted="false">元の写真の一時データが不完全です。もう一度読み込んでください</string>
+    <string name="text_a7c774a3bd73" formatted="false">書き出しデータが不完全です。写真は保存されていません</string>
+    <string name="text_84fe057f0854" formatted="false">Bitmap書き出しはsRGBのみに対応しています。広色域では未変換のリニアデータを使う書き出し経路を使用してください</string>
+    <string name="text_236748b3f384" formatted="false">ローカルの分光データの検証に失敗しました</string>
+    <string name="text_bb3e34642ce2" formatted="false">ローカルの分光データのパスが無効です</string>
+    <string name="text_837fdb22a021" formatted="false">ローカルの分光データを準備できません</string>
+    <string name="text_8d11010b3a7b" formatted="false">ローカルの分光データをインストールできません</string>
+    <string name="text_101df955ba5b" formatted="false">切り抜きキューのスナップショットが一致しません</string>
+    <string name="text_eca4546685f7" formatted="false">構図キューのスナップショットが一致しません</string>
+    <string name="text_02d5c30befc6" formatted="false">パーフォレーションキューのスナップショットが不完全です</string>
+    <string name="text_31d5184a31ac" formatted="false">タスク記録が破損しています。キャンセルして写真を追加し直してください</string>
+    <string name="text_9652b13c1fd3" formatted="false">処理が中断されました。タップして再開してください。未完了の段階は再計算されます</string>
+    <string name="text_e56de4bd4f96" formatted="false">追加が完了しませんでした。この項目をキャンセルして写真を追加し直してください</string>
+    <string name="text_f5923a5ffaa3" formatted="false">書き出しの進捗を永続保存できません</string>
+    <string name="text_70d544a20512" formatted="false">書き出し記録が失われました</string>
+    <string name="text_704cb65572bc" formatted="false">追加操作は終了しました</string>
+    <string name="text_0b58e0113da6" formatted="false">キャンセル中</string>
+    <string name="text_b050569cce69" formatted="false">進捗記録を保存できませんでした。空き容量を確保して再開してください</string>
+    <string name="text_83b39ce89c4f" formatted="false">最終構図記録のバージョンは未対応です</string>
+    <string name="text_bb72ee12ba8b" formatted="false">キューは一時停止中です。タップして再開</string>
+    <string name="text_ff3d626e1865" formatted="false">キャンセル済み。一部の一時ファイルは削除待ちです</string>
+    <string name="text_29367795aabb" formatted="false">中断した書き出しファイルを削除できません</string>
+    <string name="text_25d728831d11" formatted="false">キュー内の写真</string>
+    <string name="text_ba513cd4be11" formatted="false">中断した入力の一時ファイルを削除できません</string>
+    <string name="text_e0cc395f6b84" formatted="false">写真を保存しました</string>
+    <string name="text_598870cac16e" formatted="false">保存済み。一部の一時ファイルは削除待ちです</string>
+    <string name="text_3df4e91da12d" formatted="false">処理は一時停止中です。再開できます。未完了の段階は再計算されます</string>
+    <string name="text_801eccbf436d" formatted="false">復元データが不完全なため、このタスクを再開できません。キャンセルして写真を追加し直してください。無断でチェックポイントを削除して再計算することはありません。</string>
+    <string name="text_a3290bb56b7f" formatted="false">空き容量不足のため、タスクを一時停止しました。空き容量を確保して再開するか、キャンセルして小さいサイズで追加し直してください。</string>
+    <string name="text_c42a34760d85" formatted="false">書き出しが完了しませんでした。再試行できるようタスクを保持しています</string>
+    <string name="text_84d1e185592a" formatted="false">メモリ不足です。タスクは保持しています。後で再試行するかキャンセルできます</string>
+    <string name="text_31912f0eff0f" formatted="false">起動時の削除が完了しませんでした。編集画面に戻って削除を再試行してから、書き出しリストで再開してください。</string>
+    <string name="text_89e2a57fd12b" formatted="false">写真の書き出し</string>
+    <string name="text_13a6efbdb2f3" formatted="false">バックグラウンドのフィルム処理の進捗</string>
+    <string name="text_22db9e335155" formatted="false">書き出しキューを準備</string>
+    <string name="text_7faeabb91a25" formatted="false">Filmroom · バックグラウンド書き出し</string>
+    <string name="text_8d12fc0d4eb2" formatted="false">一時停止</string>
+    <string name="text_f515de6af876" formatted="false">HEICコンテナのデータが不完全または不整合です。</string>
+    <string name="text_0f079bb732f5" formatted="false">このHEICの種類は未対応です。現在は検証済みのsRGB / Display P3 SDRカラーのサブセットと、静止画の8ビットHEVC主画像のみを処理します。未知のICC、補助画像、反転、切り抜き、HDRには対応していません。</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEICのメタデータまたはサイズが安全な処理範囲を超えています。</string>
+    <string name="text_19e0ce29db17" formatted="false">HEICのICCカラーデータが不完全または不整合です。</string>
+    <string name="text_da9f421ae9ad" formatted="false">このHEICのICCカラープロファイルは未対応です。未知の色やHDRをsRGBとしてタグ付けすることはしていません。</string>
+    <string name="text_9cd4df0f9933" formatted="false">HEICのICCカラーデータが安全な読み込み範囲を超えています。</string>
+    <string name="text_56e47360aaca" formatted="false">このHEICは符号化画素数の現在の安全上限5200万画素を超えています。元の画像は縮小していません。</string>
+    <string name="text_9ff6012fdde9" formatted="false">このHEICを元のサイズでデコードするためのリソースが安全な範囲を超えています。元の画像は縮小していません。</string>
+    <string name="text_58a07dbdf8d7" formatted="false">端末がこのHEICの元のカラープロファイルを正しく認識できませんでした。色の推測やsRGBへのタグの変更は行っていません。</string>
+    <string name="text_986742c74398" formatted="false">端末がHEICの8ビットsRGB SDRベース画像を確認できませんでした。HDRゲインマップや自動トーンマッピングは適用していません。</string>
+    <string name="text_8b96428c13f4" formatted="false">端末のHEICデコーダーが報告した主画像のサイズまたは向きに不整合があります。元の画像をサムネイルで代用していません。</string>
+    <string name="text_1e6cd3983af1" formatted="false">端末がこのHEICを元のサイズのsRGB SDRとしてデコードできませんでした。暗黙の縮小やHDR変換は行っていません。</string>
+    <string name="text_dfe135051811" formatted="false">端末のシステムに利用可能なHEICデコーダーがありません。元の写真は変更されていません。</string>
+    <string name="text_ba94a97c604b" formatted="false">空き容量不足のため、HEICの元のサイズの作業データを保存できません。元の画像は縮小していません。</string>
+    <string name="text_f1632bf9ae5b" formatted="false">このHEICを元のサイズで安全にデコードするためのメモリが不足しています。元の画像は縮小していません。後で再試行してください。</string>
+    <string name="text_389695202ee7" formatted="false">端末のHEICデコーダーがメモリ不足のため停止しました。元の画像は縮小していません。</string>
+    <string name="text_86c64f79957e" formatted="false">sRGB出力に他のカラープロファイルを混在させることはできません</string>
+    <string name="text_7e611ddedc63" formatted="false">選択した色域のカラープロファイルがありません</string>
+    <string name="text_7f988b809315" formatted="false">カラープロファイルが無効です</string>
+    <string name="text_9f7eee77bb73" formatted="false">カラープロファイルが選択した色域と一致しません</string>
+    <string name="text_a5d702fd2654" formatted="false">画像に無効な色の値が含まれています</string>
+    <string name="text_7d7e6c47e8d9" formatted="false">選択した出力色域は未対応です</string>
+    <string name="text_62634ce08e7b" formatted="false">元の撮影メタデータを利用できません。撮影日時を補って作成することはしていません</string>
+    <string name="text_5de5710e49a1" formatted="false">元のメタデータの一部の文字コードを安全に解釈できないため、書き込みませんでした</string>
+    <string name="text_97154723b761" formatted="false">元のメタデータの一部が無効または安全な容量を超えているため、書き込みませんでした</string>
+    <string name="text_b778fe908dac" formatted="false">書き出しをキャンセルしましたが、未完了ファイルの削除を確認できませんでした。ストレージの空き容量を確認してアプリを再起動してください。</string>
+    <string name="text_075e5b2e2761" formatted="false">システムの写真選択ツールで写真を選択してください。</string>
+    <string name="text_f145e6465120" formatted="false">端末内の作業ファイルを作成できません。ストレージの空き容量を確認してください。</string>
+    <string name="text_9392b8f7c99e" formatted="false">端末の空き容量不足のため、この写真をコピーできません。空き容量を確保してもう一度読み込んでください。</string>
+    <string name="text_2673ef9ba447" formatted="false">写真ファイルが512 MiBを超えています。ファイルサイズの小さい写真を選択してください。</string>
+    <string name="text_276ad5585012" formatted="false">端末の空き容量不足のため、読み込みを停止しました。空き容量を確保して再試行してください。元の写真は変更されていません。</string>
+    <string name="text_5c2432fd4e78" formatted="false">この写真は大きいため、現在プレビューを生成できません。小さい写真に変更してください。</string>
+    <string name="text_a064cfbab736" formatted="false">読み取り権限が無効になりました。写真を選択し直してください。</string>
+    <string name="text_a428b047ad8e" formatted="false">この写真を読み込めません。ファイルの破損、利用不可、端末の空き容量不足の可能性があります。</string>
+    <string name="text_b769fd8412bb" formatted="false">端末内の作業用写真は利用できません。もう一度読み込んでください。</string>
+    <string name="text_660bbeffe8d6" formatted="false">この写真は現在のサイズで処理できません。小さい書き出しサイズを選択してください。</string>
+    <string name="text_9c508b3acf89" formatted="false">写真を再読み込みできません。もう一度読み込んでください。</string>
+    <string name="text_d408527bac5d" formatted="false">作業用写真の記録が無効です。もう一度読み込んでください。</string>
+    <string name="text_5e9174903275" formatted="false">メモリ不足のため、写真を復元できません。後でもう一度読み込んでください。</string>
+    <string name="text_63b74410c9d6" formatted="false">端末内の写真を復元できません。もう一度読み込んでください。</string>
+    <string name="text_0e98e94d0aff" formatted="false">HEICコンテナを読み込めません。</string>
+    <string name="text_2f6241f58a5d" formatted="false">HEICの元のサイズの作業データは利用できません。もう一度読み込んでください。</string>
+    <string name="text_662817bc355b" formatted="false">HEICの元のサイズの作業データが不完全です。もう一度読み込んでください。</string>
+    <string name="text_99d3398d25b4" formatted="false">HEIC Display P3をsRGB・8ビットSDRの作業色空間に変換しました。sRGB色域外の色は保持されません。SDRベース画像のみを読み込み、HDRゲインマップは適用・保持しません。</string>
+    <string name="text_21acba32c252" formatted="false">HEICは元のサイズのsRGB・8ビットSDRベース画像として処理します。HDRゲインマップは適用・保持しません。</string>
+    <string name="text_f6e0e231129a" formatted="false">現在はJPEG、PNG、通常の静止HEIC、検証済みのDNG形式に対応しています。このファイルの符号化方式は未対応です。</string>
+    <string name="text_312bb591804d" formatted="false">RAWの一時データは利用できません。もう一度読み込んでください。</string>
+    <string name="text_52dca03550a9" formatted="false">RAWのデコードデータが不完全です。もう一度読み込んでください。</string>
+    <string name="text_8f8660561ea5" formatted="false">Filmroom</string>
+    <string name="text_01b0b11fd332" formatted="false">端末の空き容量不足のため、元のサイズの一時データを保存できません。</string>
+    <string name="text_5780b5b34a55" formatted="false">この端末では、この写真を元のサイズで分割デコードできません。元の写真の縮小や置き換えは行っていません。</string>
+    <string name="text_ee57ab3f6e70" formatted="false">元のサイズの写真を読み込めないか、端末の一時領域が不足しています。元の写真は変更されていません。</string>
+    <string name="text_0c0a9b25a114" formatted="false">元のサイズのレンダリングデータが不完全なため、写真を書き出しませんでした。</string>
+    <string name="text_23fcd93377e5" formatted="false">一部の撮影メタデータを書き込めませんでした。完成画像の画素とカラープロファイルは保持されています</string>
+    <string name="text_073143680076" formatted="false">暗房_原尺寸</string>
+    <string name="text_a40512c68094" formatted="true">%1$s/暗房</string>
+    <string name="text_b3a7814059d4" formatted="false">メモリ不足で書き出しが完了せず、一時ファイルの削除も確認できませんでした。ストレージの空き容量を確認してアプリを再起動してください。</string>
+    <string name="text_4bc6c17bca33" formatted="false">メモリ不足のため、現在のサイズで書き出せません。小さいサイズを選択してください。</string>
+    <string name="text_67f346d97344" formatted="false">書き出しに失敗し、一時ファイルの削除も確認できませんでした。ストレージの空き容量を確認してアプリを再起動してください。元の写真は変更されていません。</string>
+    <string name="text_a1c12237b4d9" formatted="false">書き出しに失敗しました。端末の空き容量を確認して再試行してください。元の写真は変更されていません。</string>
+    <string name="text_b447e7ccf3ec" formatted="false">書き出し行の所有情報が一致しません</string>
+    <string name="text_5dc658ae62f8" formatted="false">保存済み写真の状態を確認できません。後で再試行してください</string>
+    <string name="text_d591741a5a6e" formatted="false">写真のサイズが安全な処理範囲を超えています。小さい写真を選択してください。</string>
+    <string name="text_3bf690c56856" formatted="false">アニメーション画像は未対応です。静止画を選択してください。</string>
+    <string name="text_e9d5f1386eb5" formatted="false">PNGの構造が不完全です。写真を選択し直してください。</string>
+    <string name="text_dac02f5d66dd" formatted="false">アニメーションPNGは未対応です。静止画を選択してください。</string>
+    <string name="text_cab3449611ff" formatted="false">PNGに画像データがありません。</string>
+    <string name="text_d3826ba783c7" formatted="false">このPNGは構造が複雑すぎるため、未対応です。</string>
+    <string name="text_9064bd4b637b" formatted="false">WebP（非可逆）</string>
+    <string name="text_e0d8c2722d95" formatted="false">WebP（可逆）</string>
+    <string name="text_459f5d31c1d5" formatted="false">TIFF（16ビット）</string>
+    <string name="text_4f410de4c30b" formatted="false">OpenEXR（浮動小数点）</string>
+    <string name="text_bec7754b9d7d" formatted="false">不明な形式を利用可能な処理経路として登録することはできません</string>
+    <string name="text_19220b804ef8" formatted="false">Android 10以降が必要です</string>
+    <string name="text_a19839fd3ffd" formatted="false">ファイルヘッダーは形式の候補の識別にのみ使用します。完全なデコードが必要であり、この写真を処理できることを保証するものではありません。</string>
+    <string name="text_55b7686e7779" formatted="false">プラットフォームの写真処理経路ではsRGB・8ビットSDRとして処理します。高ビット深度、広色域、HDRの保持は保証されません。透明部分は白で合成されます。</string>
+    <string name="text_066d69f4c0e2" formatted="false">静止画のみを処理します。アニメーションや連続画像はこの写真処理経路の対象外です。</string>
+    <string name="text_0699e8795e4f" formatted="false">元のサイズでは、向き・メモリ・空き容量の検査に合格する必要があります。HEICは読み込み時に元のサイズのリニア作業データを生成し、その他のプラットフォーム対応写真は帯状に分割してデコードします。</string>
+    <string name="text_e12fc1fdd16b" formatted="false">RAW / TIFF / OpenEXRのビット深度、色、向きの規則は、実際のネイティブデコーダーで確認します。拡張子から推測することはできません。</string>
+    <string name="text_b1ce081679c3" formatted="false">読み込みを試せますが、個々のファイルの確認が必要です</string>
+    <string name="text_27cd59975564" formatted="false">現在のバージョンには未実装です</string>
+    <string name="text_e2c0354dd326" formatted="false">端末のデコード能力を確認できません</string>
+    <string name="text_cb55532a0726" formatted="false">端末に利用可能なデコード経路がありません</string>
+    <string name="text_b6b940d93867" formatted="false">元のサイズのストリーミングエンコードに対応しています</string>
+    <string name="text_e3c99cd869ac" formatted="false">サイズ制限付きのエンコードに対応しています（長辺4096ピクセルまで）</string>
+    <string name="text_f3c2509899ee" formatted="false">現在のバージョンには利用可能なエンコード経路がありません</string>
+    <string name="text_f63450b5d12b" formatted="false">カメラRAW</string>
+    <string name="text_c65b3b97b411" formatted="false">不明な形式</string>
+    <string name="text_b04a7122dd82" formatted="false">拡大プレビュー · 長辺最大1536ピクセル</string>
+    <string name="text_084663d93fc9" formatted="false">通常プレビューを待機中</string>
+    <string name="text_fe1ca7194034" formatted="false">拡大プレビューを待機中</string>
+    <string name="text_2dd14bedbfd6" formatted="false">拡大プレビューを準備 · CPU</string>
+    <string name="text_fdaf1df9701c" formatted="true">拡大プレビューを読み込み · 長辺%1$sピクセル · CPU</string>
+    <string name="text_e3f7debc58f1" formatted="true">拡大プレビュー · 長辺%1$sピクセル · 元のサイズではありません · CPU</string>
+    <string name="text_328b93c4c2e6" formatted="false">元の写真と比較 · 拡大プレビューは非表示</string>
+    <string name="text_ccd803200ef6" formatted="false">拡大プレビューを一時停止</string>
+    <string name="text_9f37f3d6b8c1" formatted="false">通常プレビュー · </string>
+    <string name="text_b5dc9ebea612" formatted="false">この効果は未対応です</string>
+    <string name="text_d4e2c673d344" formatted="false">空きメモリ不足</string>
+    <string name="text_b9dd18aa35d1" formatted="false">元ファイルの検証に失敗</string>
+    <string name="text_f5c716cc5054" formatted="false">元ファイルの読み込みに失敗</string>
+    <string name="text_dc0ed989d876" formatted="false">拡大プレビューエンジンは利用できません</string>
+    <string name="text_49947c7bfc5f" formatted="false">エンジンのデータが未準備です</string>
+    <string name="text_c6851c16d664" formatted="false">拡大プレビュー結果の検証に失敗</string>
+    <string name="text_744e3354f3e5" formatted="false">拡大プレビューが未完了</string>
+    <string name="text_a49ffd73bc85" formatted="false">平均</string>
+    <string name="text_1961784db559" formatted="false">中央値</string>
+    <string name="text_1028167558b7" formatted="false">中央部重点</string>
+    <string name="text_6d13a74715fd" formatted="false">部分測光</string>
+    <string name="text_d8b27dee3e23" formatted="false">マトリクス</string>
+    <string name="text_513adb42d450" formatted="false">多領域</string>
+    <string name="text_2064d42c9288" formatted="false">ハイライト重点</string>
+    <string name="text_1b418527923a" formatted="false">現在の効果は拡大プレビュー未対応のため、通常プレビューを表示しています</string>
+    <string name="text_180998ba335a" formatted="false">リソースが不足しているため、通常プレビューを表示しています</string>
+    <string name="text_3da84d24730f" formatted="false">拡大プレビューを読み込めないため、通常プレビューを表示しています</string>
+    <string name="text_8ceaefb020a7" formatted="false">拡大プレビューは現在利用できないため、通常プレビューを表示しています</string>
+    <string name="text_22a603ffe91d" formatted="true">Filmroom · 直近%1$s分の診断ログ</string>
+    <string name="text_0dbb0ebd0479" formatted="false">匿名化した診断ログ</string>
+    <string name="text_2d58b497cb9d" formatted="false">書き出しは停止しません。書き出しリストで進捗を確認できます。</string>
+    <string name="text_e1bc9722aab0" formatted="false">通知欄に書き出しの進捗を表示しますか？</string>
+    <string name="text_597ba8c43d0f" formatted="false">通知を許可すると、Filmroomを離れても進捗の確認や一時停止ができます。許可しなくても書き出しは可能で、書き出しリストから進捗を確認できます。</string>
+    <string name="text_3834f9cf9f9b" formatted="false">通知を有効にする</string>
+    <string name="text_a2666f394298" formatted="false">後で</string>
+    <string name="text_945004c4e7d2" formatted="false">書き出しリスト、件数は現在確認できません</string>
+    <string name="text_52e3c85e1339" formatted="true">書き出しリスト、未完了%1$s件、処理中</string>
+    <string name="text_bc35e14dc39d" formatted="true">書き出しリスト、%1$s件が処理待ち</string>
+    <string name="text_fc6efd9ef551" formatted="false">書き出しリスト、待機中・処理中のタスクはありません</string>
+    <string name="text_9573f0c13d94" formatted="true">%1$s、新しく完了した書き出しがあります</string>
+    <string name="text_70ceea90cbaf" formatted="false">自由切り抜き。辺や角をドラッグして枠を調整し、内側をドラッグして選択範囲を移動します。2本指で選択範囲のサイズを調整できます。</string>
+    <string name="text_c8da2b308ae6" formatted="false">構図の調整。枠は固定されています。写真をドラッグして移動し、2本指で拡大・縮小します。</string>
+    <string name="text_c85ef88eb1b1" formatted="false">写真プレビュー。2本指でズームし、ダブルタップでリセットまたは拡大します。</string>
+    <string name="text_c73702747ef1" formatted="false">書き出しを準備</string>
+    <string name="text_1cb9d4521713" formatted="false">写真を保存</string>
+    <string name="text_11f1bec7ceb0" formatted="false">キャンセルして削除</string>
+    <string name="text_2fb03c5fc0b5" formatted="false">フィルム効果を生成</string>
+    <string name="text_9d2998cca517" formatted="false">削除</string>
+    <string name="text_e66883ffd17e" formatted="false">エンコード</string>
+    <string name="text_534cb3fa8fbf" formatted="false">読み込み</string>
+    <string name="text_129547c98a3a" formatted="false">端末を確認</string>
+    <string name="text_b65851ed8941" formatted="false">色素雲</string>
+    <string name="text_88d9568f838c" formatted="false">ハレーション</string>
+    <string name="text_4bd29b339038" formatted="false">濃度</string>
+    <string name="text_133496718bdc" formatted="false">対数露光量</string>
+    <string name="text_b88f02974ea0" formatted="false">前の項目</string>
+    <string name="text_f8baad25a051" formatted="false">次の項目</string>
+    <string name="text_ed42cfc64f18" formatted="false">カラーリバーサルフィルム</string>
+    <string name="text_d60c820b2be8" formatted="false">カラーネガフィルム</string>
+    <string name="queue_original_details" formatted="false">元の診断情報</string>
+    <string name="queue_metadata_warning" formatted="false">写真のメタデータを一部保持できませんでした。元の診断情報をご確認ください。</string>
+    <string name="export_progress_preview" formatted="false">書き出し進行状況のプレビュー</string>
+    <string name="toast_failed">操作に失敗しました。再試行してください</string>
+    <string name="toast_queued">書き出しリストに追加しました</string>
+    <string name="toast_queued_check">追加済みです。リストを確認してください</string>
+    <string name="toast_cancel_requested">キャンセル要求済みです</string>
+    <string name="toast_background">バックグラウンドで準備中です</string>
+    <string name="toast_uncertain">受付状況をリストで確認してください</string>
+    <string name="toast_imported_cancel">読み込み済み。後処理は中止しました</string>
+    <string name="toast_import_cancel">読み込みを中止しました</string>
+    <string name="toast_preview_cancel">プレビュー更新を中止しました</string>
+    <string name="toast_memory">メモリ不足です。後で再試行してください</string>
+    <string name="toast_storage">保存領域が不足しています</string>
+    <string name="toast_size">画像が処理範囲を超えています</string>
+    <string name="toast_format">この形式には対応していません</string>
+    <string name="toast_reimport">写真を再読み込みしてください</string>
+    <string name="toast_read">写真を読み込めません</string>
+    <string name="toast_preview">プレビューに失敗しました</string>
+    <string name="toast_add_failed">書き出しを追加できませんでした</string>
+    <string name="toast_cleanup">一時ファイルを削除できませんでした</string>
+    <string name="toast_engine">ローカルエンジンが利用できません</string>
+    <string name="toast_queue_read">書き出しリストを開けません</string>
+    <string name="toast_resume">再開できません。再試行してください</string>
+    <string name="toast_cancel_failed">キャンセルに失敗しました</string>
+    <string name="toast_open">写真はギャラリーで確認してください</string>
+    <string name="toast_notification">書き出しは可能です。リストで確認できます</string>
+    <string name="toast_detail_unsupported">この効果は通常プレビューのみです</string>
+    <string name="toast_detail_memory">リソース不足のため通常表示します</string>
+    <string name="toast_detail_read">読み込み失敗のため通常表示します</string>
+    <string name="toast_detail_fallback">通常プレビューを表示します</string>
+    <string name="toast_cancelled">処理を中止しました</string>
+    <string name="toast_profile">別のフィルムか印画紙を選んでください</string>
+    <string name="toast_parameters">設定をリセットしてください</string>
+    <string name="toast_budget">処理上限です。設定を下げてください</string>
+    <string name="toast_incomplete">処理未完了。写真は未保存です</string>
+    <string name="toast_workdir">作業領域エラー。更新してください</string>
+</resources>

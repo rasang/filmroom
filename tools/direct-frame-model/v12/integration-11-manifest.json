@@ -1,0 +1,847 @@
+{
+  "version": "direct-negative-model-v12",
+  "status": "ROOT_VISUAL_APPROVED_11_FOR_ISOLATED_CONTEXT_INTEGRATION_NOT_RELEASE",
+  "profiles": {
+    "kodak_portra_800_push1": "kodak_portra_800",
+    "kodak_portra_800_push2": "kodak_portra_800"
+  },
+  "assets": [
+    {
+      "physical_stock": "kodak_ektar_100",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_ektar_100.webp",
+      "source_sha256": "b4b5e3a0f4e291f7c7dad12949ae6d8f23ccb9a83716d0dc8ed952e802ed0e64",
+      "png_file": "frames/kodak_ektar_100-direct-model-v12.png",
+      "png_sha256": "2fb5bafb42900318415453bc8c92e2ce82ac5b857f06e3286aab23b62d17af27",
+      "png_bytes": 95878,
+      "webp_file": "webp/kodak_ektar_100-direct-model-v12.webp",
+      "webp_sha256": "3ce1f2ed8271254ae09b9d09284df1366d461d78cade969f802b885170cff1d1",
+      "webp_bytes": 28406,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        4.0,
+        4.0,
+        3.0
+      ],
+      "source_ink_rgb_anchor": [
+        195.0,
+        150.0,
+        101.0
+      ],
+      "base_model_linear_srgb": [
+        0.6131673499455685,
+        0.23636931004571557,
+        0.1355403605692296
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.026523183082713557,
+        0.004447134863113212,
+        -0.00010560503280460294
+      ],
+      "base_display_srgb8": [
+        205,
+        133,
+        103
+      ],
+      "ink_display_srgb8": [
+        45,
+        14,
+        0
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": [
+          2
+        ]
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.16934122308439006,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_ektar_100.json": "60acbd46c75005771569eafb97f534a4495e9d4e1e9c1e419b90cea2676ec7cf",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_gold_200",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_gold_200.webp",
+      "source_sha256": "518661ef3e7d0ecf32982b91e9dce6cbf50784b76d1d5063be4423a4bf638585",
+      "png_file": "frames/kodak_gold_200-direct-model-v12.png",
+      "png_sha256": "b8c1ab8bd5227986357145cb240731815f8c10c76eb875384c572339ca688b3d",
+      "png_bytes": 120400,
+      "webp_file": "webp/kodak_gold_200-direct-model-v12.webp",
+      "webp_sha256": "6242499615a9b734d23bb252f08784be1f566b08d33e71a17b33bd380a368b85",
+      "webp_bytes": 39776,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        2.0,
+        3.0,
+        11.0
+      ],
+      "source_ink_rgb_anchor": [
+        132.0,
+        94.0,
+        55.0
+      ],
+      "base_model_linear_srgb": [
+        0.5800364608857421,
+        0.2368689067727262,
+        0.10821839417288787
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.03986199660204016,
+        0.00752912207077082,
+        0.0008408372083813977
+      ],
+      "base_display_srgb8": [
+        200,
+        134,
+        92
+      ],
+      "ink_display_srgb8": [
+        56,
+        21,
+        3
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.1622259529520914,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_gold_200.json": "aa8a0c1c7851fface3752f968cdf6c6d74a26fc9756a4460d3155d2382506b7c",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_160",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_portra_160.webp",
+      "source_sha256": "3ae4743dd68a758c7dd7a80029abedf94dc85ce6a318ca96bbd9bdce0dc60779",
+      "png_file": "frames/kodak_portra_160-direct-model-v12.png",
+      "png_sha256": "c3d1edcbd9bc7aae9176305c51bce3b425d9ab41cc9406e58a58d93d5d0a0d15",
+      "png_bytes": 124229,
+      "webp_file": "webp/kodak_portra_160-direct-model-v12.webp",
+      "webp_sha256": "4bdeb7d93d6a9affbb4f379dbdeeb17f873a37c7c14c2de9ed329622f1221512",
+      "webp_bytes": 41382,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        20.0,
+        15.0,
+        10.0
+      ],
+      "source_ink_rgb_anchor": [
+        246.0,
+        199.0,
+        109.0
+      ],
+      "base_model_linear_srgb": [
+        0.7260204487739762,
+        0.23819457896086163,
+        0.14186452718165
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.04208572672759116,
+        0.004901263335923641,
+        6.154340851695752e-05
+      ],
+      "base_display_srgb8": [
+        221,
+        134,
+        105
+      ],
+      "ink_display_srgb8": [
+        58,
+        15,
+        0
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.19218801473141991,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_portra_160.json": "1bc9b65a6940f3a4381e8d14d0ac43594aff9495051992ce4d7408e761549992",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_400",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_portra_400.webp",
+      "source_sha256": "9be6e195f89027ab3ebe9547ebe89c28c088de2c518bb3b2d58b544c5d3d557f",
+      "png_file": "frames/kodak_portra_400-direct-model-v12.png",
+      "png_sha256": "288f052aa60a3d76ebd00063ed4b5484aafbe357ab20f990e09f2028949d81c8",
+      "png_bytes": 115766,
+      "webp_file": "webp/kodak_portra_400-direct-model-v12.webp",
+      "webp_sha256": "ef2d4428f8fb85dc07a076987ec7a6006b62c1a6f34a94e7c48437cf5f5b4f5e",
+      "webp_bytes": 47126,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        2.0,
+        1.0,
+        1.0
+      ],
+      "source_ink_rgb_anchor": [
+        228.0,
+        182.0,
+        115.0
+      ],
+      "base_model_linear_srgb": [
+        0.6913753060009014,
+        0.23576783124115816,
+        0.1432490996583957
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.02468567488230494,
+        0.004019218963521402,
+        0.0001402213943803895
+      ],
+      "base_display_srgb8": [
+        217,
+        133,
+        106
+      ],
+      "ink_display_srgb8": [
+        44,
+        13,
+        0
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.183206225356777,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_portra_400.json": "b5cdc73dbec8f462f488bca70bedf23fd13ce79969c0457e8ac2a2565d92bf5d",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_portra_800",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_portra_800-font-v11.webp",
+      "source_sha256": "484754ebf4d08b93703b6dfeadcc914d84188eba365a1ea5e29043cdd1045ffd",
+      "png_file": "frames/kodak_portra_800-direct-model-v12.png",
+      "png_sha256": "736f3426d0db07bcfca43229ead3f4c33963f7fe5408fc7fea9d9ed02ab4e657",
+      "png_bytes": 107599,
+      "webp_file": "webp/kodak_portra_800-direct-model-v12.webp",
+      "webp_sha256": "8c04de8e4aebaeeffe8487a6cf3eaf5057b01cdde9408f46206e7d973603b8ed",
+      "webp_bytes": 34004,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        12.0,
+        14.0,
+        14.0
+      ],
+      "source_ink_rgb_anchor": [
+        214.0,
+        154.0,
+        79.0
+      ],
+      "base_model_linear_srgb": [
+        0.6495073496822956,
+        0.25915285935362525,
+        0.10006022001265534
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.02766515388489492,
+        0.0052436186650684355,
+        -3.4358635686764904e-05
+      ],
+      "base_display_srgb8": [
+        211,
+        139,
+        89
+      ],
+      "ink_display_srgb8": [
+        46,
+        16,
+        0
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": [
+          2
+        ]
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.1736048669330899,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_portra_800.json": "5b0c6e861c6273a2ecdf552525e80738037918e650a0dc206e095acfd02f8b43",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_ultramax_400",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_ultramax_400.webp",
+      "source_sha256": "94a3b54a300c8e2fd2dbfeaaf306afd1ccd2eab08a9af8e8742766b49d664d06",
+      "png_file": "frames/kodak_ultramax_400-direct-model-v12.png",
+      "png_sha256": "d3f88372b85e988c7bb368da91f2702eb873dc8e26629c53d5574af114a3215b",
+      "png_bytes": 91310,
+      "webp_file": "webp/kodak_ultramax_400-direct-model-v12.webp",
+      "webp_sha256": "8c99a01fe2ce9227d1e0016415c399d95302c6c0a6adb772b6e1d510b97cd280",
+      "webp_bytes": 31818,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        2.0,
+        7.0,
+        4.0
+      ],
+      "source_ink_rgb_anchor": [
+        104.0,
+        79.0,
+        17.0
+      ],
+      "base_model_linear_srgb": [
+        0.6529479744217899,
+        0.26562967869995147,
+        0.1056448237780824
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.031512571156043806,
+        0.005561235271875967,
+        -0.00016685055823929633
+      ],
+      "base_display_srgb8": [
+        211,
+        141,
+        91
+      ],
+      "ink_display_srgb8": [
+        50,
+        17,
+        0
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": [
+          2
+        ]
+      },
+      "dx_nonzero_alpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.17688271388795726,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_ultramax_400.json": "248b78bdcc4fdbe864e30f193f900059ecd98cbdb276c88ad8f6f5b520137901",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_verita_200d",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_verita_200d.webp",
+      "source_sha256": "8a4bf32cea38f93f466e971daa441c90618c9706a280daad6372390281e8a45b",
+      "png_file": "frames/kodak_verita_200d-direct-model-v12.png",
+      "png_sha256": "365c1dd56a0b54c4505a0921c2cade2d4c0d6f6fb91b48bd85b53ca1ef221627",
+      "png_bytes": 281043,
+      "webp_file": "webp/kodak_verita_200d-direct-model-v12.webp",
+      "webp_sha256": "2b57d15f5bde0a224fcc284bf646c46b79f5ccfb28b47c9bd406bc89ec3b1f72",
+      "webp_bytes": 111946,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        3.0,
+        1.0,
+        4.0
+      ],
+      "source_ink_rgb_anchor": [
+        118.0,
+        113.0,
+        141.0
+      ],
+      "base_model_linear_srgb": [
+        0.6028699462839949,
+        0.19937007146384697,
+        0.10272965251406664
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.02019129842831223,
+        0.0043518590882718165,
+        0.0006883949045910501
+      ],
+      "base_display_srgb8": [
+        204,
+        123,
+        90
+      ],
+      "ink_display_srgb8": [
+        39,
+        14,
+        2
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 0,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.15503353711384726,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_verita_200d.json": "5d71a3f544721a71cfa0b0671ce1b5eda6dc1e6a09273810793d4bc821b272fc",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_200t",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_vision3_200t.webp",
+      "source_sha256": "50debdc5fbd3b559159b023df356ed5eaa770329d44de234b012a1d9f935e5a4",
+      "png_file": "frames/kodak_vision3_200t-direct-model-v12.png",
+      "png_sha256": "405871d620ab74c112943da0efc2c43ad9ff32862dce45e0c044c012c70a85a9",
+      "png_bytes": 872812,
+      "webp_file": "webp/kodak_vision3_200t-direct-model-v12.webp",
+      "webp_sha256": "652cdadaf1b9c9bb141d0fa3b37fba3e80fd6f22f4b1d6e8c88e915966512c18",
+      "webp_bytes": 287338,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        5.0,
+        2.0,
+        5.0
+      ],
+      "source_ink_rgb_anchor": [
+        25.0,
+        17.0,
+        25.0
+      ],
+      "base_model_linear_srgb": [
+        0.6423774898828731,
+        0.26314496144243754,
+        0.1364916154220683
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.027005032181010927,
+        0.0042317890212526955,
+        0.0009648112003118807
+      ],
+      "base_display_srgb8": [
+        210,
+        140,
+        103
+      ],
+      "ink_display_srgb8": [
+        46,
+        14,
+        3
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 0,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.17903594985832574,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_vision3_200t.json": "4a28f049fd6bad67be98efdb058b413c6b3c022e2932b357b346d902c4c393c8",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_250d",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_vision3_250d.webp",
+      "source_sha256": "efd9392bef22b1859ce3021630fb8805fcb58309db3b04ae3c4e78e4de26abb5",
+      "png_file": "frames/kodak_vision3_250d-direct-model-v12.png",
+      "png_sha256": "c1f0cd1c47818210ed82da09d1ff878f5080c95391833f864fe7b6853f6b7d27",
+      "png_bytes": 360408,
+      "webp_file": "webp/kodak_vision3_250d-direct-model-v12.webp",
+      "webp_sha256": "65b80cfaa05cc9d450311374b92df5698aa302f54b595b8b3f1449eef879ea5e",
+      "webp_bytes": 139894,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        6.0,
+        4.0,
+        7.0
+      ],
+      "source_ink_rgb_anchor": [
+        87.0,
+        80.0,
+        100.0
+      ],
+      "base_model_linear_srgb": [
+        0.6145465320483418,
+        0.27124980627555645,
+        0.12348748129631679
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.023245643519494895,
+        0.0037080374321802477,
+        0.0007895314757759363
+      ],
+      "base_display_srgb8": [
+        206,
+        142,
+        99
+      ],
+      "ink_display_srgb8": [
+        42,
+        12,
+        3
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 0,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.172837838674611,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_vision3_250d.json": "9ab85c8627c0533beb925b747e441e93beabe9e98c2429695b0a53866b56fcc7",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_500t",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_vision3_500t.webp",
+      "source_sha256": "3e631dc672438f8dd4a6da07ec78808d16c3856659ff3c5551b3fa541123def0",
+      "png_file": "frames/kodak_vision3_500t-direct-model-v12.png",
+      "png_sha256": "bd35365e730ec4c0f1706b46cb9712f0de5eb71c2a048dfbff8a9197c89c3b8d",
+      "png_bytes": 308577,
+      "webp_file": "webp/kodak_vision3_500t-direct-model-v12.webp",
+      "webp_sha256": "b211114472d414665134ca2b3e0814105c957ec3afaf2960316ce1e5b8bfada0",
+      "webp_bytes": 118258,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        5.0,
+        0.0,
+        6.0
+      ],
+      "source_ink_rgb_anchor": [
+        107.0,
+        102.0,
+        124.0
+      ],
+      "base_model_linear_srgb": [
+        0.6176405144140548,
+        0.26393602489405643,
+        0.1323196858030813
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.02282173644227927,
+        0.0035919764993803628,
+        0.0008591143127211393
+      ],
+      "base_display_srgb8": [
+        206,
+        140,
+        102
+      ],
+      "ink_display_srgb8": [
+        42,
+        12,
+        3
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 0,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.1735281753942622,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_vision3_500t.json": "d7beca68bf16db88dbb7373fd13a6a1150a57a911a54bb0309a760a6f9883329",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    },
+    {
+      "physical_stock": "kodak_vision3_50d",
+      "status": "REVIEW_ONLY_MODEL_DMIN_CHANNELWISE_DMAX",
+      "source_file": "inputs/kodak_vision3_50d.webp",
+      "source_sha256": "dcfd713d6bee40db3eecd38de1e21f323bfa319d5e74a5900755865c8115f4e4",
+      "png_file": "frames/kodak_vision3_50d-direct-model-v12.png",
+      "png_sha256": "de0e9458352e8eb9b7bdb33ecc6b7997d89ed72432d76cf73ceec0d98ebbdfa0",
+      "png_bytes": 624346,
+      "webp_file": "webp/kodak_vision3_50d-direct-model-v12.webp",
+      "webp_sha256": "5ab106f001f4240da746c493321b39274c74d692e2c7f5809275a0032b4b1ffd",
+      "webp_bytes": 213282,
+      "rgba_equal_png_webp": true,
+      "alpha_byte_exact": true,
+      "alpha0_rgb_zero": true,
+      "pixel_geometry": [
+        1520,
+        1400
+      ],
+      "aperture": [
+        40,
+        220,
+        1480,
+        1180
+      ],
+      "text_custom25_dx_positions_unmoved": true,
+      "source_material_rgb_anchor": [
+        11.0,
+        6.0,
+        13.0
+      ],
+      "source_ink_rgb_anchor": [
+        85.0,
+        78.0,
+        95.0
+      ],
+      "base_model_linear_srgb": [
+        0.7096042644728444,
+        0.2691751599928018,
+        0.1354656370245016
+      ],
+      "channelwise_dmax_model_linear_srgb": [
+        0.0282615633097074,
+        0.004595698981124371,
+        0.0007953691347189982
+      ],
+      "base_display_srgb8": [
+        219,
+        142,
+        103
+      ],
+      "ink_display_srgb8": [
+        47,
+        15,
+        3
+      ],
+      "display_clamped_components": {
+        "base": [],
+        "ink": []
+      },
+      "dx_nonzero_alpha_checks": 0,
+      "dx_wrong_bits": 0,
+      "dx_threshold_linear_mean": 0.19131628215261642,
+      "model_limits": [
+        "D65 profile model, not calibrated rawscan or factory printing exposure.",
+        "Dmax combines channelwise maxima, not necessarily one common exposure.",
+        "Continuous soft coverage derived from existing artwork RGB, not original factory density layer.",
+        "Original texture only via scalar coverage; original hue is not preserved."
+      ],
+      "runtime_approved": false,
+      "model_input_hashes": {
+        "kodak_vision3_50d.json": "fd426abc9de911682080db222020978dee4e8df7ca939bfcd5c9d0f6df249fa1",
+        "spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+        "colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97"
+      }
+    }
+  ],
+  "endpoint_source_sha256": "d16533c3ec5ca51366cc2757e70a0c6483b41762602de2d00f18d37c1b6b6366",
+  "blocked_stocks": [
+    "fujifilm_c200",
+    "fujifilm_xtra_400",
+    "fujifilm_pro_400h"
+  ]
+}

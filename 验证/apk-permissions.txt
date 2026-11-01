@@ -1,0 +1,3 @@
+package: dev.filmroom
+permission: dev.filmroom.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission: name='dev.filmroom.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'

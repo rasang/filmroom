@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "status": "0.1.1 revision: bounded modern SOF3 lossless JPEG DNG tiles/strips, exposure baseline applied once. Final validation recorded in FINAL_CODEC_MANIFEST.v2.json; Android runtime not claimed.",
+  "library": "film_codecs",
+  "jniClass": "dev.filmroom.codec.NativeCodecBridge",
+  "methods": {
+    "nativeCreate": "(privateRoot: String): Long; root must be canonical app-owned local directory; 0=failure",
+    "nativeProbe": "(handle: Long, inputPath: String, budgetJson: String): String; bounded metadata parsing. Optional metadataOnly:true (probe only) skips output/memory admission for retained-spool restore, returns admission:null. Decode/encode reject this key.",
+    "nativeDecode": "(handle: Long, inputPath: String, outputPath: String, budgetJson: String): String; output CREATE_NEW under privateRoot; no overwrite; incomplete output removed",
+    "nativeCancel": "(handle: Long): Unit; sticky cancellation for this handle, including calls not yet started. Create new handle after cancellation; never reset during operation entry.",
+    "nativeDestroy": "(handle: Long): Unit; call only after active worker returned",
+    "nativeEncode": "(handle: Long, inputFloatPath: String, outputEncodedPath: String, paramsJson: String): String; private CREATE_NEW encoded file; safe result JSON"
+  },
+  "budgetJson": {
+    "memoryBudgetMiB": 128,
+    "diskBudgetBytes": 1073741824
+  },
+  "output": {
+    "layout": "RGB interleaved row-major, float32 LITTLE-ENDIAN, exactly width*height*12 bytes",
+    "colorSpace": "linear sRGB D65; NO sRGB transfer",
+    "orientation": "codec applies EXIF orientation once; final dimensions already swapped when required; engine and shell MUST NOT rotate again",
+    "crop": "codec applies DNG ActiveArea and DefaultCrop exactly once; no hidden resize",
+    "alpha": "none",
+    "range": "finite output from pinned RawDevelop calibration/gamut policy; no added upper clamp"
+  },
+  "exportCapabilities": [
+    {
+      "id": "JPEG",
+      "label": "JPEG · 通用分享",
+      "mime": "image/jpeg",
+      "extension": ".jpg",
+      "bitDepth": 8,
+      "quality": "integer1..100; default95",
+      "chromaSubsampling": "4:4:4",
+      "mode": "baseline interleaved, NOT progressive, optimized Huffman OFF",
+      "encodedDiskBound": "12*N+4MiB",
+      "memoryAdmission": "32MiB+1024*width"
+    },
+    {
+      "id": "TIFF16",
+      "label": "TIFF · 16位高精度",
+      "mime": "image/tiff",
+      "extension": ".tif",
+      "bitDepth": 16,
+      "compression": "none;32-rowstrips",
+      "encodedDiskBound": "6*N+2MiB",
+      "memoryAdmission": "32MiB+1024*width"
+    }
+  ],
+  "notSupportedYet": [
+    "Unvalidated DNG compression/layout variants; float DNG; lossless JPEG restarts, point transforms and legacy DNG < 1.1",
+    "generic CR2/CR3/NEF/ARW/RAF/ORF/otherRAW",
+    "TIFF/EXR import",
+    "EXR export",
+    "RAW or DNG reconstruction from JPEG",
+    "embedded-preview fallback"
+  ],
+  "memoryModel": "No entire sensor/RGB plane: bounded rows with 8-row PPG halo, RawDevelop on each strip; stripRows<=128 chosen before sample allocation; conservative 32MiB + 96*activeWidth*(stripRows+16). Two worker threads. Entire original is never mmap-populated. Compressed blocks add actual max encoded bytes + bounded decoded block bytes + 4MiB decoder overhead; max 8MiB encoded and 4M scalar samples per block.",
+  "diskModel": "Output only: finalWidth*finalHeight*12, posix_fallocate before develop; source copy is separately owned and budgeted by shell. No transpose/fullRGB temporary spool.",
+  "privacy": "No network code. Diagnostics only fixed codes/messages/stages and numeric dimensions/budgets/timings. No input paths, EXIF/GPS, maker/model strings, file names, photo bytes or decoder exception text.",
+  "errors": [
+    "UNSUPPORTED_FORMAT",
+    "UNSUPPORTED_COMPRESSION",
+    "UNSUPPORTED_DNG_VARIANT",
+    "INVALID_INPUT",
+    "INVALID_COLOR_METADATA",
+    "PIXEL_LIMIT",
+    "MEMORY_BUDGET",
+    "DISK_BUDGET",
+    "NO_SPACE",
+    "CANCELLED",
+    "OUTPUT_EXISTS",
+    "INVALID_PATH",
+    "BUSY",
+    "INVALID_HANDLE",
+    "IO_ERROR",
+    "DECODE_FAILED",
+    "ENCODE_FAILED",
+    "UNSUPPORTED_DNG_CALIBRATION",
+    "UNSUPPORTED_DNG_OPCODE"
+  ],
+  "license": "GPL-3.0-or-later adapter; rawler=0.7.2 LGPL-2.1, pinned registry checksum in Cargo.lock. Preserve dependency source and relink/rebuild materials.",
+  "capabilityLabel": "DNG（已验证的未压缩类型）",
+  "importCapabilities": [
+    {
+      "id": "DNG_BAYER_U16_UNCOMPRESSED_STRIPS",
+      "label": "DNG · 无压缩 16 位拜耳 RAW",
+      "limits": "Classic TIFF LE/BE; compression1; u16 strips; 2x2 RGGB/BGGR/GRBG/GBRG; even active origin; valid black/white levels, AsShotNeutral, D65 ColorMatrix; positive diagonal calibration only; optional opcodes skipped with warning, mandatory unsupported opcodes rejected. Backward reader version <=1.4.0.0. 8..32768 each axis and <=52000000 total."
+    },
+    {
+      "id": "DNG_LINEAR_RGB_U16_UNCOMPRESSED_STRIPS",
+      "label": "DNG · 无压缩 16 位线性 RGB",
+      "limits": "Same classic TIFF/strip/metadata restrictions; three interleaved integer channels; no alpha."
+    }
+  ],
+  "dimensions": "encodedWidth/encodedHeight are full sensor image; activeArea and defaultCrop retain sensor-coordinate rectangles; width/height are final oriented default crop; outputOrientation=1. No resizing.",
+  "encodeParamsJson": {
+    "width": 10000,
+    "height": 5000,
+    "format": "JPEG",
+    "quality": 95,
+    "memoryBudgetMiB": 128,
+    "diskBudgetBytes": 1073741824
+  },
+  "exportPolicy": "Direct from linear-sRGB enginef32spool; explicit sRGB transfer and SDR[0,1]clipping, round to8/16bits; report clippedSamples. Embedded generated sRGB ICC. NoEXIF/GPS/author copied. outputOrientation=1. Inputfloat12*N and encoded output coexist; no fullRGB buffer. ICC header contains profile-generation time, not copied capture time; encoded file byte hashes can differ across runs while pixel data matches.",
+  "maxPixels": 52000000,
+  "acceptanceDimensions": {
+    "width": 8192,
+    "height": 6144,
+    "pixels": 50331648,
+    "status": "Final-host-binary measured8192x6144 sensor, orientation6 =>6144x8192 float;603979776 bytes; no resizing; decode3.308670s/RSS38640KiB, JPEG4.313645s/RSS4428KiB, TIFF3.381420s/RSS5064KiB on cloud CPU. Not Android timings."
+  },
+  "jniResultShape": {
+    "success": "Probe or ExportReport fields TOP LEVEL, ok:true, stage:complete, outputValid, schemaVersion:1, operation, elapsedMs. Probe/decode also admission object (or null for metadataOnly) and metadataOnly boolean.",
+    "failure": "TOP LEVEL ok:false, code, message, stage, outputValid:false; schemaVersion/operation/elapsedMs for normal run paths.",
+    "cliDifference": "codec_probe CLI nests probe/admission or report and nested error; never use CLI shape as JNI contract."
+  },
+  "dngPolicy": "Pinned RawDevelop D65 ColorMatrix+AsShotNeutral policy, not complete Adobe/Camera2 profile processing. Positive diagonal CameraCalibration is explicitly applied and cancels under row normalization; non-diagonal rejected. ForwardMatrix alternate method not double-applied. Optional lens corrections not implemented and disclosed. NoiseProfile advisory; no denoising claim.",
+  "actualPhoneSamples": [
+    {
+      "device": "Google Pixel 2 XL",
+      "encoded": [
+        4032,
+        3032
+      ],
+      "output": [
+        4016,
+        3008
+      ],
+      "source": "CC0 raw.pixls.us record2206",
+      "result": "decoded all sensor pixels via strips, finite output, preview visually inspected; optional lens correction warning"
+    },
+    {
+      "device": "OnePlus 3T",
+      "encoded": [
+        4656,
+        3496
+      ],
+      "output": [
+        4640,
+        3480
+      ],
+      "source": "CC0 raw.pixls.us record1328",
+      "result": "decoded via strips, finite output, preview visually inspected"
+    }
+  ],
+  "rawDevelopmentPolicy": "ColorMatrix(D65), AsShotNeutral, black/white levels, crop/orientation; finite SRATIONAL BaselineExposure applied exactly once in linear RGB. ProfileToneCurve validated and explicitly not applied before film look; optional lens correction warning retained. Mandatory unsupported opcodes still rejected."
+}

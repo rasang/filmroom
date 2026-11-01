@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_language">언어</string>
+    <string name="settings_group_photos">사진 및 조정</string>
+    <string name="settings_group_diagnostics">진단</string>
+    <string name="settings_show_log_notes">진단 로그 안내 ▾</string>
+    <string name="settings_hide_log_notes">로그 안내 접기 ▴</string>
+    <string name="settings_log_privacy_summary">개인정보를 제거한 진단 정보만 내보내며 사진이나 위치 정보는 포함하지 않습니다. 공유 대상을 선택하기 전에는 전송되지 않습니다.</string>
+</resources>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="route_reversal_only">反转片仅支持直扫。</string>
+    <string name="route_print_preference_retained">印相选择已保留，切回负片后恢复。</string>
+    <string name="route_correction_preference_retained">当前流程不支持，已暂时关闭；你的设置仍保留。</string>
+</resources>

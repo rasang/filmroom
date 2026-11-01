@@ -1,0 +1,5 @@
+<resources>
+    <string name="route_reversal_only">リバーサルフィルムは直接スキャンのみ対応しています。</string>
+    <string name="route_print_preference_retained">プリントの選択は保持され、ネガフィルムに戻すと復元されます。</string>
+    <string name="route_correction_preference_retained">この処理では非対応のため一時的にオフです。設定は保持されています。</string>
+</resources>

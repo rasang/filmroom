@@ -1,0 +1,57 @@
+# HEIC 导入：原尺寸 SDR 路线与验证边界
+
+## 当前范围
+
+新增 HEIC **导入**，没有新增 HEIC 导出。JPEG / PNG / TIFF 的输出菜单、位深和色彩契约不变。不引入 libheif、FFmpeg 或其他生产依赖；不增加权限或网络。测试素材生成所用的主机工具不打包进应用。
+
+支持候选是静态、非加密、8 位 4:2:0 HEVC 主图（`hvc1`）及由 HEVC tile 组成的 `grid`。容器旋转 `irot` 由系统 ImageDecoder 应用一次。主图之外的 tile 和缩略图不等同于动画；真实 2×2 grid 纳入测试。HEIF 容器不是任何编码都支持的承诺，AVIF 和图像序列仍未接入。
+
+颜色仅接受可核验的 SDR 子集：关联主图的 NCLX 必须为 primaries=1、transfer=13、matrix=1（检查 range 保留位）；或关联的 ICC 是经过有界解析核验的标准 sRGB / Display P3 v4 RGB matrix/TRC profile。ICC 不按名称放行：检查 D50 色度矩阵、sRGB 参数曲线、白点/Bradford 适应、tag 边界及冲突；未知/LUT/HDR profile 拒绝。grid 主图未声明颜色时，必须全部 HEVC tile 明确声明同一身份；缺失或冲突拒绝。NCLX-only Display P3/BT.2020 仍不接入，避免系统忽略 NCLX 后的 sRGB 回退。
+
+系统 ImageDecoder 的**源**颜色空间必须在设置目标之前与已验证的 ICC/NCLX 身份匹配（参数曲线及适应到 D50 的矩阵，不只检查名称或目标标签）。随后由 ImageDecoder 真正转换到 sRGB，而不是重标 P3 像素。P3 超出 sRGB 的颜色不保留；界面明确显示转换提示。原文件及其 profile 不修改。
+
+仍明确拒绝 10 位/高位深、PQ/HLG 主图、标准容器辅助图（包括深度/alpha）、`imir` 镜像、`clap` 裁切、非方形像素、未支持的必需属性与动画/视频轨。**某些手机的普通拍摄 HEIC 也可能带这些辅助项，因此不能宣称兼容全部 iPhone/OPPO HEIC。** 这里的 HDR/辅助项检查针对解析到的标准容器属性；不声称能够识别每家厂商的不透明尾部扩展。SDR 主图导入不解释或传递这些私有扩展，因而不是 HDR 往返。拒绝不修改源文件，也不自动改用内嵌 JPEG、缩略图或低分辨率转换。
+
+## 单一输入保证
+
+1. 保留选择器返回的原始字节私有副本；已有 512 MiB 文件上限、流式复制和取消清理继续生效。
+2. `PhotoHeaders` 最多读取 64 KiB 进行候选识别。`HeicContainer` 用随机访问读取有界元数据（meta ≤4 MiB，最多4096 boxes、1024 items/properties），核对主图、HEVC属性、尺寸、关联与变体。头部识别不是完整文件验证，实际像素仍必须由系统完整解码成功。
+3. 查询本机 `ImageDecoder.isMimeTypeSupported("image/heif")`。系统没有解码器时明确拒绝，不从 Android 版本/芯片名称推断一定兼容。
+4. **一次按原尺寸解码**。只使用 ImageDecoder software allocator，目标 sRGB，不设置 targetSize/sample/crop。解码头和最终 Bitmap 的显示尺寸均必须与容器尺寸/旋转一致；不再次套用 JPEG/EXIF 方向。最终格式要求 ARGB_8888、sRGB；框架报告的 HDR 主图色彩会拒绝。若已核验的 SDR8 底图附带独立 gainmap，则仅移除附层，不应用、不做色调映射；API36及以后另核验 gainmap 方向为 SDR→HDR，HDR→SDR 或不能确认方向仍拒绝。
+5. 逐行读取未预乘 sRGB8 像素，透明值防御性合成白底，然后逆 sRGB transfer 写成线性 RGB float32。此 float 文件保持原尺寸，**不是有损 JPEG 中间文件，也不使8位输入凭空变成高位深**。
+6. 预览、交互引擎输入、缩放输出、原尺寸队列全部读取同一个规范化线性文件，避免平台两次解码/两种方向规则导致亮度和方向分叉。HEIC 保持 `image/heif` 标记，不标成 RAW/DNG。
+7. 缓存文件使用 `heic-source-UUID.rgb`。进程恢复复用完整 spool，不偷偷重新低分辨率解码；丢失/长度不符明确要求重新导入。启动回收理解该文件名，只清理已知孤儿；当前保留源不会被清理。
+
+队列新增内部 `LINEAR_SOURCE` 输入种类描述需要缩放的规范化数据，仍兼容读旧版 `RAW` 种类。原尺寸沿用 `LINEAR`，不是新的输出编码。
+
+## 内存/磁盘
+
+**不使用 BitmapRegionDecoder 作为“HEIC 分块低内存”的保证。** 平台 HEIF codec 可能仍在内部解码整图。
+
+- 最多52,000,000个描述的编码像素；估算同时计入所有 HEVC tile/缩略图的 ispe 像素之和与主图像素的较大值，所以 grid 的边缘 padding 不会按小预览预算放行。
+- 重型准入估算为 **64 MiB + 编码像素 ×32 字节 + 原始编码文件字节数**，另由现有共享 limiter 加16MiB余量。包含整图输出、方向中间缓冲及系统 codec/YUV/reference缓冲的保守余量，而非只计算逐行数组。
+- 通过现有 `NativeWorkReservations` 与引擎/RAW重型任务共享名额和当前系统内存证据；保留系统threshold +64MiB之后，只准使用剩余可用内存的一半。50MP可能因当前空闲内存不足而拒绝，不暗中降尺寸。
+- **这是准入估计，不是第三方/系统解码器分配器硬上限，也不是手机峰值RSS实测。** 容器metadata并不证明码流合法；系统解码器仍是处理不可信压缩码流的边界。
+- 线性工作文件需要宽×高×12字节磁盘空间，加16MiB余量；后续导出沿用队列自己的存储检查。
+- 同步系统解码未必可即时中止。取消后等待该调用返回再回收Bitmap，清理新副本/工作文件；不会发布取消后的半成品。
+
+## 测试与未验证项
+
+- 原创CC0真实HEIC：普通主图、三个旋转、四tile grid，以及Main10/mirror/真实NCLX-only Display P3拒绝样本，以及原创标准 ICC P3 主图/仅tile声明ICC的grid、独立LittleCMS转换参考。生成、哈希、宿主libheif解码尺寸与角点在 [HEIC_FIXTURES.md](HEIC_FIXTURES.md)。
+- 纯JVM测试检查容器边界、大小、溢出、异常属性、方向、grid内存计数和取消。真实fixture用于容器准入测试；不冒充Android像素解码。
+- 显式fake HEVC pixel backend验证内存不足先拒绝、原尺寸/旋转坐标、白底合成、源文件不变、失败/取消释放和清理。
+- Robolectric repository/queue测试使用真实container + **替身HEVC像素**，验证恢复、同一spool预览/标准/原尺寸输出、队列快照与非RAW标记。
+- 提供instrumentation测试用于实际平台解码的尺寸/角点/旋转/grid核验；**本次按用户要求不运行Mac、模拟器或真机**。编译和host测试通过不等于OPPO/高通设备HEVC兼容、峰值内存、50MP性能已验证。
+
+## 官方依据
+
+- [平台格式表](https://developer.android.com/media/platform/supported-formats)：HEIF设备可选，profile能力必须实查。
+- [ImageDecoder](https://developer.android.com/reference/android/graphics/ImageDecoder)：平台能力、目标色彩空间与解码契约。
+- [Skia HEIF scanline实现](https://skia.googlesource.com/skia/+/3296f7ba1f66bad209eb6a861a8bcbd89634f6ae/src/codec/SkHeifCodec.cpp)：subset不等同于低内存原图解码。
+- [Ultra HDR编辑](https://developer.android.com/media/grow/ultra-hdr/edit)：修改底图后不能盲目复用旧gainmap。
+
+## 独立 gainmap 与 SDR 底图
+
+厂商可能在标准 HEIF items 之外保存私有增益图。此路线只读取经过严格颜色验证的 SDR8 主图；不解析厂商公式、不恢复 HDR，也不传递原 gainmap。若 Android 返回带附层的 SDR Bitmap，在原尺寸/ARGB8888/sRGB 检查通过后 `setGainmap(null)`，随后逐行读取同一底图。UI 明确提示“只导入 SDR 底图，不应用或保留 HDR 增益图”。标准容器辅助 item 的准入范围未扩大。
+
+[AOSP ImageDecoder JNI](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/libs/hwui/jni/ImageDecoder.cpp) 先解码基础像素，再独立提取附层；[Bitmap JNI](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/libs/hwui/jni/Bitmap.cpp) 的 getPixels 读取基础 SkBitmap，setGainmap 只替换附层引用。[官方 Gainmap 契约](https://developer.android.com/reference/android/graphics/Gainmap) 区分底图与增强层，[Bitmap.setGainmap](https://developer.android.com/reference/android/graphics/Bitmap#setGainmap(android.graphics.Gainmap)) 允许 null 移除。API36 的 HDR→SDR 反向 gainmap 不属于此路线；仍使用 compileSdk35，通过运行时公开 getter 核验方向，缺失/异常安全拒绝。这些源码/API依据不是 OPPO 厂商解码器实测。

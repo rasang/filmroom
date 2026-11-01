@@ -1,0 +1,15 @@
+{
+  "width": 4016,
+  "height": 3008,
+  "samples": 36240384,
+  "finite": true,
+  "min": 0.0,
+  "max": 1.5076996088027954,
+  "meanRGB": [
+    0.08137629187097709,
+    0.12984352201005542,
+    0.14946315751888367
+  ],
+  "sha256": "68ea62d9765ea8c8397ce6fd42d9f3dbfff0fa910791672964c222fedf8df1a9",
+  "preview": "derived from actual decoded float sensor data; no embedded preview; not app screenshot"
+}

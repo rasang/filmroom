@@ -1,0 +1,120 @@
+{
+  "productionBefore": "6e5d721e2baf1015a735e575b8a3f16c67c11e16af70b4c0ff4988b753b5cae0",
+  "integrationBefore": "6e5d721e2baf1015a735e575b8a3f16c67c11e16af70b4c0ff4988b753b5cae0",
+  "sameInodeBefore": false,
+  "productionAfter": "6e5d721e2baf1015a735e575b8a3f16c67c11e16af70b4c0ff4988b753b5cae0",
+  "integrationAfter": "15917bf771517df5bb4f58341d938d774b1ac038963f0e32285877f903190a95",
+  "artifactSha256": "15917bf771517df5bb4f58341d938d774b1ac038963f0e32285877f903190a95",
+  "hostSha256": "9f0ac2256da37dd778c39d651f30988420ac7a3c2abd97d372de2882a334c480",
+  "size": 8278480,
+  "nativeSourceFiles": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "de9e29b12e1fdb0cce5ecb98c1087d1752efffa46106aab1e8d7344bd61b732a"
+    },
+    {
+      "path": "crates/film-engine/Cargo.toml",
+      "sha256": "805aac37e902b04eaf00317af533f1d7fc69df555ab746ad32dfcf01d3e1dbf0"
+    },
+    {
+      "path": "crates/film-engine/src/lib.rs",
+      "sha256": "bdba343e75b97d33b8c21e9e1f2f8832d006e39d95f0bbeae10947875126bdd3"
+    },
+    {
+      "path": "crates/spektrafilm-core/src/stages/filming.rs",
+      "sha256": "7001f920d84b2234c94ae69b3d83eeb1e44710c2a8d3f58d3c9dae74a5b42cf4"
+    },
+    {
+      "path": "crates/film-engine/src/detail/mod.rs",
+      "sha256": "57a34417d781e2397abffa6ea92fe66033abf58b489a12aaa33d8e93568df6be"
+    },
+    {
+      "path": "crates/film-engine/src/detail/global.rs",
+      "sha256": "3a6b9796e68f52a39ab5daa2b04a06a7f4203e7aafcb43e2680f6e72b9d16375"
+    },
+    {
+      "path": "crates/film-engine/src/detail/fft.rs",
+      "sha256": "49c3e712332a6b31b4a4fd74e04a77cdfb659ee6b46d558f07ac12422fb4728f"
+    },
+    {
+      "path": "crates/film-engine/src/detail/bridge.rs",
+      "sha256": "3381a312c418ebfab6be8cf2c7296ce74602a2a4bad9a6e619e8b1a6a11b2ae5"
+    },
+    {
+      "path": "crates/film-engine/src/detail/jni.rs",
+      "sha256": "59156c63d5b0362376d2364814862ad212bb84fecd1c86d755a5edde90059d44"
+    },
+    {
+      "path": "crates/film-engine/src/bin/detail_probe.rs",
+      "sha256": "d291e558e5dbd6aa675b484212dbb55a173c4af102cd876177858cdaea22067e"
+    },
+    {
+      "path": "tests/jni/dev/filmroom/engine/NativeDetailBridge.java",
+      "sha256": "6cf2355011218b2de0e1a438ad77d5018439af92a824208d742779a7140f6ded"
+    },
+    {
+      "path": "tests/jni/dev/filmroom/engine/DetailProbe.java",
+      "sha256": "55046f926c87bfb2149daea46d61031858d65de3f4882f136770326f7c7a76ee"
+    },
+    {
+      "path": "OWNED_DETAIL_API.md",
+      "sha256": "38cce35d05ba1a10051b48b2d0160a4f6d41dc8011a434ba413ed74bf7119f00"
+    },
+    {
+      "path": "OWNED_DETAIL_JNI.md",
+      "sha256": "580a32e6454b3699df863449e12cc629c4e7471b8cc845938f892b820fbbc986"
+    },
+    {
+      "path": "run-detail-host-jni.sh",
+      "sha256": "3bcd073006c2cbcbb366d0b917a84e64cea183c0a9dff5e936702af6224b64c1"
+    },
+    {
+      "path": "run-owned-validation.sh",
+      "sha256": "3ea8d6b923cde23d552282ea57692caf229fde4806894488404e8c067891fae1"
+    }
+  ],
+  "x86_64": {
+    "integrationBefore": "258e96358af385991c2d173d0402d16bef15dd5996c6821a9a694c2abf3b0f48",
+    "productionEngineBefore": "258e96358af385991c2d173d0402d16bef15dd5996c6821a9a694c2abf3b0f48",
+    "integrationCodecsBefore": {
+      "arm64-v8a": "8592bbd3d9ca4d6f234ce45c59b73770212c3f24819da2fc511917164b585be3",
+      "x86_64": "2616f22ee8f0ab6259f1bdaf80b82ce3400b70c60a138ea4063b98e9b64ce682"
+    },
+    "arm64Before": "15917bf771517df5bb4f58341d938d774b1ac038963f0e32285877f903190a95",
+    "artifactSha256": "0d94d275948fd2cc4347762c067e64321da7d9b92ba1d0f33de84d092ca8a847",
+    "integrationAfter": "0d94d275948fd2cc4347762c067e64321da7d9b92ba1d0f33de84d092ca8a847",
+    "productionEngineAfter": "258e96358af385991c2d173d0402d16bef15dd5996c6821a9a694c2abf3b0f48",
+    "arm64After": "15917bf771517df5bb4f58341d938d774b1ac038963f0e32285877f903190a95",
+    "integrationCodecsAfter": {
+      "arm64-v8a": "8592bbd3d9ca4d6f234ce45c59b73770212c3f24819da2fc511917164b585be3",
+      "x86_64": "2616f22ee8f0ab6259f1bdaf80b82ce3400b70c60a138ea4063b98e9b64ce682"
+    },
+    "sizeBytes": 9258912,
+    "architecture": "ELF64 X86-64 Android API26",
+    "features": [
+      "precision-f64",
+      "adreno-gpu"
+    ],
+    "loadAlignment": "0x4000",
+    "detailJniSymbols": [
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeBeginOperation",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeBuild",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeCancel",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabilities",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeCreate",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeDestroy",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativePlan",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeReleaseOperation",
+      "Java_dev_filmroom_engine_NativeDetailBridge_nativeTile"
+    ],
+    "legacyJniSymbols": [
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeCancel",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeCreate",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeDestroy",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeExportFile",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeGetProgress",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativePlanExport",
+      "Java_dev_filmroom_engine_NativeFilmBridge_nativeRender"
+    ]
+  }
+}

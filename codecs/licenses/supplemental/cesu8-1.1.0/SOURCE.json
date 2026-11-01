@@ -1,0 +1,6 @@
+{
+  "licenseChoice": "Apache-2.0",
+  "basis": "vendor/cesu8-1.1.0/src/lib.rs lines1-9 and COPYRIGHT-RUST.txt",
+  "textOrigin": "Standard Apache-2.0 terms from installed jpeg-encoder LICENSE-APACHE, excluding appendix",
+  "notFromRegistryArchive": true
+}

@@ -1,0 +1,399 @@
+{
+  "version": "direct-fuji-model-v13",
+  "status": "ROOT_VISUAL_APPROVED_FOR_ISOLATED_CONTEXT_INTEGRATION_NOT_COLOR_MEASUREMENT_OR_RELEASE",
+  "assets": [
+    {
+      "physical_stock": "fujifilm_c200",
+      "status": "REVIEW_MANUFACTURER_RED_GREEN_SPECTRAL_MODEL",
+      "png_file": "frames/fujifilm_c200-direct-model-v13.png",
+      "png_sha256": "07072c3c8e9f3e769ba75fb74a23482b6b584347e6b8bcc19ebea2d7b1ac28dd",
+      "png_bytes": 84755,
+      "webp_file": "webp/fujifilm_c200-direct-model-v13.webp",
+      "webp_sha256": "c70516a818cff4ed98c7699c2c9a3ce1d4c278184a372a59d28e1a87754484b2",
+      "webp_bytes": 27050,
+      "source_positive_sha256": "52bee3891ea2ef233687719621b4bac0168b26e529419959e3751789874fdb7a",
+      "source_neutral_sha256": "fea73a573a5ebc7e29e3348ff65b2f308bf2890c2abd3b92be85cc28ad528b14",
+      "source_profile_sha256": "30db07d88090aadc62e03d18c2c51f67a20a1673390c69f99933b7ed5406d2c8",
+      "channel_absorption_peak_nm": [
+        700.0,
+        545.0,
+        450.0
+      ],
+      "palettes": {
+        "base": {
+          "density_vector": [
+            0,
+            0,
+            0
+          ],
+          "linear_srgb": [
+            0.6065623869876982,
+            0.24452168925938628,
+            0.11964279082117737
+          ],
+          "srgb8": [
+            204,
+            136,
+            97
+          ],
+          "display_clamped_channels": []
+        },
+        "neutral_ink": {
+          "density_vector": [
+            1.7039116837244785,
+            2.0405283670507677,
+            2.643089598545579
+          ],
+          "linear_srgb": [
+            0.015015715716208633,
+            0.00151810928143669,
+            1.565568552782997e-05
+          ],
+          "srgb8": [
+            33,
+            5,
+            0
+          ],
+          "display_clamped_channels": []
+        },
+        "red_MplusY": {
+          "density_vector": [
+            0,
+            2.0405283670507677,
+            2.643089598545579
+          ],
+          "linear_srgb": [
+            0.25732308190747855,
+            -0.012076678621680654,
+            -0.0031477316941343654
+          ],
+          "srgb8": [
+            139,
+            0,
+            0
+          ],
+          "display_clamped_channels": [
+            1,
+            2
+          ]
+        },
+        "green_CplusY": {
+          "density_vector": [
+            1.7039116837244785,
+            0,
+            2.643089598545579
+          ],
+          "linear_srgb": [
+            0.053413219880182584,
+            0.21626940340487305,
+            -0.022362030087833874
+          ],
+          "srgb8": [
+            65,
+            128,
+            0
+          ],
+          "display_clamped_channels": [
+            2
+          ]
+        }
+      },
+      "stripe_masks": {
+        "red": {
+          "geometric_mask_pixels": 5472,
+          "visible_nonzeroalpha_pixels": 3216,
+          "source_median_srgb8": [
+            107.0,
+            16.0,
+            19.0
+          ],
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "4856a640fd11002d35d498fb22d2b5ff3df72ee898e4e83c53d17ea59e62a02d"
+        },
+        "green": {
+          "geometric_mask_pixels": 4560,
+          "visible_nonzeroalpha_pixels": 2688,
+          "source_median_srgb8": [
+            51.0,
+            105.0,
+            50.0
+          ],
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "5987021993ffc8a58d1f4d5fc8c0413bf942bd6bdd7fb5fbb5f07a62a9ecd3b9"
+        }
+      },
+      "changed_from_neutral_pixels": 5904,
+      "alpha_byte_exact": true,
+      "outside_stripe_masks_byte_exact": true,
+      "png_webp_rgba_exact": true,
+      "dx_pixels_byte_exact_to_v12": true,
+      "dx_nonzeroalpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "runtime_approved": false
+    },
+    {
+      "physical_stock": "fujifilm_xtra_400",
+      "status": "REVIEW_MANUFACTURER_RED_GREEN_SPECTRAL_MODEL",
+      "png_file": "frames/fujifilm_xtra_400-direct-model-v13.png",
+      "png_sha256": "74d0e6abd18e46a462c8080a10a7c907c454122fd5c7300ce3d4771d2d8aaa67",
+      "png_bytes": 33515,
+      "webp_file": "webp/fujifilm_xtra_400-direct-model-v13.webp",
+      "webp_sha256": "aae191ded4fd3a66ce6f63a9b151ee7dacf85f2d8af2f88e24069fb5c8b52dbf",
+      "webp_bytes": 7944,
+      "source_positive_sha256": "2928e7dd9d7ae9b57f570c5c0933fe5778c56e024ca808878872f5363ba728c1",
+      "source_neutral_sha256": "db8c9ea9eb4fbd3005e592008b8caf0942bd7cba06b3e204a619cd0b2631f850",
+      "source_profile_sha256": "5f2a3642c7c8db5e750d7366c34b47d24b89ad78d2abe41da4b5282fd4286e58",
+      "channel_absorption_peak_nm": [
+        695.0,
+        545.0,
+        450.0
+      ],
+      "palettes": {
+        "base": {
+          "density_vector": [
+            0,
+            0,
+            0
+          ],
+          "linear_srgb": [
+            0.6057980615743812,
+            0.26018567906649653,
+            0.135405034685738
+          ],
+          "srgb8": [
+            204,
+            139,
+            103
+          ],
+          "display_clamped_channels": []
+        },
+        "neutral_ink": {
+          "density_vector": [
+            2.1328906703698873,
+            2.250179521252354,
+            2.86267049328632
+          ],
+          "linear_srgb": [
+            0.007304530390675134,
+            0.0011337687554796945,
+            6.938181737555054e-05
+          ],
+          "srgb8": [
+            21,
+            4,
+            0
+          ],
+          "display_clamped_channels": []
+        },
+        "red_MplusY": {
+          "density_vector": [
+            0,
+            2.250179521252354,
+            2.86267049328632
+          ],
+          "linear_srgb": [
+            0.23699974788704592,
+            -0.011492842023941002,
+            -0.002957416189749686
+          ],
+          "srgb8": [
+            134,
+            0,
+            0
+          ],
+          "display_clamped_channels": [
+            1,
+            2
+          ]
+        },
+        "green_CplusY": {
+          "density_vector": [
+            2.1328906703698873,
+            0,
+            2.86267049328632
+          ],
+          "linear_srgb": [
+            0.010482509859456573,
+            0.22048831939476152,
+            -0.021183389307269786
+          ],
+          "srgb8": [
+            26,
+            129,
+            0
+          ],
+          "display_clamped_channels": [
+            2
+          ]
+        }
+      },
+      "stripe_masks": {
+        "red": {
+          "geometric_mask_pixels": 9120,
+          "visible_nonzeroalpha_pixels": 5376,
+          "source_median_srgb8": [
+            205.0,
+            26.0,
+            48.0
+          ],
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "397f55baf91f82d80a24909678e5774170dc2f812192a886c495a0a201f193f3"
+        },
+        "green": {
+          "geometric_mask_pixels": 5472,
+          "visible_nonzeroalpha_pixels": 3216,
+          "source_median_srgb8": [
+            21.0,
+            95.0,
+            37.0
+          ],
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "3fda1129346f60f3c539e47fe3ec7c89f5fcdd1582d8568cbadd6fa486f9007c"
+        }
+      },
+      "changed_from_neutral_pixels": 8592,
+      "alpha_byte_exact": true,
+      "outside_stripe_masks_byte_exact": true,
+      "png_webp_rgba_exact": true,
+      "dx_pixels_byte_exact_to_v12": true,
+      "dx_nonzeroalpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "runtime_approved": false
+    },
+    {
+      "physical_stock": "fujifilm_pro_400h",
+      "status": "REVIEW_MONOCHROME_LINE_COLOR_UNVERIFIED",
+      "png_file": "frames/fujifilm_pro_400h-direct-model-v13.png",
+      "png_sha256": "c8ab0b2713174ab240fe2ef17d9ae8a44f7a021276bb5682b9fa17f16386bd16",
+      "png_bytes": 191910,
+      "webp_file": "webp/fujifilm_pro_400h-direct-model-v13.webp",
+      "webp_sha256": "7cb5199ed265bf45ddf024cdea99d75dc37ab20a3bad3fbc1898614b22182138",
+      "webp_bytes": 76814,
+      "source_positive_sha256": "1b9ae4d34bf8acf506a6cb0aeef075dfc3e4f659fb1e3158b407383a354e683f",
+      "source_neutral_sha256": "c8ab0b2713174ab240fe2ef17d9ae8a44f7a021276bb5682b9fa17f16386bd16",
+      "source_profile_sha256": "da1be731ab79fb5535c43042494fa7298c942179abb68270b928aa012c629b31",
+      "channel_absorption_peak_nm": [
+        695.0,
+        545.0,
+        455.0
+      ],
+      "palettes": {
+        "base": {
+          "density_vector": [
+            0,
+            0,
+            0
+          ],
+          "linear_srgb": [
+            0.6344608473476733,
+            0.18881038789678647,
+            0.08550225754045532
+          ],
+          "srgb8": [
+            209,
+            120,
+            83
+          ],
+          "display_clamped_channels": []
+        },
+        "neutral_ink": {
+          "density_vector": [
+            1.5817671629318264,
+            1.605388198969167,
+            2.1262136512627285
+          ],
+          "linear_srgb": [
+            0.028863138624476033,
+            0.0033339140303523984,
+            -8.740864242162675e-05
+          ],
+          "srgb8": [
+            47,
+            11,
+            0
+          ],
+          "display_clamped_channels": [
+            2
+          ]
+        },
+        "red_MplusY": {
+          "density_vector": [
+            0,
+            1.605388198969167,
+            2.1262136512627285
+          ],
+          "linear_srgb": [
+            0.3338616835340845,
+            -0.013731415429850282,
+            -0.003996078164869631
+          ],
+          "srgb8": [
+            156,
+            0,
+            0
+          ],
+          "display_clamped_channels": [
+            1,
+            2
+          ]
+        },
+        "green_CplusY": {
+          "density_vector": [
+            1.5817671629318264,
+            0,
+            2.1262136512627285
+          ],
+          "linear_srgb": [
+            0.09303189890665978,
+            0.19288155349445035,
+            -0.020732431059369092
+          ],
+          "srgb8": [
+            86,
+            121,
+            0
+          ],
+          "display_clamped_channels": [
+            2
+          ]
+        }
+      },
+      "stripe_masks": {
+        "red": {
+          "geometric_mask_pixels": 0,
+          "visible_nonzeroalpha_pixels": 0,
+          "source_median_srgb8": null,
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "d26a50e7c87b8952208df0ed0ca4ffd8eabf1362ebfee40b1d8278753fd6b1db"
+        },
+        "green": {
+          "geometric_mask_pixels": 0,
+          "visible_nonzeroalpha_pixels": 0,
+          "source_median_srgb8": null,
+          "geometry_source": "fixed135-dx-v2/replace_dx.py, reused exact row/dash ranges; no relayout",
+          "mask_sha256": "d26a50e7c87b8952208df0ed0ca4ffd8eabf1362ebfee40b1d8278753fd6b1db"
+        }
+      },
+      "changed_from_neutral_pixels": 0,
+      "alpha_byte_exact": true,
+      "outside_stripe_masks_byte_exact": true,
+      "png_webp_rgba_exact": true,
+      "dx_pixels_byte_exact_to_v12": true,
+      "dx_nonzeroalpha_checks": 71884,
+      "dx_wrong_bits": 0,
+      "runtime_approved": false
+    }
+  ],
+  "limits": [
+    "Manufacturer confirms hue families/line structure, not numeric spectral exposures or RGB.",
+    "Red uses own-profile M+Y channel maxima; green uses C+Y; peaks verified near red/green/blue absorption. Upper-bound model choices, not actual factory latent exposures.",
+    "PRO400H line color unverified. Retained neutral dark model solely for structural review.",
+    "No source reference photographs copied. Existing alpha/geometric masks preserved."
+  ],
+  "actual_physical_image_gaps_global18": [
+    "fujifilm_pro_400h",
+    "kodak_vision3_50d",
+    "kodak_verita_200d"
+  ],
+  "approval_boundary": "Visual review accepted documented-hue model reconstruction and explicitly uncertain PRO400H line. Not a calibration, physical-color certification or rawscan match."
+}

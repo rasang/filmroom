@@ -1,0 +1,157 @@
+{
+  "version": "0.1.14",
+  "versionCode": 15,
+  "utc": "2026-10-31T23:59:08.568537+00:00",
+  "gate": {
+    "standardTotal": 701,
+    "standardPassed": 675,
+    "standardFailures": 0,
+    "standardExplicitOptInSkips": 26,
+    "resolvedOptInMethods": [
+      "dev.filmroom.AndroidStraightAlphaBorderLoaderHostTest.researchPngAndroidNativeGraphicsStraightDecodeMatchesHostReferenceAndRecyclesOnCancel",
+      "dev.filmroom.BorderCodecIntegrationHostTest.finalFloatSpoolEncodesRealJpegPngTiffWithOutputDimensionsAndPrecision",
+      "dev.filmroom.BorderQueueIntegrationHostTest.restartUsesPinnedAssetAndBorderFreeCheckpointThenCommitsFinalDimensions",
+      "dev.filmroom.CandidateBorderCatalogHostTest.optInAll18CurrentAndTwentySevenLegacyPngsMatchRuntimeInEveryRgbaChannel",
+      "dev.filmroom.CandidateBorderCatalogHostTest.optInAll45CurrentAndLegacyContractsResolveWithExactMatteAndAliases",
+      "dev.filmroom.Complete18BorderCorpusHostTest.all18ReadOnlyPngLoaderGeometryAndSharedCompositeSmokeCover20Profiles",
+      "dev.filmroom.ConcurrentBorderMemoryHostTest.borrowedAtlasSurvivesEvictionWhilePreviewAndFinalEncodeShareAdmission",
+      "dev.filmroom.DirectRouteBorderHostTest.optInEveryDirectMatteMatchesFastAndSettledBothOrientations",
+      "dev.filmroom.FinalDxSamplingHostTest.actualJpeg95PngAndTiff16Exports1536RetainDxLogicalRows",
+      "dev.filmroom.FinalDxSamplingHostTest.finalPngAndLosslessWebpPreview384RetainIndependentDxLogicalRows",
+      "dev.filmroom.InteractiveBorderDragBenchmarkHostTest.compareExactPerMoveWithCachedFrameAndCanvasAt1536",
+      "dev.filmroom.LosslessWebpBorderAssessmentHostTest.all18AndroidStraightWebpDecodesExactlyMatchOriginalPngAndSharedPreview",
+      "dev.filmroom.PlainCropQueueIntegrationHostTest.restartUsesFrozenCropAndUncroppedCheckpointThenWritesCaptureMetadataAndDimensions",
+      "dev.filmroom.RealDngList3ImportHostTest.cameraList3ImportPreservesFullSpoolAndFloatPreviewAcrossReopen",
+      "dev.filmroom.ResearchRgbaBorderHostTest.actualNegativeAndBlackResearchAtlasUseSharedFinalOverlayAcrossSizesOrientationsAndPrimaries",
+      "dev.filmroom.WhiteHoleMatteHostTest.optInActualEveryStockAndHistoricalBlackHolesMatchFastAndSettledInBothOrientations",
+      "dev.filmroom.WhiteHoleMatteHostTest.optInRealCodecKeepsNewWhiteAndQueuedBlackInBothOrientations",
+      "dev.filmroom.engine.RealCompositionDetailHostTest.repeatedCompositionAndModeChangesReuseRealScienceContext",
+      "dev.filmroom.engine.RealLocalDetailPhotoViewHostTest.actualViewDrawsRealOwnedCellsAboveLowResolutionUnderlayAndRetires",
+      "dev.filmroom.engine.RealOwnedDetailHostTest.actualOwnedJniBuildTileIdentityAndRetirement",
+      "dev.filmroom.export.RealNativeExportQueueHostTest.heicCanonicalSourceReopensAndExportsThroughRealNativeQueueIncludingLegacyRawRetry",
+      "dev.filmroom.export.RealNativeExportQueueHostTest.publicIccP3SourcesKeepValidatedIdentityAndConvertedCanonicalPixelsThroughRealNativeExports",
+      "dev.filmroom.export.RealNativeExportQueueHostTest.realQueueRenderEncodePublishRetryAndRejectedPaths",
+      "dev.filmroom.io.XmpCaptureTimeTest.optionalPrivateDjiSourceRemainsUntouchedAndCaptureTimeIsAvailable"
+    ],
+    "historicalOnlyNotRerun": [
+      "dev.filmroom.BorderLargeExportStressHostTest.real80to84mpPostFilmChainPreservesSamplesMetadataAndBoundedWork",
+      "dev.filmroom.Fixed135LargeExportStressHostTest.real80to84mpPostFilmChainPreservesSamplesMetadataAndBoundedWork"
+    ],
+    "unresolved": [],
+    "actualUniqueMethodsExecuted": 699,
+    "groups": {
+      "RealNativeExportQueueHostTest": {
+        "passed": 3,
+        "skipped": 0
+      },
+      "direct-dx-1": {
+        "passed": 2,
+        "skipped": 0
+      },
+      "catalogue": {
+        "passed": 5,
+        "skipped": 0
+      },
+      "RealOwnedDetailHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "direct-atlas-1g": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "assets": {
+        "passed": 10,
+        "skipped": 0
+      },
+      "drag-benchmark": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "concurrency": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "direct-dx-0": {
+        "passed": 2,
+        "skipped": 0
+      },
+      "dx": {
+        "passed": 2,
+        "skipped": 0
+      },
+      "BorderQueueIntegrationHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "original-size-focused": {
+        "passed": 3,
+        "skipped": 0
+      },
+      "RealDngList3ImportHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "BorderCodecIntegrationHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "privacy-date-focused": {
+        "passed": 6,
+        "skipped": 0
+      },
+      "PlainCropQueueIntegrationHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "RealLocalDetailPhotoViewHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "RealCompositionDetailHostTest": {
+        "passed": 1,
+        "skipped": 0
+      },
+      "white-matte": {
+        "passed": 5,
+        "skipped": 0
+      }
+    },
+    "largeGateCurrentRun": false,
+    "largeGateReason": "Current shared free below4GiB; prior0.1.13 24actual encodes retained as historical evidence only; no capacity gate weakened",
+    "androidRuntimeTested": false
+  },
+  "apk": {
+    "bytes": 22202788,
+    "sha256": "af0ef9ecba30697d87262f813b2dcf3acf593079b68c09bc28875576e5d92049",
+    "abi": "arm64-v8a",
+    "certificateSha256": "4d48147062cf82469b95c0aea85bf739489637e2386eaad47a8150ee780a59d5",
+    "debugBuild": true,
+    "debuggable": true,
+    "zipalign16KiB": true,
+    "allEntryBytesAndZipMethodsMatchGradleApk": true,
+    "noInternetPermission": true
+  },
+  "nativeLibraries": {
+    "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so": "fb9cb972fb8c52482e6dfc623c55dd4e68d56a6dd0c00e5a523e6b343d8f89bb",
+    "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": "4f3c5ea986cf41e030045f09fe098b53e138c1c0e7895173741cf89b14087932",
+    "app/src/main/jniLibs/x86_64/libfilm_engine.so": "ba9e34d444bfff854faba34347a82c7f66a432cfdbefdc5c7353fd80995eeedd",
+    "app/src/main/jniLibs/x86_64/libfilm_codecs.so": "620124be9e253871d07a4985eb16086d8e48511d6422dad97ea167be66c65314"
+  },
+  "fixed135": {
+    "contracts": 73,
+    "payloads": 38,
+    "old45Preserved": true,
+    "directMaterialsAreModelsNotMeasuredScans": true,
+    "referenceGaps": [
+      "PRO400H",
+      "Vision3 50D",
+      "Verita200D"
+    ]
+  },
+  "packedLutIndependentByteRestoration": true,
+  "androidDeviceRuntimeTested": false,
+  "roiLimit": 1536,
+  "hdrEnhancementIncluded": false,
+  "cancelledAECompensationIncluded": false
+}

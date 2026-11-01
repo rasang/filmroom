@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "fujifilm_c200",
+      "name": "Fujifilm C200",
+      "kind": "negative",
+      "defaultPaper": "fujifilm_crystal_archive_typeii",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "fujifilm_crystal_archive_typeii",
+      "name": "Fujifilm Crystal Archive Type II",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "fujifilm_pro_400h",
+      "name": "Fujifilm Pro 400H",
+      "kind": "negative",
+      "defaultPaper": "fujifilm_crystal_archive_typeii",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "fujifilm_provia_100f",
+      "name": "Fujifilm Provia 100F",
+      "kind": "reversal",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "direct"
+    },
+    {
+      "id": "fujifilm_velvia_100",
+      "name": "Fujifilm Velvia 100",
+      "kind": "reversal",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "direct"
+    },
+    {
+      "id": "fujifilm_xtra_400",
+      "name": "Fujifilm X-Tra 400",
+      "kind": "negative",
+      "defaultPaper": "fujifilm_crystal_archive_typeii",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_2383",
+      "name": "Kodak Vision 2383",
+      "kind": "cine_print",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_2393",
+      "name": "Kodak Vision Premier 2393",
+      "kind": "cine_print",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_ektachrome_100",
+      "name": "Kodak Ektachrome 100",
+      "kind": "reversal",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "direct"
+    },
+    {
+      "id": "kodak_ektacolor_edge",
+      "name": "Kodak Ektacolor Edge",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_ektar_100",
+      "name": "Kodak Ektar 100",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_endura_premier",
+      "name": "Kodak Professional Endura Premier",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_gold_200",
+      "name": "Kodak Gold 200",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_kodachrome_64",
+      "name": "Kodak Kodachrome 64",
+      "kind": "reversal",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "direct"
+    },
+    {
+      "id": "kodak_portra_160",
+      "name": "Kodak Portra 160",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_portra_400",
+      "name": "Kodak Portra 400",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_portra_800",
+      "name": "Kodak Portra 800",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_portra_800_push1",
+      "name": "Kodak Portra 800 (Push 1)",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_portra_800_push2",
+      "name": "Kodak Portra 800 (Push 2)",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_portra_endura",
+      "name": "Kodak Professional Portra Endura",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_supra_endura",
+      "name": "Kodak Professional Supra Endura",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_ultra_endura",
+      "name": "Kodak Professional Ultra Endura",
+      "kind": "paper",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_ultramax_400",
+      "name": "Kodak Ultramax 400",
+      "kind": "negative",
+      "defaultPaper": "kodak_portra_endura",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_verita_200d",
+      "name": "Kodak Verita 200D",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_vision3_200t",
+      "name": "Kodak Vision3 200T",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_vision3_250d",
+      "name": "Kodak Vision3 250D",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_vision3_500t",
+      "name": "Kodak Vision3 500T",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_vision3_50d",
+      "name": "Kodak Vision3 50D",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+<resources>
+    <string name="route_reversal_only">리버설 필름은 직접 스캔만 지원합니다.</string>
+    <string name="route_print_preference_retained">인화 선택은 저장되며 네거티브 필름으로 바꾸면 복원됩니다.</string>
+    <string name="route_correction_preference_retained">현재 처리 방식에서는 지원하지 않아 일시적으로 꺼집니다. 설정은 유지됩니다.</string>
+</resources>

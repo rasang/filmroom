@@ -1,0 +1,33 @@
+[package]
+name = "film-engine"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "film_engine"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+adreno-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
+precision-f64 = ["spektrafilm-core/precision-f64", "spektrafilm-math/precision-f64", "spektrafilm-gpu/precision-f64"]
+
+[dependencies]
+spektrafilm-core.workspace = true
+spektrafilm-model.workspace = true
+spektrafilm-math.workspace = true
+spektrafilm-gpu.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jni = { version = "0.21.1", default-features = false }
+rustfft.workspace = true
+rayon.workspace = true
+
+
+wgpu = { version = "24", optional = true, default-features = false, features = ["wgsl", "vulkan-portability"] }
+pollster = { version = "0.4", optional = true }
+bytemuck = { version = "1.25", optional = true }
+
+[dev-dependencies]
+naga = { version = "24", features = ["wgsl-in"] }

@@ -1,0 +1,14 @@
+{
+  "decoded-50mp.f32le": {
+    "bytes": 603979776,
+    "sha256": "8d004708916eb227157d2992f4fc4b7903db3d95d1d0b58995624ee403732001"
+  },
+  "encoded-50mp.jpg": {
+    "bytes": 20895476,
+    "sha256": "aeb32a17f2a2afcb69a454c34a5339c23e4a6daacbf6620b39b1ae17353e2f6e"
+  },
+  "encoded-50mp.tif": {
+    "bytes": 301992782,
+    "sha256": "e17afab6aeb81586dec2c5074494871f5fb8440cd3f2f7f3ddec4a780d94180b"
+  }
+}

@@ -1,0 +1,620 @@
+{
+  "summary": {
+    "tests": 295,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1
+  },
+  "suites": [
+    {
+      "name": "dev.filmroom.ExportCompletionVisibilityHostTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:57",
+      "hostname": "b8aeedd6a192",
+      "time": "1.254"
+    },
+    {
+      "name": "dev.filmroom.NativeScreenHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:13",
+      "hostname": "b8aeedd6a192",
+      "time": "0.164"
+    },
+    {
+      "name": "dev.filmroom.diagnostics.DiagnosticStoreTest",
+      "tests": "21",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.069"
+    },
+    {
+      "name": "dev.filmroom.io.formats.PhotoHeadersTest",
+      "tests": "8",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.014"
+    },
+    {
+      "name": "dev.filmroom.BitmapOutputColorTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:40",
+      "hostname": "b8aeedd6a192",
+      "time": "0.001"
+    },
+    {
+      "name": "dev.filmroom.HighResolutionImportHostTest",
+      "tests": "9",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:10",
+      "hostname": "b8aeedd6a192",
+      "time": "2.876"
+    },
+    {
+      "name": "dev.filmroom.EditorQueueHandoffHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:56",
+      "hostname": "b8aeedd6a192",
+      "time": "0.191"
+    },
+    {
+      "name": "dev.filmroom.DownloadsExportHostTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:56",
+      "hostname": "b8aeedd6a192",
+      "time": "0.255"
+    },
+    {
+      "name": "dev.filmroom.RulerSeekBarHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.064"
+    },
+    {
+      "name": "dev.filmroom.DiagnosticShareHostTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:56",
+      "hostname": "b8aeedd6a192",
+      "time": "0.153"
+    },
+    {
+      "name": "dev.filmroom.ProcessingVisualStageTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.004"
+    },
+    {
+      "name": "dev.filmroom.export.ExportQueueHostTest",
+      "tests": "14",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.439"
+    },
+    {
+      "name": "dev.filmroom.PreviewRefinementHostTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:13",
+      "hostname": "b8aeedd6a192",
+      "time": "0.135"
+    },
+    {
+      "name": "dev.filmroom.io.PhotoLimitsTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.001"
+    },
+    {
+      "name": "dev.filmroom.io.formats.FormatCapabilitiesTest",
+      "tests": "8",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.007"
+    },
+    {
+      "name": "dev.filmroom.FilmEffectsStateHostTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:09",
+      "hostname": "b8aeedd6a192",
+      "time": "0.12"
+    },
+    {
+      "name": "dev.filmroom.diagnostics.DiagnosticJsonRegressionTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.2"
+    },
+    {
+      "name": "dev.filmroom.codec.CodecExportScopeTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:16",
+      "hostname": "b8aeedd6a192",
+      "time": "0.006"
+    },
+    {
+      "name": "dev.filmroom.diagnostics.RawTechnicalInfoTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.078"
+    },
+    {
+      "name": "dev.filmroom.EditorRotationHostTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:56",
+      "hostname": "b8aeedd6a192",
+      "time": "0.756"
+    },
+    {
+      "name": "dev.filmroom.CameraLayoutRenderHostTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:40",
+      "hostname": "b8aeedd6a192",
+      "time": "15.368"
+    },
+    {
+      "name": "dev.filmroom.ExportQueuePresentationTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:07",
+      "hostname": "b8aeedd6a192",
+      "time": "0.004"
+    },
+    {
+      "name": "dev.filmroom.StartupRecoveryHostTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:15",
+      "hostname": "b8aeedd6a192",
+      "time": "0.12"
+    },
+    {
+      "name": "dev.filmroom.ExportQueueActivityHostTest",
+      "tests": "10",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:03",
+      "hostname": "b8aeedd6a192",
+      "time": "1.745"
+    },
+    {
+      "name": "dev.filmroom.io.StaticPngTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.001"
+    },
+    {
+      "name": "dev.filmroom.PrivateWorkRecoveryTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.023"
+    },
+    {
+      "name": "dev.filmroom.FilmCarouselPositionHostTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:07",
+      "hostname": "b8aeedd6a192",
+      "time": "1.031"
+    },
+    {
+      "name": "dev.filmroom.RawOwnershipHostTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.103"
+    },
+    {
+      "name": "dev.filmroom.ExportProgressDialogHostTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:02",
+      "hostname": "b8aeedd6a192",
+      "time": "0.85"
+    },
+    {
+      "name": "dev.filmroom.io.LinearSpoolTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.002"
+    },
+    {
+      "name": "dev.filmroom.FilmStockArtworkHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:09",
+      "hostname": "b8aeedd6a192",
+      "time": "1.1"
+    },
+    {
+      "name": "dev.filmroom.TransientStatusHostTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:15",
+      "hostname": "b8aeedd6a192",
+      "time": "1.063"
+    },
+    {
+      "name": "dev.filmroom.AutoExposureChoiceHostTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:35",
+      "hostname": "b8aeedd6a192",
+      "time": "5.309"
+    },
+    {
+      "name": "dev.filmroom.NativeWorkReservationsTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:13",
+      "hostname": "b8aeedd6a192",
+      "time": "0.379"
+    },
+    {
+      "name": "dev.filmroom.ExportOwnedCleanupTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:02",
+      "hostname": "b8aeedd6a192",
+      "time": "0.035"
+    },
+    {
+      "name": "dev.filmroom.SettledChoiceSelectorHostTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.464"
+    },
+    {
+      "name": "dev.filmroom.HighResolutionCodecCapabilityHostTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:10",
+      "hostname": "b8aeedd6a192",
+      "time": "0.031"
+    },
+    {
+      "name": "dev.filmroom.diagnostics.NativeEngineFailureTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.084"
+    },
+    {
+      "name": "dev.filmroom.codec.PhotoCodecsTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:16",
+      "hostname": "b8aeedd6a192",
+      "time": "0.394"
+    },
+    {
+      "name": "dev.filmroom.PendingExportCancellationTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:13",
+      "hostname": "b8aeedd6a192",
+      "time": "0.001"
+    },
+    {
+      "name": "dev.filmroom.ResponsiveLayoutHostTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.449"
+    },
+    {
+      "name": "dev.filmroom.export.ExportServiceLifecycleHostTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.288"
+    },
+    {
+      "name": "dev.filmroom.ExportQueueEntryHostTest",
+      "tests": "9",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:04",
+      "hostname": "b8aeedd6a192",
+      "time": "2.346"
+    },
+    {
+      "name": "dev.filmroom.io.PngColorProfileHostTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.046"
+    },
+    {
+      "name": "dev.filmroom.io.LinearPreviewTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.036"
+    },
+    {
+      "name": "dev.filmroom.ProcessingAnimationHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.038"
+    },
+    {
+      "name": "dev.filmroom.ExportStageRailHostTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:07",
+      "hostname": "b8aeedd6a192",
+      "time": "0.093"
+    },
+    {
+      "name": "dev.filmroom.RawMetadataWarningHostTest",
+      "tests": "5",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:14",
+      "hostname": "b8aeedd6a192",
+      "time": "0.091"
+    },
+    {
+      "name": "dev.filmroom.StartupRecoveryGateTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:15",
+      "hostname": "b8aeedd6a192",
+      "time": "0.073"
+    },
+    {
+      "name": "dev.filmroom.ExportStoragePolicyTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:07",
+      "hostname": "b8aeedd6a192",
+      "time": "0.001"
+    },
+    {
+      "name": "dev.filmroom.export.RealNativeExportQueueHostTest",
+      "tests": "1",
+      "skipped": "1",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.018"
+    },
+    {
+      "name": "dev.filmroom.io.LinearRgbPngTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:18",
+      "hostname": "b8aeedd6a192",
+      "time": "0.348"
+    },
+    {
+      "name": "dev.filmroom.codec.JniContractTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:16",
+      "hostname": "b8aeedd6a192",
+      "time": "0.048"
+    },
+    {
+      "name": "dev.filmroom.codec.QueueCodecWiringTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.101"
+    },
+    {
+      "name": "dev.filmroom.NativeMemoryPolicyTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:13",
+      "hostname": "b8aeedd6a192",
+      "time": "0.002"
+    },
+    {
+      "name": "dev.filmroom.EditHistoryTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:56",
+      "hostname": "b8aeedd6a192",
+      "time": "0.004"
+    },
+    {
+      "name": "dev.filmroom.ExportDisplayProgressTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:58",
+      "hostname": "b8aeedd6a192",
+      "time": "0.002"
+    },
+    {
+      "name": "dev.filmroom.export.ExportCompletionReadHostTest",
+      "tests": "9",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:17",
+      "hostname": "b8aeedd6a192",
+      "time": "0.171"
+    },
+    {
+      "name": "dev.filmroom.GpuRuntimeInfoHostTest",
+      "tests": "7",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:10",
+      "hostname": "b8aeedd6a192",
+      "time": "0.123"
+    },
+    {
+      "name": "dev.filmroom.FilmEffectsControlsHostTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:30:08",
+      "hostname": "b8aeedd6a192",
+      "time": "0.722"
+    },
+    {
+      "name": "dev.filmroom.ExportNotificationPermissionHostTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-10-31T06:29:58",
+      "hostname": "b8aeedd6a192",
+      "time": "3.473"
+    }
+  ]
+}

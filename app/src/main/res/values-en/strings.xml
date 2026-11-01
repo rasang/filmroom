@@ -1,0 +1,758 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="text_3d05fc7cf7e4" formatted="false">Cleaning up temporary files from the last session</string>
+    <string name="text_5ec95121dc94" formatted="true">%1$s temporary items from the last session could not be cleaned up. Editing is paused to avoid filling your storage. Check your device storage, then tap here to retry, or close the app and reopen it later. Your original photo is unchanged.</string>
+    <string name="text_b3622bcacaaf" formatted="false">Restore on-device editing</string>
+    <string name="text_cd6fac59a752" formatted="false">The last unfinished export cannot be cleaned up right now. Check your gallery or try again later.</string>
+    <string name="text_7b50017ae47e" formatted="false">Photo</string>
+    <string name="text_063189730acc" formatted="false">The temporary photo from the last session is no longer available. Please import it again.</string>
+    <string name="text_1663134e88db" formatted="false">Read photo</string>
+    <string name="text_6dfdd1fe6561" formatted="false">Finish import</string>
+    <string name="text_2416623f6d39" formatted="false">Photo imported. Further processing was canceled.</string>
+    <string name="text_d630bd89f6dd" formatted="false">Import canceled. Your previous photo has been kept.</string>
+    <string name="text_3052d04d78c2" formatted="false">This photo is too large to read safely. Please choose a smaller photo.</string>
+    <string name="text_c976e3b99689" formatted="false">Unable to read this photo. Please select a supported photo format.</string>
+    <string name="text_c12aefec4f8a" formatted="false">Canceling and cleaning up temporary files…</string>
+    <string name="text_6f25582e0d79" formatted="false">Preview update canceled.</string>
+    <string name="text_acd49b3daba5" formatted="false">Not enough device memory to generate a preview.</string>
+    <string name="text_bc37a5375a5d" formatted="false">On-device rendering did not finish. Please retry or choose another photo.</string>
+    <string name="text_be0d9af082d8" formatted="false">Add to export queue</string>
+    <string name="text_bb8990972dce" formatted="false">Added to the export queue. You can keep editing or add more photos.</string>
+    <string name="text_afb4ebeb2c42" formatted="false">Cancellation requested. Check the export queue for the task status.</string>
+    <string name="text_f9957f03a610" formatted="false">The task is still being prepared in the background. Check the export queue for its status.</string>
+    <string name="text_9f9e68d602d6" formatted="false">Stopped waiting. Check the export queue to see whether the task was accepted.</string>
+    <string name="text_834295cc897b" formatted="false">Task added to the export queue. Check the queue for its status.</string>
+    <string name="text_aeb3f82f0b35" formatted="false">Not enough memory to add the export task.</string>
+    <string name="text_420e35e0302a" formatted="false">Task added to the export queue. Check its status or resume it there.</string>
+    <string name="text_11ee5fdc4a0b" formatted="false">Could not add the export task. Check your device storage and try again.</string>
+    <string name="text_16b38790d59b" formatted="false">Back to editor</string>
+    <string name="text_88b41d5ab211" formatted="false">Export queue</string>
+    <string name="text_f361f0328380" formatted="false">Loading export queue…</string>
+    <string name="text_3cd263a38563" formatted="false">Unable to load the export queue right now. Go back and try again.</string>
+    <string name="text_b4351becfe47" formatted="false">Unable to read export queue</string>
+    <string name="text_5f44ac2035ae" formatted="true">%1$s processing</string>
+    <string name="text_24d163f0f56e" formatted="true">%1$s waiting</string>
+    <string name="text_e982159d21f2" formatted="true">%1$s paused</string>
+    <string name="text_b331b1884a29" formatted="false">No export tasks yet\nChoose Export in the editor to add one here.</string>
+    <string name="text_7062447638eb" formatted="false">Unable to resume right now. Please try again later.</string>
+    <string name="text_d0ac5e20f891" formatted="false">Cancellation did not finish. Please try again.</string>
+    <string name="text_2d968e781718" formatted="false">Task not started. Tap to resume</string>
+    <string name="text_916bd97fb66f" formatted="false">Preparing thumbnail</string>
+    <string name="text_7c9691192f1b" formatted="false">Resume</string>
+    <string name="text_2cd0f3be8738" formatted="false">Cancel</string>
+    <string name="text_4c777c000d4a" formatted="false">Cancel this export?</string>
+    <string name="text_a008667aeb14" formatted="false">This task\'s temporary files will be cleaned up. Your original photo will not be affected.</string>
+    <string name="text_670ec25af841" formatted="false">Keep</string>
+    <string name="text_537d17f1c531" formatted="false">Cancel task</string>
+    <string name="text_9c1ea2e60a71" formatted="false">View photo</string>
+    <string name="text_979a332955c8" formatted="false">Details</string>
+    <string name="text_0ae7312510f4" formatted="false">Hide details</string>
+    <string name="text_a97cb6107f92" formatted="false">Film</string>
+    <string name="text_1a5219a8272a" formatted="false">Not enough</string>
+    <string name="text_402590868fff" formatted="false">Unable</string>
+    <string name="text_4f2d9c358b11" formatted="false">Could not</string>
+    <string name="text_a9ca8eff92c8" formatted="false">Pending cleanup</string>
+    <string name="text_b8784c8dd563" formatted="false">Retry</string>
+    <string name="text_183e988f1288" formatted="true">Photo %1$s, %2$s</string>
+    <string name="text_38952e7e372e" formatted="true">Photo %1$s, cancel export</string>
+    <string name="text_3f3f6c8c5093" formatted="true">Photo %1$s, view saved photo</string>
+    <string name="text_a9e8a732c910" formatted="true">Photo %1$s, expand or collapse details</string>
+    <string name="text_f6a4bb2cb013" formatted="false">View the saved photo in your gallery or file manager.</string>
+    <string name="text_3be614977d5d" formatted="false">\nUnfinished stages may be recalculated when you resume.\nTemporary files are kept while paused. Cancel the task to free up storage.</string>
+    <string name="text_e3c1f7706839" formatted="false">No thumbnail yet</string>
+    <string name="text_8fb3a3261b43" formatted="false">Waiting to process</string>
+    <string name="text_9aaf67962338" formatted="false">Exporting</string>
+    <string name="text_eb0c326b60ae" formatted="false">Paused</string>
+    <string name="text_544c342feaf0" formatted="false">Adding photo</string>
+    <string name="text_1bd91a7d0c53" formatted="false">Saved</string>
+    <string name="text_6e4445df6957" formatted="false">Export failed</string>
+    <string name="text_a37778f17c5f" formatted="false">Canceled</string>
+    <string name="text_a15bc3b4bd3e" formatted="true">Export failed\n%1$s · Step %2$s/7</string>
+    <string name="text_1a418b9270f7" formatted="false">Export result</string>
+    <string name="text_37eb7c18d5ef" formatted="false">Negative stage illustration · Not the final photo</string>
+    <string name="text_0b00a78a5faa" formatted="false">Original · Not the processed result</string>
+    <string name="text_dde174726d3f" formatted="false">Cancel the current operation?</string>
+    <string name="text_aa7d5766b326" formatted="false">Photos that have already been saved will not be deleted.</string>
+    <string name="text_a7084fcb218d" formatted="false">Cancel operation</string>
+    <string name="text_576d81bb0631" formatted="false">Import</string>
+    <string name="text_76420433f22d" formatted="false">Export</string>
+    <string name="text_926a50b98ece" formatted="false">Undo</string>
+    <string name="text_03717b6f1070" formatted="false">Redo</string>
+    <string name="text_ae384296a4ac" formatted="false">Reset preset</string>
+    <string name="text_df3d58c7d84b" formatted="false">Settings</string>
+    <string name="text_1f14f4b50d0b" formatted="false">Bring your photos into Filmroom</string>
+    <string name="text_95c277eafaea" formatted="false">Authentic film and photographic paper processing\nAll calculations run on your device</string>
+    <string name="text_a7fc4b2dbd50" formatted="false">Import photo</string>
+    <string name="text_ee2241639ab0" formatted="false">Photos and supported DNG files · No account needed</string>
+    <string name="text_c37117eec876" formatted="false">Original</string>
+    <string name="text_002e7216c97a" formatted="false">Loading zoomed preview</string>
+    <string name="text_36c69988127e" formatted="false">Compare with original</string>
+    <string name="text_255cf72e1d8c" formatted="false">Adjust composition</string>
+    <string name="text_7c3154414c11" formatted="false">Photo information</string>
+    <string name="text_1b0acbdaf172" formatted="false">Original · Tap Compare again to return</string>
+    <string name="text_6d05fcab868f" formatted="true">Film preview · %1$s × %2$s</string>
+    <string name="text_a21efd19b7df" formatted="false">Back to film effect</string>
+    <string name="text_c3c12cabaae9" formatted="false">Updating preview</string>
+    <string name="text_130bb0102047" formatted="false">Adjusting composition. Confirm or cancel below</string>
+    <string name="text_168ac579f2fb" formatted="false">Temporary files need cleanup</string>
+    <string name="text_74edb00b2c95" formatted="false">Temporary files from the last session could not be cleaned up. Check available storage and retry. Your original photo will not be changed.</string>
+    <string name="text_77b9d0a61b6d" formatted="false">Retry cleanup</string>
+    <string name="text_a558cf14eef8" formatted="false">Close app</string>
+    <string name="text_bb1d19b85634" formatted="false">Diagnostic logs</string>
+    <string name="text_7eefaaff791f" formatted="false">Cancel export</string>
+    <string name="text_25e7efea7600" formatted="false">Finishing export</string>
+    <string name="text_35e33ec9481e" formatted="false">Canceling\nExiting after cleanup</string>
+    <string name="text_461ec432d86f" formatted="true">Photos are processed only on your device. Adding to the export queue. Accepted tasks can continue in the background; check the export queue for their status.\n\nCurrent step: %1$s</string>
+    <string name="text_cd33cfaad6ad" formatted="false">Cleaning up</string>
+    <string name="text_aacf040ce88a" formatted="false">Film exposure</string>
+    <string name="text_7ce0c0cf48da" formatted="false">Changes film exposure and its imaging response, not simply the brightness of the final photo.</string>
+    <string name="text_8e2f643ad160" formatted="false">Brightness</string>
+    <string name="text_8dbf138761d8" formatted="false">Adjusts the brightness of the final photo.</string>
+    <string name="text_4cbc753240e5" formatted="false">Contrast</string>
+    <string name="text_0a746a522ab4" formatted="false">Adjusts print contrast. The default preserves the original effect. Bypassed in direct scan mode.</string>
+    <string name="text_90f74b4ac6f1" formatted="false">Warmth</string>
+    <string name="text_4bed17be043d" formatted="false">Fine-tunes warmth through print filtration, not a color temperature setting in K. Bypassed in direct scan mode.</string>
+    <string name="text_6045e74dcfa7" formatted="false">Development inhibition</string>
+    <string name="text_fa586db5f990" formatted="false">Changes color and edge contrast through development inhibition. Controls the same effect as Development inhibition strength in Development; the two underlying factors are multiplied. The scale indicates a relative adjustment, with the default preserving the original effect. The minimum does not produce black and white.</string>
+    <string name="text_cda1ea706d23" formatted="false">Diffusion filter</string>
+    <string name="text_69c47fd991d5" formatted="false">Simulates a lens diffusion filter, controlled separately from film halation. Glimmerglass / Black Pro-Mist / Pro-Mist / Cinebloom correspond to their respective filter models.</string>
+    <string name="text_7351ad023c8d" formatted="false">Diffusion strength</string>
+    <string name="text_fc5315fbd6fd" formatted="false">Select a diffusion filter first. 0 disables the effect.</string>
+    <string name="text_dfe1ad62ec51" formatted="false">Diffusion spread</string>
+    <string name="text_93ee12df430c" formatted="false">Controls the spread of lens diffusion.</string>
+    <string name="text_e8b4d7c5c3d2" formatted="false">Halation strength</string>
+    <string name="text_b89612346534" formatted="false">Simulates film halation around highlights, usually warm-toned, with separately adjustable color. It does not blur the entire photo.</string>
+    <string name="text_f08d365f119c" formatted="false">Halation spread</string>
+    <string name="text_b5034bff2db9" formatted="false">Controls the spread of film halation around highlights.</string>
+    <string name="text_5acbd63667a0" formatted="false">Grain strength</string>
+    <string name="text_7b7266f68310" formatted="false">0 disables grain. Higher values increase film grain.</string>
+    <string name="text_065f01b65731" formatted="false">Grain size</string>
+    <string name="text_6c6bd5cb96c0" formatted="false">Controls grain size. Unavailable when strength is 0.</string>
+    <string name="text_813cd5bf9234" formatted="false">Paper</string>
+    <string name="text_14e7fe83afcb" formatted="false">Selects a photographic paper or motion-picture print film profile, changing print color and response.</string>
+    <string name="text_3fe7b9f3a996" formatted="false">Yellow filtration</string>
+    <string name="text_15206742c3a6" formatted="false">Changes yellow filtration during paper exposure. 0 uses the original formula. This is not screen color temperature.</string>
+    <string name="text_5f542cc5a3de" formatted="false">Magenta filtration</string>
+    <string name="text_0e5ad3c12a0e" formatted="false">Changes magenta filtration during paper exposure. 0 uses the original formula.</string>
+    <string name="text_469f85e3c561" formatted="false">Pre-exposure</string>
+    <string name="text_7dd11c898748" formatted="false">Adds a small, uniform exposure (also called preflashing) to paper or motion-picture print film to alter contrast. 0 disables it. The value is an additional exposure ratio, not flash power or image brightness.</string>
+    <string name="text_23cc75747b5a" formatted="false">Sharpening strength</string>
+    <string name="text_60d828125725" formatted="false">Emphasizes scanned edges. 0 disables sharpening. Excessive strength may create halos; it cannot recover detail missing from the original.</string>
+    <string name="text_e9c8b36e09c7" formatted="false">Sharpening radius</string>
+    <string name="text_cff8983d8e70" formatted="false">Controls the sharpening radius in pixels. Unavailable when strength is 0.</string>
+    <string name="text_c4d38d9c07cc" formatted="false">Film stock</string>
+    <string name="text_5f86d5d545f8" formatted="false">Selects a bundled film profile. Reversal film defaults to direct scanning; negative film defaults to printing.</string>
+    <string name="text_9b7a0bf8b525" formatted="false">Film format</string>
+    <string name="text_13d6c864eb05" formatted="false">The simulated format\'s long-edge length in millimeters, not the film strip width. Affects grain and optical effect scale. 35 mm does not mean the long edge of a standard 135 frame.</string>
+    <string name="text_3c14663c1cfa" formatted="false">Auto exposure</string>
+    <string name="text_eeb4cdfe3959" formatted="false">Select a metering mode to enable auto exposure. Turning it off retains the last metering mode. Estimates film exposure from the imported photo, not the camera exposure at capture. Average and Median use brightness across the whole image; Center-weighted emphasizes the center; Partial meters only the central circle; Matrix weights a 5×5 grid; Multi-zone weights three concentric regions; Highlight-weighted emphasizes brighter pixels. These are simulated metering modes, not recreations of camera manufacturers\' scene recognition.</string>
+    <string name="text_be94f251df06" formatted="false">Highlight boost</string>
+    <string name="text_7b779407bf2a" formatted="false">Increases exposure in highlight areas. 0 disables it.</string>
+    <string name="text_7db1278a003a" formatted="false">Highlight range</string>
+    <string name="text_f3e9a635edb2" formatted="false">Controls the area affected by highlight boost.</string>
+    <string name="text_1eb299c92ae4" formatted="false">Highlight threshold</string>
+    <string name="text_67ca9c11ac9c" formatted="false">Sets the brightness at which highlight boost starts, in stops above middle gray. Higher values boost only brighter areas. This does not recover lost highlights.</string>
+    <string name="text_35d9afa371aa" formatted="false">Lens softening</string>
+    <string name="text_a19e8ff37742" formatted="false">Simulates lens blur, measured in micrometers at the film plane. 0 disables it.</string>
+    <string name="text_1ecfa7339d9b" formatted="false">Scattering strength</string>
+    <string name="text_df421b8d77b5" formatted="false">Light scattering within the film, controlled independently of film halation.</string>
+    <string name="text_27360875f5af" formatted="false">Scattering spread</string>
+    <string name="text_ff2824686803" formatted="false">Controls the spread of film scattering.</string>
+    <string name="text_67eec7fc23cb" formatted="false">Halation color</string>
+    <string name="text_80a38a96456b" formatted="false">Changes the distribution of halation across color layers while preserving total strength.</string>
+    <string name="text_96dc8a905d84" formatted="false">Halation reflections</string>
+    <string name="text_990e19e16b96" formatted="false">Simulates the number of internal light reflections in the film. More reflections require more computation.</string>
+    <string name="text_d8d39aadba89" formatted="false">Reflection decay</string>
+    <string name="text_1b574ccb3dca" formatted="false">Controls halation decay after each reflection.</string>
+    <string name="text_901dc35db60c" formatted="false">Halation compensation</string>
+    <string name="text_3aa08a91a7b7" formatted="false">Compensates for the overall brightening caused by added halation. Turning this off retains that brightening.</string>
+    <string name="text_1ac007c4cc44" formatted="false">Red-layer grain</string>
+    <string name="text_7ee55be9078d" formatted="false">Adjusts the grain area ratio for this color layer, not saturation or radius.</string>
+    <string name="text_4178263a7543" formatted="false">Green-layer grain</string>
+    <string name="text_bf4fa10b9092" formatted="false">Blue-layer grain</string>
+    <string name="text_0932a36c793c" formatted="false">Layered grain</string>
+    <string name="text_18a3261024a9" formatted="false">Simulates grain in the film\'s different light-sensitive layers.</string>
+    <string name="text_032a197cbdc1" formatted="false">Grain layers</string>
+    <string name="text_bec5aa3e1052" formatted="false">Only applies when layered grain is off. More layers require more computation.</string>
+    <string name="text_10822132628a" formatted="false">Grain softening</string>
+    <string name="text_703b12844fd9" formatted="false">Adjusts grain blur in pixels of the image currently being processed. The default is 0.65.</string>
+    <string name="text_7642681245ee" formatted="false">Dye cloud spread</string>
+    <string name="text_697904f75f57" formatted="false">The appearance of color film grain is related to tiny dye clouds. This adjusts dye cloud spread in the model. The value is a model coefficient, not a physical length.</string>
+    <string name="text_21fab82784d2" formatted="false">Grain uniformity</string>
+    <string name="text_4e33ce2575ba" formatted="false">Changes grain uniformity while preserving the profile\'s color-layer ratios.</string>
+    <string name="text_bf9837ba9fec" formatted="false">Clumping scale</string>
+    <string name="text_9dcf8c3eacb2" formatted="false">Simulates the scale of uneven grain distribution, in micrometers. It does not represent actual grains sticking together.</string>
+    <string name="text_c95615254a6d" formatted="false">Clumping strength</string>
+    <string name="text_c58fafa690cd" formatted="false">Adjusts the strength of uneven grain distribution, with model amplitude in nanometers. This is neither actual grain displacement nor a percentage.</string>
+    <string name="text_9f9d03c837c2" formatted="false">Film contrast</string>
+    <string name="text_43e5e3a7d83d" formatted="false">Adjusts the slope of the film characteristic curve. 1 uses the original profile value.</string>
+    <string name="text_febdf6716d8a" formatted="false">Development inhibition strength</string>
+    <string name="text_2ea45ddd3494" formatted="false">Simulates developer inhibitor effects within a layer and between color layers. Controls the same effect as Development inhibition in Adjustments; the two underlying factors are multiplied. The scale indicates a relative adjustment, with the default preserving the original effect.</string>
+    <string name="text_d16c830dd6b9" formatted="false">Diffusion distance</string>
+    <string name="text_5add1c5c18cc" formatted="false">Developer inhibitor diffusion distance in the model, in micrometers.</string>
+    <string name="text_b52f4f0476c1" formatted="false">Intralayer effect</string>
+    <string name="text_57941e00a8a3" formatted="false">Adjusts development interactions within the same light-sensitive layer.</string>
+    <string name="text_cad65c0c8168" formatted="false">Interlayer effect</string>
+    <string name="text_44e260b2da07" formatted="false">Adjusts development interactions between different light-sensitive layers.</string>
+    <string name="text_abc2bcc3191e" formatted="false">Imaging method</string>
+    <string name="text_0001b8c5d8e1" formatted="false">Printing uses the selected photographic paper or motion-picture print film model. Direct scanning of reversal film produces a positive image. Direct scanning of negative film does not invert it and preserves the negative appearance.</string>
+    <string name="text_6a36379e12c4" formatted="false">Print diffusion</string>
+    <string name="text_31b721f36494" formatted="false">Uses a diffusion filter at the printing stage. Does not apply to direct scans.</string>
+    <string name="text_30e570b25ae8" formatted="false">Print diffusion strength</string>
+    <string name="text_35e2151edfde" formatted="false">Adjusts the strength of print diffusion.</string>
+    <string name="text_884a4b4a9697" formatted="false">Print diffusion spread</string>
+    <string name="text_c7fab338a3d7" formatted="false">Adjusts the spread of print diffusion.</string>
+    <string name="text_cf53a2dacdff" formatted="false">Auto neutralization</string>
+    <string name="text_8adffac5e954" formatted="false">Uses neutralizing filtration from the film and paper database. Turn this off to adjust cyan, magenta and yellow filtration manually.</string>
+    <string name="text_3369277a249a" formatted="false">Neutralizing cyan</string>
+    <string name="text_b7bf91e866a3" formatted="false">Manual neutralizing filtration. Determined by the database when auto neutralization is on.</string>
+    <string name="text_d74d21d856e9" formatted="false">Neutralizing magenta</string>
+    <string name="text_402b841befae" formatted="false">Neutralizing yellow</string>
+    <string name="text_7304135c5662" formatted="false">Print contrast</string>
+    <string name="text_4362dbdb902d" formatted="false">Adjusts the characteristic curve slope of the selected paper or motion-picture print film model. 1 uses the original profile value.</string>
+    <string name="text_6de4ace73d5d" formatted="false">High-speed layer contrast</string>
+    <string name="text_d586866d607b" formatted="false">Adjusts the characteristic curve slope of the high-speed sublayer in the print model. 1 uses the original profile value.</string>
+    <string name="text_948834ada56f" formatted="false">Mid/low-speed layer contrast</string>
+    <string name="text_656f07b65ba1" formatted="false">Adjusts the characteristic curve slopes of both the medium-speed and low-speed sublayers in the print model. 1 uses the original profile value.</string>
+    <string name="text_350e57d09710" formatted="false">Red-layer contrast</string>
+    <string name="text_6aae1486c3af" formatted="false">Adjusts the characteristic curve slope of the red channel in the print model. 1 uses the original profile value.</string>
+    <string name="text_3ddbae16e340" formatted="false">Green-layer contrast</string>
+    <string name="text_87dcffd01b93" formatted="false">Adjusts the characteristic curve slope of the green channel in the print model. 1 uses the original profile value.</string>
+    <string name="text_bd27c57099e9" formatted="false">Blue-layer contrast</string>
+    <string name="text_2d22a0ed76a2" formatted="false">Adjusts the characteristic curve slope of the blue channel in the print model. 1 uses the original profile value.</string>
+    <string name="text_6dfc6e921ae6" formatted="false">Developer depletion</string>
+    <string name="text_a04be1d22c78" formatted="false">Simulates how developer depletion affects the characteristic curve of paper or motion-picture print film. 0 disables it. This does not simulate local chemical concentration.</string>
+    <string name="text_05af46cca01b" formatted="false">Print exposure</string>
+    <string name="text_b2bf5f41cd45" formatted="false">Changes paper exposure, in stops.</string>
+    <string name="text_2311d090000f" formatted="false">Print light source</string>
+    <string name="text_555843d03db0" formatted="false">Selects the light source used for printing. Direct scan mode bypasses printing.</string>
+    <string name="text_6535e9c39c2a" formatted="false">Print compensation</string>
+    <string name="text_ecb5cb67b187" formatted="false">Compensates during printing for brightness changes caused by film exposure adjustments. The effect also depends on print exposure normalization.</string>
+    <string name="text_99e0c3ab5f84" formatted="false">Exposure normalization</string>
+    <string name="text_a7d5a1c52f90" formatted="false">Normalizes print exposure using middle gray as a reference. This is not automatic metering based on analysis of the whole photo.</string>
+    <string name="text_9d35c4a1f0c8" formatted="false">Pre-exposure yellow filtration</string>
+    <string name="text_e5180d3737f5" formatted="false">Sets separate yellow filtration for print pre-exposure. Has no effect when pre-exposure is off.</string>
+    <string name="text_01894cdc79b1" formatted="false">Pre-exposure magenta filtration</string>
+    <string name="text_d08a02a1d17f" formatted="false">Sets separate magenta filtration for print pre-exposure. Has no effect when pre-exposure is off.</string>
+    <string name="text_1a8fd554611b" formatted="false">Scan softening</string>
+    <string name="text_f45c23864553" formatted="false">Simulates slight scan blur, in pixels of the image currently being processed. 0 disables it.</string>
+    <string name="text_c08900693d28" formatted="false">Scan glare</string>
+    <string name="text_eeaba0ff1bbe" formatted="false">Simulates haze and reduced contrast caused by stray light, not film halation around highlight edges. 0 disables it.</string>
+    <string name="text_f40402359b27" formatted="false">Glare variation</string>
+    <string name="text_56b172e2135b" formatted="false">Controls local variation in scan glare.</string>
+    <string name="text_65863fca9aa3" formatted="false">Glare softening</string>
+    <string name="text_73339f074019" formatted="false">Smooths uneven scan glare, in pixels of the image currently being processed.</string>
+    <string name="text_9c6c44727001" formatted="false">White-point correction</string>
+    <string name="text_e4d3654ef963" formatted="false">Corrects the scan white point. Not supported for direct scans of negatives; select printing or reversal film.</string>
+    <string name="text_391a41ace427" formatted="false">Black-point correction</string>
+    <string name="text_a4922750f39f" formatted="false">Corrects the scan black point. Not supported for direct scans of negatives; select printing or reversal film.</string>
+    <string name="text_a4e50b0ef643" formatted="false">White-point target</string>
+    <string name="text_4d74dee109f4" formatted="false">Target for white-point correction. Must be higher than the black point.</string>
+    <string name="text_6654107ffef8" formatted="false">Black-point target</string>
+    <string name="text_f040ad2ae5b5" formatted="false">Target for black-point correction. Must be lower than the white point.</string>
+    <string name="text_646130986822" formatted="false">Gamut compression</string>
+    <string name="text_192216b8cb6d" formatted="false">Compresses colors outside the sRGB gamut into the displayable range. Automatically disabled for wide-gamut export.</string>
+    <string name="text_6f16843acab7" formatted="false">GPU acceleration</string>
+    <string name="text_8d80b85bbd7f" formatted="false">Automatically attempts Adreno acceleration for some density stages; other stages remain on the CPU. Falls back to the CPU when unavailable. Faster processing is not guaranteed.</string>
+    <string name="text_683099bf5b6c" formatted="false">Film default</string>
+    <string name="text_789f61dbfcc7" formatted="false">Red</string>
+    <string name="text_d5234258fd84" formatted="false">Amber</string>
+    <string name="text_574ce385b86d" formatted="false">Neutral</string>
+    <string name="text_3fd47edce45b" formatted="false">Off</string>
+    <string name="text_2eb88a373a7f" formatted="false">Glimmerglass</string>
+    <string name="text_adb439547ac9" formatted="false">Black Pro-Mist</string>
+    <string name="text_3b339febf98c" formatted="false">Pro-Mist</string>
+    <string name="text_aaf1818f550f" formatted="false">Cinebloom</string>
+    <string name="text_499e8c373806" formatted="false">Print</string>
+    <string name="text_b5ef62893e01" formatted="false">Direct scan</string>
+    <string name="text_7eb336e42cb5" formatted="false">Auto</string>
+    <string name="text_8da97ddda990" formatted="false">On</string>
+    <string name="text_f65c42a2540b" formatted="false">Adjustments</string>
+    <string name="text_83219449b5eb" formatted="false">Light effects</string>
+    <string name="text_b82bd426d236" formatted="false">Grain</string>
+    <string name="text_1b5d3d55ef48" formatted="false">Development</string>
+    <string name="text_c2a291b64f6b" formatted="false">Scan</string>
+    <string name="text_ec00bc673f05" formatted="false">Choose paper</string>
+    <string name="text_3691a3aa4ece" formatted="false">Paper / print style</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · Motion-picture print film</string>
+    <string name="text_3b789c2037e2" formatted="false"> · Color paper</string>
+    <string name="text_7b528c395978" formatted="false">135 composition</string>
+    <string name="text_e76a25844aa5" formatted="false">Recompose</string>
+    <string name="text_61d5477ed69a" formatted="false">Landscape 135</string>
+    <string name="text_cad49035a99d" formatted="false">Portrait 135</string>
+    <string name="text_4b1db520af46" formatted="false">Original image</string>
+    <string name="text_d1047eed5dd5" formatted="false">Free</string>
+    <string name="text_36f33adaf094" formatted="false">Confirm</string>
+    <string name="text_f02806d5dc08" formatted="false">Composition</string>
+    <string name="text_9634fb0832be" formatted="false">Parameters</string>
+    <string name="text_06ea736a7066" formatted="true">Adjust %1$s</string>
+    <string name="text_c0b3fbff51cc" formatted="false">Done</string>
+    <string name="text_657a8c2de63c" formatted="false">, selected</string>
+    <string name="text_61ea0b0d9ed0" formatted="false">Film info</string>
+    <string name="text_74b054e27203" formatted="false">Frame watermark</string>
+    <string name="text_369143830b0b" formatted="false">Frame watermark, fixed at frame 25</string>
+    <string name="text_4b96acdd5e96" formatted="false">White holes (negative)</string>
+    <string name="text_6d2683a65646" formatted="false">White sprocket holes on negatives; always white on reversal film</string>
+    <string name="text_ffd510bae3ad" formatted="false">%+.2f stops</string>
+    <string name="text_5b1b0d1d80a6" formatted="false">%.2f×</string>
+    <string name="text_b6a198a1e6c7" formatted="false">%.2f pixels</string>
+    <string name="text_4e3db4596715" formatted="true">About %1$s</string>
+    <string name="text_de32e20193ad" formatted="false">Got it</string>
+    <string name="text_f94fbbaa8f93" formatted="true">Reset %1$s</string>
+    <string name="text_f2961369ae98" formatted="false">Restore the current film stock\'s preset settings?</string>
+    <string name="text_c265e02073e5" formatted="false">Resets exposure, light effects, grain, paper and other color settings. Keeps composition and watermark settings.</string>
+    <string name="text_e0534b8a4e46" formatted="false">Restore</string>
+    <string name="text_d1c4835b23ed" formatted="false">\nTransparent areas are composited over white</string>
+    <string name="text_c96f06693217" formatted="true">%1$s\n%2$s × %3$s\n%4$s\n%5$s KB\n\nTemporary on-device copy; the original is unchanged. Preview uses sRGB SDR. Export offers a choice of color space and retains supported original capture metadata (including existing GPS). Modification time is set to the export time. Private camera fields and old thumbnails are not copied.%6$s%7$s\n\nPinch to zoom; double-tap to reset or zoom in.\n\nZoomed preview: %8$s%9$s</string>
+    <string name="text_557e29365b35" formatted="true">\nPreview size: %1$s × %2$s</string>
+    <string name="text_8824021eb6d7" formatted="false">Reset zoom</string>
+    <string name="text_685f5b4ebdf4" formatted="false">Film and paper</string>
+    <string name="text_70e86d94f885" formatted="true">Calculated on your device using spectral film and paper models, not a simple color filter.\n\nIncludes %1$s camera film profiles and %2$s photographic paper / motion-picture print film profiles. Reversal film defaults to direct scanning; negative film defaults to printing. Names identify measured profiles and do not imply brand partnerships.\n\nSome cloud-based algorithm comparisons and code tests have been completed. Android hardware testing is still pending; large images may process slowly.\n\nOriginal project: Andrea Volpato / spektrafilm. Software licensed under GPL-3.0; film profiles under CC BY-SA 4.0. Full notices are included with the app.</string>
+    <string name="text_038ad816c53f" formatted="false">Open-source licenses</string>
+    <string name="text_070a076df57a" formatted="false">Software license · GPL-3.0</string>
+    <string name="text_42cec9151c59" formatted="false">Film profiles · CC BY-SA 4.0 and attribution</string>
+    <string name="text_0b3a85a2a436" formatted="false">Film engine · Rust third-party notices</string>
+    <string name="text_334ca499fe26" formatted="false">Image codecs · rawler and other dependency notices</string>
+    <string name="text_8150d89b6537" formatted="false">Sprocket border assets · Drawn from real references and attribution</string>
+    <string name="text_1a485ac7a998" formatted="false">The film model is based on Andrea Volpato\'s spektrafilm and its Rust port. The interface and image processing integration have been modified. Software is provided under GPL-3.0; film data under CC BY-SA 4.0. RAW decoding uses rawler (LGPL-2.1). Each dependency retains its own license. Complete corresponding source and build materials are provided with the installation package. Legal texts are kept in their original language.</string>
+    <string name="text_200ae4c1c12e" formatted="false">This notice cannot be read right now. See the corresponding source and licenses included with the installation package. This does not affect saving photos on your device.</string>
+    <string name="text_564eb6dfeaca" formatted="false">Open-source licenses and attribution</string>
+    <string name="text_d6d466c03f8e" formatted="false">Import from</string>
+    <string name="text_543b8fb9aa67" formatted="false">Choose a photo from your gallery</string>
+    <string name="text_85534f27f5d9" formatted="false">Choose a photo / DNG from files</string>
+    <string name="text_c69504e36552" formatted="true">Original %1$s × %2$s\nSDR · Saves a new file without overwriting the original</string>
+    <string name="text_42a85b8d8038" formatted="false">File format</string>
+    <string name="text_b4a83add8f8c" formatted="false">JPEG · Easy sharing</string>
+    <string name="text_82aa50547f13" formatted="false">PNG · Lossless compression</string>
+    <string name="text_ba4b003cfd7c" formatted="false">TIFF · 16-bit editing</string>
+    <string name="text_7a6dd5919b20" formatted="false">JPEG files are smaller and suitable for galleries and sharing.</string>
+    <string name="text_8d15e79b0441" formatted="false">PNG losslessly compresses this 8-bit output. This does not mean the original RAW, HDR or alpha channel is preserved.</string>
+    <string name="text_128a704b1837" formatted="false">JPEG quality · 95</string>
+    <string name="text_8cfce0f46112" formatted="false">JPEG quality, 95</string>
+    <string name="text_7190cce2fd40" formatted="true">JPEG quality · %1$s</string>
+    <string name="text_59df7ac272da" formatted="true">JPEG quality, %1$s</string>
+    <string name="text_6e539699fdb0" formatted="false">16-bit TIFF is suitable for further color editing and creates larger files. Saved in Downloads/暗房; some galleries cannot display it. It does not turn an 8-bit original back into RAW.</string>
+    <string name="text_20f14d321daa" formatted="false">Output color space</string>
+    <string name="text_df0877ff9634" formatted="false">Choose sRGB for general sharing. Wide-gamut output requires a color-managed viewer; the preview still uses sRGB. Selecting wide gamut automatically disables sRGB-only gamut compression.</string>
+    <string name="text_4a7b0d4654d7" formatted="false">Photo size</string>
+    <string name="text_f60066ec4bbf" formatted="false">Original size</string>
+    <string name="text_6bea77acefb3" formatted="false">Standard</string>
+    <string name="text_d1ee60a322e5" formatted="true">Higher detail · %1$s</string>
+    <string name="text_1018b7d83c8b" formatted="true">Original size · %1$s</string>
+    <string name="text_6d821f237f2f" formatted="false">With sprocket borders enabled, the photo is cropped to the current 135 composition and a fixed outer frame is added. The original photo file is unchanged.</string>
+    <string name="text_aabd69bfed16" formatted="false">Smaller sizes are scaled proportionally, without cropping or enlarging the original.</string>
+    <string name="text_597fecd88b25" formatted="false">Original-size processing may need several GiB of temporary storage. Processing stops if storage is insufficient; the image is never silently reduced.</string>
+    <string name="text_c767b0ebc50a" formatted="false">Everything is processed on your device. After adding a task to the export queue, you can keep editing, leave the screen or lock your device. Background processing is still subject to system limits. Check progress, pause or cancel in the export queue.</string>
+    <string name="text_cef4e28b1774" formatted="false">Export new photo</string>
+    <string name="text_d14f6e1f0a6f" formatted="false">Save new photo</string>
+    <string name="text_e8e6e48f180e" formatted="false">Editing preferences</string>
+    <string name="text_2413c386102e" formatted="false">Reset settings when importing a new photo</string>
+    <string name="text_712623100497" formatted="false">When on, restores the current film stock\'s preset. When off, keeps your color adjustments. Composition is always reset for a new photo.</string>
+    <string name="text_7daa923cc7e5" formatted="false">Restore last photo on startup</string>
+    <string name="text_5f08fa1da11e" formatted="false">Only affects the next app launch. Does not clear current edits or background exports.</string>
+    <string name="text_84a61a56ecc6" formatted="false">Choose how far back to include logs</string>
+    <string name="text_b46da08445e2" formatted="true">Last %1$s min</string>
+    <string name="text_45809131f9a2" formatted="false">Custom number of minutes</string>
+    <string name="text_90d8b0eab93d" formatted="false">1–1440 minutes</string>
+    <string name="text_75a879d2307c" formatted="false">Custom recent time range, 1 to 1440 minutes</string>
+    <string name="text_1fdccd5c32ea" formatted="false">Exports a single UTF-8 .txt file containing a diagnostic summary and full sanitized event details (parameters, dimensions, timings and memory). Does not include photos, filenames, GPS, paths or account information. Sent only after you choose a sharing destination.</string>
+    <string name="text_546989732ef0" formatted="false">Kept for up to 24 hours; older entries may be overwritten sooner when capacity is reached. The summary states the actual coverage. An unfinished operation is only a clue, not proof of a crash.</string>
+    <string name="text_d09e99fe27d8" formatted="false">Share TXT logs</string>
+    <string name="text_dcc63884dad1" formatted="false">Enter a whole number from 1 to 1440</string>
+    <string name="text_f0922cbcaaa2" formatted="false">Prepare diagnostic logs</string>
+    <string name="text_13e5bfcd9568" formatted="true">Preparing sanitized TXT logs for the last %1$s min…</string>
+    <string name="text_2cd0039fff3b" formatted="true">Share logs for the last %1$s min</string>
+    <string name="text_b6ad51ea5ed7" formatted="false">Unable to share logs right now</string>
+    <string name="text_f2df43642219" formatted="false">Check device storage and available sharing apps, then retry. Your photos will not be sent.</string>
+    <string name="text_ad1d18f9d3e5" formatted="true">135 composition + sprocket border → %1$s × %2$s</string>
+    <string name="text_96fa923afb1a" formatted="true">%1$s × %2$s · Sprocket borders unavailable at this size</string>
+    <string name="text_6e8f80256c84" formatted="true">%1$s × %2$s · Sprocket border assets unavailable</string>
+    <string name="text_ff27ed115be8" formatted="false">With the sprocket border, the image exceeds the current JPEG / TIFF limit of 84 million pixels. The original was not reduced. Turn off the border, choose a smaller size or use PNG.</string>
+    <string name="text_022fe563baa4" formatted="false">Not enough available memory to apply this composition.</string>
+    <string name="text_8f256a031a2d" formatted="false">Sprocket border preview exceeds the size limit</string>
+    <string name="text_5c82a6b4a003" formatted="false">Sprocket border asset does not match the task\'s fixed geometry</string>
+    <string name="text_1384551c8e44" formatted="false">Film sprocket borders are not available yet</string>
+    <string name="text_e47ae3f26387" formatted="false">Invalid linear image data</string>
+    <string name="text_5bba0c1f8416" formatted="false">Final composition preview exceeds the size limit</string>
+    <string name="text_bec36dff07be" formatted="false">The sprocket border asset version for the original export task is unavailable. No other asset will be substituted</string>
+    <string name="text_d1c5599a9bff" formatted="false">Sprocket border task geometry does not match the fixed asset</string>
+    <string name="text_5c0b4e508a52" formatted="false">Border strips must be explicitly composited onto a verified background color; transparency cannot be silently discarded</string>
+    <string name="text_a63185c8bf65" formatted="false">The photo\'s aspect ratio cannot accommodate the fixed sprocket border text. Assets will not be cropped or stretched</string>
+    <string name="text_b64913db4f1d" formatted="false">Export working directory validation failed. No photo was saved. Update the app and retry.</string>
+    <string name="text_df30ae362f2b" formatted="false">Not enough available device memory. Close other apps and retry. The original image was not reduced.</string>
+    <string name="text_2c28d802618b" formatted="false">On-device image codec component unavailable. Reinstall the complete installation package.</string>
+    <string name="text_41db58446aa4" formatted="false">Unable to start the on-device image codec component.</string>
+    <string name="text_93313da164ac" formatted="false">Not enough available device memory. Try again later. The original image was not reduced.</string>
+    <string name="text_c2145ea571e4" formatted="false">On-device encoding/decoding canceled</string>
+    <string name="text_0105eb1c06a7" formatted="false">This photo\'s encoding is not supported yet. DNG support currently covers verified 16-bit uncompressed and lossless JPEG-compressed variants. Embedded previews are not used in place of RAW.</string>
+    <string name="text_46ac8768982e" formatted="false">This DNG requires correction steps that are not supported yet. Corrections were not skipped, and the embedded preview was not used in place of RAW.</string>
+    <string name="text_c946e8a02212" formatted="false">This DNG\'s camera calibration matrix is not supported yet. No guessed colors were substituted.</string>
+    <string name="text_19b3b0255d08" formatted="false">On-device photo read/write failed. Check available storage and select the original file again.</string>
+    <string name="text_199d9706e7a1" formatted="false">Could not read complete, valid image data. Select the original file again. It is not yet possible to confirm whether the file is damaged.</string>
+    <string name="text_e92a0c3cbaef" formatted="false">This output color space is not supported yet. Color tags were not changed in place of conversion.</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">The final export exceeds the current limit of 84 million pixels.</string>
+    <string name="text_5c55db3ba035" formatted="false">This photo exceeds the codec component\'s current limit of 52 million pixels.</string>
+    <string name="text_6bceec6d29d6" formatted="false">Not enough device storage. Processing did not finish. Your original photo is unchanged.</string>
+    <string name="text_d171c3322a9c" formatted="false">The current device memory budget is too low to process this photo safely.</string>
+    <string name="text_56858cdae70f" formatted="false">This RAW file\'s color calibration data is not supported yet. No guessed colors were substituted.</string>
+    <string name="text_aff865b41066" formatted="false">On-device image encoding/decoding did not finish. Share diagnostic logs to help determine why. Your original photo is unchanged.</string>
+    <string name="text_62f3e125a3ce" formatted="false">Some optional lens corrections in this DNG were not applied. Vignetting or distortion may remain.</string>
+    <string name="text_95665116d521" formatted="false">Imports raw data using Filmroom\'s film colors, not a recreation of the camera\'s JPEG output.</string>
+    <string name="text_d2d161102e41" formatted="false">The camera\'s built-in display tone curve was not applied.</string>
+    <string name="text_99981a4927ac" formatted="false">Uses basic RAW color rendering without the file\'s hue/saturation correction tables. Colors may differ from the camera gallery.</string>
+    <string name="text_5f37317ec18e" formatted="false">RAW decoding metadata is incomplete. Processing was stopped.</string>
+    <string name="text_34f1a903d47d" formatted="true">暗房_诊断_%1$s分钟_%2$s_%3$s.txt</string>
+    <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\nEncoding: UTF-8; single text file (not ZIP)\n\n=== Summary ===\n</string>
+    <string name="text_7af205e83135" formatted="false">\n\n=== Full sanitized event details ===\n</string>
+    <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
+    <string name="text_60ef08049a72" formatted="true">App: Filmroom; version code: %1$s; engine build: 4; interface: 1\nAndroid API: %2$s; ABI: %3$s; processors: %4$s; Java heap limit: %5$s bytes; memory class: %6$s MB</string>
+    <string name="text_5c1712cb2d38" formatted="false">Current run</string>
+    <string name="text_b1336f82fea4" formatted="false">Restore editing</string>
+    <string name="text_5a9df9227ec6" formatted="false">Preview rendering</string>
+    <string name="text_9ced68312ac6" formatted="false">Original-size decoding</string>
+    <string name="text_71cab785c5d9" formatted="false">Check export budget</string>
+    <string name="text_0a3bbae44150" formatted="false">Original-size rendering</string>
+    <string name="text_2fa4917d052e" formatted="false">Export encoding</string>
+    <string name="text_73fff6a5d6e6" formatted="false">Diagnostic sharing</string>
+    <string name="text_f8281de2df36" formatted="false">Temporary file cleanup</string>
+    <string name="text_d2bb025a2e51" formatted="false">Start</string>
+    <string name="text_4077a1f6397d" formatted="false">Read image information</string>
+    <string name="text_56e09dd8e1fc" formatted="false">Tile decoding</string>
+    <string name="text_77f67305d365" formatted="false">Enter native engine</string>
+    <string name="text_2bd9ae163aa5" formatted="false">Native processing step</string>
+    <string name="text_98407f5c987e" formatted="false">Native engine return</string>
+    <string name="text_222b0d3c08c4" formatted="false">Start encoding</string>
+    <string name="text_9e388ac3f491" formatted="false">Row-by-row encoding</string>
+    <string name="text_2560088669b6" formatted="false">Create pending photo</string>
+    <string name="text_6ef11d1e8c02" formatted="false">Photo saved</string>
+    <string name="text_2625bda74112" formatted="false">Cancellation requested</string>
+    <string name="text_d43461bfe6fc" formatted="false">Clean up unfinished files</string>
+    <string name="text_ae173945fb80" formatted="false">Processing failed</string>
+    <string name="text_2c4c4e5e32fa" formatted="false">Previous run did not end normally</string>
+    <string name="text_c7b24e7997e9" formatted="false">End</string>
+    <string name="text_df800a26392c" formatted="false">Filmroom diagnostics | Version code </string>
+    <string name="text_66e4acfbd6bd" formatted="false"> | Last </string>
+    <string name="text_5b3a75c53bbd" formatted="false"> minutes\n</string>
+    <string name="text_2428420e407f" formatted="false">Total: </string>
+    <string name="text_e8a56d1c0e70" formatted="false"> events. Logs are retained for up to 24 hours or 1 MiB; older records are rotated out when capacity is reached.\n</string>
+    <string name="text_366712d2d80e" formatted="false">Actual first and last records: </string>
+    <string name="text_8727f227e2c6" formatted="false"> to </string>
+    <string name="text_0e898ec43b0b" formatted="false">; not continuous monitoring.\n</string>
+    <string name="text_fa1c6dd0bfc3" formatted="false">Discards observed in this run: expired </string>
+    <string name="text_6e94c47fde22" formatted="false">, capacity rotation </string>
+    <string name="text_4af5bd6fb80e" formatted="false">, damaged or incomplete </string>
+    <string name="text_e9d6840052fc" formatted="false">, uncertain future timestamp </string>
+    <string name="text_1701c7739625" formatted="false">. Totals across runs are unknown.\n</string>
+    <string name="text_5bf7bab64ce3" formatted="false">Most recent failure/interruption record: </string>
+    <string name="text_e779813b6cc2" formatted="false">Most recent on-device step: </string>
+    <string name="text_e5b01c51fa19" formatted="false">; the progress count applies only to the current pass, not completion of the whole photo.\n</string>
+    <string name="text_4d7c038cbc95" formatted="false">The last operation did not end normally. It may have been reclaimed by the system, force-closed or crashed. This is not a captured crash report.\n</string>
+    <string name="text_7d01902a70ae" formatted="false">No records in the selected time range. This does not establish whether any errors occurred.\n</string>
+    <string name="text_aebe06f7e024" formatted="false">Includes records from other runs. Their timing depends on the system UTC clock; clock changes may affect the time range.\n</string>
+    <string name="text_a89d10b60775" formatted="false">Some records could not be written. Contents may be incomplete.\n</string>
+    <string name="text_a6a08f5857fd" formatted="false">Contains only technical events and restricted numerical values, not photos, names, location, file paths or original exception text. Shared copies are cleaned up under a 24-hour retention policy the next time the app opens or shares logs. This run uses a monotonic clock to prevent clock jumps from deleting them early. System cache cleanup, uninstalling or clock changes between runs may affect availability. Recipients should save copies promptly.</string>
+    <string name="text_1c751a529433" formatted="false">Filmroom diagnostics · Last </string>
+    <string name="text_79aa64a23d25" formatted="false">Generated at (UTC): </string>
+    <string name="text_02e29a8a9e56" formatted="false">Window: </string>
+    <string name="text_73ba3e48606b" formatted="false"> ≤ event time ≤ </string>
+    <string name="text_4b5117d9bd17" formatted="false">Events within window: </string>
+    <string name="text_e52827dd4ad4" formatted="false">; events from other runs: </string>
+    <string name="text_c8768200958b" formatted="false">Actual first and last record times: </string>
+    <string name="text_bf7b123c114d" formatted="false">; no continuous monitoring between events.\n</string>
+    <string name="text_ccc4edebf400" formatted="false">Discard counts observable in this run: expired=</string>
+    <string name="text_1a58fbf44b39" formatted="false">, capacity rotation=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">, damaged/incomplete=</string>
+    <string name="text_338aa9ce6405" formatted="false">, unconfirmed future timestamp=</string>
+    <string name="text_b028650697a5" formatted="false">. Totals across runs cannot be determined.\n</string>
+    <string name="text_bbbde15a1296" formatted="false">Recorded only on your device. After tapping Share, you choose the receiving app. This app does not upload logs.\n</string>
+    <string name="text_e78eb8f72096" formatted="false">Retention: up to the last 24 hours and 1 MiB of events. Older records are replaced when capacity is reached.\n</string>
+    <string name="text_0cbe74b0ae0a" formatted="false">This run is filtered using a monotonic clock. Records from other runs can only be filtered using the UTC wall clock, so system clock changes may cause errors.\n</string>
+    <string name="text_f068c05d35bf" formatted="false">Both recorded UTC and monotonic times are listed. Filter UTC is calculated backward from this snapshot\'s time.\n</string>
+    <string name="text_de9b9a98a215" formatted="false">Does not contain photo content, filenames, paths, URIs, location, EXIF, accounts, keys, original exception text or unique device identifiers.\n</string>
+    <string name="text_9e46400a4c40" formatted="false">Native crash stacks are not captured. Unfinished records can only indicate that the previous operation may have been interrupted abnormally.\n</string>
+    <string name="text_d93adff8dfc6" formatted="false">The last operation did not end normally. It may have been reclaimed by the system, force-closed or crashed. The cause cannot be determined from this alone.\n</string>
+    <string name="text_f51871fbed21" formatted="false">Warning: some diagnostic records could not be written to device storage. This report may be incomplete.\n</string>
+    <string name="text_fd756ca7b128" formatted="false">No shareable diagnostic events in the selected time range. This does not mean no errors occurred during that time.\n</string>
+    <string name="text_42892fd91f62" formatted="false">\n\nEvents (technical codes; no free text):\n</string>
+    <string name="text_f3650cb3e121" formatted="false">FilterUTC=</string>
+    <string name="text_a6225820802e" formatted="false"> RecordedUTC=</string>
+    <string name="text_af560d1154f3" formatted="false"> MonotonicMs=</string>
+    <string name="text_0d863965cf79" formatted="false"> Run=</string>
+    <string name="text_da3f4b1e2ad6" formatted="false"> Sequence=</string>
+    <string name="text_b3660b2a6a62" formatted="false"> Operation=</string>
+    <string name="text_e564bb482cfa" formatted="false"> Result=</string>
+    <string name="text_815ce3797ff8" formatted="false"> ErrorCode=</string>
+    <string name="text_0a9cd9640dfe" formatted="false">Diagnostic time range must be 1–1440 minutes</string>
+    <string name="text_652bd8e2b42a" formatted="false">Prepare film data</string>
+    <string name="text_7b5d2a09babd" formatted="false">Auto metering</string>
+    <string name="text_6ff3e6e82562" formatted="false">Highlight enhancement</string>
+    <string name="text_99ccd913c2c3" formatted="false">Lens blur</string>
+    <string name="text_28dfadf63de0" formatted="false">Grain clusters</string>
+    <string name="text_bab826d7cea1" formatted="false">Lens diffusion</string>
+    <string name="text_ee5e1f321d0c" formatted="false">Film exposure to light</string>
+    <string name="text_e29e511b19c8" formatted="false">Film scattering</string>
+    <string name="text_0caa7cb6bf14" formatted="false">Film halation</string>
+    <string name="text_a3a8c53854e3" formatted="false">Convert to log exposure</string>
+    <string name="text_e010cca5a693" formatted="false">Form film density</string>
+    <string name="text_c3d62fb6dc52" formatted="false">Developer inhibitor diffusion</string>
+    <string name="text_63dc46ef8527" formatted="false">Film development</string>
+    <string name="text_6817024599e0" formatted="false">Generate grain</string>
+    <string name="text_b6ccbb59ff43" formatted="false">Simulate dye clouds</string>
+    <string name="text_465b9d003092" formatted="false">Grain imaging</string>
+    <string name="text_6534faa7428f" formatted="false">Paper and scan</string>
+    <string name="text_6fb121b28fdd" formatted="false">Scan sharpening</string>
+    <string name="text_93b5664a205f" formatted="false">Processing complete</string>
+    <string name="text_94f31f970642" formatted="false">Choose a diagnostic range of 1–1440 minutes.</string>
+    <string name="text_235ff46182e0" formatted="false">Diagnostic logging is not initialized. Reopen the app and try again.</string>
+    <string name="text_2bec26a5c8e2" formatted="false">Unable to prepare the diagnostic sharing directory.</string>
+    <string name="text_78d664a50890" formatted="false">Unable to create the diagnostic sharing file.</string>
+    <string name="text_c6bddcd61e6b" formatted="true">%1$s\nStep %2$s/7</string>
+    <string name="text_d23207c07a82" formatted="false">Prepare photo</string>
+    <string name="text_ef1ae2c65edd" formatted="false">Calculate exposure</string>
+    <string name="text_6159fa0e2bb0" formatted="false">Process light effects</string>
+    <string name="text_3b490fba1ffc" formatted="false">Print and scan</string>
+    <string name="text_6c41da9a3395" formatted="false">Encode and save</string>
+    <string name="text_af91aee46a69" formatted="false">Clean up temporary files</string>
+    <string name="text_30fe814c4574" formatted="true"> · This pass %1$s%%</string>
+    <string name="text_6c9f62a53f72" formatted="false">On-device engine not installed</string>
+    <string name="text_a4ca69371996" formatted="false">On-device film engine is not ready</string>
+    <string name="text_6c0813b39bb5" formatted="false">On-device processing canceled</string>
+    <string name="text_d5113f613aad" formatted="false">This photo exceeds the current processing limits. Choose Standard size</string>
+    <string name="text_8bbca1842388" formatted="false">The current size or halation spread exceeds the device\'s processing budget. Reduce halation spread or choose Standard size. The original image was not reduced.</string>
+    <string name="text_e46692a12a54" formatted="false">The current film or paper profile is unavailable. Choose another profile and retry</string>
+    <string name="text_fda570c695c8" formatted="false">The current adjustment settings are invalid. Reset adjustments and retry</string>
+    <string name="text_368306bc6068" formatted="false">Not enough temporary storage on your device. Export at Standard size</string>
+    <string name="text_77f7a824adc1" formatted="false">Processing result is incomplete. No photo was saved</string>
+    <string name="text_9695c3a1a61a" formatted="false">Export working directory validation failed. Update the app and retry; there is no need to reduce the photo size</string>
+    <string name="text_4e906ddf82d9" formatted="false">On-device film processing did not finish. Retry; if it still fails, share diagnostic logs</string>
+    <string name="text_0a9765e80ef5" formatted="false">On-device film engine is not ready. You can import and view originals; effects and export are temporarily unavailable.</string>
+    <string name="text_4c0c1ba5f426" formatted="false">Unable to prepare on-device film data</string>
+    <string name="text_c7b93a82c0c6" formatted="false">Image exceeds this version\'s processing size limit</string>
+    <string name="text_ba4205340595" formatted="false">Unable to load on-device film data</string>
+    <string name="text_1c50d5872b77" formatted="false">Engine returned invalid colors</string>
+    <string name="text_ed15a09dd74c" formatted="false">This version exports up to 4096 pixels on the long edge</string>
+    <string name="text_84ccf8f71d0d" formatted="false">Reading the processing result was interrupted</string>
+    <string name="text_0db55ca8317f" formatted="false">Processing result contains invalid colors</string>
+    <string name="text_3ac8122c5f15" formatted="false">Original photo exceeds safe processing dimensions</string>
+    <string name="text_ed2785856a9e" formatted="false">Temporary original photo data is incomplete. Please import it again</string>
+    <string name="text_a7c774a3bd73" formatted="false">Export data is incomplete. No photo was saved</string>
+    <string name="text_84fe057f0854" formatted="false">Bitmap export supports only sRGB. For wide gamut, use the raw linear export path</string>
+    <string name="text_236748b3f384" formatted="false">On-device spectral data validation failed</string>
+    <string name="text_bb3e34642ce2" formatted="false">Invalid on-device spectral data path</string>
+    <string name="text_837fdb22a021" formatted="false">Unable to prepare on-device spectral data</string>
+    <string name="text_8d11010b3a7b" formatted="false">Unable to install on-device spectral data</string>
+    <string name="text_101df955ba5b" formatted="false">Inconsistent crop queue snapshot</string>
+    <string name="text_eca4546685f7" formatted="false">Inconsistent composition queue snapshot</string>
+    <string name="text_02d5c30befc6" formatted="false">Incomplete sprocket border queue snapshot</string>
+    <string name="text_31d5184a31ac" formatted="false">Task record is damaged. Cancel it and add the photo again</string>
+    <string name="text_9652b13c1fd3" formatted="false">Processing interrupted. Tap to resume; unfinished stages will be recalculated</string>
+    <string name="text_e56de4bd4f96" formatted="false">Adding the photo did not finish. Cancel this item and add the photo again</string>
+    <string name="text_f5923a5ffaa3" formatted="false">Unable to persist export progress</string>
+    <string name="text_70d544a20512" formatted="false">Export record missing</string>
+    <string name="text_704cb65572bc" formatted="false">Add operation has ended</string>
+    <string name="text_0b58e0113da6" formatted="false">Canceling</string>
+    <string name="text_b050569cce69" formatted="false">Could not save progress. Free up storage and resume</string>
+    <string name="text_83b39ce89c4f" formatted="false">Unsupported final composition record version</string>
+    <string name="text_bb72ee12ba8b" formatted="false">Queue paused. Tap to resume</string>
+    <string name="text_ff3d626e1865" formatted="false">Canceled, some temporary files pending cleanup</string>
+    <string name="text_29367795aabb" formatted="false">Unable to clean up interrupted export files</string>
+    <string name="text_25d728831d11" formatted="false">Queued photo</string>
+    <string name="text_ba513cd4be11" formatted="false">Unable to clean up interrupted input staging files</string>
+    <string name="text_e0cc395f6b84" formatted="false">Photo saved</string>
+    <string name="text_598870cac16e" formatted="false">Saved, some temporary files pending cleanup</string>
+    <string name="text_3df4e91da12d" formatted="false">Processing paused. You can resume; unfinished stages will be recalculated</string>
+    <string name="text_801eccbf436d" formatted="false">Recovery data is incomplete, so this task cannot resume. Cancel it and add the photo again. Checkpoints will not be silently deleted to recalculate.</string>
+    <string name="text_a3290bb56b7f" formatted="false">Not enough storage. Task paused. Free up storage and resume, or cancel and add it again at a smaller size.</string>
+    <string name="text_c42a34760d85" formatted="false">Export unfinished. Task kept for retry</string>
+    <string name="text_84d1e185592a" formatted="false">Not enough memory. Task kept; retry later or cancel</string>
+    <string name="text_31912f0eff0f" formatted="false">Startup cleanup did not finish. Return to the editor to retry cleanup, then resume in the export queue.</string>
+    <string name="text_89e2a57fd12b" formatted="false">Photo export</string>
+    <string name="text_13a6efbdb2f3" formatted="false">Background film processing progress</string>
+    <string name="text_22db9e335155" formatted="false">Prepare export queue</string>
+    <string name="text_7faeabb91a25" formatted="false">Filmroom · Background export</string>
+    <string name="text_8d12fc0d4eb2" formatted="false">Pause</string>
+    <string name="text_f515de6af876" formatted="false">HEIC container data is incomplete or inconsistent.</string>
+    <string name="text_0f079bb732f5" formatted="false">This HEIC variant is not supported yet. Currently supports only verified sRGB / Display P3 SDR color subsets and static 8-bit HEVC primary images. Unknown ICC profiles, auxiliary images, mirroring, cropping and HDR are not supported.</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEIC metadata or dimensions exceed safe processing limits.</string>
+    <string name="text_19e0ce29db17" formatted="false">HEIC ICC color data is incomplete or inconsistent.</string>
+    <string name="text_da9f421ae9ad" formatted="false">This HEIC ICC color profile is not supported yet. Unknown or HDR colors were not labeled as sRGB.</string>
+    <string name="text_9cd4df0f9933" formatted="false">HEIC ICC color data exceeds safe reading limits.</string>
+    <string name="text_56e47360aaca" formatted="false">This HEIC exceeds the current safety limit of 52 million encoded pixels. The original image was not reduced.</string>
+    <string name="text_9ff6012fdde9" formatted="false">This HEIC\'s original-size decoding budget exceeds safe limits. The original image was not reduced.</string>
+    <string name="text_58a07dbdf8d7" formatted="false">Your device did not correctly identify this HEIC\'s source color profile. Colors were not guessed or simply relabeled as sRGB.</string>
+    <string name="text_986742c74398" formatted="false">Your device could not confirm an 8-bit sRGB SDR base image in this HEIC. No HDR gain map or automatic tone mapping was applied.</string>
+    <string name="text_8b96428c13f4" formatted="false">The device\'s HEIC decoder reported inconsistent primary image dimensions or orientation. A thumbnail was not substituted for the original.</string>
+    <string name="text_1e6cd3983af1" formatted="false">Your device could not decode this HEIC at original size in sRGB SDR. No implicit resizing or HDR conversion was performed.</string>
+    <string name="text_dfe135051811" formatted="false">No HEIC decoder is available on this device. Your original photo is unchanged.</string>
+    <string name="text_ba94a97c604b" formatted="false">Not enough storage to save original-size HEIC working data. The original image was not reduced.</string>
+    <string name="text_f1632bf9ae5b" formatted="false">Not enough available device memory to safely decode this original-size HEIC. The original image was not reduced. Try again later.</string>
+    <string name="text_389695202ee7" formatted="false">The device\'s HEIC decoder ran out of memory and stopped. The original image was not reduced.</string>
+    <string name="text_86c64f79957e" formatted="false">sRGB output cannot use other color profiles</string>
+    <string name="text_7e611ddedc63" formatted="false">Missing color profile for the selected gamut</string>
+    <string name="text_7f988b809315" formatted="false">Invalid color profile</string>
+    <string name="text_9f7eee77bb73" formatted="false">Color profile does not match the selected gamut</string>
+    <string name="text_a5d702fd2654" formatted="false">Image contains invalid color values</string>
+    <string name="text_7d7e6c47e8d9" formatted="false">Selected output gamut is not supported</string>
+    <string name="text_62634ce08e7b" formatted="false">Original capture metadata unavailable; capture time was not fabricated</string>
+    <string name="text_5de5710e49a1" formatted="false">Some original metadata text encodings could not be safely decoded and were omitted</string>
+    <string name="text_97154723b761" formatted="false">Some original metadata was invalid or exceeded safe size limits and was omitted</string>
+    <string name="text_b778fe908dac" formatted="false">Export canceled, but cleanup of unfinished files could not be confirmed. Check storage and restart the app.</string>
+    <string name="text_075e5b2e2761" formatted="false">Please select a photo using the system photo picker.</string>
+    <string name="text_f145e6465120" formatted="false">Unable to create an on-device working file. Check storage.</string>
+    <string name="text_9392b8f7c99e" formatted="false">Not enough device storage to copy this photo. Free up storage and import it again.</string>
+    <string name="text_2673ef9ba447" formatted="false">Photo file exceeds 512 MiB. Choose a photo with a smaller file size.</string>
+    <string name="text_276ad5585012" formatted="false">Not enough remaining device storage. Import stopped. Free up storage and retry. Your original photo is unchanged.</string>
+    <string name="text_5c2432fd4e78" formatted="false">This photo is too large to generate a preview right now. Please choose a smaller photo.</string>
+    <string name="text_a064cfbab736" formatted="false">Read permission has expired. Select the photo again.</string>
+    <string name="text_a428b047ad8e" formatted="false">Unable to read this photo. The file may be damaged or unavailable, or device storage may be insufficient.</string>
+    <string name="text_b769fd8412bb" formatted="false">The on-device working photo is no longer available. Please import it again.</string>
+    <string name="text_660bbeffe8d6" formatted="false">This photo cannot be processed at the current size. Choose a smaller export size.</string>
+    <string name="text_9c508b3acf89" formatted="false">Unable to read the photo again. Please import it again.</string>
+    <string name="text_d408527bac5d" formatted="false">Invalid working photo record. Please import it again.</string>
+    <string name="text_5e9174903275" formatted="false">Not enough memory to restore the photo right now. Import it again later.</string>
+    <string name="text_63b74410c9d6" formatted="false">Unable to restore the on-device photo. Please import it again.</string>
+    <string name="text_0e98e94d0aff" formatted="false">Unable to read the HEIC container.</string>
+    <string name="text_2f6241f58a5d" formatted="false">Original-size HEIC working data is no longer available. Please import it again.</string>
+    <string name="text_662817bc355b" formatted="false">Original-size HEIC working data is incomplete. Please import it again.</string>
+    <string name="text_99d3398d25b4" formatted="false">HEIC Display P3 was converted to an sRGB, 8-bit SDR working space. Colors outside sRGB are not preserved. Only the SDR base image is imported; HDR gain maps are neither applied nor retained.</string>
+    <string name="text_21acba32c252" formatted="false">HEIC is processed as an original-size sRGB, 8-bit SDR base image. HDR gain maps are neither applied nor retained.</string>
+    <string name="text_f6e0e231129a" formatted="false">Currently supports JPEG, PNG, standard static HEIC and verified DNG types. This file\'s encoding is not supported yet.</string>
+    <string name="text_312bb591804d" formatted="false">Temporary RAW data is no longer available. Please import it again.</string>
+    <string name="text_52dca03550a9" formatted="false">Decoded RAW data is incomplete. Please import it again.</string>
+    <string name="text_8f8660561ea5" formatted="false">Filmroom</string>
+    <string name="text_01b0b11fd332" formatted="false">Not enough available device storage to save original-size temporary data.</string>
+    <string name="text_5780b5b34a55" formatted="false">This device cannot decode this original-size photo in tiles. The original photo was not reduced or replaced.</string>
+    <string name="text_ee57ab3f6e70" formatted="false">Unable to read the original-size photo, or not enough temporary device storage. Your original photo is unchanged.</string>
+    <string name="text_0c0a9b25a114" formatted="false">Original-size rendering data is incomplete. No photo was exported.</string>
+    <string name="text_23fcd93377e5" formatted="false">Some capture metadata could not be written. Image pixels and color profile were preserved</string>
+    <string name="text_073143680076" formatted="false">暗房_原尺寸</string>
+    <string name="text_a40512c68094" formatted="true">%1$s/暗房</string>
+    <string name="text_b3a7814059d4" formatted="false">Not enough memory. Export did not finish, and temporary file cleanup could not be confirmed. Check storage and restart the app.</string>
+    <string name="text_4bc6c17bca33" formatted="false">Not enough memory to export at this size. Choose a smaller size.</string>
+    <string name="text_67f346d97344" formatted="false">Export failed, and temporary file cleanup could not be confirmed. Check storage and restart the app. Your original photo is unchanged.</string>
+    <string name="text_a1c12237b4d9" formatted="false">Export failed. Check available device storage and retry. Your original photo is unchanged.</string>
+    <string name="text_b447e7ccf3ec" formatted="false">Export row ownership mismatch</string>
+    <string name="text_5dc658ae62f8" formatted="false">Unable to confirm the saved photo\'s status. Try again later</string>
+    <string name="text_d591741a5a6e" formatted="false">Photo dimensions exceed safe processing limits. Choose a smaller photo.</string>
+    <string name="text_3bf690c56856" formatted="false">Animated photos are not supported yet. Choose a still photo.</string>
+    <string name="text_e9d5f1386eb5" formatted="false">PNG structure is incomplete. Select the photo again.</string>
+    <string name="text_dac02f5d66dd" formatted="false">Animated PNG is not supported yet. Choose a still photo.</string>
+    <string name="text_cab3449611ff" formatted="false">PNG image data is missing.</string>
+    <string name="text_d3826ba783c7" formatted="false">This PNG\'s structure is too complex and is not supported yet.</string>
+    <string name="text_9064bd4b637b" formatted="false">WebP (lossy)</string>
+    <string name="text_e0d8c2722d95" formatted="false">WebP (lossless)</string>
+    <string name="text_459f5d31c1d5" formatted="false">TIFF (16-bit)</string>
+    <string name="text_4f410de4c30b" formatted="false">OpenEXR (floating point)</string>
+    <string name="text_bec7754b9d7d" formatted="false">Unknown formats cannot be registered as available processing paths</string>
+    <string name="text_19220b804ef8" formatted="false">Requires Android 10 or later</string>
+    <string name="text_a19839fd3ffd" formatted="false">The file header only identifies candidate formats. Full decoding is still required and does not guarantee this photo can be processed.</string>
+    <string name="text_55b7686e7779" formatted="false">The platform image path processes photos in sRGB, 8-bit SDR. High bit depth, wide gamut and HDR are not guaranteed to be preserved. Transparent areas are composited over white.</string>
+    <string name="text_066d69f4c0e2" formatted="false">Only still photos are processed. Animations and image sequences are not supported by this image path.</string>
+    <string name="text_0699e8795e4f" formatted="false">Original-size processing must pass orientation, memory and storage checks. HEIC generates original-size linear working data on import; other platform images use strip decoding.</string>
+    <string name="text_e12fc1fdd16b" formatted="false">RAW / TIFF / OpenEXR bit depth, color and orientation rules are determined by the actual native decoder, not inferred from file extensions.</string>
+    <string name="text_b1ce081679c3" formatted="false">Import can be attempted; the specific file still needs checking</string>
+    <string name="text_27cd59975564" formatted="false">Not integrated in this version yet</string>
+    <string name="text_e2c0354dd326" formatted="false">Unable to confirm this device\'s decoding capabilities</string>
+    <string name="text_cb55532a0726" formatted="false">No available decoding path on this device yet</string>
+    <string name="text_b6b940d93867" formatted="false">Original-size streaming encoding integrated</string>
+    <string name="text_e3c99cd869ac" formatted="false">Bounded-size encoding integrated (long edge up to 4096 pixels)</string>
+    <string name="text_f3c2509899ee" formatted="false">No available encoding path in this version yet</string>
+    <string name="text_f63450b5d12b" formatted="false">Camera RAW</string>
+    <string name="text_c65b3b97b411" formatted="false">Unknown format</string>
+    <string name="text_b04a7122dd82" formatted="false">Zoomed preview · Long edge up to 1536 pixels</string>
+    <string name="text_084663d93fc9" formatted="false">Waiting for standard preview</string>
+    <string name="text_fe1ca7194034" formatted="false">Waiting for zoomed preview</string>
+    <string name="text_2dd14bedbfd6" formatted="false">Preparing zoomed preview · CPU</string>
+    <string name="text_fdaf1df9701c" formatted="true">Loading zoomed preview · Long edge %1$s pixels · CPU</string>
+    <string name="text_e3f7debc58f1" formatted="true">Zoomed preview · Long edge %1$s pixels · Not original size · CPU</string>
+    <string name="text_328b93c4c2e6" formatted="false">Original comparison · Zoomed preview hidden</string>
+    <string name="text_ccd803200ef6" formatted="false">Zoomed preview paused</string>
+    <string name="text_9f37f3d6b8c1" formatted="false">Standard preview · </string>
+    <string name="text_b5dc9ebea612" formatted="false">Effect not supported yet</string>
+    <string name="text_d4e2c673d344" formatted="false">Not enough available memory</string>
+    <string name="text_b9dd18aa35d1" formatted="false">Source file validation failed</string>
+    <string name="text_f5c716cc5054" formatted="false">Source file read failed</string>
+    <string name="text_dc0ed989d876" formatted="false">Zoomed preview engine unavailable</string>
+    <string name="text_49947c7bfc5f" formatted="false">Engine data not ready</string>
+    <string name="text_c6851c16d664" formatted="false">Zoomed preview result validation failed</string>
+    <string name="text_744e3354f3e5" formatted="false">Zoomed preview unfinished</string>
+    <string name="text_a49ffd73bc85" formatted="false">Average</string>
+    <string name="text_1961784db559" formatted="false">Median</string>
+    <string name="text_1028167558b7" formatted="false">Center-weighted</string>
+    <string name="text_6d13a74715fd" formatted="false">Partial</string>
+    <string name="text_d8b27dee3e23" formatted="false">Matrix</string>
+    <string name="text_513adb42d450" formatted="false">Multi-zone</string>
+    <string name="text_2064d42c9288" formatted="false">Highlight-weighted</string>
+    <string name="text_1b418527923a" formatted="false">The current effect does not support zoomed preview yet. Showing standard preview</string>
+    <string name="text_180998ba335a" formatted="false">Resources are temporarily insufficient. Showing standard preview</string>
+    <string name="text_3da84d24730f" formatted="false">Unable to read zoomed preview right now. Showing standard preview</string>
+    <string name="text_8ceaefb020a7" formatted="false">Zoomed preview is temporarily unavailable. Showing standard preview</string>
+    <string name="text_22a603ffe91d" formatted="true">Filmroom · Diagnostic logs for the last %1$s min</string>
+    <string name="text_0dbb0ebd0479" formatted="false">Sanitized diagnostic logs</string>
+    <string name="text_2d58b497cb9d" formatted="false">Export will not stop because of this. Check progress in the export queue.</string>
+    <string name="text_e1bc9722aab0" formatted="false">Show export progress in notifications?</string>
+    <string name="text_597ba8c43d0f" formatted="false">Allow notifications to check progress and pause exports even after leaving Filmroom. You can still export without notifications and check progress in the export queue.</string>
+    <string name="text_3834f9cf9f9b" formatted="false">Enable notifications</string>
+    <string name="text_a2666f394298" formatted="false">Not now</string>
+    <string name="text_945004c4e7d2" formatted="false">Export queue, count temporarily unavailable</string>
+    <string name="text_52e3c85e1339" formatted="true">Export queue, %1$s unfinished, processing</string>
+    <string name="text_bc35e14dc39d" formatted="true">Export queue, %1$s waiting to process</string>
+    <string name="text_fc6efd9ef551" formatted="false">Export queue, no waiting or active tasks</string>
+    <string name="text_9573f0c13d94" formatted="true">%1$s, a new export has finished</string>
+    <string name="text_70ceea90cbaf" formatted="false">Free crop. Drag edges or corners to resize the crop frame, drag inside to move the selection, and pinch to resize it.</string>
+    <string name="text_c8da2b308ae6" formatted="false">Composition adjustment. The frame is fixed. Drag the photo to move it and pinch to zoom.</string>
+    <string name="text_c85ef88eb1b1" formatted="false">Photo preview. Pinch to zoom; double-tap to reset or zoom in.</string>
+    <string name="text_c73702747ef1" formatted="false">Prepare export</string>
+    <string name="text_1cb9d4521713" formatted="false">Save photo</string>
+    <string name="text_11f1bec7ceb0" formatted="false">Cancel and clean up</string>
+    <string name="text_2fb03c5fc0b5" formatted="false">Generate film effect</string>
+    <string name="text_9d2998cca517" formatted="false">Cleanup</string>
+    <string name="text_e66883ffd17e" formatted="false">Encoding</string>
+    <string name="text_534cb3fa8fbf" formatted="false">Reading</string>
+    <string name="text_129547c98a3a" formatted="false">Check device</string>
+    <string name="text_b65851ed8941" formatted="false">Dye clouds</string>
+    <string name="text_88d9568f838c" formatted="false">Halation</string>
+    <string name="text_4bd29b339038" formatted="false">Density</string>
+    <string name="text_133496718bdc" formatted="false">Log exposure</string>
+    <string name="text_b88f02974ea0" formatted="false">Previous item</string>
+    <string name="text_f8baad25a051" formatted="false">Next item</string>
+    <string name="text_ed42cfc64f18" formatted="false">Color reversal film</string>
+    <string name="text_d60c820b2be8" formatted="false">Color negative film</string>
+    <string name="queue_original_details" formatted="false">Original diagnostic details</string>
+    <string name="queue_metadata_warning" formatted="false">Some photo metadata could not be preserved. See the original diagnostic details.</string>
+    <string name="export_progress_preview" formatted="false">Export progress preview</string>
+    <string name="toast_failed">Operation failed. Try again.</string>
+    <string name="toast_queued">Added to export queue</string>
+    <string name="toast_queued_check">Task added. Check queue.</string>
+    <string name="toast_cancel_requested">Cancel requested. Check queue.</string>
+    <string name="toast_background">Task preparing in background</string>
+    <string name="toast_uncertain">Check queue for task status</string>
+    <string name="toast_imported_cancel">Imported. Processing cancelled.</string>
+    <string name="toast_import_cancel">Import cancelled</string>
+    <string name="toast_preview_cancel">Preview update cancelled</string>
+    <string name="toast_memory">Low memory. Try again later.</string>
+    <string name="toast_storage">Not enough storage</string>
+    <string name="toast_size">Image exceeds processing limit</string>
+    <string name="toast_format">Format not supported</string>
+    <string name="toast_reimport">Photo unavailable. Import again.</string>
+    <string name="toast_read">Cannot read photo</string>
+    <string name="toast_preview">Preview failed. Try again.</string>
+    <string name="toast_add_failed">Could not add export task</string>
+    <string name="toast_cleanup">Temporary file cleanup failed</string>
+    <string name="toast_engine">Local engine unavailable</string>
+    <string name="toast_queue_read">Cannot read export queue</string>
+    <string name="toast_resume">Cannot resume. Try again.</string>
+    <string name="toast_cancel_failed">Cancel failed. Try again.</string>
+    <string name="toast_open">View photo in your gallery</string>
+    <string name="toast_notification">Export still works. Check queue.</string>
+    <string name="toast_detail_unsupported">Effect uses standard preview</string>
+    <string name="toast_detail_memory">Low resources. Standard preview.</string>
+    <string name="toast_detail_read">Read failed. Standard preview.</string>
+    <string name="toast_detail_fallback">Using standard preview</string>
+    <string name="toast_cancelled">Processing cancelled</string>
+    <string name="toast_profile">Choose another film or paper</string>
+    <string name="toast_parameters">Invalid settings. Reset adjustments.</string>
+    <string name="toast_budget">Processing limit. Reduce settings.</string>
+    <string name="toast_incomplete">Processing incomplete. Not saved.</string>
+    <string name="toast_workdir">Work folder error. Update app.</string>
+</resources>

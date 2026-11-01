@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_group_language">语言</string>
+    <string name="settings_group_photos">照片与参数</string>
+    <string name="settings_group_diagnostics">诊断</string>
+    <string name="settings_show_log_notes">日志说明 ▾</string>
+    <string name="settings_hide_log_notes">收起日志说明 ▴</string>
+    <string name="settings_log_privacy_summary">仅导出脱敏诊断，不含照片或位置；选择分享对象后才发送。</string>
+</resources>

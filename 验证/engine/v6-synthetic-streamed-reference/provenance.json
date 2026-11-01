@@ -1,0 +1,25 @@
+{
+  "fixtureProvenance": "synthetic-spatial-v6-integer-grid-20261031",
+  "createdUtc": "2026-10-31",
+  "kind": "new deterministic Rust whole-vs-streamed regression; NOT recovered Python oracle",
+  "input": {
+    "width": 64,
+    "height": 64,
+    "channels": 3,
+    "encoding": "little-endian f32 linear sRGB",
+    "bytes": 49152,
+    "sha256": "c66b0ca67af4e9326c422371cd1a36e0f02657e617e2946687b0dadb789aa551",
+    "generation": "streamed_reference.rs input(): binary-exact integer-grid ramps/pattern and 4.0 impulse"
+  },
+  "historicalEvidence": "验证/engine/v5-streamed-reference/provenance.json unchanged; original six fixtures absent from both identical source archives",
+  "sourceSnapshots": [
+    {
+      "path": "native/crates/film-engine/tests/streamed_reference.rs",
+      "sha256": "01f1568287381b2ec4635ab06e0960ef2900878335b3220fced999b3245bd803"
+    },
+    {
+      "path": "native/crates/spektrafilm-core/src/params.rs",
+      "sha256": "48e0e214b94e99e506c504ed075bf49fa003674dda8c40b61f7a0ba853f365f0"
+    }
+  ]
+}

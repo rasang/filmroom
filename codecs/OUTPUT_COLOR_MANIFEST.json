@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "component": "output-color-codecs",
+  "createdUtc": "2026-10-31T01:32:12.894261+00:00",
+  "spaces": [
+    "sRGB",
+    "Display P3",
+    "Adobe RGB (1998)"
+  ],
+  "inputContract": "already selected-space linear RGB; no double primaries conversion",
+  "rustAggregateReleasePassed": 31,
+  "finalFocusedDebugColorTestsPassed": 5,
+  "hostJniChecksPassed": 19,
+  "androidRuntimeTested": false,
+  "pngHostTests": "pending UI worker aggregate",
+  "independentColorReview": "pending parent",
+  "files": {
+    "src/lossless.rs": "be9f8e5183bb3867d367ea6f1fabd5a1fa49f2b83450573f36be87c8791ece48",
+    "src/lib.rs": "eb160c0126aabb37c6264f6c29e74325de2e6e3e7f2fd3671f2e6a3b94314f02",
+    "src/dng.rs": "c162d265d945243bc3f8b3634964116ae5dd988ad785170273cda293f7bc9027",
+    "src/export.rs": "6d87697f5eff6be08dcc0b23f6490f0379e578a660c0a6257171ba6809a41bb5",
+    "src/output_color.rs": "e6e835c9ae5fd271e87c33e52f735ef1f7899f2a60a1df4b6ccaa7b91ecb10a9",
+    "src/error.rs": "589c71e028ea9b5a3ae70a28a7ca918e99ab6a9f2c6a6a8e421cd3fc659d8875",
+    "src/develop.rs": "654c7322387ad0e87e7aff6e21828b24c01ad656c3a227479e4da3e64c34399e",
+    "src/opcodes.rs": "0476934187e53da7c7f3725b4378d774c180fac2642b1285532b820346160cfb",
+    "src/tiff.rs": "aa52532724ac7ab1d897f421c6ac316d20145e2b65717bb88c5f126bd6d02424",
+    "src/jni_bridge.rs": "4f89649a343da33bebb305d1b6255fb11da7e62e54c84b991e5a3d8aa8fa28e2",
+    "tests/output_color_test.rs": "65e5020dcd170699e90f4cfaa8dee312e8c4ebf9a471ded6d6922e271fa23d06",
+    "../app/src/main/assets/color-profiles/srgb.icc": "5dc910f30a690a4858c212e701c90d0224933dec5363044aa9e6f9b3de35f1b1",
+    "../app/src/main/assets/color-profiles/display-p3.icc": "eb86621701124eec88381738870d7562031423c11b6f1c1cbd6b8db72ca68748",
+    "../app/src/main/assets/color-profiles/adobe-rgb-1998.icc": "f390459ab91ba6544934c040cc937b02cb6ba5b7b351f98ae617eeb0919bc007",
+    "../app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": "60bf552972d54d8e1aa743573dceaf0edccdc3f44b6b88c942d3c2d6dc741e6d",
+    "../app/src/main/jniLibs/x86_64/libfilm_codecs.so": "d70dbeb6777db3b1721c876d86b9122288f8638613f50f5c5cbb90f34ae4ba4e"
+  }
+}

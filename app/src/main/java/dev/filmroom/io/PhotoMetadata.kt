@@ -1,0 +1,196 @@
+package dev.filmroom.io
+
+import androidx.exifinterface.media.ExifInterface
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.math.BigDecimal
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.time.OffsetDateTime
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
+import java.util.Locale
+
+/** A bounded, typed capture snapshot, never a copy of source offsets or opaque MakerNotes. */
+@ConsistentCopyVisibility
+data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null) {
+    fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).toString()
+
+    /** A timestamp without its original offset is a local wall time, not an invented UTC instant. */
+    fun captureTimeMillis():Long?=runCatching {
+        val date=attributes["DateTimeOriginal"] ?: return null
+        sourceCreateDate?.let { validatedSourceInstant(attributes,it) }?.let { return it }
+        val offset=attributes["OffsetTimeOriginal"] ?: return null
+        val base=LocalDateTime.parse(date,DATE).toInstant(ZoneOffset.of(offset)).toEpochMilli()
+        val sub=attributes["SubSecTimeOriginal"].orEmpty().take(3).padEnd(3,'0').toIntOrNull() ?: 0
+        Math.addExact(base,sub.toLong())
+    }.getOrNull()
+
+    fun exifBytes(width:Int,height:Int,colorSpace:String,exportMillis:Long):ByteArray {
+        require(width>0 && height>0)
+        val groups=Array(3){mutableListOf<Entry>()}
+        attributes.forEach { (key,value)->SCHEMA[key]?.let { s->groups[s.group].add(Entry(s.tag,s.type,encode(s,value))) } }
+        fun add(group:Int,tag:Int,type:Int,value:String) { groups[group].removeAll{it.tag==tag};groups[group].add(Entry(tag,type,encode(Spec(group,tag,type),value))) }
+        // Only fill a missing original offset from a matching, explicitly zoned source XMP
+        // capture date. Persisted sourceCreateDate records provenance; no device-zone guess.
+        if(sourceCreateDate!=null && validatedSourceInstant(attributes,sourceCreateDate)!=null) {
+            val source=OffsetDateTime.parse(sourceCreateDate)
+            if(attributes["OffsetTimeOriginal"]==null)add(1,0x9011,2,if(source.offset==ZoneOffset.UTC)"+00:00" else source.offset.id)
+            if(attributes["SubSecTimeOriginal"]==null && source.nano!=0)add(1,0x9291,2,source.nano.toString().padStart(9,'0').trimEnd('0'))
+        }
+        val now=Instant.ofEpochMilli(exportMillis).atOffset(ZoneOffset.UTC)
+        add(0,0x100,4,width.toString());add(0,0x101,4,height.toString());add(0,0x112,3,"1")
+        add(0,0x132,2,DATE.format(now));add(1,0x9010,2,"+00:00");add(1,0x9290,2,String.format(Locale.ROOT,"%03d",now.nano/1_000_000))
+        add(1,0xA002,4,width.toString());add(1,0xA003,4,height.toString());add(1,0xA001,3,if(colorSpace=="sRGB")"1" else "65535")
+        add(1,0x9000,7,"0232")
+        groups[0].add(Entry(0x8769,4,ByteArray(4)))
+        if(groups[2].isNotEmpty())groups[0].add(Entry(0x8825,4,ByteArray(4)))
+        groups.forEach { it.sortBy{e->e.tag} }
+        val starts=IntArray(3);var end=8
+        groups.forEachIndexed { i,g->if(g.isNotEmpty()){starts[i]=end;end+=2+12*g.size+4} }
+        groups[0].first{it.tag==0x8769}.data.putU32(0,starts[1].toLong())
+        groups[0].firstOrNull{it.tag==0x8825}?.data?.putU32(0,starts[2].toLong())
+        val payload=ByteArrayOutputStream();val header=ByteArray(end);header[0]=73;header[1]=73;header[2]=42;header.putU32(4,8)
+        groups.forEachIndexed { i,g->if(g.isNotEmpty()) {
+            header.putU16(starts[i],g.size)
+            g.forEachIndexed { n,e->val p=starts[i]+2+12*n;header.putU16(p,e.tag);header.putU16(p+2,e.type);header.putU32(p+4,(e.data.size/sizeOf(e.type)).toLong())
+                if(e.data.size<=4)e.data.copyInto(header,p+8) else {header.putU32(p+8,(end+payload.size()).toLong());payload.write(e.data);if(payload.size()%2!=0)payload.write(0)} }
+        } }
+        return (header+payload.toByteArray()).also { require(it.size<=BUDGET) }
+    }
+
+    companion object {
+        const val BUDGET=48*1024
+        private val DATE=DateTimeFormatter.ofPattern("uuuu:MM:dd HH:mm:ss",Locale.ROOT).withResolverStyle(ResolverStyle.STRICT)
+        private data class Spec(val group:Int,val tag:Int,val type:Int,val count:Int=1)
+        private data class Entry(val tag:Int,val type:Int,val data:ByteArray)
+        // No source geometry, color profile, IFD pointers, thumbnails, strip offsets or MakerNote.
+        private val SCHEMA=linkedMapOf<String,Spec>().apply {
+            fun tags(group:Int,type:Int,vararg entries:Pair<String,Int>) {entries.forEach{put(it.first,Spec(group,it.second,type))}}
+            tags(0,2,"ImageDescription" to 0x10e,"Make" to 0x10f,"Model" to 0x110,"Artist" to 0x13b,"Copyright" to 0x8298)
+            tags(0,3,"Rating" to 0x4746,"RatingPercent" to 0x4749)
+            tags(1,2,"DateTimeOriginal" to 0x9003,"DateTimeDigitized" to 0x9004,"OffsetTimeOriginal" to 0x9011,"OffsetTimeDigitized" to 0x9012,"SubSecTimeOriginal" to 0x9291,"SubSecTimeDigitized" to 0x9292,"CameraOwnerName" to 0xA430,"BodySerialNumber" to 0xA431,"LensMake" to 0xA433,"LensModel" to 0xA434,"LensSerialNumber" to 0xA435,"ImageUniqueID" to 0xA420)
+            tags(1,5,"ExposureTime" to 0x829a,"FNumber" to 0x829d,"ApertureValue" to 0x9202,"MaxApertureValue" to 0x9205,"SubjectDistance" to 0x9206,"FocalLength" to 0x920a,"DigitalZoomRatio" to 0xA404,"ExposureIndex" to 0xA215)
+            tags(1,10,"ShutterSpeedValue" to 0x9201,"BrightnessValue" to 0x9203,"ExposureBiasValue" to 0x9204)
+            tags(1,3,"PhotographicSensitivity" to 0x8827,"SensitivityType" to 0x8830,"ExposureProgram" to 0x8822,"MeteringMode" to 0x9207,"LightSource" to 0x9208,"Flash" to 0x9209,"FocalLengthIn35mmFilm" to 0xA405,"ExposureMode" to 0xA402,"WhiteBalance" to 0xA403,"SceneCaptureType" to 0xA406,"GainControl" to 0xA407,"Contrast" to 0xA408,"Saturation" to 0xA409,"Sharpness" to 0xA40A,"SubjectDistanceRange" to 0xA40C)
+            tags(1,4,"StandardOutputSensitivity" to 0x8831,"RecommendedExposureIndex" to 0x8832,"ISOSpeed" to 0x8833)
+            put("LensSpecification",Spec(1,0xA432,5,4));put("UserComment",Spec(1,0x9286,7))
+            tags(2,2,"GPSLatitudeRef" to 1,"GPSLongitudeRef" to 3,"GPSSatellites" to 8,"GPSStatus" to 9,"GPSMeasureMode" to 10,"GPSSpeedRef" to 12,"GPSTrackRef" to 14,"GPSImgDirectionRef" to 16,"GPSMapDatum" to 18,"GPSDestLatitudeRef" to 19,"GPSDestLongitudeRef" to 21,"GPSDestBearingRef" to 23,"GPSDestDistanceRef" to 25,"GPSDateStamp" to 29)
+            tags(2,5,"GPSAltitude" to 6,"GPSDOP" to 11,"GPSSpeed" to 13,"GPSTrack" to 15,"GPSImgDirection" to 17,"GPSDestBearing" to 24,"GPSDestDistance" to 26,"GPSHPositioningError" to 31)
+            put("GPSAltitudeRef",Spec(2,5,1));put("GPSDifferential",Spec(2,30,3))
+            for((key,tag) in listOf("GPSLatitude" to 2,"GPSLongitude" to 4,"GPSTimeStamp" to 7,"GPSDestLatitude" to 20,"GPSDestLongitude" to 22))put(key,Spec(2,tag,5,3))
+            put("GPSVersionID",Spec(2,0,1,4));put("GPSProcessingMethod",Spec(2,27,7));put("GPSAreaInformation",Spec(2,28,7))
+        }
+        fun unavailable():PhotoMetadata=PhotoMetadata(emptyMap(),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_62634ce08e7b))
+        fun read(file:File):PhotoMetadata=try {
+            val exif=ExifInterface(file.absolutePath)
+            var unsupportedText=false
+            val fields=SCHEMA.keys.mapNotNull { key->
+                val value=if(key in setOf("UserComment","GPSProcessingMethod","GPSAreaInformation")) {
+                    val bytes=exif.getAttributeBytes(key)
+                    if(bytes==null)null else try {decodeComment(bytes)}catch(_:Exception){unsupportedText=true;null}
+                } else exif.getAttribute(key) ?: if(key=="PhotographicSensitivity")exif.getAttribute("ISOSpeedRatings")else null
+                value?.let{key to it}
+            }.toMap()
+            val result=fromAttributes(fields).let { metadata ->
+                val hint=runCatching { XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP)) }.getOrNull()
+                if(hint!=null && validatedSourceInstant(fields,hint)!=null)metadata.copy(sourceCreateDate=hint) else metadata
+            }
+            if(unsupportedText)result.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1))else result
+        } catch(_:Exception){unavailable()} catch(_:OutOfMemoryError){unavailable()}
+        fun fromJson(text:String):PhotoMetadata=try {
+            require(text.toByteArray(Charsets.UTF_8).size<=BUDGET)
+            val j=JSONObject(text);require(j.getInt("version")==1);val a=j.getJSONObject("attributes")
+            val fields=a.keys().asSequence().associateWith { key->a.getString(key) }
+            val hint=j.optString("sourceCreateDate").takeIf{it.isNotEmpty() && validatedSourceInstant(fields,it)!=null}
+            val result=fromAttributes(fields).copy(sourceCreateDate=hint)
+            result.copy(warning=result.warning ?: if(j.isNull("warning"))null else j.optString("warning").take(160).takeIf{it.isNotEmpty()})
+        }catch(_:Exception){unavailable()}
+        internal fun fromAttributes(input:Map<String,String>):PhotoMetadata {
+            val accepted=linkedMapOf<String,String>();var omitted=false
+            input.forEach { (key,raw)->val s=SCHEMA[key];if(s==null){omitted=true;return@forEach}
+                try {
+                    require(raw.length<=4096 && !raw.contains('\u0000'))
+                    val value=if(key=="GPSTimeStamp" && raw.contains(':'))raw.replace(':',',') else if(key=="GPSVersionID")raw.replace('.',',') else raw
+                    if(key.startsWith("DateTime"))LocalDateTime.parse(value,DATE)
+                    if(key.startsWith("OffsetTime")) {require(value.matches(Regex("[+-]\\d{2}:\\d{2}")));ZoneOffset.of(value)}
+                    if(key.startsWith("SubSec"))require(value.matches(Regex("[0-9]{1,12}")))
+                    encode(s,value);accepted[key]=value
+                    // JSON overhead can exceed binary size; reserve space for generated export fields.
+                    if(PhotoMetadata(accepted).toJson().toByteArray().size>BUDGET-4096 || PhotoMetadata(accepted).exifBytes(1,1,"sRGB",0).size>BUDGET-4096){accepted.remove(key);omitted=true}
+                }catch(_:Exception){accepted.remove(key);omitted=true}
+            }
+            return PhotoMetadata(accepted.toMap(),if(omitted)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_97154723b761) else null)
+        }
+        /** XMP supplies an explicit source offset; never infer a zone from the exporting phone. */
+        private fun validatedSourceInstant(fields:Map<String,String>,iso:String):Long?=runCatching {
+            require(iso.length<=64)
+            val source=OffsetDateTime.parse(iso)
+            require(source.offset.totalSeconds%60==0)
+            fields["OffsetTimeOriginal"]?.let { require(ZoneOffset.of(it)==source.offset) }
+            val original=LocalDateTime.parse(fields["DateTimeOriginal"] ?: return null,DATE)
+            require(source.toLocalDateTime().withNano(0)==original)
+            val sub=fields["SubSecTimeOriginal"]
+            if(sub!=null)require(source.nano==(sub.take(9).padEnd(9,'0').toIntOrNull() ?: return null))
+            source.toInstant().toEpochMilli()
+        }.getOrNull()
+        private fun decodeComment(bytes:ByteArray):String {
+            require(bytes.size in 8..8192)
+            val prefix=bytes.copyOfRange(0,8).toString(Charsets.US_ASCII)
+            val body=bytes.copyOfRange(8,bytes.size)
+            val charset=when(prefix) {
+                "ASCII\u0000\u0000\u0000"->{require(body.all{it.toInt() in 0..127});Charsets.US_ASCII}
+                "UNICODE\u0000"->{require(body.size>=2 && ((body[0]==0xfe.toByte() && body[1]==0xff.toByte()) || (body[0]==0xff.toByte() && body[1]==0xfe.toByte())));Charsets.UTF_16}
+                else->throw IllegalArgumentException("Unsupported EXIF text encoding")
+            }
+            return charset.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(body)).toString().trimEnd('\u0000')
+        }
+        private fun sizeOf(type:Int)=when(type){1,2,7->1;3->2;4->4;5,10->8;else->error("type")}
+        private fun encode(s:Spec,value:String):ByteArray {
+            if(s.type==2){require(value.all{it.code in 1..127});return value.toByteArray(Charsets.US_ASCII)+byteArrayOf(0)}
+            if(s.type==7) {
+                if(s.tag==0x9000)return value.toByteArray(Charsets.US_ASCII)
+                return if(value.all{it.code in 1..127})"ASCII\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII)+value.toByteArray(Charsets.US_ASCII)
+                else "UNICODE\u0000".toByteArray(Charsets.US_ASCII)+byteArrayOf(0xfe.toByte(),0xff.toByte())+value.toByteArray(Charsets.UTF_16BE)
+            }
+            val parts=value.split(',').map{it.trim()};require(parts.size==s.count)
+            val b=ByteBuffer.allocate(parts.size*sizeOf(s.type)).order(ByteOrder.LITTLE_ENDIAN)
+            parts.forEach { part->when(s.type) {
+                1->{val v=part.toLong();require(v in 0..255);b.put(v.toByte())}
+                3->{val v=part.toLong();require(v in 0..65535);b.putShort(v.toShort())}
+                4->{val v=part.toLong();require(v in 0..0xffffffffL);b.putInt(v.toInt())}
+                5,10->{val (n,d)=rational(part);val lo=if(s.type==5)0L else Int.MIN_VALUE.toLong();val hi=if(s.type==5)0xffffffffL else Int.MAX_VALUE.toLong();require(n in lo..hi && (d in 1..hi || (s.tag==0xA432 && n==0L && d==0L)));b.putInt(n.toInt());b.putInt(d.toInt())}
+            } }
+            return b.array()
+        }
+        private fun rational(value:String):Pair<Long,Long> {
+            if(value.contains('/')) {val p=value.split('/');require(p.size==2);return p[0].toLong() to p[1].toLong()}
+            val parsed=BigDecimal(value);require(parsed.precision()<=64 && parsed.scale() in -20..30)
+            val d=parsed.stripTrailingZeros()
+            val denominator=if(d.scale()>0)java.math.BigInteger.TEN.pow(d.scale())else java.math.BigInteger.ONE
+            val numerator=d.multiply(BigDecimal(denominator)).toBigIntegerExact();val gcd=numerator.gcd(denominator)
+            val n=numerator.divide(gcd);val q=denominator.divide(gcd)
+            if(n.abs()<=java.math.BigInteger.valueOf(0xffffffffL) && q<=java.math.BigInteger.valueOf(0xffffffffL))return n.toLong() to q.toLong()
+            // Legacy rational tags are exposed as decimal doubles. Recover a bounded rational
+            // (e.g. 0.0003333333333333333 -> 1/3000), never copy a broken zero denominator.
+            val sign=if(parsed.signum()<0)-1 else 1;var x=kotlin.math.abs(parsed.toDouble());require(x.isFinite())
+            val target=x;var h0=0L;var h1=1L;var k0=1L;var k1=0L
+            for(iteration in 0 until 32) {
+                val a=kotlin.math.floor(x);if(a>0xffffffffL)break
+                if(h1>0 && a>(0xffffffffL-h0)/h1 || k1>0 && a>(Int.MAX_VALUE.toLong()-k0)/k1)break
+                val h=a.toLong()*h1+h0;val k=a.toLong()*k1+k0
+                if(h>0xffffffffL || k>Int.MAX_VALUE || h<0 || k<=0)break
+                h0=h1;h1=h;k0=k1;k1=k
+                if(kotlin.math.abs(h.toDouble()/k-target)<=maxOf(1e-15,target*1e-13))return sign*h to k
+                val rem=x-a;if(rem==0.0)return sign*h to k;x=1.0/rem
+            }
+            require(k1>0);return sign*h1 to k1
+        }
+        private fun ByteArray.putU16(p:Int,v:Int){this[p]=v.toByte();this[p+1]=(v ushr 8).toByte()}
+        private fun ByteArray.putU32(p:Int,v:Long){for(i in 0..3)this[p+i]=(v ushr (8*i)).toByte()}
+    }
+}

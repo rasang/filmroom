@@ -1,0 +1,65 @@
+{
+  "appVersion": "0.1.11",
+  "versionCode": 12,
+  "createdUtc": "2026-10-31T12:04:00.181336+00:00",
+  "hostTests": {
+    "tests": 449,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 5
+  },
+  "independentRealJniTests": {
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "freshJvmPerSuite": true,
+    "engineAndCodecs": "real",
+    "hevcPixelsAndMediaStore": "explicit test doubles"
+  },
+  "lintDebug": "passed",
+  "unsignedReleaseCompiled": true,
+  "instrumentationApkCompiled": true,
+  "androidRuntimeTested": false,
+  "instrumentationExecuted": false,
+  "trustedRootAliasHotfix": true,
+  "fixedImageAreaStatus": false,
+  "cornerLoadingIconDp": 24,
+  "toastStatus": true,
+  "boundedParallelExport": true,
+  "foregroundCooperativeYield": true,
+  "printCache1536Fixed": true,
+  "roi": {
+    "enabled": true,
+    "maxGridEdge": 1536,
+    "ordinaryPreview": "512/768 retained",
+    "nativeBackend": "CPU fallback",
+    "unsupportedRoutes": "ordinary preview retained without removing effects",
+    "originalPixelDetail": false
+  },
+  "metadata": "bounded standard EXIF snapshot; GPS if available; original capture date retained; modify/export instant consistent; excludes opaque MakerNote/XMP/IPTC and old thumbnails; source rating unavailable",
+  "heicP3SdrBaseFixPreserved": true,
+  "borderDraftIncluded": false,
+  "nativeLibraries": {
+    "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so": "fb9cb972fb8c52482e6dfc623c55dd4e68d56a6dd0c00e5a523e6b343d8f89bb",
+    "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so": "8592bbd3d9ca4d6f234ce45c59b73770212c3f24819da2fc511917164b585be3",
+    "app/src/main/jniLibs/x86_64/libfilm_engine.so": "ba9e34d444bfff854faba34347a82c7f66a432cfdbefdc5c7353fd80995eeedd",
+    "app/src/main/jniLibs/x86_64/libfilm_codecs.so": "2616f22ee8f0ab6259f1bdaf80b82ce3400b70c60a138ea4063b98e9b64ce682"
+  },
+  "apk": {
+    "bytes": 20551999,
+    "sha256": "b6609360c970001642a47d0951e80dbc34597a9f7523938736236cddec1b2c9f",
+    "abi": "arm64-v8a",
+    "minSdk": 29,
+    "targetSdk": 35,
+    "dexCompressed": true,
+    "nativeLibrariesStored": true,
+    "signatureVerified": true,
+    "zipalign16KiB": true,
+    "certificateSha256": "4d48147062cf82469b95c0aea85bf739489637e2386eaad47a8150ee780a59d5"
+  },
+  "privatePhotosKeysCachesExcluded": true,
+  "highGridResearchIncluded": false,
+  "codec84MpPrototypeIncluded": false,
+  "productionGateStableInputs": 640,
+  "postVersionChangeUnchangedInputs": 639
+}

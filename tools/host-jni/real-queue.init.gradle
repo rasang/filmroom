@@ -1,0 +1,4 @@
+allprojects { tasks.withType(Test).configureEach {
+    def libs = System.getenv('FILMROOM_HOST_JNI_DIR')
+    if (libs != null) { systemProperty 'java.library.path', libs }
+} }

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "pythonReference": "3bb2c2d2801ff68b92019cf1dbcbb133d60832bc",
+  "rootInApk": "assets/engine-data",
+  "runtimeDirectory": "files/engine-data",
+  "networkRequired": false,
+  "files": [
+    {
+      "path": "luts/spectral_upsampling/irradiance_xy_tc.npy",
+      "bytes": 5972096,
+      "sha256": "52f90c724811f5fab80769f8548bf24d08a521eb09e65ab6e016893258d2a783"
+    },
+    {
+      "path": "filters/neutral_print_filters.json",
+      "bytes": 22195,
+      "sha256": "8bbf8d8db76aecdc9e94bc0b1e31f3329553eeda56d210ab36294fa5e4bf3b13"
+    },
+    {
+      "path": "profiles/kodak_portra_400.json",
+      "bytes": 207169,
+      "sha256": "b5cdc73dbec8f462f488bca70bedf23fd13ce79969c0457e8ac2a2565d92bf5d"
+    },
+    {
+      "path": "profiles/kodak_gold_200.json",
+      "bytes": 206865,
+      "sha256": "aa8a0c1c7851fface3752f968cdf6c6d74a26fc9756a4460d3155d2382506b7c"
+    },
+    {
+      "path": "profiles/fujifilm_c200.json",
+      "bytes": 206785,
+      "sha256": "30db07d88090aadc62e03d18c2c51f67a20a1673390c69f99933b7ed5406d2c8"
+    },
+    {
+      "path": "profiles/kodak_portra_endura.json",
+      "bytes": 205481,
+      "sha256": "e3bb6069e02d088d8080d38ce28035816038f62786e2aff9176bf4aeeb4820a0"
+    },
+    {
+      "path": "profiles/fujifilm_crystal_archive_typeii.json",
+      "bytes": 206097,
+      "sha256": "0db98e5b8e2ed5248696e62bc39b7f21459a8812d64049b1275d7be995af873b"
+    },
+    {
+      "path": "profiles/kodak_supra_endura.json",
+      "bytes": 205758,
+      "sha256": "3a0928013effbb33e81acd01db426937faa3a12021a267c54b4d96e916286bd6"
+    },
+    {
+      "path": "SPEKTRAFILM_LICENSE.txt",
+      "bytes": 23677,
+      "sha256": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "provenance": "Original synthetic Display P3 profile; LittleCMS relative colorimetric, no optimization, no BPC",
+  "lcms_encoded_version": 2160,
+  "profile_sha256": "c0d30e1d21efe193f7e2d8751576386bbfabfcc26d82b4cfd27eadc80200f268",
+  "intent": "relative_colorimetric",
+  "float_tolerance": 0.002,
+  "notes": "Reference maps original P3 code values, not lossy HEVC-decoded values. Android color connector comparison should use these input values directly.",
+  "samples": [
+    {
+      "p3_code8": [
+        170,
+        100,
+        100
+      ],
+      "p3_encoded": [
+        0.6666666666666666,
+        0.39215686274509803,
+        0.39215686274509803
+      ],
+      "srgb_encoded": [
+        0.7109447121620178,
+        0.3748072385787964,
+        0.38417524099349976
+      ],
+      "srgb_code8": [
+        181,
+        96,
+        98
+      ]
+    },
+    {
+      "p3_code8": [
+        100,
+        170,
+        100
+      ],
+      "p3_encoded": [
+        0.39215686274509803,
+        0.6666666666666666,
+        0.39215686274509803
+      ],
+      "srgb_encoded": [
+        0.28425273299217224,
+        0.675232470035553,
+        0.3588775098323822
+      ],
+      "srgb_code8": [
+        72,
+        172,
+        92
+      ]
+    },
+    {
+      "p3_code8": [
+        100,
+        100,
+        170
+      ],
+      "p3_encoded": [
+        0.39215686274509803,
+        0.39215686274509803,
+        0.6666666666666666
+      ],
+      "srgb_encoded": [
+        0.3921568691730499,
+        0.3921568691730499,
+        0.6864671111106873
+      ],
+      "srgb_code8": [
+        100,
+        100,
+        175
+      ]
+    },
+    {
+      "p3_code8": [
+        170,
+        160,
+        100
+      ],
+      "p3_encoded": [
+        0.6666666666666666,
+        0.6274509803921569,
+        0.39215686274509803
+      ],
+      "srgb_encoded": [
+        0.6750859022140503,
+        0.6257318258285522,
+        0.3565475642681122
+      ],
+      "srgb_code8": [
+        172,
+        160,
+        91
+      ]
+    }
+  ]
+}

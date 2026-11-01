@@ -1,0 +1,17 @@
+<resources>
+    <!-- Deliberately not DayNight: Filmroom currently has one dark interface. -->
+    <style name="AppThemeBase" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#E5A35D</item>
+        <item name="android:colorBackground">@color/filmroom_background</item>
+        <item name="android:colorBackgroundFloating">@color/filmroom_surface</item>
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:navigationBarColor">@color/filmroom_background</item>
+        <item name="android:statusBarColor">@color/filmroom_background</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@color/filmroom_background</item>
+    </style>
+    <style name="AppTheme" parent="AppThemeBase"/>
+</resources>

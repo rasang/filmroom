@@ -1,0 +1,28 @@
+package dev.filmroom.io.importing
+
+import dev.filmroom.io.*
+import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.ensureActive
+import org.json.JSONObject
+
+internal class DngInputAdapter(private val codecs: DngSourceDecoder): PhotoInputAdapter {
+    override fun accepts(header: PhotoInputHeader) = header.isClassicTiff
+    override suspend fun load(request: PhotoImportRequest, header: PhotoInputHeader): LoadedPhoto = with(request) {
+        val metadata:JSONObject
+        val raw:File
+        if(existingRaw!=null && existingRaw.isFile && existingRaw.canonicalFile.parentFile==sourceDirectory.canonicalFile){
+            metadata=codecs.probe(file);raw=existingRaw
+        }else{
+            if(!allowDecode)throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_312bb591804d))
+            raw=File(sourceDirectory,"raw-source-${UUID.randomUUID()}.rgb");onNewRaw(raw)
+            metadata=codecs.decode(file,raw)
+        }
+        val parsed=dev.filmroom.codec.RawMetadata.parse(metadata)
+        val width=parsed.width;val height=parsed.height
+        if(raw.length()!=parsed.bytes)throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_52dca03550a9))
+        job.ensureActive()
+        val preview=LinearSpool.preview(raw,width,height,maxEdge,job)
+        return@with LoadedPhoto(PhotoSource(file,name,"image/x-adobe-dng",width,height,file.length(),false,raw,photoMetadata=captureMetadata,developmentMessages=parsed.displayMessages),preview)
+    }
+}
