@@ -8,7 +8,7 @@
 
 **简体中文** · [English](README.en.md)
 
-[安装与版本](#安装与版本) · [开始使用](#开始使用) · [格式支持](#格式支持) · [开发指南](docs/DEVELOPMENT.md)
+[界面与样片](#界面与样片) · [安装与版本](#安装与版本) · [开始使用](#开始使用) · [格式支持](#格式支持) · [开发指南](docs/DEVELOPMENT.md)
 
 <img src="app/src/main/assets/film-rolls/kodak_portra_400.webp" width="100" alt="Portra 400 原创胶卷插画" />
 <img src="app/src/main/assets/film-rolls/fujifilm_c200.webp" width="100" alt="Fujifilm C200 原创胶卷插画" />
@@ -20,6 +20,50 @@
 <sub>应用内的原创胶卷选择素材；不是实物照片或成像效果对比。[素材来源与品牌说明](app/src/main/assets/film-rolls/ASSET_PROVENANCE.md)</sub>
 
 </div>
+
+## 界面与样片
+
+### 应用界面
+
+照片编辑与后台导出队列。截图展示实际使用界面，细节可能随版本更新。
+
+<p align="center">
+  <a href="docs/images/showcase/editor.webp"><img src="docs/images/showcase/editor.webp" width="36%" align="top" alt="照片编辑" /></a>
+  <a href="docs/images/showcase/export-queue.webp"><img src="docs/images/showcase/export-queue.webp" width="36%" align="top" alt="后台导出队列" /></a>
+</p>
+
+### 无边框样片
+
+保留照片本身的画幅，让色彩、颗粒和光影成为主角。
+
+<p align="center">
+  <a href="docs/images/showcase/unframed-sunset.webp"><img src="docs/images/showcase/unframed-sunset.webp" width="31%" align="top" alt="车窗外的落日" /></a>
+  <a href="docs/images/showcase/unframed-city.webp"><img src="docs/images/showcase/unframed-city.webp" width="31%" align="top" alt="暮色中的城市道路" /></a>
+  <a href="docs/images/showcase/unframed-station.webp"><img src="docs/images/showcase/unframed-station.webp" width="31%" align="top" alt="车站里的光影" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/unframed-blossoms.webp"><img src="docs/images/showcase/unframed-blossoms.webp" width="31%" align="top" alt="日光下的花枝" /></a>
+  <a href="docs/images/showcase/unframed-sign.webp"><img src="docs/images/showcase/unframed-sign.webp" width="31%" align="top" alt="树荫间的标牌" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/unframed-escalator.webp"><img src="docs/images/showcase/unframed-escalator.webp" width="64%" align="top" alt="灯光下的扶梯" /></a>
+</p>
+
+### 齿边水印样片
+
+横幅与竖幅分别展示，保留完整齿孔、边框和画面。
+
+<p align="center">
+  <a href="docs/images/showcase/framed-scooters.webp"><img src="docs/images/showcase/framed-scooters.webp" width="31%" align="top" alt="齿边样片：路边的电动车" /></a>
+  <a href="docs/images/showcase/framed-interior.webp"><img src="docs/images/showcase/framed-interior.webp" width="31%" align="top" alt="齿边样片：室内光影" /></a>
+  <a href="docs/images/showcase/framed-garden.webp"><img src="docs/images/showcase/framed-garden.webp" width="31%" align="top" alt="齿边样片：树下的园景" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/framed-dog.webp"><img src="docs/images/showcase/framed-dog.webp" width="31%" align="top" alt="齿边样片：小狗" /></a>
+  <a href="docs/images/showcase/framed-cat.webp"><img src="docs/images/showcase/framed-cat.webp" width="31%" align="top" alt="齿边样片：猫" /></a>
+</p>
+
+<sub>以上为用户提供的界面截图与成片。点击图片查看大图；网页展示副本已缩小并移除元信息，未额外调色或裁剪。齿边为应用生成的边框水印，并非实物胶片扫描。</sub>
 
 ## 从选一卷胶片开始
 
@@ -34,7 +78,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 ## 安装与版本
 
-**当前源码版本：0.1.18。** 安装包将通过 [GitHub Releases](https://github.com/rasang/filmroom/releases) 提供；具体可下载版本以 Releases 页面为准。现在可以按[开发指南](docs/DEVELOPMENT.md)自行构建。
+**当前源码版本：0.1.18。** 从 [GitHub Releases](https://github.com/rasang/filmroom/releases) 下载 APK，也可按[开发指南](docs/DEVELOPMENT.md)自行构建。
 
 - 面向 **Android 10（API 29）及以上的 64 位设备**；源码默认构建 ARM64 和 x86_64，可单独构建 ARM64 手机包。
 - 项目仍处于早期体验阶段。已有主机构建、算法及 JNI/UI 测试，**尚未完成 Android 真机全流程验证**，不作手机速度或耗电保证。

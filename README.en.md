@@ -8,7 +8,7 @@ Native Android film simulation · Offline, on-device processing · No account or
 
 [简体中文](README.md) · **English**
 
-[Get started](#availability) · [Workflow](#your-first-photo) · [Formats](#supported-formats) · [Build guide](docs/DEVELOPMENT.md)
+[Screenshots & samples](#screenshots--samples) · [Get started](#availability) · [Workflow](#your-first-photo) · [Formats](#supported-formats) · [Build guide](docs/DEVELOPMENT.md)
 
 <img src="app/src/main/assets/film-rolls/kodak_portra_400.webp" width="100" alt="Original Portra 400 film-stock artwork" />
 <img src="app/src/main/assets/film-rolls/fujifilm_c200.webp" width="100" alt="Original Fujifilm C200 film-stock artwork" />
@@ -20,6 +20,50 @@ Native Android film simulation · Offline, on-device processing · No account or
 <sub>Original artwork used in the app's film selector—not product photographs or before/after samples. [Provenance and trademarks](app/src/main/assets/film-rolls/ASSET_PROVENANCE.md)</sub>
 
 </div>
+
+## Screenshots & samples
+
+### The app
+
+The photo editor and background export queue in use. Interface details may change between versions.
+
+<p align="center">
+  <a href="docs/images/showcase/editor.webp"><img src="docs/images/showcase/editor.webp" width="36%" align="top" alt="Photo editor" /></a>
+  <a href="docs/images/showcase/export-queue.webp"><img src="docs/images/showcase/export-queue.webp" width="36%" align="top" alt="Background export queue" /></a>
+</p>
+
+### Samples without frames
+
+The original image proportions, with color, grain and light taking center stage.
+
+<p align="center">
+  <a href="docs/images/showcase/unframed-sunset.webp"><img src="docs/images/showcase/unframed-sunset.webp" width="31%" align="top" alt="Sunset through a window" /></a>
+  <a href="docs/images/showcase/unframed-city.webp"><img src="docs/images/showcase/unframed-city.webp" width="31%" align="top" alt="City road at dusk" /></a>
+  <a href="docs/images/showcase/unframed-station.webp"><img src="docs/images/showcase/unframed-station.webp" width="31%" align="top" alt="Light and shadow at a station" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/unframed-blossoms.webp"><img src="docs/images/showcase/unframed-blossoms.webp" width="31%" align="top" alt="Blossoms in sunlight" /></a>
+  <a href="docs/images/showcase/unframed-sign.webp"><img src="docs/images/showcase/unframed-sign.webp" width="31%" align="top" alt="A sign among the foliage" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/unframed-escalator.webp"><img src="docs/images/showcase/unframed-escalator.webp" width="64%" align="top" alt="Escalator under ceiling lights" /></a>
+</p>
+
+### Samples with film-edge frames
+
+Landscape and portrait compositions, keeping every perforation and the entire frame visible.
+
+<p align="center">
+  <a href="docs/images/showcase/framed-scooters.webp"><img src="docs/images/showcase/framed-scooters.webp" width="31%" align="top" alt="Film-edge sample: parked scooters" /></a>
+  <a href="docs/images/showcase/framed-interior.webp"><img src="docs/images/showcase/framed-interior.webp" width="31%" align="top" alt="Film-edge sample: interior light" /></a>
+  <a href="docs/images/showcase/framed-garden.webp"><img src="docs/images/showcase/framed-garden.webp" width="31%" align="top" alt="Film-edge sample: garden beneath the trees" /></a>
+</p>
+<p align="center">
+  <a href="docs/images/showcase/framed-dog.webp"><img src="docs/images/showcase/framed-dog.webp" width="31%" align="top" alt="Film-edge sample: dog" /></a>
+  <a href="docs/images/showcase/framed-cat.webp"><img src="docs/images/showcase/framed-cat.webp" width="31%" align="top" alt="Film-edge sample: cat" /></a>
+</p>
+
+<sub>User-provided screenshots and finished photos. Click an image to view it larger. Web copies are resized with metadata removed, without additional color grading or cropping. Film edges are app-generated frames, not scans of physical film.</sub>
 
 ## Start with a roll of film
 
@@ -34,7 +78,7 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.18.** APKs will be distributed through [GitHub Releases](https://github.com/rasang/filmroom/releases); check that page for available published versions. You can also [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current source version: 0.1.18.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
