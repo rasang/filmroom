@@ -1,6 +1,5 @@
-//! Capability policies for DNG metadata, selected by tags rather than camera brands.
-//! These preserve the validated developer's rejection/warning behavior. Adding a camera
-//! means testing its required capabilities, never bypassing checks based on Make/Model.
+//! Shared DNG capability checks plus narrowly scoped brand compatibility policies.
+//! Brand matching never bypasses required opcodes or safety/resource checks.
 mod calibration;
 mod profiles;
 mod lens;

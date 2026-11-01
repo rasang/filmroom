@@ -73,7 +73,8 @@ class MainActivity:ComponentActivity() {
     private val films get()=catalog.filter{it.kind=="negative"||it.kind=="reversal"}
     private val papers get()=catalog.filter{it.kind=="paper"||it.kind=="cine_print"}.map{it.id to it.name}
     private var group="film";private var selected="brightness";private var dragging=false
-    private val landscapeEditor get()=resources.configuration.screenWidthDp>resources.configuration.screenHeightDp
+    private val landscapeEditor get()=dev.filmroom.ui.EditorLayoutPolicy.usesTwoPanes(resources.configuration.screenWidthDp,resources.configuration.screenHeightDp,isInMultiWindowMode)
+    private var renderedTwoPane=false
     private var landscapeScroll:ScrollView?=null
     private var landscapeBuiltGroup:String?=null
     private val landscapePositions=mutableMapOf<String,Int>()
@@ -142,7 +143,9 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true)}
-    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
+    override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
     override fun onPause(){if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
     override fun onDestroy(){languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
@@ -177,7 +180,7 @@ class MainActivity:ComponentActivity() {
     }
     private fun toolButton(label:String,icon:Int,chosen:Boolean,action:()->Unit)=button(label,action=action).apply{
         textSize=12f;maxLines=1;setHorizontallyScrolling(false);setPadding(dp(10),dp(8),dp(10),dp(8));minimumWidth=dp(64)
-        if(resources.configuration.screenWidthDp<=resources.configuration.screenHeightDp){
+        if(!landscapeEditor){
             val drawable=getDrawable(icon)!!.mutate();drawable.setTint(if(chosen)accent else ink);drawable.setBounds(0,0,dp(24),dp(24))
             setCompoundDrawables(null,drawable,null,null);compoundDrawablePadding=dp(6)
         }
@@ -187,7 +190,7 @@ class MainActivity:ComponentActivity() {
     private fun row()=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
     private fun buildScreen(){
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(17,20,19))}
-        root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(insets.systemWindowInsetLeft,insets.systemWindowInsetTop,insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
+        dev.filmroom.ui.EditorSystemBars.attach(this,root)
         setContentView(root)
         // Keep seven semantic touch targets; use compact visual glyphs and spend spare
         // space at group boundaries, rather than squeezing seven painted tiles together.
@@ -267,7 +270,8 @@ class MainActivity:ComponentActivity() {
             top.addView(it,LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(12)})
         }
         root.addView(top,LinearLayout.LayoutParams(-1,-2))
-        val wideLayout=resources.configuration.screenWidthDp>resources.configuration.screenHeightDp
+        val wideLayout=landscapeEditor
+        renderedTwoPane=wideLayout
         val body=LinearLayout(this).apply{orientation=if(wideLayout)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL}
         root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
         val imageColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
@@ -275,7 +279,7 @@ class MainActivity:ComponentActivity() {
         val frame=FrameLayout(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
         photo=PhotoView(this);model.detailInvalidator=invalidateDetail;if(model.localDetailEnabled)photo.configureDetail(model.detailProviderFactory());frame.addView(photo,FrameLayout.LayoutParams(-1,-1))
         welcome=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12),dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12))}
-        welcome.addView(ImageView(this).apply{setImageResource(R.drawable.ic_brand)},LinearLayout.LayoutParams(dp(if(wideLayout)40 else 76),dp(if(wideLayout)40 else 76)))
+        welcome.addView(ImageView(this).apply{setImageResource(R.drawable.welcome_cplift)},LinearLayout.LayoutParams(dp(if(wideLayout)40 else 76),dp(if(wideLayout)40 else 76)))
         welcome.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1f14f4b50d0b),if(wideLayout)18f else 25f).apply{gravity=Gravity.CENTER;setPadding(0,dp(if(wideLayout)6 else 20),0,dp(if(wideLayout)4 else 10))})
         welcome.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_95c277eafaea),if(wideLayout)12f else 14f,muted).apply{gravity=Gravity.CENTER})
         welcome.addView(button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7fc4b2dbd50),R.drawable.ic_import,true){importDialog()}.apply{minimumHeight=dp(48);minHeight=dp(48)},LinearLayout.LayoutParams(-2,-2).apply{topMargin=dp(if(wideLayout)8 else 24)})
@@ -821,7 +825,7 @@ class MainActivity:ComponentActivity() {
     }
     private fun stockChoices(p:EditorState,s:EditorUiState,target:LinearLayout=tools){
             // Film browsing is deliberately tap-only; short parameter enums retain their snap rails.
-            val landscape=resources.configuration.screenWidthDp>resources.configuration.screenHeightDp
+            val landscape=landscapeEditor
             val sideBySide=landscape && resources.configuration.fontScale<=1.35f
             val sample=TextView(this).apply{textSize=12f}
             val longest=films.maxOf{film->dev.filmroom.ui.FilmStockArtwork.cardLabel(film.id,film.name).lines().maxOf{sample.paint.measureText(it)}}

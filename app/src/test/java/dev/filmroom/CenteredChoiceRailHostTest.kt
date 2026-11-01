@@ -86,15 +86,17 @@ class CenteredChoiceRailHostTest {
     @Test(timeout=30000) fun fingerReleaseAnimatesToNearestItemRatherThanJumping() {
         Robolectric.buildActivity(Activity::class.java).setup().use { c ->
             val changes=mutableListOf<Int>();val v=rail(c.get(),changes);c.get().setContentView(v);layout(v)
-            touch(v,MotionEvent.ACTION_DOWN,240f,0)
-            touch(v,MotionEvent.ACTION_MOVE,180f,50)
-            v.scrollTo(145,0)
-            touch(v,MotionEvent.ACTION_UP,180f,600)
-            waitMs(180)
-            assertTrue("Snap has started but not jumped: ${v.scrollX}",v.scrollX in 101..145)
+            touch(v,MotionEvent.ACTION_DOWN,280f,android.os.SystemClock.uptimeMillis())
+            repeat(6){i->waitMs(48);touch(v,MotionEvent.ACTION_MOVE,280f-(i+1)*28f,android.os.SystemClock.uptimeMillis())}
+            repeat(3){waitMs(120);touch(v,MotionEvent.ACTION_MOVE,112f,android.os.SystemClock.uptimeMillis())}
+            val released=v.scrollX;val target=((released+50)/100)*100
+            assertTrue(released>0);assertNotEquals(released,target)
+            touch(v,MotionEvent.ACTION_UP,112f,android.os.SystemClock.uptimeMillis())
+            waitMs(48)
+            assertTrue("Immediate intermediate animation: released=$released target=$target actual=${v.scrollX}",v.scrollX in (minOf(released,target)+1) until maxOf(released,target))
             assertTrue(changes.isEmpty())
-            waitMs(320)
-            assertEquals(100,v.scrollX);assertEquals(listOf(1),changes)
+            waitMs(1200)
+            assertEquals(target,v.scrollX);assertEquals(listOf(target/100),changes)
         }
     }
     @Test(timeout=30000) fun touchInterruptsSnapAndCancelledGestureCannotCommitOldTarget() {

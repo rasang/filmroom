@@ -215,7 +215,7 @@ fn encode_srgb(xyz: [f64; 3]) -> io::Result<[u8; 3]> {
 }
 // Tiny standards-compliant RGB8 PNG encoder. Stored DEFLATE blocks avoid adding
 // an Android dependency for a <=197 KiB thumbnail. CRC32 and Adler32 cover all data.
-fn png_rgb(w: u32, h: u32, rgb: &[u8]) -> Vec<u8> {
+pub(crate) fn png_rgb(w: u32, h: u32, rgb: &[u8]) -> Vec<u8> {
     let mut raw = Vec::with_capacity(rgb.len() + h as usize);
     for row in rgb.chunks_exact(w as usize * 3) {
         raw.push(0);

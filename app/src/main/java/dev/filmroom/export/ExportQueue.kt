@@ -176,11 +176,14 @@ class ExportQueue internal constructor(private val context:Context,private val p
         fun update(transform:(ExportJob)->ExportJob){store.change(id,transform)?.let{changed->runCatching{onChanged(changed)}}}
         var output:File?=null
         var framedOutput:File?=null
+        val previewContext=currentCoroutineContext()
+        var previewAttempt:String?=null
+        var previewAttempted=false
         try {
             val accepted=synchronized(activeLock){
                 if(store.get(id)?.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY))false
                 else if(initial.requestGeneration!=pauseGeneration.get()) {update{it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bb72ee12ba8b),messageUi=UiMessage.of(R.string.text_bb72ee12ba8b))};false}
-                else {update{it.copy(state=ExportJobState.RUNNING,message=null,messageUi=null)};true}
+                else {previewAttempt=runCatching{ScanPreviewStore.begin(dir)}.getOrNull();update{it.copy(state=ExportJobState.RUNNING,message=null,messageUi=null)};true}
             }
             if(!accepted)return
             val existing=initial.mediaUri?.let{repository.committedExport(it,initial.outputWidth,initial.outputHeight,initial.format)}
@@ -214,7 +217,15 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     }finally{prepared.delete()}
                 }
                 if(input.length()!=initial.width.toLong()*initial.height*12)throw EngineException(EngineFailure.INCOMPLETE)
-                output=processing.render(input,initial.width,initial.height,initial.parameters,dir){p->update{it.copy(progress=p.display)}}
+                output=processing.render(input,initial.width,initial.height,initial.parameters,dir){p->
+                    if(!previewAttempted && p.display.stage==6 && p.scanPreview!=null && previewAttempt!=null){
+                        previewAttempted=true
+                        try {BorderMemoryAdmission.withBudget(4L*1024*1024,{NativeWorkReservations.snapshot(context)}){
+                            ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
+                        }}catch(c:CancellationException){throw c}catch(_:Exception){}catch(_:OutOfMemoryError){}
+                    }
+                    update{it.copy(progress=p.display)}
+                }
                 update{it.copy(progress=ExportDisplayProgress(7))}
                 // One persisted instant per encode attempt. A committed row is reused above;
                 // an uncommitted retry gets its actual new export time, not the failed attempt time.
@@ -259,6 +270,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
             val clean=cleanup(id)
             update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
         } catch(c:CancellationException) {
+            ScanPreviewStore.clear(dir)
             withContext(NonCancellable+Dispatchers.IO) {
                 val current=store.get(id)!!
                 val committed=current.mediaUri?.let{runCatching{repository.committedExport(it,current.outputWidth,current.outputHeight,current.format)}.getOrNull()}
@@ -267,12 +279,12 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 else update{it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3df4e91da12d),messageUi=UiMessage.of(R.string.text_3df4e91da12d))}
             }
             throw c
-        } catch(t:Exception) {update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
+        } catch(t:Exception) {ScanPreviewStore.clear(dir);update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
             EngineFailure.INCOMPLETE->UiMessage.of(R.string.text_801eccbf436d)
             EngineFailure.STORAGE->UiMessage.of(R.string.text_a3290bb56b7f)
             else->(t as? EngineException)?.uiMessage ?: (t as? PhotoException)?.uiMessage ?: UiMessage.of(R.string.text_c42a34760d85)
         })}}
-        catch(t:OutOfMemoryError){update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
+        catch(t:OutOfMemoryError){ScanPreviewStore.clear(dir);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
         finally {reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete()}}
     }
     private fun saveFinalThumbnail(uri:String,dir:File) {

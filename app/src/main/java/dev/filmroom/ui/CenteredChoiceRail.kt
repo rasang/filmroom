@@ -10,6 +10,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.widget.OverScroller
 import android.view.animation.DecelerateInterpolator
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -22,6 +24,7 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
     var selectedIndex = 0; private set
     var itemWidth = 1; private set
     private var touching = false
+    private var ignoreTouchUntilDown = false
     private var userScroll = false
     private var snapping: ValueAnimator? = null
     private var listener: ((Int) -> Unit)? = null
@@ -29,7 +32,8 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
     private val mask = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private var fade: LinearGradient? = null
     private val window = RectF()
-    private val settle = Runnable { if (!touching && userScroll) snapTo((scrollX.toFloat()/itemWidth).roundToInt()) }
+    private val projection = OverScroller(context)
+    private val maximumVelocity = ViewConfiguration.get(context).scaledMaximumFlingVelocity
 
     init {
         isHorizontalScrollBarEnabled = false
@@ -42,12 +46,24 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
         itemWidth = width.coerceAtLeast(1)
         selectedIndex = index.coerceIn(0, (items.childCount-1).coerceAtLeast(0))
         listener = onSelected
-        fling(0); computeScroll(); scrollTo(selectedIndex*itemWidth,0)
+        super.fling(0); super.computeScroll(); scrollTo(selectedIndex*itemWidth,0)
         requestLayout()
         invalidate()
     }
 
-    fun select(index: Int) { if (isEnabled) snapTo(index) }
+    fun select(index: Int) {
+        if (!isEnabled) return
+        if (touching) {
+            // Keyboard/accessibility selection takes ownership from an active finger.
+            val time=android.os.SystemClock.uptimeMillis()
+            MotionEvent.obtain(time,time,MotionEvent.ACTION_CANCEL,0f,0f,0).also{
+                super.dispatchTouchEvent(it);it.recycle()
+            }
+            touching=false
+            ignoreTouchUntilDown=true
+        }
+        snapTo(index)
+    }
 
     private fun stopAnimation() {
         val old = snapping
@@ -56,42 +72,61 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
         old?.cancel()
     }
     private fun cancelPending() {
-        removeCallbacks(settle)
         stopAnimation()
         touching = false
+        ignoreTouchUntilDown = false
         userScroll = false
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
+        if(event.actionMasked==MotionEvent.ACTION_DOWN)ignoreTouchUntilDown=false
+        else if(ignoreTouchUntilDown)return true
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                removeCallbacks(settle); stopAnimation(); touching = true; userScroll = true
-            }
-            MotionEvent.ACTION_UP -> { touching = false; scheduleSettle() }
-            MotionEvent.ACTION_CANCEL -> {
-                touching = false; userScroll = false
-                // A cancelled gesture cannot change the committed option.
-                snapTo(selectedIndex, false)
-            }
+            MotionEvent.ACTION_DOWN -> { stopAnimation(); touching = true; userScroll = true }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touching = false
         }
-        return super.dispatchTouchEvent(event)
+        // Native touch handling decides whether UP is a fling. Our override below
+        // owns that motion, so no native inertia/debounce/second animation chain exists.
+        val handled = super.dispatchTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_UP -> if (userScroll && snapping == null)
+                snapTo((scrollX.toFloat()/itemWidth).roundToInt())
+            MotionEvent.ACTION_CANCEL -> { userScroll = false; snapTo(selectedIndex, false) }
+        }
+        return handled
+    }
+
+    override fun fling(velocityX: Int) {
+        if (velocityX == 0) { super.fling(0); return }
+        if (!isEnabled || items.childCount == 0) return
+        // Android's density/friction-aware prediction, bounded by the real option range.
+        // Quantize the destination before starting: one continuous release-to-center motion.
+        projection.forceFinished(true)
+        projection.fling(scrollX,0,velocityX.coerceIn(-maximumVelocity,maximumVelocity),0,
+            0,(items.childCount-1)*itemWidth,0,0)
+        val target=(projection.finalX.toFloat()/itemWidth).roundToInt()
+        // OverScroller exposes the projected position, not its duration in the public API.
+        // For our cubic ease-out, initial speed = 3 * distance / duration. Match release
+        // velocity rather than adding a second, fixed-length animation after inertia.
+        val speed=abs(velocityX.coerceIn(-maximumVelocity,maximumVelocity)).coerceAtLeast(1)
+        val motionDuration=(3000.0*abs(target*itemWidth-scrollX)/speed).toLong().coerceIn(160L,1000L)
+        projection.forceFinished(true)
+        snapTo(target, durationOverride=motionDuration)
     }
 
     override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
         super.onScrollChanged(l,t,oldl,oldt)
-        if (userScroll && !touching && snapping == null) scheduleSettle()
         invalidate()
     }
-    private fun scheduleSettle() { removeCallbacks(settle); postDelayed(settle,160) }
 
-    private fun snapTo(index: Int, commit: Boolean = true) {
+    private fun snapTo(index: Int, commit: Boolean = true, durationOverride:Long?=null) {
         if (items.childCount == 0) return
-        removeCallbacks(settle); stopAnimation(); userScroll = false
+        stopAnimation(); userScroll = false
         val target = index.coerceIn(0,items.childCount-1)
         val start = scrollX
         // Stop native inertia before the explicit snap animation owns the scroll position.
-        fling(0); computeScroll(); scrollTo(start,0)
+        super.fling(0); super.computeScroll(); scrollTo(start,0)
         val end = target*itemWidth
         fun finish() {
             scrollTo(end,0)
@@ -102,7 +137,7 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
         }
         if (start == end || width == 0 || !ValueAnimator.areAnimatorsEnabled()) { finish(); return }
         snapping = ValueAnimator.ofInt(start,end).apply {
-            duration = (160L + (abs(end-start).toFloat()/itemWidth*70).roundToInt()).coerceAtMost(300L)
+            duration = durationOverride ?: (160L + (abs(end-start).toFloat()/itemWidth*70).roundToInt()).coerceAtMost(300L)
             interpolator = DecelerateInterpolator(1.5f)
             addUpdateListener { scrollTo(it.animatedValue as Int,0) }
             addListener(object: AnimatorListenerAdapter() {
@@ -149,7 +184,7 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
     }
     override fun setEnabled(enabled: Boolean) {
         super.setEnabled(enabled)
-        if (!enabled) { cancelPending(); fling(0); scrollTo(selectedIndex*itemWidth,0) }
+        if (!enabled) { cancelPending(); super.fling(0); super.computeScroll(); scrollTo(selectedIndex*itemWidth,0) }
         invalidate()
     }
     override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {

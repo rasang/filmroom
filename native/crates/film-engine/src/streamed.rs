@@ -26,7 +26,7 @@ fn new_file(p:&Path)->Result<File> {OpenOptions::new().write(true).create_new(tr
 fn read64(f:&mut File,n:usize)->Result<Vec<f64>> {let mut b=vec![0u8;n*8];f.read_exact(&mut b).map_err(io)?;let mut v=Vec::with_capacity(n);for x in b.chunks_exact(8){let a=f64::from_le_bytes(x.try_into().unwrap());if !a.is_finite(){return Err(error("INVALID_PIXELS","Nonfinite intermediate"));}v.push(a);}Ok(v)}
 fn write64(f:&mut File,v:&[f64])->Result<()> {let mut b=Vec::with_capacity(v.len()*8);for &x in v {if !x.is_finite(){return Err(error("NONFINITE_OUTPUT","Nonfinite intermediate"));}b.extend_from_slice(&x.to_le_bytes());}f.write_all(&b).map_err(io)}
 struct OutputGuard {path:PathBuf,keep:bool}
-impl Drop for OutputGuard {fn drop(&mut self){if !self.keep {let _=fs::remove_file(&self.path);}}}
+impl Drop for OutputGuard {fn drop(&mut self){if !self.keep {let _=fs::remove_file(&self.path);if let Some(p)=crate::scan_preview::path(&self.path){let _=fs::remove_file(&p);let _=fs::remove_file(p.with_extension("png.tmp"));}}}}
 struct Scratch {dir:PathBuf,seq:u64,peak:u64,spatial_buffer:u64,read:u64,written:u64,passes:u64}
 impl Scratch {
  fn new(dir:&Path)->Result<Self>{fs::create_dir(dir).map_err(io)?;Ok(Self{dir:dir.to_path_buf(),seq:0,peak:0,spatial_buffer:0,read:0,written:0,passes:0})}
@@ -319,16 +319,21 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let sharpening=(sharp_radius>0. && sharp_amount>0.) || pipe.params.scanner.lens_blur>0.;
  let scan_paths:[PathBuf;3]=std::array::from_fn(|_|scratch.path("scan-linear"));
  let mut scan_files=if sharpening {scan_paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?}else{Vec::new()};
+ let mut scan_preview=if crate::scan_preview::path(output_path).is_some(){crate::scan_preview::Sampler::new(width,height).ok()}else{None};
  progress.begin_work("printing_scanning");for y in(0..height).step_by(rows as usize){cancel(&mut cancelled)?;let hh=rows.min(height-y);let mut planes=Vec::new();for f in &mut files{planes.push(read64(f,width as usize*hh as usize)?);}let image=image_from_planes(&planes,width,hh);
    let developed=if print_diffusion{Some(prepared.develop_print_raw_chunk(&image,&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?)}else{None};
    let mut rgb=if let Some(developed)=developed.as_ref(){
      if let Some(field)=glare_input.as_mut(){let values:Vec<Scalar>=read64(field,width as usize*hh as usize)?.into_iter().map(from_f64).collect();prepared.scan_print_density_chunk_unclipped_with_glare(developed,&values).map_err(|e|error("PIPELINE_ERROR",e))?}else{prepared.scan_print_density_chunk_unclipped(developed).map_err(|e|error("PIPELINE_ERROR",e))?}
    }else if let Some(field)=glare_input.as_mut(){let values:Vec<Scalar>=read64(field,width as usize*hh as usize)?.into_iter().map(from_f64).collect();prepared.process_density_chunk_unclipped_with_glare(&image,&values,&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?}else if sharpening {prepared.process_density_chunk_unclipped(&image,&CpuBackend)}else{prepared.process_density_chunk(&image,&CpuBackend)};
    if !sharpening&&(glare_input.is_some()||print_diffusion){for v in &mut rgb.data{*v=(*v).clamp(from_f64(0.),from_f64(1.));}}
+   if scan_preview.as_mut().is_some_and(|preview|preview.capture(y,&rgb).is_err()){scan_preview=None;}
    if sharpening {write_image_planes(&mut scan_files,&rgb)?;}else{write_output_rgb(&mut output,&rgb,exposure)?;}
    progress.pass("printing_scanning",(y+hh)as u64,height as u64);
  }
- progress.end_work();drop(scan_files);drop(files);drop(glare_input);if let Some(q)=&glare_path{scratch.remove(q)?;}for q in &density{scratch.remove(q)?;}scratch.observe()?;
+ progress.end_work();
+ // Real full-frame scan RGB exists now; later scanner blur/sharpen still belongs to stage6.
+ if let Some(preview)=scan_preview {if let Err(e)=preview.publish(output_path,&pipe.params.io.output_color_space,exposure,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}}
+ drop(scan_files);drop(files);drop(glare_input);if let Some(q)=&glare_path{scratch.remove(q)?;}for q in &density{scratch.remove(q)?;}scratch.observe()?;
  if sharpening {
    let at_sharpen=Instant::now();
    for ch in 0..3 {
@@ -350,6 +355,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  }else{
    progress.begin_stage(6,1,"printing_scanning");progress.begin_work("printing_scanning");
    checkpoints.as_ref().unwrap().restore(&[output_path.to_path_buf()],&mut cancelled).map_err(checkpoint_error)?;progress.end_work();
+   if let Err(e)=crate::scan_preview::publish_restored(output_path,width,height,&pipe.params.io.output_color_space,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}
  }
  scratch.observe()?;let metrics=StreamedMetrics{export_execution:None,metered_ev,gpu:backend.diagnostics(),width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
  fs::remove_dir_all(&scratch.dir).map_err(io)?;drop(scratch);output_guard.keep=true;progress.pass("complete",n,n);progress.finish_stage();Ok(metrics)

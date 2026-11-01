@@ -105,10 +105,17 @@ class SettledChoiceSelector(context: Context) : LinearLayout(context) {
         info.className = "android.widget.SeekBar"
         if (labels.isNotEmpty()) info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(
             AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_INT, 0f, labels.lastIndex.toFloat(), selected.toFloat())
+        if (isEnabled && labels.isNotEmpty()) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS)
         if (isEnabled && selected > 0) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
         if (isEnabled && selected < labels.lastIndex) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
     }
     override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if(action==AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id){
+            if(!isEnabled || labels.isEmpty() || arguments==null || !arguments.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))return false
+            val value=arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE,Float.NaN)
+            if(!value.isFinite())return false
+            commit(value.coerceIn(0f,labels.lastIndex.toFloat()).roundToInt());return true
+        }
         if (isEnabled && labels.isNotEmpty()) when (action) {
             AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> { commit(selected + 1); return true }
             AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> { commit(selected - 1); return true }

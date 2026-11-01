@@ -40,19 +40,19 @@ class SettledChoiceSelectorHostTest {
             }
             c.get().setContentView(selector);layout(selector)
             val rail=selector.getChildAt(1) as HorizontalScrollView
-            val item=((rail.getChildAt(0) as ViewGroup).getChildAt(0)).width
-            touch(rail,MotionEvent.ACTION_DOWN,220f,0)
-            touch(rail,MotionEvent.ACTION_MOVE,170f,30)
-            rail.scrollTo(item,0)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(250))
+            touch(rail,MotionEvent.ACTION_DOWN,220f,android.os.SystemClock.uptimeMillis())
+            repeat(6){i->
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
+                touch(rail,MotionEvent.ACTION_MOVE,220f-(i+1)*30f,android.os.SystemClock.uptimeMillis())
+            }
+            assertTrue("Real MOVE scrolls",rail.scrollX>0)
             assertTrue("Dragging is not a committed change",changes.isEmpty())
-            touch(rail,MotionEvent.ACTION_UP,170f,500)
-            // A fling can advance through multiple options. Only its final resting option commits.
-            rail.scrollTo(item*3,0)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(80))
-            rail.scrollTo(item*2,0)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
-            assertEquals(listOf(2),changes)
+            touch(rail,MotionEvent.ACTION_UP,40f,android.os.SystemClock.uptimeMillis())
+            // Fast real release projects to the final bounded option; no injected scrollTo.
+            repeat(90){shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))}
+            assertEquals(listOf(3),changes)
+            val selectedRail=rail as dev.filmroom.ui.CenteredChoiceRail
+            assertEquals(3*selectedRail.itemWidth,rail.scrollX)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
             assertEquals(1,changes.size)
             assertTrue(history.canUndo);history.undo();assertFalse(history.canUndo)

@@ -98,6 +98,33 @@ class ExportPreviewLoadingHostTest {
         } finally {gates.forEach{it.complete(Unit)};runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
     }
 
+    @Test fun retryDuringScanDecodeRejectsOldAttemptAndRecyclesUnacceptedPhoto()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val gate=CompletableDeferred<Unit>();val started=AtomicInteger();val decoded=java.util.concurrent.atomic.AtomicReference<Bitmap>();var dir:File?=null
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();until("queue initialized"){queue(a)!=null};runCurrent()
+                val j=job(6);dir=fixture(queue(a)!!,j)
+                val first=dev.filmroom.export.ScanPreviewStore.begin(dir!!)
+                File(dir,"scan-preview-$first.jpg").writeText("hook")
+                a.thumbnailDecoder={file->
+                    if(file.name.startsWith("scan-preview-")) {
+                        started.incrementAndGet();withContext(NonCancellable){gate.await()}
+                        solid(Color.RED).also{decoded.set(it)}
+                    } else solid(Color.GREEN)
+                }
+                render(a,listOf(j));layout(a);until("scan decoder blocked"){started.get()==1}
+                val view=image(a,j.id)
+                // No new render/bind: generation and stage key deliberately remain unchanged.
+                dev.filmroom.export.ScanPreviewStore.begin(dir!!)
+                gate.complete(Unit)
+                until("old attempt bitmap recycled"){decoded.get()?.isRecycled==true}
+                assertNull("Stale attempt never enters visible frame",current(view))
+                controller.pause()
+            }
+        } finally {gate.complete(Unit);runCurrent();dir?.deleteRecursively();Dispatchers.resetMain()}
+    }
+
     @Test fun scrollingOffscreenClearsBitmapThenReturnsCachedContourWithoutBlackReplay()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val dirs=mutableListOf<File>();val decodes=AtomicInteger()

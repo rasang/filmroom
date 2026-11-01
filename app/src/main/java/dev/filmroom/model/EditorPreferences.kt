@@ -6,9 +6,9 @@ import android.content.Context
 class EditorPreferences(context:Context) {
     private val values=context.applicationContext.getSharedPreferences("editor-preferences",Context.MODE_PRIVATE)
     var resetOnImport:Boolean
-        get()=values.getBoolean("reset-on-import",true)
+        get()=values.getBoolean("reset-on-import",false)
         set(value){values.edit().putBoolean("reset-on-import",value).apply()}
     var restoreLastPhoto:Boolean
-        get()=values.getBoolean("restore-last-photo",true)
+        get()=values.getBoolean("restore-last-photo",false)
         set(value){values.edit().putBoolean("restore-last-photo",value).apply()}
 }

@@ -156,11 +156,15 @@ class FilmEngine(private val context: Context) {
     }.getOrNull()
     private suspend fun exportWithProgress(created:Long,input:File,output:File,width:Int,height:Int,parameters:EditorState,budget:Int,trace:OperationTrace,onProgress:((EngineProgress)->Unit)?,workspace:File?=null,progressOnMain:Boolean=true):String = coroutineScope {
         // Each call owns a new handle (initial jobId0), so positive IDs identify this export.
+        // Filename derives exclusively from this Kotlin-owned output, never a native supplied path.
+        val scanPreview=scanPreviewForOutput(output,workspace)
+        var latest:EngineProgress?=null
         val polling=launch(Dispatchers.IO) {
             var lastPass=-1L;var lastPhase:NativePhase?=null
             while(isActive) {
                 delay(400)
-                val value=progress(created)?:continue
+                val value=(progress(created)?:continue).let{it.copy(scanPreview=scanPreview?.takeIf{file->file.isFile&&file.length()>0})}
+                latest=value
                 if(value.passId!=lastPass||value.phase!=lastPhase){
                     trace.mark(Stage.NATIVE_PROGRESS,SafeInfo(nativePhase=value.phase,nativePass=value.passId,completedUnits=value.done,totalUnits=value.total))
                     lastPass=value.passId;lastPhase=value.phase
@@ -168,8 +172,14 @@ class FilmEngine(private val context: Context) {
                 if(onProgress!=null){if(progressOnMain)withContext(Dispatchers.Main.immediate){onProgress(value)}else onProgress(value)}
             }
         }
-        try {currentCoroutineContext().ensureActive();NativeFilmBridge.nativeExportFile(created,input.absolutePath,output.absolutePath,width,height,JSONObject(nativeParameters(parameters,"export",budget)).apply{workspace?.let{put("checkpointDirectory",File(it,"checkpoint").absolutePath)}}.toString())}
+        val result=try {currentCoroutineContext().ensureActive();NativeFilmBridge.nativeExportFile(created,input.absolutePath,output.absolutePath,width,height,JSONObject(nativeParameters(parameters,"export",budget)).apply{workspace?.let{put("checkpointDirectory",File(it,"checkpoint").absolutePath)}}.toString())}
         finally {withContext(NonCancellable){polling.cancelAndJoin()}}
+        // A short stage or checkpoint restore can finish between400ms polls. No new render.
+        if(onProgress!=null && JSONObject(result).optBoolean("ok") && scanPreview!=null && scanPreview.isFile && scanPreview.length()>0){
+            val ready=(latest ?: EngineProgress(1,1,dev.filmroom.diagnostics.NativePhase.PRINTING_SCANNING,1,1)).copy(display=ExportDisplayProgress(6,1,1),scanPreview=scanPreview)
+            if(progressOnMain)withContext(Dispatchers.Main.immediate){onProgress(ready)}else onProgress(ready)
+        }
+        result
     }
     /** Consumes an export-only decoded bitmap; never pass the displayed preview. */
     suspend fun renderFile(source: Bitmap, parameters: EditorState, onProgress:((EngineProgress)->Unit)?=null): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.EXPORT_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> renderMutex.withLock { withContext(Dispatchers.IO) {

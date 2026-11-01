@@ -2,13 +2,13 @@
 
 [简体中文 README](../README.md) · [English README](../README.en.md) · [历史记录](HISTORY.md)
 
-本指南对应 0.1.16 源码。应用离线运行不等于构建完全离线；首次依赖解析可能需要网络。以下为构建步骤，不表示本次文档更新重新运行了这些测试。
+本指南包含 0.1.17 原生构建工具链更新。应用离线运行不等于构建完全离线；首次依赖解析可能需要网络。以下为构建步骤，不表示本次文档更新重新运行了这些测试。
 
 ## 环境
 
 - 完整 JDK 17，Android SDK 35，Build Tools 35.0.0。
 - 仓库自带 Gradle Wrapper 8.11.1。
-- 重建原生组件：Rust/Cargo 1.88.0、Android NDK r27c（27.2.12479018），以及 `aarch64-linux-android` / `x86_64-linux-android` 目标。
+- 重建原生组件：Android NDK r27c（27.2.12479018），以及 `aarch64-linux-android` / `x86_64-linux-android` 目标。引擎脚本锁定 Rust/Cargo 1.88.0；0.1.17 编解码器使用独立的 Rust/Cargo 1.94.0 构建与前后对照验证。这里记录实际构建版本，不声明两者是同一工具链或最低支持版本。
 - 最低 Android 10 / API 29；默认 ABI 为 ARM64 与 x86_64。
 
 自行创建 `local.properties`，把 `sdk.dir` 指向自己的 SDK。不要提交本机路径、签名私钥或用户照片。
@@ -25,7 +25,7 @@
 ./gradlew connectedDebugAndroidTest
 ```
 
-Release 默认未签名。请用自己的密钥签名并保管好密钥；不同签名不能覆盖安装已有应用。既有体验包为调试签名，不代表已建立正式发行证书流程。源码不含私人签名密钥。
+Release 默认未签名。请用自己的密钥签名并保管好密钥；不同签名不能覆盖安装已有应用。0.1.16 及以前体验包使用旧调试签名；0.1.17 起使用新的固定发行签名，首次迁移须卸载重装。发行私钥在仓库外保管，不由 Gradle 自动生成或提交。源码不含私人签名密钥。
 
 ## 重建与替换全部 JNI 组件
 
@@ -33,9 +33,9 @@ Release 默认未签名。请用自己的密钥签名并保管好密钥；不同
 
 ```sh
 export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
-bash native/build-native.sh --check
-bash native/build-native.sh all
-bash codecs/build-android.sh
+RUSTUP_TOOLCHAIN=1.88.0 bash native/build-native.sh --check
+RUSTUP_TOOLCHAIN=1.88.0 bash native/build-native.sh all
+RUSTUP_TOOLCHAIN=1.94.0 bash codecs/build-android.sh
 for abi in arm64-v8a x86_64; do
   mkdir -p "app/src/main/jniLibs/$abi"
   cp "native/artifacts/jniLibs/$abi/libfilm_engine.so" "app/src/main/jniLibs/$abi/"

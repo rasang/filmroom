@@ -12,6 +12,7 @@ pub mod disk_spatial;
 pub mod streamed;
 pub mod checkpoint;
 pub mod negative_preview;
+pub mod scan_preview;
 pub mod streamed_progress;
 
 pub mod disk_diffusion;
@@ -26,3 +27,7 @@ pub mod streamed_global;
 pub mod detail;
 
 pub mod export_execution;
+
+// Exact pre-preview source snapshot, compiled only in the host unit-test oracle.
+#[cfg(test)]
+mod test_baseline_streamed16;

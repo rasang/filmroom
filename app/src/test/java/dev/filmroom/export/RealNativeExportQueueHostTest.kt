@@ -281,7 +281,18 @@ class RealNativeExportQueueHostTest {
             val job=queue.enqueue(photo,EditorState(),format,null,95)
             if(format==ExportFormat.TIFF16) {
                 val dir=queue.store.directory(job.id)
-                val result=FilmEngine(app).exportSpool(File(dir,"input.rgb"),32,24,job.parameters,workspace=dir,progressOnMain=false)
+                var scanSeen=false
+                val result=FilmEngine(app).exportSpool(File(dir,"input.rgb"),32,24,job.parameters,workspace=dir,progressOnMain=false,onProgress={ progress ->
+                    progress.scanPreview?.let { file ->
+                        assertEquals(6,progress.display.stage)
+                        assertEquals(dir.canonicalFile,file.canonicalFile.parentFile)
+                        assertTrue(file.name.startsWith("scan-source-"))
+                        val thumb=checkNotNull(android.graphics.BitmapFactory.decodeFile(file.path))
+                        assertTrue(thumb.width in 1..256 && thumb.height in 1..256)
+                        thumb.recycle();scanSeen=true
+                    }
+                })
+                assertTrue("Real stage6 callback exposes decodable full-color scan before encoding",scanSeen)
                 assertTrue(File(dir,"checkpoint").isDirectory);result.delete()
                 queue.store.update(job.copy(state=ExportJobState.FAILED,progress=ExportDisplayProgress(7),message="old codec root failure"))
                 assertTrue(File(dir,"input.rgb").isFile)

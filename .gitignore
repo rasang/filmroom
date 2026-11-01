@@ -6,3 +6,11 @@
 
 # Generated validation reports (keep outside version control)
 /验证/
+
+# Generated local compiler state and duplicate native build output.
+/.kotlin/
+/native/artifacts/
+/native/target/
+/native/target-android/
+/codecs/artifacts/
+/codecs/target/

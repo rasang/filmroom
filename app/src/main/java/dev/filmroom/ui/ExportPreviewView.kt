@@ -15,6 +15,9 @@ internal class ExportPreviewView(context: Context) : View(context) {
     private var blend = 1f
     private var light = 0f
     private var lightTarget = false
+    private var emphasis:ValueAnimator?=null
+    private var strength=30f
+    private var strongTarget=false
     private var intro = false
     private var foreground = false
     private var version: String? = null
@@ -22,7 +25,7 @@ internal class ExportPreviewView(context: Context) : View(context) {
     private var fade: ValueAnimator? = null
     private var breathing: ValueAnimator? = null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    internal val animating get() = (fade?.isRunning == true && fade?.isPaused != true) || (breathing?.isRunning == true && breathing?.isPaused != true)
+    internal val animating get() = (emphasis?.isRunning==true && emphasis?.isPaused!=true) || (fade?.isRunning == true && fade?.isPaused != true) || (breathing?.isRunning == true && breathing?.isPaused != true)
     internal var transitionCount = 0; private set
 
     fun bindJob(key: String) {
@@ -31,12 +34,19 @@ internal class ExportPreviewView(context: Context) : View(context) {
     }
     fun setForeground(value: Boolean) {
         foreground = value
-        if (!value) { fade?.pause(); breathing?.pause() }
+        if (!value) { fade?.pause(); breathing?.pause(); emphasis?.pause() }
         else if (ValueAnimator.areAnimatorsEnabled()) {
-            fade?.resume(); breathing?.resume(); updateBreathing()
+            fade?.resume(); breathing?.resume(); emphasis?.resume(); updateBreathing()
         } else { finishAnimations() }
     }
-    fun setBreathing(value: Boolean) {
+    fun setBreathing(value: Boolean, strong: Boolean = false) {
+        if(strongTarget!=strong){
+            strongTarget=strong;emphasis?.cancel();emphasis=null
+            val target=if(strong)78f else 30f
+            if(foreground && ValueAnimator.areAnimatorsEnabled())emphasis=ValueAnimator.ofFloat(strength,target).apply{
+                duration=450;interpolator=AccelerateDecelerateInterpolator();addUpdateListener{strength=it.animatedValue as Float;invalidate()};start()
+            }else strength=target
+        }
         if (lightTarget == value) return
         lightTarget = value
         breathing?.cancel(); breathing = null
@@ -76,10 +86,10 @@ internal class ExportPreviewView(context: Context) : View(context) {
         updateBreathing(); invalidate()
     }
     private fun finishAnimations() {
-        fade?.cancel(); fade = null; breathing?.cancel(); breathing = null
+        fade?.cancel(); fade = null; breathing?.cancel(); breathing = null; emphasis?.cancel();emphasis=null
         blend = 1f; previous = null; light = 0f; invalidate()
     }
-    fun release() { finishAnimations(); current = null; version = null; lightTarget = false; invalidate() }
+    fun release() { finishAnimations(); current = null; version = null; lightTarget = false;strongTarget=false;strength=30f; invalidate() }
     override fun onDetachedFromWindow() { setForeground(false); super.onDetachedFromWindow() }
     private fun photo(canvas: Canvas, bitmap: Bitmap, alpha: Int) {
         if (bitmap.isRecycled) return
@@ -98,8 +108,8 @@ internal class ExportPreviewView(context: Context) : View(context) {
         super.onDraw(canvas); drawContent(canvas)
         if (light > 0f && current != null) {
             paint.alpha=255
-            paint.shader=RadialGradient(width*.38f,height*.38f,max(width,height).toFloat().coerceAtLeast(1f),
-                intArrayOf(Color.argb((light*30).toInt(),255,240,211),Color.TRANSPARENT),null,Shader.TileMode.CLAMP)
+            paint.shader=RadialGradient(width*.38f,height*.38f,max(width,height).toFloat().coerceAtLeast(1f)*(1f+(strength-30f)/240f),
+                intArrayOf(Color.argb((light*strength).toInt(),255,240,211),Color.TRANSPARENT),null,Shader.TileMode.CLAMP)
             canvas.drawRect(0f,0f,width.toFloat(),height.toFloat(),paint); paint.shader=null
         }
     }

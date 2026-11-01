@@ -332,7 +332,7 @@ class ExportQueueActivity : ComponentActivity() {
             val visible=container.bottom>scroll.scrollY && container.top<scroll.scrollY+scroll.height && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             bar.setViewportVisible(visible)
             image.setForeground(visible)
-            image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && previewVersion?.contains("negative-preview")!=true)
+            image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && previewVersion?.contains("negative-preview")!=true,job.progress.stage==3)
             if(!near){previewGeneration++;previewTask?.cancel();image.release();previewPlaceholder.visibility=View.VISIBLE;previewVersion=null;previewKey=null;return}
             if(!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))return
             val dir=queue?.store?.directory(id) ?: return
@@ -344,26 +344,33 @@ class ExportQueueActivity : ComponentActivity() {
                 val generation=++previewGeneration
                 previewTask=lifecycleScope.launch {
                     val knownVersion=previewVersion
+                    var ownedBitmap:android.graphics.Bitmap?=null
+                    try {
                     val (selection,version,bitmap)=withContext(Dispatchers.IO){
                         val selected=ExportPreviewSelection.select(dir,job.state,job.progress.stage,stageFourComplete)
                         val contour=selected.file?.name=="original-preview.jpg" && job.progress.stage>=1 && job.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY,ExportJobState.COMPLETED)
                         val version=selected.file?.let{"${it.name}:${it.lastModified()}:${it.length()}:${if(contour)"contour" else "photo"}"} ?: "absent"
                         val bitmap=if(version!=knownVersion)selected.file?.let { file ->
                             try {thumbnailDecoder(file)?.let { source ->
-                                if(contour)ExportContourCache.get("$id:$version",source).also{source.recycle()} else source
+                                if(contour)try{ExportContourCache.get("$id:$version",source)}finally{source.recycle()} else source.also{ownedBitmap=it}
                             }}catch(_:OutOfMemoryError){null}catch(_:Exception){null}
                         }else null
                         Triple(selected,version,bitmap)
                     }
-                    if(previewGeneration==generation && previewKey==key && version!=previewVersion && bitmap!=null){
+                    val scanStillCurrent=selection.file?.let { file ->
+                        !file.name.startsWith("scan-preview-") || ScanPreviewStore.select(dir)?.name==file.name
+                    } ?: true
+                    if(scanStillCurrent && previewGeneration==generation && previewKey==key && version!=previewVersion && bitmap!=null){
                         val intro=introPending && job.state==ExportJobState.RUNNING && job.progress.stage==1
                         introPending=false;previewVersion=version
                         image.show(bitmap,version,intro)
-                        image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && selection.file?.name!="negative-preview.png")
+                        ownedBitmap=null // Ownership transferred only after acceptance; cached contours are never owned.
+                        image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && selection.file?.name!="negative-preview.png",job.progress.stage==3)
                         previewPlaceholder.visibility=View.GONE
                         image.contentDescription=if(version.endsWith(":contour"))dev.filmroom.i18n.L10n.text(R.string.export_progress_preview)else selection.label
                         // Fixed slot; a failed or cancelled load never clears an already visible frame.
                     }
+                    } finally {ownedBitmap?.recycle()}
                 }
             }
         }
@@ -396,9 +403,11 @@ internal data class ExportJobPresentation(val status:String,val progress:String,
 internal data class ExportPreviewSelection(val file:File?,val label:String) {
     companion object {
         fun select(dir:File,state:ExportJobState,stage:Int=8,stageFourComplete:Boolean=false):ExportPreviewSelection {
+            val scan=if(state==ExportJobState.RUNNING && stage>=6)ScanPreviewStore.select(dir)else null
             val final=File(dir,"final-preview.jpg");val negative=File(dir,"negative-preview.png");val original=File(dir,"original-preview.jpg")
             return when {
                 state==ExportJobState.COMPLETED && final.isFile && final.length()>0->ExportPreviewSelection(final,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1a418b9270f7))
+                scan!=null->ExportPreviewSelection(scan,dev.filmroom.i18n.L10n.text(R.string.export_progress_preview))
                 (stage>=5 || (stage==4 && stageFourComplete)) && state!=ExportJobState.CANCELLED && negative.isFile && negative.length()>0->ExportPreviewSelection(negative,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_37eb7c18d5ef))
                 original.isFile && original.length()>0->ExportPreviewSelection(original,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b00a78a5faa))
                 else->ExportPreviewSelection(null,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e3c1f7706839))

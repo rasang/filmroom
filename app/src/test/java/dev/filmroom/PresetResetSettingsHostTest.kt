@@ -95,6 +95,7 @@ class PresetResetSettingsHostTest {
         Robolectric.buildActivity(MainActivity::class.java).setup().use{c->
             val a=c.get();val p=EditorState(filmStock="kodak_ektachrome_100",brightness=2f,grain=.2f,filmBorder=false,negativeWhiteHoles=false)
             val(vm,flow)=setup(a,p)
+            val appChoices=EditorPreferences(a);appChoices.resetOnImport=true;appChoices.restoreLastPhoto=false
             val reset=button(a,"恢复预设");assertTrue(reset.isEnabled)
             reset.performClick();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(32));val first=ShadowAlertDialog.getLatestAlertDialog();assertTrue(first.isShowing)
             reset.performClick();assertSame(first,ShadowAlertDialog.getLatestAlertDialog())
@@ -103,6 +104,8 @@ class PresetResetSettingsHostTest {
             reset.performClick();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(32));assertTrue(a.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED));assertEquals(p,flow.value.parameters);ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(32))
             assertEquals(0f,flow.value.parameters.brightness);assertEquals(1f,flow.value.parameters.grain);assertEquals("direct",flow.value.parameters.outputRoute)
             assertEquals(p.filmStock,flow.value.parameters.filmStock);assertFalse(flow.value.parameters.negativeWhiteHoles)
+            assertTrue("Restoring a film preset must preserve explicit app settings",EditorPreferences(a).resetOnImport)
+            assertFalse(EditorPreferences(a).restoreLastPhoto)
             assertTrue(flow.value.canUndo);vm.undo();assertEquals(p,flow.value.parameters);assertFalse(flow.value.canUndo)
             vm.cancel()
         }
@@ -141,7 +144,10 @@ class PresetResetSettingsHostTest {
     @Test(timeout=30000) fun settingsChoicesPersistAndColdRestoreOffDoesNotClearSavedSession(){
         val app=RuntimeEnvironment.getApplication()
         app.getSharedPreferences("editor-preferences",0).edit().clear().commit()
-        val prefs=EditorPreferences(app);assertTrue(prefs.resetOnImport);assertTrue(prefs.restoreLastPhoto)
+        val prefs=EditorPreferences(app);assertFalse(prefs.resetOnImport);assertFalse(prefs.restoreLastPhoto)
+        // Explicit saved ON choices survive upgrades; subsequent clicks exercise OFF persistence.
+        prefs.resetOnImport=true;prefs.restoreLastPhoto=true
+        assertTrue(EditorPreferences(app).resetOnImport);assertTrue(EditorPreferences(app).restoreLastPhoto)
         Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
             val switches=all(root(c.get())).filterIsInstance<Switch>()
             switches.single{it.contentDescription=="导入新照片时重置参数"}.performClick()

@@ -146,6 +146,15 @@ impl Tiff {
                 if !tags.insert(tag) {
                     return Err(err("INVALID_INPUT", "probe"));
                 }
+                // ProfileDynamicRange is not implemented. Keep presence only to
+                // exclude the vivo default-SDR exception, without reading an
+                // untrusted payload or changing legacy metadata admission.
+                // This marker must never be interpreted through nums()/uints().
+                if tag == 52551 {
+                    ifd.insert(tag, Value { typ: endian.u16(&ent[2..]),
+                        count: endian.u32(&ent[4..]), bytes: Vec::new(), endian });
+                    continue;
+                }
                 if !SELECTED.contains(&tag) {
                     continue;
                 }

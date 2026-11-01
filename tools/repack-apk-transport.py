@@ -2,8 +2,9 @@
 """Lossless APK ZIP transport recompression, before zipalign and apksigner.
 Usage: python3 tools/repack-apk-transport.py app-debug.apk transport-unsigned.apk
 Then use build-tools zipalign -P 16 -f 4 and apksigner --v1-signing-enabled false
-with your own signing key. This minSDK29 delivery verifies with APK signature v3;
-the original Gradle comparison APK verifies with v2. The certificate is unchanged.
+with your own signing key. A release build may be unsigned before this step.
+Verify the actual signature schemes and certificate after signing; recompression
+does not assert that the input and output use the same certificate or schemes.
 The APK signing block is intentionally rebuilt by apksigner; payload bytes and
 ZIP methods are unchanged. This script accepts APKs without v1 signature files.
 """

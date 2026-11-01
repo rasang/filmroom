@@ -54,12 +54,19 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
                 || points[0] != 0.
                 || points[1] != 0.
                 || points[points.len() - 2] != 1.
-                || points[points.len() - 1] != 1.
                 || points
                     .chunks_exact(2)
                     .collect::<Vec<_>>()
                     .windows(2)
                     .any(|p| p[1][0] <= p[0][0] || p[1][1] < p[0][1])
+            {
+                return Err(color_err());
+            }
+            // Keep the shared SDR rule strict except for the bounded vivo
+            // compatibility policy. All curve safety checks above still apply.
+            let endpoint = points[points.len() - 1];
+            if endpoint != 1.
+                && !super::brands::vivo::allows_subunity_tone_endpoint(root, raw, endpoint, points[points.len() - 3])
             {
                 return Err(color_err());
             }

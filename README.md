@@ -34,11 +34,11 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 ## 安装与版本
 
-**当前源码版本：0.1.16。** 安装包将通过 [GitHub Releases](https://github.com/rasang/filmroom/releases) 提供；目前尚未发布 Release 或 APK 附件。现在可以按[开发指南](docs/DEVELOPMENT.md)自行构建。
+**当前源码版本：0.1.17。** 安装包将通过 [GitHub Releases](https://github.com/rasang/filmroom/releases) 提供；具体可下载版本以 Releases 页面为准。现在可以按[开发指南](docs/DEVELOPMENT.md)自行构建。
 
 - 面向 **Android 10（API 29）及以上的 64 位设备**；源码默认构建 ARM64 和 x86_64，可单独构建 ARM64 手机包。
 - 项目仍处于早期体验阶段。已有主机构建、算法及 JNI/UI 测试，**尚未完成 Android 真机全流程验证**，不作手机速度或耗电保证。
-- 既有体验包使用调试证书；自行构建的签名可能不同，不能保证覆盖安装。请保留自己的签名密钥；Release 构建默认未签名。
+- 0.1.17 改用固定发行签名；与 0.1.16 及更早体验包不同，首次须卸载旧版再安装，应用内参数、临时照片和队列会清除，已保存相册成片不受影响。之后同签名版本可覆盖升级。自行构建需使用自己的密钥；Release 构建默认未签名。详见[迁移与更新说明](docs/RELEASE_0_1_17.md)。
 
 ## 开始使用
 

@@ -34,11 +34,11 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.16.** APKs will be distributed through [GitHub Releases](https://github.com/rasang/filmroom/releases); no Release or APK asset has been published yet. For now, [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current source version: 0.1.17.** APKs will be distributed through [GitHub Releases](https://github.com/rasang/filmroom/releases); check that page for available published versions. You can also [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
-- Existing preview packages use a debug certificate. Your own build may use a different signature and may not install over them. Keep your signing key; release builds are unsigned by default.
+- Versions through 0.1.16 used the old debug certificate. Version 0.1.17 starts a new fixed release certificate; see the migration notice below. Keep your own signing key; source release builds are unsigned by default.
 
 ## Your first photo
 
@@ -89,3 +89,7 @@ Filmroom's film and paper engine builds on Andrea Volpato's [spektrafilm](https:
 Code is licensed under [GPL-3.0](LICENSE). The relevant film profiles and LUT data are licensed under **CC BY-SA 4.0**; see the [upstream license and data notices](app/src/main/assets/licenses/SPEKTRAFILM_LICENSE.txt). Other components retain their own [licenses and notices](app/src/main/assets/licenses). The reset-settings icon comes from [Material Symbols](third-party/material-symbols-reset-settings/NOTICE.txt).
 
 The film-selector illustrations are original project artwork. Film-edge frames include reference-based redraws and modeled interpretations, not original film scans; [artwork documentation](docs/FILM_STOCK_ARTWORK.md) records provenance and limitations. Kodak, Fujifilm and film-stock names belong to their respective owners and identify profiles only, without affiliation or endorsement.
+
+## Signing migration in 0.1.17
+
+This version uses a new fixed release certificate. Upgrading from 0.1.16 or earlier requires uninstalling the old app first: private edit settings, temporary photos and export queues are removed; images already saved to the system gallery/downloads remain. Future versions using this same certificate can update in place. Source builds are unsigned by default. See [release notes](docs/RELEASE_0_1_17.md).
