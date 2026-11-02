@@ -58,6 +58,14 @@ impl<'a> BitPumpMSB<'a> {
     }
   }
 
+  /// Filmroom: bits not consumed, including buffered lookahead and unread bytes.
+  /// Does not alter refill/peek/consume behavior or successful decoded samples.
+  pub fn remaining_bits(&self) -> usize {
+    let chunks = self.buffer.len();
+    let last_bytes = self.buffer.clone().next_back().map_or(0, |chunk| chunk.len());
+    (chunks.saturating_sub(1) * 4 + last_bytes) * 8 + self.nbits as usize
+  }
+
   /// Refill internal bit buffer - Big-Endian
   ///
   /// For fast refill, we can simply take a whole u32 value out.

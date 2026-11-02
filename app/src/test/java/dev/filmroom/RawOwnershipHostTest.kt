@@ -28,23 +28,40 @@ class RawOwnershipHostTest {
         override val available=true
         var blocking=false;val entered=CountDownLatch(1);val release=CountDownLatch(1)
         var metadataOnly=false
+        var lastBatch:String?=null
         override fun nativeCreate(root:String)=1L
         override fun nativeCancel(handle:Long){release.countDown()}
         override fun nativeDestroy(handle:Long){}
         private fun response()=JSONObject("{\"ok\":true,\"width\":8,\"height\":8,\"outputOrientation\":1,\"schemaVersion\":1,\"format\":\"DNG\",\"orientationApplied\":true,\"outputBytes\":768,\"warnings\":[],\"outputValid\":true}").apply{warningCode?.let{put("warnings",org.json.JSONArray().put(JSONObject().put("code",it).put("message","PRIVATE RAW NAME")))}}.toString()
         override fun nativeProbe(handle:Long,input:String,budget:String):String{metadataOnly=JSONObject(budget).optBoolean("metadataOnly");return response()}
         override fun nativeDecode(handle:Long,input:String,output:String,budget:String):String{
+            lastBatch=JSONObject(budget).optString("rawBatch")
             File(output).writeBytes(ByteArray(8*8*12));entered.countDown()
             if(blocking)check(release.await(10,TimeUnit.SECONDS))
             return response()
         }
         override fun nativeEncode(handle:Long,input:String,output:String,parameters:String)="{\"ok\":false,\"code\":\"INVALID_INPUT\"}"
     }
-    private fun setup(api:Api):Pair<PhotoRepository,Uri> {
+    private fun setup(api:Api,preference:()->dev.filmroom.model.RawBatchMode={dev.filmroom.model.RawBatchMode.AUTO}):Pair<PhotoRepository,Uri> {
         val context=ApplicationProvider.getApplicationContext<Application>()
         val uri=Uri.parse("content://dev.filmroom.synthetic-test/raw")
         shadowOf(context.contentResolver).registerInputStream(uri,ByteArrayInputStream(byteArrayOf(0x49,0x49,42,0,8,0,0,0)))
-        return PhotoRepository(context,PhotoCodecs(context.cacheDir,api,memorySnapshot={dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)})) to uri
+        return PhotoRepository(context,PhotoCodecs(context.cacheDir,api,memorySnapshot={dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)},rawBatchPreference=preference)) to uri
+    }
+    @Test fun batchChoiceIsFrozenBeforePrivateInputCopyAndOnlyNextImportUsesNewSetting()=runBlocking {
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        var choice=dev.filmroom.model.RawBatchMode.SMALL
+        var calls=0
+        val api=Api();val(repo,uri)=setup(api){calls++;choice}
+        val bytes=byteArrayOf(0x49,0x49,42,0,8,0,0,0)
+        shadowOf(app.contentResolver).registerInputStream(uri,object:ByteArrayInputStream(bytes){
+            override fun read(b:ByteArray,off:Int,len:Int):Int {choice=dev.filmroom.model.RawBatchMode.LARGE;return super.read(b,off,len)}
+        })
+        val first=repo.import(uri)
+        try{assertEquals("small",api.lastBatch);assertEquals(1,calls)}finally{first.preview.recycle();repo.discard(first.source)}
+        shadowOf(app.contentResolver).registerInputStream(uri,ByteArrayInputStream(bytes))
+        val second=repo.import(uri)
+        try{assertEquals("large",api.lastBatch);assertEquals(2,calls)}finally{second.preview.recycle();repo.discard(second.source)}
     }
     @Test fun rawRestoreUsesMetadataOnlyAndPreservesBorrowedSpool()=runBlocking {
         val api=Api();val (repo,uri)=setup(api);val loaded=repo.import(uri)

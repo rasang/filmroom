@@ -1807,5 +1807,17 @@
       "LICENSE-MIT",
       "LICENSE-ZLIB"
     ]
+  },
+  {
+    "name": "arw6-bounded-prototype",
+    "version": "0.0.0",
+    "license": "LGPL-2.1",
+    "licenseFile": "arw6-bounded/LICENSE",
+    "sourceDirectory": "arw6-bounded",
+    "preservedNoticeFiles": [
+      "LICENSE",
+      "NOTICE.md"
+    ],
+    "upstreamCommit": "41cc1e012222d2bebbaf7623bf771ae5f0c356a4"
   }
 ]

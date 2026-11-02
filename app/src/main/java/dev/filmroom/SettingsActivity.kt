@@ -95,6 +95,43 @@ class SettingsActivity : ComponentActivity() {
         preferenceRow(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2413c386102e),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_712623100497),preferences.resetOnImport){preferences.resetOnImport=it}
         divider(photoSection)
         preferenceRow(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7daa923cc7e5),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5f08fa1da11e),preferences.restoreLastPhoto){preferences.restoreLastPhoto=it}
+        divider(photoSection)
+        val rawPreferences=dev.filmroom.model.RawBatchPreferences(this)
+        val rawValue=label(getString(rawPreferences.mode.titleRes),14f,accent).apply{tag="raw-batch-value"}
+        val rawRow=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;setPadding(0,dp(8),0,dp(8));minimumHeight=dp(48)
+            tag="raw-batch-setting";isClickable=true;isFocusable=true
+            addView(label(getString(R.string.raw_batch_title),16f).apply{setTypeface(null,Typeface.BOLD)})
+            addView(label(getString(R.string.raw_batch_description),13f,muted).apply{setLineSpacing(dp(3).toFloat(),1f)})
+            addView(rawValue)
+        }
+        fun updateRawValue(){
+            rawValue.text=getString(rawPreferences.mode.titleRes)
+            rawRow.contentDescription=getString(R.string.raw_batch_title)+" · "+rawValue.text
+        }
+        updateRawValue()
+        rawRow.setOnClickListener {
+            if(pending?.isShowing!=true){
+                val modes=dev.filmroom.model.RawBatchMode.entries
+                var selected=modes.indexOf(rawPreferences.mode)
+                val choices=object:ArrayAdapter<String>(this,android.R.layout.select_dialog_singlechoice,modes.map{getString(it.titleRes)}){
+                    override fun getView(position:Int,recycled:View?,parent:android.view.ViewGroup):View =
+                        (super.getView(position,recycled,parent) as CheckedTextView).apply{
+                            setSingleLine(false);maxLines=Int.MAX_VALUE;ellipsize=null
+                            layoutParams=AbsListView.LayoutParams(-1,-2);minHeight=dp(48)
+                        }
+                }
+                val dialog=AlertDialog.Builder(this)
+                    .setTitle(R.string.raw_batch_title)
+                    .setSingleChoiceItems(choices,selected){_,which->selected=which}
+                    .setPositiveButton(R.string.raw_batch_apply){_,_->rawPreferences.mode=modes[selected];updateRawValue()}
+                    .setNegativeButton(R.string.text_2cd0f3be8738,null)
+                    .create()
+                dialog.setOnDismissListener{if(pending===dialog)pending=null}
+                pending=dialog;dialog.show()
+            }
+        }
+        photoSection.addView(rawRow)
         val diagnosticSection=section(R.string.settings_group_diagnostics,"diagnostics")
         diagnosticSection.addView(label(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84a61a56ecc6),16f).apply{setTypeface(null,Typeface.BOLD)})
         radios=RadioGroup(this)

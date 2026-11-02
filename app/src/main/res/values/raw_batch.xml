@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="raw_batch_title">RAW处理批次</string>
+    <string name="raw_batch_auto">自动（推荐）</string>
+    <string name="raw_batch_small">小批次</string>
+    <string name="raw_batch_standard">标准批次</string>
+    <string name="raw_batch_large">大批次</string>
+    <string name="raw_batch_description">调整RAW导入的速度与内存占用，不改变画质。仅对后续导入生效；实际批次受格式和内存限制，部分格式不支持调整。</string>
+    <string name="raw_batch_apply">确定</string>
+</resources>

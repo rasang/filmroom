@@ -50,6 +50,10 @@ class MainActivity:ComponentActivity() {
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
     private val model:EditorViewModel by viewModels()
+    private val exportBackgroundGuidance=dev.filmroom.ui.ExportBackgroundGuidance(this,
+        proceed={if(model.state.value.canExport)exportNotifications.offer{exportOptionsDialog()} else exportBackgroundGuidanceFinished()},
+        verifiedProceed={exportOptionsDialog()})
+    private fun exportBackgroundGuidanceFinished(){exportBackgroundGuidance.finish()}
     private val exportNotifications=dev.filmroom.ui.ExportNotificationPermission(this)
     private val ink=Color.rgb(244,241,233); private val muted=Color.rgb(184,187,178)
     private val accent=Color.rgb(229,163,93);private val surface=Color.rgb(26,30,27);private val raised=Color.rgb(36,42,37)
@@ -118,6 +122,7 @@ class MainActivity:ComponentActivity() {
         savedInstanceState?.getBundle("landscapePositions")?.let{saved->for(key in saved.keySet())landscapePositions[key]=saved.getInt(key)}
         detailFeedback=dev.filmroom.ui.DetailFeedback(savedInstanceState?.getStringArrayList("detailToastKeys").orEmpty())
         buildScreen()
+        exportBackgroundGuidance.restore(savedInstanceState)
         if(!dev.filmroom.i18n.L10n.hasChosen(this)) languageDialog=dev.filmroom.i18n.LanguagePicker.show(this,true, savedInstanceState?.takeIf { it.containsKey("languageDraft") }?.getInt("languageDraft")){
             languageDialog=null
             if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this))recreate()
@@ -143,11 +148,11 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true)}
-    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
     override fun onPause(){if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
-    override fun onDestroy(){languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
+    override fun onDestroy(){exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
         recoveryDialog?.dismiss();recoveryDialog=null
@@ -159,6 +164,7 @@ class MainActivity:ComponentActivity() {
         super.onStop()
     }
     override fun onSaveInstanceState(outState:Bundle){
+        exportBackgroundGuidance.save(outState)
         languageDialog?.takeIf{it.isShowing}?.let { outState.putInt("languageDraft",it.listView.checkedItemPosition) }
         photo.finishCompositionGesture();outState.putFloatArray("viewerNormalized",photo.viewerState())
         outState.putStringArrayList("detailToastKeys",detailFeedback.savedKeys())
@@ -354,7 +360,10 @@ class MainActivity:ComponentActivity() {
         welcomeScroll.visibility=if(hasPhoto)View.GONE else View.VISIBLE
         badge.visibility=if(hasPhoto)View.VISIBLE else View.GONE
         val shown=if(s.compare)s.original else s.rendered ?: s.original
-        if(lastBitmap!==shown){photo.bitmap=shown;lastBitmap=shown}
+        if(lastBitmap!==shown){
+            photo.bitmap=shown;lastBitmap=shown
+            if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let(model::previewBound)
+        }
         if(!model.localDetailEnabled)photo.disableDetail()
         val scienceReady=s.renderedParameters?.copy(filmBorder=s.parameters.filmBorder,negativeWhiteHoles=s.parameters.negativeWhiteHoles,composition=s.parameters.composition,crop=s.parameters.crop)==s.parameters
         val presentationChanged=s.renderedParameters?.let{it.filmBorder!=s.parameters.filmBorder || it.negativeWhiteHoles!=s.parameters.negativeWhiteHoles || it.composition!=s.parameters.composition || it.crop!=s.parameters.crop}==true
@@ -364,7 +373,7 @@ class MainActivity:ComponentActivity() {
             else s.cropPresentation!=null && s.renderedParameters?.filmBorder==false
         photo.bindDetail(s.photo,s.parameters,model.localDetailEnabled && s.startupReady && s.busy==null && ((!s.updating && !s.previewRefining) || compositionOnly) && !s.exporting && s.rendered!=null && scienceReady,s.compare,presentedBorder=!s.compare && s.rendered!=null && (s.renderedParameters?.filmBorder==true || s.cropPresentation!=null))
         if(sourceChanged){if(restoredSource==s.photo?.cacheKey&&restoredViewer!=null)photo.restoreViewerState(restoredViewer!!)else if(restoredSource==s.photo?.cacheKey&&restoredZoom!=null)photo.restoreTransform(restoredZoom!!)else photo.resetZoom();restoredZoom=null;restoredViewer=null}
-        if((s.presentation!=null && s.renderedParameters?.filmBorder==true) || (s.rendered==null && s.parameters.filmBorder))photo.bindComposition(if(s.compare)null else s.presentation,s.compositionSource,s.parameters.composition,
+        if((s.presentation!=null && s.renderedParameters?.filmBorder==true) || (s.rendered==null && s.parameters.filmBorder))photo.bindComposition(if(s.compare)null else s.presentation,s.compositionSource,s.photo?.let{s.parameters.presentationTransform(it.originalWidth,it.originalHeight)} ?: s.parameters.composition,
             s.compositionEditing && presentationReady && !s.compare,interactiveBorder=s.interactiveBorder){transform,commit->model.composition(transform,commit)}
         else photo.bindCrop(if(s.compare)null else s.cropPresentation,s.compositionSource,s.parameters.crop,
             s.compositionEditing && presentationReady && !s.compare){transform,commit->model.composition(transform,commit)}
@@ -380,6 +389,7 @@ class MainActivity:ComponentActivity() {
         compare.visibility=if(s.photo==null || loading.visibility==View.VISIBLE)View.GONE else View.VISIBLE
         infoButton.visibility=if(s.photo!=null)compare.visibility else View.GONE
         enabled(compositionButton,s.editable && s.rendered!=null && presentationReady && !s.compare)
+        if(landscapeEditor)tools.findViewWithTag<View>("crop-adjust")?.let{enabled(it,compositionButton.isEnabled)}
         if(!s.compositionEditing && selected=="composition")restoreCompositionTool()
         if(boundCompositionEditing!=s.compositionEditing){
             boundCompositionEditing=s.compositionEditing
@@ -462,7 +472,10 @@ class MainActivity:ComponentActivity() {
         val read:(EditorState)->Float={0f},val write:(EditorState,Float)->EditorState={p,_->p},
         val active:(EditorState)->Boolean={true},val exactValue:Boolean=false,
         val parameterIds:Set<String> = setOf(id))
-    private fun controls():List<Control> = when(group){
+    private fun controls():List<Control> = controlsRaw().map(::capabilityControl)
+    private fun extraControls():List<Control> = extraControlsRaw().map(::capabilityControl)
+    private fun capabilityControl(c:Control)=c.copy(active={p->c.active(p)&&p.controlSupported(c.id)})
+    private fun controlsRaw():List<Control> = when(group){
         "adjust"->listOf(
             Control("filmExposure",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_aacf040ce88a),R.drawable.ic_tool_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7ce0c0cf48da),-4f,4f,0f,{it.filmExposure},{p,v->p.copy(filmExposure=v)}),
             Control("brightness",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8e2f643ad160),R.drawable.ic_brightness,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8dbf138761d8),-2f,2f,0f,{it.brightness},{p,v->p.copy(brightness=v)}),
@@ -483,6 +496,7 @@ class MainActivity:ComponentActivity() {
         )
         "print"->listOf(
             Control("paper",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_813cd5bf9234),R.drawable.ic_tool_paper,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_14e7fe83afcb)),
+            Control("printExposureEv",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_05af46cca01b),R.drawable.ic_tool_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b2bf5f41cd45),-4f,4f,0f,{it.printExposureEv},{p,v->p.copy(printExposureEv=v)},{it.outputRoute=="print"},true),
             Control("printYellow",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3fe7b9f3a996),R.drawable.ic_tool_filter_yellow,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_15206742c3a6),-30f,30f,0f,{it.printYellow},{p,v->p.copy(printYellow=v)},{it.outputRoute=="print"}),
             Control("printMagenta",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5f542cc5a3de),R.drawable.ic_tool_filter_magenta,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0e5ad3c12a0e),-30f,30f,0f,{it.printMagenta},{p,v->p.copy(printMagenta=v)},{it.outputRoute=="print"}),
             Control("preflash",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_469f85e3c561),R.drawable.ic_tool_preflash,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7dd11c898748),0f,0.2f,0f,{it.preflash},{p,v->p.copy(preflash=v)},{it.outputRoute=="print"})
@@ -493,10 +507,11 @@ class MainActivity:ComponentActivity() {
         )
         else->emptyList()
     }
-    private fun extraControls():List<Control> = when(group){
+    private fun extraControlsRaw():List<Control> = when(group){
         "film"->listOf(
             Control("filmStock",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c4d38d9c07cc),R.drawable.ic_film,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5f86d5d545f8)),
             Control("filmFormatMm",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9b7a0bf8b525),R.drawable.ic_tool_radius,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_13d6c864eb05),8f,120f,35f,{it.filmFormatMm},{p,v->p.copy(filmFormatMm=v)},exactValue=true),
+            Control("filmDevelopmentTime",getString(R.string.bw_film_development),R.drawable.ic_tool_curve,getString(R.string.bw_development_help)),
             Control("autoExposure",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3c14663c1cfa),R.drawable.ic_tool_auto_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_eeb4cdfe3959),exactValue=true,parameterIds=setOf("autoExposure","metering")),
             Control("highlightBoostEv",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_be94f251df06),R.drawable.ic_tool_highlights,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7b779407bf2a),0f,3f,0f,{it.highlightBoostEv},{p,v->p.copy(highlightBoostEv=v)},exactValue=true),
             Control("highlightBoostRange",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7db1278a003a),R.drawable.ic_tool_radius,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f3e9a635edb2),0f,1f,0.3f,{it.highlightBoostRange},{p,v->p.copy(highlightBoostRange=v)},{it.highlightBoostEv>0},true),
@@ -531,14 +546,15 @@ class MainActivity:ComponentActivity() {
             Control("dirInterLayer",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cad65c0c8168),R.drawable.ic_tool_inter_layer,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_44e260b2da07),0f,2f,1f,{it.dirInterLayer},{p,v->p.copy(dirInterLayer=v)},exactValue=true)
         )
         "print"->listOf(
+            Control("paperDevelopmentTime",getString(R.string.bw_print_development),R.drawable.ic_tool_curve,getString(R.string.bw_development_help)),
             Control("outputRoute",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_abc2bcc3191e),R.drawable.ic_tool_route,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0001b8c5d8e1),active={!it.isReversalFilm}),
             Control("printDiffusionFilter",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6a36379e12c4),R.drawable.ic_tool_diffusion,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_31b721f36494),active={it.outputRoute=="print"},exactValue=true),
             Control("printDiffusionStrength",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_30e570b25ae8),R.drawable.ic_tool_diffusion,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_35e2151edfde),0f,2f,0.5f,{it.printDiffusionStrength},{p,v->p.copy(printDiffusionStrength=v)},{it.outputRoute=="print"&&it.printDiffusionFilter!="off"},true),
             Control("printDiffusionSize",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_884a4b4a9697),R.drawable.ic_tool_radius,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c7fab338a3d7),0.25f,2f,1f,{it.printDiffusionSize},{p,v->p.copy(printDiffusionSize=v)},{it.outputRoute=="print"&&it.printDiffusionFilter!="off"},true),
             Control("neutralFiltersFromDatabase",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cf53a2dacdff),R.drawable.ic_tool_neutral,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8adffac5e954),active={it.outputRoute=="print"},exactValue=true),
-            Control("neutralCyan",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3369277a249a),R.drawable.ic_tool_filter_cyan,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,0f,{it.neutralCyan},{p,v->p.copy(neutralCyan=v)},{it.outputRoute=="print"&&!it.neutralFiltersFromDatabase},true),
-            Control("neutralMagenta",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d74d21d856e9),R.drawable.ic_tool_filter_magenta,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,65f,{it.neutralMagenta},{p,v->p.copy(neutralMagenta=v)},{it.outputRoute=="print"&&!it.neutralFiltersFromDatabase},true),
-            Control("neutralYellow",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_402b841befae),R.drawable.ic_tool_filter_yellow,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,55f,{it.neutralYellow},{p,v->p.copy(neutralYellow=v)},{it.outputRoute=="print"&&!it.neutralFiltersFromDatabase},true),
+            Control("neutralCyan",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3369277a249a),R.drawable.ic_tool_filter_cyan,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,0f,{it.neutralCyan},{p,v->p.copy(neutralCyan=v)},{it.outputRoute=="print"&&!it.effectiveNeutralFiltersFromDatabase},true),
+            Control("neutralMagenta",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d74d21d856e9),R.drawable.ic_tool_filter_magenta,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,65f,{it.neutralMagenta},{p,v->p.copy(neutralMagenta=v)},{it.outputRoute=="print"&&!it.effectiveNeutralFiltersFromDatabase},true),
+            Control("neutralYellow",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_402b841befae),R.drawable.ic_tool_filter_yellow,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b7bf91e866a3),0f,200f,55f,{it.neutralYellow},{p,v->p.copy(neutralYellow=v)},{it.outputRoute=="print"&&!it.effectiveNeutralFiltersFromDatabase},true),
             Control("paperGamma",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7304135c5662),R.drawable.ic_tool_curve,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4362dbdb902d),0.5f,2f,1f,{it.paperGamma},{p,v->p.copy(paperGamma=v)},{it.outputRoute=="print"},true),
             Control("paperGammaFast",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6de4ace73d5d),R.drawable.ic_tool_curve,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d586866d607b),0.5f,2f,1f,{it.paperGammaFast},{p,v->p.copy(paperGammaFast=v)},{it.outputRoute=="print"},true),
             Control("paperGammaSlow",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_948834ada56f),R.drawable.ic_tool_curve,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_656f07b65ba1),0.5f,2f,1f,{it.paperGammaSlow},{p,v->p.copy(paperGammaSlow=v)},{it.outputRoute=="print"},true),
@@ -546,7 +562,6 @@ class MainActivity:ComponentActivity() {
             Control("paperGammaGreen",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3ddbae16e340),R.drawable.ic_tool_layer_green,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_87dcffd01b93),0.5f,2f,1f,{it.paperGammaGreen},{p,v->p.copy(paperGammaGreen=v)},{it.outputRoute=="print"},true),
             Control("paperGammaBlue",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bd27c57099e9),R.drawable.ic_tool_layer_blue,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2d22a0ed76a2),0.5f,2f,1f,{it.paperGammaBlue},{p,v->p.copy(paperGammaBlue=v)},{it.outputRoute=="print"},true),
             Control("paperDeveloperExhaustion",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6dfc6e921ae6),R.drawable.ic_tool_exhaustion,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a04be1d22c78),0f,1f,0f,{it.paperDeveloperExhaustion},{p,v->p.copy(paperDeveloperExhaustion=v)},{it.outputRoute=="print"},true),
-            Control("printExposureEv",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_05af46cca01b),R.drawable.ic_tool_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b2bf5f41cd45),-4f,4f,0f,{it.printExposureEv},{p,v->p.copy(printExposureEv=v)},{it.outputRoute=="print"},true),
             Control("printIlluminant",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2311d090000f),R.drawable.ic_tool_illuminant,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_555843d03db0),active={it.outputRoute=="print"},exactValue=true),
             Control("printCompensation",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6535e9c39c2a),R.drawable.ic_tool_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ecb5cb67b187),active={it.outputRoute=="print"},exactValue=true),
             Control("normalizePrintExposure",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_99e0c3ab5f84),R.drawable.ic_tool_normalize,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7d5a1c52f90),active={it.outputRoute=="print"},exactValue=true),
@@ -569,6 +584,7 @@ class MainActivity:ComponentActivity() {
     }
     private fun correctionSupported(p:EditorState)=p.scannerCorrectionSupported
     private fun choiceValues(id:String):List<Pair<String,String>> = when(id){
+        "filmDevelopmentTime","paperDevelopmentTime"->listOf("0.0" to getString(R.string.bw_development_default))+(if(id=="filmDevelopmentTime")listOf(4f,5f,6.5f,9f,12f)else listOf(2f,3.5f,5f,7f,9f)).map{it.toString() to "$it min"}
         "halationColor"->listOf("stock" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_683099bf5b6c),"red" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_789f61dbfcc7),"amber" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d5234258fd84),"neutral" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_574ce385b86d))
         "diffusionFilter","printDiffusionFilter"->listOf("off" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3fd47edce45b),"glimmerglass" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2eb88a373a7f),"black_pro_mist" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_adb439547ac9),"pro_mist" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3b339febf98c),"cinebloom" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_aaf1818f550f))
         "outputRoute"->listOf("print" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_499e8c373806),"direct" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b5ef62893e01))
@@ -578,7 +594,8 @@ class MainActivity:ComponentActivity() {
         else->emptyList()
     }
     private fun choiceValue(p:EditorState,id:String):String=when(id){
-        "neutralFiltersFromDatabase"->p.neutralFiltersFromDatabase.toString();"halationColor"->p.halationColor;"diffusionFilter"->p.diffusionFilter;"printDiffusionFilter"->p.printDiffusionFilter
+        "filmDevelopmentTime"->p.filmDevelopmentTime.toString();"paperDevelopmentTime"->p.paperDevelopmentTime.toString()
+        "neutralFiltersFromDatabase"->p.effectiveNeutralFiltersFromDatabase.toString();"halationColor"->p.halationColor;"diffusionFilter"->p.diffusionFilter;"printDiffusionFilter"->p.printDiffusionFilter
         "outputRoute"->p.outputRoute;"printIlluminant"->p.printIlluminant
         "halationNormalize"->p.halationNormalize.toString();"grainSublayers"->p.grainSublayers.toString();"autoExposure"->dev.filmroom.ui.AutoExposureChoice.value(p)
         "printCompensation"->p.printCompensation.toString();"normalizePrintExposure"->p.normalizePrintExposure.toString()
@@ -586,6 +603,7 @@ class MainActivity:ComponentActivity() {
         else->""
     }
     private fun choose(p:EditorState,id:String,value:String):EditorState=when(id){
+        "filmDevelopmentTime"->p.copy(filmDevelopmentTime=value.toFloat());"paperDevelopmentTime"->p.copy(paperDevelopmentTime=value.toFloat())
         "neutralFiltersFromDatabase"->p.copy(neutralFiltersFromDatabase=value.toBoolean());"halationColor"->p.copy(halationColor=value);"diffusionFilter"->p.copy(diffusionFilter=value);"printDiffusionFilter"->p.copy(printDiffusionFilter=value)
         "outputRoute"->p.selectOutputRoute(value)
         "printIlluminant"->p.copy(printIlluminant=value)
@@ -642,8 +660,8 @@ class MainActivity:ComponentActivity() {
         val controls=controls()+extraControls()
         for(control in controls){
             val id=control.id
-            val value=when(id){"filmStock"->listOf(p.filmStock,p.filmBorder,p.negativeWhiteHoles);"paper"->p.paperStock;else->if(choiceValues(id).isNotEmpty())choiceValue(p,id)else control.read(p)}
-            val key=listOf(value,s.editable,control.active(p),if(group=="print")p.outputRoute else null,
+            val value=when(id){"filmStock"->listOf(p.filmStock,p.filmBorder,p.negativeWhiteHoles,p.outputRoute);"paper"->p.paperStock;else->if(choiceValues(id).isNotEmpty())choiceValue(p,id)else control.read(p)}
+            val key=listOf(value,p.filmStock,p.paperStock,p.outputRoute,s.editable,control.active(p),if(group=="print")p.outputRoute else null,
                 if(id=="outputRoute" || id=="scanWhiteCorrection" || id=="scanBlackCorrection")listOf(p.isReversalFilm,p.preferredOutputRoute,p.scannerCorrectionSupported,p.scanWhiteCorrection,p.scanBlackCorrection)else null)
             val section=landscapeSections.getOrPut(id){
                 ParameterSection(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="parameter-section:$id";setPadding(0,dp(8),0,dp(12))},emptyList()).also{
@@ -665,11 +683,7 @@ class MainActivity:ComponentActivity() {
                 }
                 if(crop.key!=cropKey){
                     forgetSectionStrips(crop.view);crop.view.removeAllViews()
-                    if(s.compositionEditing)buildCompositionTools(p,s.editable,crop.view)
-                    else{
-                        (compositionButton.parent as? ViewGroup)?.removeView(compositionButton)
-                        crop.view.addView(compositionButton,LinearLayout.LayoutParams(-1,-2))
-                    }
+                    buildCompositionTools(p,s.editable,crop.view)
                     crop.key=cropKey
                 }
             }
@@ -722,7 +736,9 @@ class MainActivity:ComponentActivity() {
                 controlHeading(control,null,target)
                 target.addView(button(papers.firstOrNull{it.first==p.paperStock}?.second ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ec00bc673f05)){
                     AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3691a3aa4ece)).setSingleChoiceItems(choiceAdapter(papers.map{paper->paper.second+if(catalog.first{it.id==paper.first}.kind=="cine_print")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b9afff7ca1b0)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3b789c2037e2)},true),papers.indexOfFirst{it.first==model.state.value.parameters.paperStock}){dialog,which->finishCompositionForParameterEdit();model.parameters(model.state.value.parameters.copy(paperStock=papers[which].first));dialog.dismiss()}.setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
-                }.apply{enabled(this,s.editable&&p.outputRoute=="print")},LinearLayout.LayoutParams(-1,-2))
+                }.apply{
+                    enabled(this,s.editable&&p.outputRoute=="print")
+                },LinearLayout.LayoutParams(-1,-2))
             }
             else->singleSlider(control,p,s.editable,target)
         }
@@ -737,9 +753,9 @@ class MainActivity:ComponentActivity() {
         if(selected=="composition")restoreCompositionTool()
     }
     private fun buildCompositionTools(p:EditorState,editable:Boolean,target:LinearLayout=tools){
-        val stackedActions=landscapeEditor && resources.configuration.fontScale>1.35f
-        val heading=row().apply{if(stackedActions)orientation=LinearLayout.VERTICAL}
-        heading.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),14f).apply{tag="crop-title";maxLines=if(stackedActions)Int.MAX_VALUE else 1;setHorizontallyScrolling(false)},if(stackedActions)LinearLayout.LayoutParams(-1,-2)else LinearLayout.LayoutParams(0,-2,1f))
+        val editing=model.state.value.compositionEditing
+        val heading=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this)else row()
+        heading.addView(sectionTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),R.drawable.ic_composition).apply{tag="crop-title";if(!landscapeEditor)maxLines=1},LinearLayout.LayoutParams(0,-2,1f))
         target.addView(heading,LinearLayout.LayoutParams(-1,-2))
         val choices=if(p.filmBorder)listOf(CropMode.RATIO_3_2 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_61d5477ed69a),CropMode.RATIO_2_3 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cad49035a99d)) else listOf(
             CropMode.ORIGINAL to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4b1db520af46),CropMode.FREE to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d1047eed5dd5),CropMode.SQUARE to "1:1",
@@ -754,7 +770,7 @@ class MainActivity:ComponentActivity() {
         val modes=row();scroll.addView(modes)
         for((mode,label)in choices)modes.addView(button(label){photo.finishCompositionGesture();model.chooseCompositionMode(mode)}.apply{
             tag="crop-mode:${mode.name}";maxLines=1;setHorizontallyScrolling(false);isSelected=current==mode;setTextColor(if(isSelected)accent else ink)
-            val ratio=when(mode){
+            val ratio=if(p.filmBorder)dev.filmroom.border.BorderCatalog.frameAspect(p.frameStock,mode==CropMode.RATIO_2_3)else when(mode){
                 CropMode.RATIO_3_2->1.5;CropMode.RATIO_2_3->2.0/3.0;CropMode.RATIO_4_3->4.0/3.0;CropMode.RATIO_3_4->.75
                 CropMode.RATIO_16_9->16.0/9.0;CropMode.RATIO_9_16->9.0/16.0;CropMode.SQUARE->1.0
                 else->model.state.value.photo?.let{it.originalWidth.toDouble()/it.originalHeight.coerceAtLeast(1)} ?: 1.5
@@ -762,14 +778,38 @@ class MainActivity:ComponentActivity() {
             val icon=dev.filmroom.ui.CropAspectDrawable(ratio,when(mode){CropMode.FREE->"free";CropMode.ORIGINAL->"original";else->"ratio"},if(isSelected)accent else ink)
             icon.setBounds(0,0,dp(24),dp(24));setCompoundDrawables(null,icon,null,null);compoundDrawablePadding=dp(4)
             contentDescription=label
-            background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable)
+            background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable && editing)
         },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
         retainStrip(scroll,modes,"crop-modes:${p.filmBorder}","crop-mode:${current.name}")
         target.addView(scroll,LinearLayout.LayoutParams(-1,-2))
-        val actions=if(stackedActions)row().also{heading.addView(it,LinearLayout.LayoutParams(-1,-2))}else heading
-        actions.addView(button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738)){photo.discardCompositionGesture();model.cancelComposition()}.apply{tag="crop-cancel";maxLines=1;setHorizontallyScrolling(false);enabled(this,editable)},LinearLayout.LayoutParams(-2,-2))
-        actions.addView(button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36f33adaf094),primary=true){photo.finishCompositionGesture();model.confirmComposition()}.apply{tag="crop-confirm";maxLines=1;setHorizontallyScrolling(false);enabled(this,editable)},LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(4)})
+        val actions=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this,false).also{heading.addView(it,LinearLayout.LayoutParams(-2,-2))}else heading
+        if(!editing){
+            actions.addView(compositionAction(getString(R.string.composition_adjust_action),true){compositionButton.performClick()}.apply{
+                tag="crop-adjust";enabled(this,editable && compositionButton.isEnabled)
+            })
+        }else{
+            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738)){photo.discardCompositionGesture();model.cancelComposition()}.apply{tag="crop-cancel";enabled(this,editable)})
+            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36f33adaf094),true){photo.finishCompositionGesture();model.confirmComposition()}.apply{tag="crop-confirm";enabled(this,editable)},LinearLayout.LayoutParams(-2,-2).apply{if(!landscapeEditor)marginStart=dp(4)})
+        }
     }
+    private fun compositionAction(label:String,primary:Boolean=false,action:()->Unit)=button(label,primary=primary,action=action).apply{
+        if(landscapeEditor){
+            // The visual pill is smaller; the actual focus/touch bounds remain at least 48dp.
+            textSize=12f
+            background=android.graphics.drawable.InsetDrawable(shape(if(primary)accent else raised),dp(2),dp(7),dp(2),dp(7))
+            // InsetDrawable installs its own padding, so set the text padding afterwards.
+            setPadding(dp(10),dp(7),dp(10),dp(7))
+        }else maxLines=1
+    }
+    private fun sectionTitle(label:String,icon:Int):TextView{
+        if(!landscapeEditor)return text(label,14f)
+        return dev.filmroom.ui.GlyphAlignedSectionTitleView(this).apply{
+            text=label;textSize=14f;setTextColor(ink);gravity=Gravity.CENTER_VERTICAL;includeFontPadding=true
+            val drawable=getDrawable(icon)!!.mutate();drawable.setTint(ink)
+            setHeadingIcon(drawable,(textSize*1.15f).roundToInt(),dp(6))
+        }
+    }
+
     private fun mountTools(){
         if(landscapeEditor)return
         if(expandedTools?.isShowing==true){
@@ -864,7 +904,7 @@ class MainActivity:ComponentActivity() {
             if(dev.filmroom.border.BorderCatalog.PROTOTYPE_ENABLED){
                 infoRow.addView(Switch(this).apply{
                     text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_74b054e27203);contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_369143830b0b);tag="film-border-switch";maxLines=1;setHorizontallyScrolling(false);minHeight=dp(48);isChecked=p.filmBorder
-                    isEnabled=s.editable && (p.filmBorder || dev.filmroom.border.BorderCatalog.available(p.filmStock))
+                    isEnabled=s.editable && (p.filmBorder || dev.filmroom.border.BorderCatalog.available(p.frameStock))
                     setOnCheckedChangeListener{_,checked->finishCompositionForParameterEdit();photo.finishCompositionGesture();model.parameters(model.state.value.parameters.copy(filmBorder=checked))}
                 },LinearLayout.LayoutParams(-2,-2))
 
@@ -873,8 +913,14 @@ class MainActivity:ComponentActivity() {
                 infoRow.addView(Switch(this).apply{
                     text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4b96acdd5e96);contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6d2683a65646);tag="negative-white-holes-switch"
                     maxLines=1;setHorizontallyScrolling(false);minHeight=dp(48);isChecked=p.negativeWhiteHoles
-                    isEnabled=s.editable && p.filmBorder
-                    setOnCheckedChangeListener{_,checked->finishCompositionForParameterEdit();photo.finishCompositionGesture();model.parameters(model.state.value.parameters.copy(negativeWhiteHoles=checked))}
+                    enabled(this,s.editable && p.filmBorder && p.negativeWhiteHolesSupported)
+                    setOnCheckedChangeListener{_,checked->
+                        val current=model.state.value
+                        if(isEnabled && current.editable && current.parameters.filmBorder && current.parameters.negativeWhiteHolesSupported){
+                            finishCompositionForParameterEdit();photo.finishCompositionGesture()
+                            model.parameters(model.state.value.parameters.copy(negativeWhiteHoles=checked))
+                        }
+                    }
                 },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             }
             target.addView(infoScroll,LinearLayout.LayoutParams(-1,-2))
@@ -895,12 +941,11 @@ class MainActivity:ComponentActivity() {
         else->if(control.exactValue)dev.filmroom.i18n.L10n.format("%.2f",value)else dev.filmroom.i18n.L10n.format("%+.0f",(value-control.neutral)/(control.max-control.min)*100)
     }
     private fun controlHeading(control:Control,value:String?,target:LinearLayout=tools):TextView{
-        val stacked=landscapeEditor && resources.configuration.fontScale>1.35f && value!=null
-        val heading=row().apply{if(stacked)orientation=LinearLayout.VERTICAL}
-        heading.addView(text(control.label,14f),if(stacked)LinearLayout.LayoutParams(-1,-2)else LinearLayout.LayoutParams(0,-2,1f))
-        val values=if(stacked)row().also{heading.addView(it,LinearLayout.LayoutParams(-1,-2))}else heading
+        val heading=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this)else row()
+        heading.addView(sectionTitle(control.label,control.icon),LinearLayout.LayoutParams(0,-2,1f))
+        val values=if(landscapeEditor)row().also{heading.addView(it,LinearLayout.LayoutParams(-2,-2))}else heading
         val label=text(value ?: "",14f,accent)
-        values.addView(label,if(stacked)LinearLayout.LayoutParams(0,-2,1f)else LinearLayout.LayoutParams(-2,-2))
+        values.addView(label,LinearLayout.LayoutParams(-2,-2))
         values.addView(iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4e3db4596715, control.label),R.drawable.ic_info){AlertDialog.Builder(this).setTitle(control.label).setMessage(control.help).setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_de32e20193ad),null).showReadable()})
         target.addView(heading,LinearLayout.LayoutParams(-1,-2));return label
     }
@@ -997,12 +1042,13 @@ class MainActivity:ComponentActivity() {
                 else filePicker.launch(arrayOf("image/*", "application/octet-stream"))
             }.setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
     }
-    private fun exportDialog(){exportNotifications.offer{exportOptionsDialog()}}
+    private fun exportDialog(){if(model.state.value.canExport)exportBackgroundGuidance.offer()}
     private fun exportOptionsDialog(){
-        val s=model.state.value;val p=s.photo ?: return
+        val s=model.state.value;val p=s.photo
+        if(p==null || !s.canExport){exportBackgroundGuidance.finish();return}
         var edge=2560
         var originalSize=true
-        var format=model.availableExportFormats.firstOrNull() ?: return
+        var format=model.availableExportFormats.firstOrNull() ?: run{exportBackgroundGuidance.finish();return}
         var quality=95
         var outputColorSpace=s.parameters.outputColorSpace
         val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),dp(8),dp(24),0)}
@@ -1045,7 +1091,7 @@ class MainActivity:ComponentActivity() {
         content.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4a7b0d4654d7),16f).apply{setPadding(0,dp(16),0,dp(4))})
         val choices=RadioGroup(this)
         val largest=maxOf(p.originalWidth,p.originalHeight)
-        fun outputOption(w:Int,h:Int)=dev.filmroom.border.BorderExportPolicy.option(s.parameters.filmStock,w,h,s.parameters.filmBorder,canonicalWidth=p.originalWidth,canonicalHeight=p.originalHeight,composition=s.parameters.composition,negativeWhiteHoles=s.parameters.negativeWhiteHoles,outputRoute=s.parameters.outputRoute)
+        fun outputOption(w:Int,h:Int)=dev.filmroom.border.BorderExportPolicy.option(s.parameters.frameStock,w,h,s.parameters.filmBorder,canonicalWidth=p.originalWidth,canonicalHeight=p.originalHeight,composition=s.parameters.composition,negativeWhiteHoles=s.parameters.negativeWhiteHoles,outputRoute=s.parameters.outputRoute)
         val standard=p.outputSize(2560)
         val standardOption=outputOption(standard.width,standard.height)
         val small=RadioButton(this).apply{isEnabled=standardOption.available;id=View.generateViewId();text=(if(largest<=2560)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f60066ec4bbf)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6bea77acefb3))+" · ${standardOption.label}";minHeight=dp(48);setTextColor(ink);textSize=14f}
@@ -1070,6 +1116,7 @@ class MainActivity:ComponentActivity() {
         content.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c767b0ebc50a),13f,muted).apply{setPadding(0,dp(12),0,dp(12))})
         AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cef4e28b1774)).setView(ScrollView(this).apply{addView(content)})
             .setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d14f6e1f0a6f)){_,_->if(choices.checkedRadioButtonId!=-1){if(originalSize)model.exportOriginal(format,quality,outputColorSpace)else model.export(format,edge,quality,outputColorSpace)}}
-            .setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
+            .setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null)
+            .setOnDismissListener{exportBackgroundGuidance.finish()}.showReadable()
     }
 }

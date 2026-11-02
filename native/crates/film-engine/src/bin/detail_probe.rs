@@ -27,6 +27,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let params = MobileParams::parse(&fs::read_to_string(&a[5])?)?;
     let config = DetailConfig {
+        region_output: false,
         width: a[3].parse()?,
         height: a[4].parse()?,
         params,

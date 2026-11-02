@@ -32,13 +32,17 @@ class RealOwnedDetailHostTest {
             val photo=PhotoSource(original,"source.dng","image/x-adobe-dng",32,24,original.length(),linearFile=linear)
             val provider=OwnedDetailProvider(root,NativeDetailBridge,{NativeMemorySnapshot(8L*1024*1024*1024,0,false)})
             val parameters=EditorState(grain=0f,halation=0f,scatterAmount=0f,dirAmount=0f,grainBlur=0f,grainDyeCloud=0f)
-            val session=provider.open(photo,parameters)
+            val session=provider.open(photo,parameters,preferRegion=true)
             try {
                 val tile=session.tile(0,0)
                 assertEquals(DetailRect(0,0,32,24),tile.core);assertEquals(tile.core,tile.sample)
                 assertEquals(session.key,tile.key);assertTrue(tile.cpuFallback)
                 assertEquals(32,tile.bitmap.width);assertEquals(24,tile.bitmap.height)
-                tile.bitmap.recycle()
+                val region=session.region(DetailRect(5,6,10,8)){false}
+                assertEquals(DetailRect(4,5,12,10),region.sample)
+                for(y in 0 until region.sample.height)for(x in 0 until region.sample.width)
+                    assertEquals(tile.bitmap.getPixel(x+4,y+5),region.bitmap.getPixel(x,y))
+                region.bitmap.recycle();tile.bitmap.recycle()
             } finally {session.close()}
             withTimeout(5000){while(File(root,"cache/detail-preview/sources").listFiles().orEmpty().isNotEmpty())delay(10)}
             assertTrue(original.exists());assertTrue(linear.exists())

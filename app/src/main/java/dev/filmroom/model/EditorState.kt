@@ -83,6 +83,8 @@ data class EditorState(
     val paperGammaGreen: Float = 1f,
     val paperGammaBlue: Float = 1f,
     val paperDeveloperExhaustion: Float = 0f,
+    val filmDevelopmentTime: Float = 0f,
+    val paperDevelopmentTime: Float = 0f,
     val filmBorder: Boolean = false, // output presentation only; reset defaults OFF
     val negativeWhiteHoles: Boolean = true, // presentation preference; reversal output remains white
     val composition: CompositionTransform = CompositionTransform(),
@@ -90,6 +92,20 @@ data class EditorState(
     // null follows each film's default; explicit choice survives a forced reversal/direct route.
     val preferredOutputRoute: String? = null,
 ) {
+    val isMonochromeFilm get()=filmStock=="kodak_doublex" || filmStock=="kodak_trix"
+    val isMonochromePrint get()=paperStock=="kodak_2302"
+    val neutralDatabaseSupported get()=(!isMonochromeFilm && !isMonochromePrint) || BwNeutralFilterEntries.contains(filmStock,paperStock,printIlluminant)
+    val effectiveNeutralFiltersFromDatabase get()=neutralFiltersFromDatabase && neutralDatabaseSupported
+    val frameStock get()=dev.filmroom.border.BorderCatalog.frameStock(filmStock,paperStock,outputRoute)
+    val negativeWhiteHolesSupported get()=(outputRoute=="print" || outputRoute=="direct") && dev.filmroom.border.FrameProfileCatalog.kinds[frameStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE
+    fun controlSupported(id:String):Boolean=when(id){
+        "neutralFiltersFromDatabase"->neutralDatabaseSupported
+        "filmDevelopmentTime"->filmStock=="kodak_doublex"
+        "paperDevelopmentTime"->isMonochromePrint && outputRoute=="print"
+        "saturation","dirInterLayer","grainRedScale","grainGreenScale","grainBlueScale","halationColor"->!isMonochromeFilm
+        "warmth","paperGammaFast","paperGammaSlow","paperGammaRed","paperGammaGreen","paperGammaBlue","paperDeveloperExhaustion"->!isMonochromePrint
+        else->true
+    }
     val isReversalFilm get()=dev.filmroom.border.FrameProfileCatalog.kinds[filmStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.REVERSAL
     val scannerCorrectionSupported get()=outputRoute!="direct" || isReversalFilm
     val effectiveScanWhiteCorrection get()=scanWhiteCorrection && scannerCorrectionSupported
@@ -102,16 +118,25 @@ data class EditorState(
         // Legacy negative/direct states can only have arisen from a manual route choice.
         val preference=preferredOutputRoute ?: if(dev.filmroom.border.FrameProfileCatalog.kinds[filmStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE && outputRoute=="direct")"direct" else null
         val reversal=dev.filmroom.border.FrameProfileCatalog.kinds[id]==dev.filmroom.border.FrameAppearanceContext.FilmKind.REVERSAL
-        return copy(filmStock=id,paperStock=if(paperStock==previousDefaultPaper)defaultPaper else paperStock,
+        return copy(filmStock=id,filmFormatMm=if(filmFormatMm==(if(filmStock=="kodak_trix")8f else 35f)) {if(id=="kodak_trix")8f else 35f}else filmFormatMm,paperStock=if(paperStock==previousDefaultPaper)defaultPaper else paperStock,
             outputRoute=if(reversal)"direct" else preference ?: defaultRoute,preferredOutputRoute=preference)
     }
     /** Restore processing controls while leaving the user's composition and output preferences intact. */
     fun processingDefaults(defaultPaper:String,defaultRoute:String)=EditorState(
-        filmStock=filmStock,paperStock=defaultPaper,outputRoute=defaultRoute,
+        filmStock=filmStock,paperStock=defaultPaper,outputRoute=defaultRoute,filmFormatMm=if(filmStock=="kodak_trix")8f else 35f,
         filmBorder=filmBorder,negativeWhiteHoles=negativeWhiteHoles,composition=composition,crop=crop,
         useGpu=useGpu,outputColorSpace=outputColorSpace,outputGamut=outputGamut,
     )
-    fun presentationTransform(w:Int,h:Int)=if(filmBorder)composition.clamped(w,h) else crop.effectiveTransform(w,h)
+    fun presentationTransform(w:Int,h:Int):CompositionTransform = presentationTransformForFrame(w,h,frameStock)
+    /** Frozen legacy queue validation may use its explicit historical frame, never current selection. */
+    internal fun presentationTransformForFrame(w:Int,h:Int,frameStock:String):CompositionTransform {
+        if(!filmBorder)return crop.effectiveTransform(w,h)
+        val bw=frameStock in setOf("kodak_doublex","kodak_trix","kodak_2302")
+        // Keep legacy implicit colour orientation exactly; explicit orientation survives
+        // stock switches while its physical aperture ratio follows the selected frame.
+        val aspect=if(!bw && composition.targetAspect==null)null else dev.filmroom.border.BorderCatalog.frameAspect(frameStock,composition.targetAspect?.let{it<1.0} ?: (h>w))
+        return composition.copy(targetAspect=aspect).clamped(w,h)
+    }
     fun withPresentationTransform(value:CompositionTransform)=if(filmBorder)copy(composition=value) else copy(crop=crop.copy(transform=value))
     fun json(mode: String = "preview", includePresentation: Boolean = true) = JSONObject().apply {
         if(includePresentation){
@@ -121,6 +146,7 @@ data class EditorState(
             put("crop",crop.json())
             put("preferredOutputRoute",preferredOutputRoute ?: JSONObject.NULL)
         }
+        put("filmDevelopmentTime",filmDevelopmentTime);put("paperDevelopmentTime",paperDevelopmentTime)
         put("schemaVersion", 1); put("filmStock", filmStock); put("paperStock", paperStock)
         put("brightnessEv", brightness); put("filmExposureEv", filmExposure)
         put("contrast", contrast); put("warmth", warmth); put("saturation", saturation)
@@ -204,6 +230,7 @@ data class EditorState(
                     else->null
                 }
             EditorState(
+                filmDevelopmentTime=j.optDouble("filmDevelopmentTime",0.0).toFloat(),paperDevelopmentTime=j.optDouble("paperDevelopmentTime",0.0).toFloat(),
                 filmBorder=j.optBoolean("filmBorder",false),
                 negativeWhiteHoles=j.optBoolean("negativeWhiteHoles",true),
                 composition=j.optJSONObject("composition")?.let{CompositionTransform.fromJson(it)} ?: CompositionTransform(),

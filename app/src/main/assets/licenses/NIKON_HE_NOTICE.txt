@@ -1,0 +1,4 @@
+Research integration, not release clearance.
+Fixed source: Wes2000ley/darktable commit0a8dd792a3bce5d22142a801d41470e736c17990 src/imageio/nikon_he.
+Original copyright notices retained. Codec sources offer LGPL2.1 or CDDL1.0 alternatives; accompanying full texts retained. Our modifications: exact8280x5520 profile dimension exception; row sink; cancellation polling; bounded C ABI. No upstream GPL test files included in this production-source directory.
+Copyright licensing is NOT patent clearance. intoPIX asserts relevant TicoRAW patents. Deployment decision remains pending owner/legal review; no SDK agreement or patent license has been accepted.

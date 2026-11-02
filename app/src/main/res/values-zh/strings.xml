@@ -319,7 +319,7 @@
     <string name="text_564eb6dfeaca" formatted="false">开源许可与署名</string>
     <string name="text_d6d466c03f8e" formatted="false">从哪里导入</string>
     <string name="text_543b8fb9aa67" formatted="false">从相册选择照片</string>
-    <string name="text_85534f27f5d9" formatted="false">从文件选择照片 / DNG</string>
+    <string name="text_85534f27f5d9" formatted="false">从文件选择照片/RAW</string>
     <string name="text_c69504e36552" formatted="true">原片 %1$s × %2$s\nSDR · 保存新文件，不覆盖原图</string>
     <string name="text_42a85b8d8038" formatted="false">保存格式</string>
     <string name="text_b4a83add8f8c" formatted="false">JPEG · 通用分享</string>
@@ -384,7 +384,7 @@
     <string name="text_41db58446aa4" formatted="false">无法启动本机图像编解码组件。</string>
     <string name="text_93313da164ac" formatted="false">当前本机可用内存不足，请稍后重试；没有缩小原图。</string>
     <string name="text_c2145ea571e4" formatted="false">本机编解码已取消</string>
-    <string name="text_0105eb1c06a7" formatted="false">这张照片的编码类型暂不支持。DNG 当前支持已验证的 16 位无压缩及无损 JPEG 压缩类型，不使用内嵌预览代替 RAW。</string>
+    <string name="text_0105eb1c06a7" formatted="false">暂不支持此照片的压缩方式</string>
     <string name="text_46ac8768982e" formatted="false">这张 DNG 包含暂不支持的必需校正步骤；未忽略校正，也未使用内嵌预览代替 RAW。</string>
     <string name="text_c946e8a02212" formatted="false">这张 DNG 的相机校准矩阵暂不支持，未使用猜测颜色代替。</string>
     <string name="text_19b3b0255d08" formatted="false">本机照片读写失败，请检查可用存储空间后重新选择原文件。</string>
@@ -669,7 +669,7 @@
     <string name="text_ccd803200ef6" formatted="false">放大预览暂停</string>
     <string name="text_9f37f3d6b8c1" formatted="false">普通预览 · </string>
     <string name="text_b5dc9ebea612" formatted="false">效果暂不支持</string>
-    <string name="text_d4e2c673d344" formatted="false">可用内存不足</string>
+    <string name="text_d4e2c673d344" formatted="false">细节计算超出资源预算</string>
     <string name="text_b9dd18aa35d1" formatted="false">源文件校验失败</string>
     <string name="text_f5c716cc5054" formatted="false">源文件读取失败</string>
     <string name="text_dc0ed989d876" formatted="false">放大预览引擎不可用</string>
@@ -755,4 +755,17 @@
     <string name="toast_budget">请减小光晕或导出尺寸</string>
     <string name="toast_incomplete">处理未完成，未保存照片</string>
     <string name="toast_workdir">工作目录异常，请更新应用</string>
+    <string name="composition_adjust_action">调整</string>
+    <string name="detail_admission" formatted="false">等待可用计算资源</string>
+    <string name="detail_pressure" formatted="false">细节缓存因资源压力释放</string>
+    <string name="detail_storage" formatted="false">临时存储预算不足</string>
+    <string name="detail_allocation" formatted="false">内存分配失败</string>
+    <string name="camera_raw_basic_development" formatted="false">相机 RAW 使用黑白电平、白平衡和色彩矩阵进行基础开发；不复刻相机直出风格，也不应用全部镜头校正，颜色和几何效果可能与相机或其他软件不同。</string>
+    <string name="camera_raw_variant_unsupported" formatted="false">暂不支持或尚未验证这种相机 RAW 像素布局或压缩类型；未改用内嵌预览或降低原图尺寸。</string>
+    <string name="camera_raw_profile_unsupported" formatted="false">此相机 RAW 暂无有效的相机色彩配置，未猜测颜色或改用内嵌预览。</string>
+
+    <string name="bw_film_development">胶片显影时间</string>
+    <string name="bw_print_development">印相显影时间</string>
+    <string name="bw_development_help">使用上游实测显影时间族；默认取中间档，非通用化学配方。</string>
+    <string name="bw_development_default">上游默认</string>
 </resources>

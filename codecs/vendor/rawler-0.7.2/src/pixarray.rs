@@ -73,7 +73,7 @@ where
   }
 
   pub fn new_uninit(width: usize, height: usize) -> Self {
-    let data = Vec::with_capacity(width * height);
+    let data = Vec::new(); // Filmroom: metadata-only dimensions must not reserve pixel storage.
     Self {
       data,
       width,

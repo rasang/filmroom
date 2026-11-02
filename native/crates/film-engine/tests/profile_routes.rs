@@ -253,6 +253,12 @@ fn every_print_stock_supports_each_exposed_curve_control() {
     use spektrafilm_core::{params::PrintCurvesMorphParams, print_morph::morph_density_curves};
     for id in profile_catalog::PAPERS {
         let profile = load_profile_by_name(&data(), id).unwrap();
+        // BW 2302 exposes measured-table scalar gamma, not this colour fitted morph.
+        if profile.is_bw() {
+            assert_eq!(*id,"kodak_2302");
+            assert!(spektrafilm_core::profile::resolve_for_render(profile,None).data.density_curves_model.is_none());
+            continue;
+        }
         let model = profile
             .data
             .density_curves_model

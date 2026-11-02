@@ -1,7 +1,7 @@
 use crate::{
-    develop::{Budget, admit, decode},
-    dng::Dng,
-    error::{Result, err, io_error},
+    develop::Budget,
+    error::{Result, err},
+    raw::decode,
 };
 use jni::{
     JNIEnv,
@@ -108,15 +108,7 @@ fn run(id: i64, input: &str, output: Option<&str>, budget: &str) -> Value {
             let (p, a) = decode(&input, &path(&h, output, true)?, &b, &h.cancel)?;
             (p, Some(a))
         } else {
-            let d = Dng::read(&mut std::fs::File::open(&input).map_err(|e| io_error(e, "probe"))?)?;
-            (
-                d.probe(),
-                if metadata_only {
-                    None
-                } else {
-                    Some(admit(&d, &b)?)
-                },
-            )
+            crate::raw::probe(&input, &b, metadata_only)?
         };
         let mut v = serde_json::to_value(probe).map_err(|_| err("DECODE_FAILED", "complete"))?;
         v["admission"] =

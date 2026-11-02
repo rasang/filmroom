@@ -45,3 +45,13 @@ mod technical;
 pub mod gainmap;
 
 pub mod cfa_gainmap;
+
+pub mod camera_raw;
+mod nikon_he;
+mod he_spool;
+pub mod raw;
+
+mod snef_rows;
+mod nikon_snef;
+
+pub mod raw_batch;

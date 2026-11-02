@@ -33,6 +33,8 @@ impl Drop for TempGuard {
     }
 }
 
+/// Accepts a resolved runtime profile (`Pipeline::film`), not an unselected B&W
+/// development-time family. Do not resolve again here: the pipeline owns that choice.
 /// Returns None for reversal/positive/unknown film types: never fabricate a negative.
 /// A non-cancellation preview failure may be ignored by the exporter; checkpoints
 /// remain authoritative. Published files are complete PNGs; stale .tmp is removed
@@ -469,10 +471,54 @@ mod tests {
         }
     }
     #[test]
+    fn actual_doublex_runtime_families_write_png_and_match_physical_scanner() {
+        use spektrafilm_core::{params::RuntimeParams, pipeline::Pipeline, profile::load_profile_by_name};
+        use spektrafilm_math::{image::ImageBuf, precision::from_f64};
+        let data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let raw = load_profile_by_name(&data, "kodak_doublex").unwrap();
+        let print = load_profile_by_name(&data, "kodak_2302").unwrap();
+        assert_eq!(raw.data.development_time, vec![4., 5., 6.5, 9., 12.]);
+        let norm: f64 = (0..spectral::N_WAVELENGTHS)
+            .map(|i| spectral::ILLUMINANT_D65_F64[i] * spectral::CMF_Y_F64[i]).sum();
+        let identity = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+        for (index, &time) in raw.data.development_time.iter().enumerate() {
+            let mut params = RuntimeParams::default();
+            params.film_render.development_time = Some(time);
+            let pipe = Pipeline::new(raw.clone(), print.clone(), params);
+            let p = &pipe.film;
+            assert_eq!(p.data.development_time, vec![time]);
+            for i in 0..spectral::N_WAVELENGTHS {
+                assert_eq!(p.data.channel_density[i], vec![raw.data.channel_density[i][0], 0., 0.]);
+                assert_eq!(p.data.base_density[i], raw.data.base_density_rows[i][index]);
+            }
+            let model = LightTable::new(p).unwrap();
+            let density = [0.5; 3];
+            let xyz = model.xyz(density).unwrap();
+            let image = ImageBuf::from_data(1, 1, density.map(from_f64).to_vec());
+            let dyes: Vec<[f64; 3]> = p.data.channel_density.iter().map(|v| [v[0], v[1], v[2]]).collect();
+            let reference = spektrafilm_gpu::cpu_backend::scan_spectral_cpu(
+                &image, &dyes, &p.data.base_density, &spectral::ILLUMINANT_D65_F64,
+                norm, &identity, &identity,
+            );
+            for c in 0..3 { assert!((xyz[c] - reference.data[c] as f64).abs() < 1e-6, "time={time} channel={c}"); }
+            // Real publication and decoder exercise, not merely a finite matrix.
+            let f = Fixture::new(3, 1, |x, _| x as f64 * 0.5);
+            let path = write_negative_preview(&f.planes, p, 3, 1, &f.dir, &mut || false).unwrap().unwrap();
+            let (w, h, rgb) = pixels(&fs::read(path).unwrap());
+            assert_eq!((w, h), (3, 1));
+            for x in 0..3 {
+                assert_eq!(&rgb[x * 3..x * 3 + 3], &encode_srgb(model.xyz([x as f64 * 0.5; 3]).unwrap()).unwrap());
+            }
+            assert!(rgb[..3].iter().any(|v| *v > 0));
+            for c in 0..3 { assert!(rgb[c] > rgb[3 + c] && rgb[3 + c] > rgb[6 + c]); }
+        }
+    }
+    #[test]
     fn all_shipped_negative_profiles_have_usable_spectra() {
         let data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
         for name in crate::profile_catalog::FILMS {
-            let p = spektrafilm_core::profile::load_profile_by_name(&data, name).unwrap();
+            let raw = spektrafilm_core::profile::load_profile_by_name(&data, name).unwrap();
+            let p = spektrafilm_core::profile::resolve_for_render(raw, None);
             if p.info.film_type == "negative" {
                 let model = LightTable::new(&p).unwrap_or_else(|e| panic!("{name}: {e}"));
                 let rgb = encode_srgb(model.xyz([0.5; 3]).unwrap()).unwrap();

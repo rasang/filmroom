@@ -197,7 +197,8 @@ class CameraLayoutRenderHostTest {
                         val vertical=all(root).filterIsInstance<android.widget.ScrollView>().single{it.tag=="landscape-parameters-scroll"}
                         vertical.scrollTo(0,section.top);layout(root,w,h)
                     }
-                    val rail=all(renderRoot).filterIsInstance<dev.filmroom.ui.SettledChoiceSelector>().single()
+                    // Other sections now have development-time selectors; target the metering rail.
+                    val rail=all(renderRoot).filterIsInstance<dev.filmroom.ui.SettledChoiceSelector>().single{it.contentDescription?.contains("中央重点")==true}
                     assertTrue(rail.height>=48)
                     val visible=android.graphics.Rect()
                     assertTrue(rail.getGlobalVisibleRect(visible))

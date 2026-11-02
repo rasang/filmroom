@@ -33,6 +33,89 @@ class PhotoMetadataTest {
             assertTrue(PhotoMetadata.read(file).toJson().contains("测试照片 — café"))
         }finally{file.delete()}
     }
+    @Test fun emptyUndefinedCommentIsAbsentButMeaningfulUnknownEncodingStillWarns() {
+        val original=PhotoMetadata.fromAttributes(mapOf("Make" to "Camera", "UserComment" to " ".repeat(256)))
+        val tiff=original.exifBytes(2,3,"sRGB",0)
+        val prefix="ASCII\u0000\u0000\u0000".toByteArray()
+        val start=tiff.indices.first { i -> i+prefix.size<=tiff.size && tiff.copyOfRange(i,i+prefix.size).contentEquals(prefix) }
+        val file=java.io.File.createTempFile("empty-comment-", ".jpg")
+        fun read(body:ByteArray):PhotoMetadata {
+            val payload="Exif\u0000\u0000".toByteArray()+body;val n=payload.size+2
+            file.writeBytes(byteArrayOf(-1,-40,-1,-31,(n ushr 8).toByte(),n.toByte())+payload+byteArrayOf(-1,-39))
+            return PhotoMetadata.read(file)
+        }
+        try {
+            java.util.Arrays.fill(tiff,start,start+264,0.toByte())
+            val empty=read(tiff);assertNull(empty.warning)
+            assertFalse(org.json.JSONObject(empty.toJson()).getJSONObject("attributes").has("UserComment"))
+            tiff[start+8]='A'.code.toByte()
+            assertNotNull("Nonempty unknown encoding must remain a warning",read(tiff).warning)
+        } finally {file.delete()}
+    }
+    @Test fun galleryDateUsesApprovedFrozenLocalOffsetWithoutChangingSourceSnapshot() {
+        val old=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Shanghai"))
+            val metadata=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2016:09:10 18:16:23", "SubSecTimeOriginal" to "80"))
+            assertNull("Source timezone remains unknown",metadata.captureTimeMillis())
+            val expected=Instant.parse("2016-09-10T10:16:23.800Z").toEpochMilli()
+            assertEquals(expected,metadata.mediaStoreCaptureTimeMillis())
+            val persisted=metadata.toJson()
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/New_York"))
+            val restored=PhotoMetadata.fromJson(persisted)
+            assertEquals("Retry after timezone change preserves frozen indexing time",expected,restored.mediaStoreCaptureTimeMillis())
+            val root=values(restored.exifBytes(2,3,"sRGB",Instant.parse("2026-11-02T03:00:00Z").toEpochMilli()))
+            val capture=values(restored.exifBytes(2,3,"sRGB",0),long(root.getValue(0x8769)))
+            assertEquals("Approved output compatibility offset", "+08:00",string(capture.getValue(0x9011)))
+            assertFalse("Source snapshot still records no original offset",org.json.JSONObject(restored.toJson()).getJSONObject("attributes").has("OffsetTimeOriginal"))
+            assertEquals(dev.filmroom.diagnostics.MetadataDateBasis.ASSUMED_IMPORT_ZONE,restored.diagnosticDateBasis)
+            assertEquals("2016:09:10 18:16:23",string(capture.getValue(0x9003)))
+            val explicit=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2023:10:18 17:19:29", "OffsetTimeOriginal" to "-04:00", "SubSecTimeOriginal" to "68"))
+            assertEquals(Instant.parse("2023-10-18T21:19:29.680Z").toEpochMilli(),explicit.mediaStoreCaptureTimeMillis())
+            assertNull(PhotoMetadata.fromAttributes(emptyMap()).mediaStoreCaptureTimeMillis())
+            val invalid=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2020:01:02 03:04:05","OffsetTimeOriginal" to "bad"))
+            assertNull(invalid.inferredOriginalOffset());assertNull(invalid.mediaStoreCaptureTimeMillis())
+            assertNull(PhotoMetadata.fromJson(invalid.toJson()).inferredOriginalOffset())
+        } finally {java.util.TimeZone.setDefault(old)}
+    }
+    @Test fun localDateDstGapAndOverlapUseExplicitJavaTimeRulesNotToday() {
+        val old=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/New_York"))
+            val gap=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2021:03:14 02:30:00"))
+            assertEquals(Instant.parse("2021-03-14T07:30:00Z").toEpochMilli(),gap.mediaStoreCaptureTimeMillis())
+            assertEquals("-05:00",gap.inferredOriginalOffset())
+            val overlap=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2021:11:07 01:30:00"))
+            assertEquals(Instant.parse("2021-11-07T05:30:00Z").toEpochMilli(),overlap.mediaStoreCaptureTimeMillis())
+            assertEquals("-04:00",overlap.inferredOriginalOffset())
+            assertNull(PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2021:02:30 12:00:00")).mediaStoreCaptureTimeMillis())
+        } finally {java.util.TimeZone.setDefault(old)}
+    }
+    @Test fun gpsVersionBytesAreNotMistakenForInvalidText() {
+        val metadata=PhotoMetadata.fromAttributes(mapOf("GPSVersionID" to "2,3,0,0"))
+        val payload="Exif\u0000\u0000".toByteArray()+metadata.exifBytes(2,3,"sRGB",0);val n=payload.size+2
+        val file=java.io.File.createTempFile("gps-version-", ".jpg")
+        try {
+            file.writeBytes(byteArrayOf(-1,-40,-1,-31,(n ushr 8).toByte(),n.toByte())+payload+byteArrayOf(-1,-39))
+            val read=PhotoMetadata.read(file);assertNull(read.warning);assertTrue(read.issues.isEmpty())
+            assertEquals("2,3,0,0",org.json.JSONObject(read.toJson()).getJSONObject("attributes").getString("GPSVersionID"))
+        } finally {file.delete()}
+    }
+    @Test fun malformedPersistedDateHintsCannotTurnInvalidExplicitOffsetIntoAssumption() {
+        val old=java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Shanghai"))
+            val metadata=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2016:01:08 15:08:01"))
+            val j=org.json.JSONObject(metadata.toJson()).put("indexTimeZone","/private/not-a-zone").put("indexTimeMillis",0)
+            val recovered=PhotoMetadata.fromJson(j.toString())
+            assertEquals(Instant.parse("2016-01-08T07:08:01Z").toEpochMilli(),recovered.mediaStoreCaptureTimeMillis())
+            j.getJSONObject("attributes").put("OffsetTimeOriginal","invalid-offset")
+            j.put("sourceOffsetPresent",false)
+            val invalid=PhotoMetadata.fromJson(j.toString())
+            assertNull(invalid.inferredOriginalOffset());assertNull(invalid.mediaStoreCaptureTimeMillis())
+            assertTrue(invalid.issues.any{it.reason==dev.filmroom.diagnostics.MetadataIssueReason.INVALID_OFFSET})
+        } finally {java.util.TimeZone.setDefault(old)}
+    }
     @Test fun readerWriterRoundtripNormalizesOrientationAndPreservesCapture() {
         val source=java.io.File.createTempFile("metadata-source-", ".jpg")
         val output=java.io.File.createTempFile("metadata-output-", ".jpg")

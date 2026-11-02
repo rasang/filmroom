@@ -20,7 +20,7 @@ internal data class DiagnosticMetadata(
 internal object ChineseDiagnostics {
     private fun operation(value: Operation): String = when (value) {
         Operation.SESSION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5c1712cb2d38); Operation.RESTORE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b1336f82fea4); Operation.IMPORT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7fc4b2dbd50)
-        Operation.PREVIEW_RENDER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5a9df9227ec6); Operation.ORIGINAL_SPOOL -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9ced68312ac6)
+        Operation.PREVIEW_RENDER, Operation.PREVIEW_PRESENTATION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5a9df9227ec6); Operation.ORIGINAL_SPOOL -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9ced68312ac6)
         Operation.EXPORT_PLAN -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_71cab785c5d9); Operation.EXPORT_RENDER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0a3bbae44150); Operation.EXPORT_ENCODE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2fa4917d052e)
         Operation.SHARE_DIAGNOSTICS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_73fff6a5d6e6); Operation.CLEANUP -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f8281de2df36)
     }

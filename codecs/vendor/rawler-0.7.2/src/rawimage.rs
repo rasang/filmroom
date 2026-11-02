@@ -194,6 +194,10 @@ impl CFAConfig {
 /// as all the needed metadata
 #[derive(Debug, Clone)]
 pub struct RawImage {
+  /// Filmroom: actual source IFD selected by a camera decoder, for preflight binding.
+  pub source_ifd_offset: Option<u32>,
+  /// Filmroom HE metadata-only admission: actual Nikon compression MakerNote13/14.
+  pub nikon_he_mode: Option<u16>,
   /// Camera definition
   pub camera: Camera,
   /// camera make as encoded in the file
@@ -368,6 +372,8 @@ impl RawImage {
     let crop_area = cam.crop_area.map(|area| Rect::new_with_borders(Dim2::new(pixel_width, image.height), &area));
 
     RawImage {
+      source_ifd_offset: None,
+      nikon_he_mode: None,
       camera: cam.clone(),
       make: cam.make.clone(),
       model: cam.model.clone(),
@@ -457,6 +463,8 @@ impl RawImage {
     let crop_area = cam.crop_area.map(|area| Rect::new_with_borders(Dim2::new(pixel_width, height), &area));
 
     RawImage {
+      source_ifd_offset: None,
+      nikon_he_mode: None,
       camera: cam.clone(),
       make: cam.make.clone(),
       model: cam.model.clone(),

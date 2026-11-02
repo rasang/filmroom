@@ -6,6 +6,8 @@ use crate::pixarray::PixU16;
 use crate::pumps::ByteStream;
 
 mod decompressors;
+mod streaming;
+mod raster_streaming;
 pub mod huffman;
 
 enum Marker {

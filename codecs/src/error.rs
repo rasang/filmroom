@@ -15,8 +15,12 @@ pub fn err(code: &'static str, stage: &'static str) -> CodecError {
             "UNSUPPORTED_COLOR_SPACE" => "暂不支持此输出色彩空间，未更改颜色标签冒充支持",
             "UNSUPPORTED_FORMAT" => "暂不支持此照片格式",
             "UNSUPPORTED_COMPRESSION" => {
-                "暂不支持此 RAW 压缩变体；当前支持已验证的无压缩及无损 JPEG DNG"
+                "暂不支持此照片的压缩方式"
             }
+            "UNSUPPORTED_CAMERA_RAW_VARIANT" => {
+                "暂不支持此相机 RAW 像素布局或压缩变体，未使用预览替代"
+            }
+            "UNSUPPORTED_CAMERA" => "当前离线相机色彩配置尚不支持此 RAW",
             "UNSUPPORTED_DNG_VARIANT" => "暂不支持此 DNG 的像素布局或校正配置",
             "UNSUPPORTED_DNG_OPCODE" => "此DNG包含尚未支持的必需校正，未忽略或替换为预览",
             "UNSUPPORTED_DNG_CALIBRATION" => "暂不支持此 DNG 的相机校准矩阵",

@@ -47,11 +47,11 @@ internal data class RasterImportPreview(val bitmap: Bitmap, val width: Int, val 
 internal fun interface RasterPreviewDecoder {
     suspend fun decode(file: File, maxEdge: Int, job: CoroutineContext): RasterImportPreview
 }
-internal interface DngSourceDecoder {
+internal interface RawSourceDecoder {
     suspend fun probe(file: File): JSONObject
     suspend fun decode(file: File, target: File): JSONObject
 }
-internal class NativeDngSourceDecoder(private val codecs: PhotoCodecs): DngSourceDecoder {
+internal class NativeRawSourceDecoder(private val codecs: PhotoCodecs): RawSourceDecoder {
     override suspend fun probe(file: File) = codecs.probe(file)
     override suspend fun decode(file: File, target: File) = codecs.decode(file, target)
 }

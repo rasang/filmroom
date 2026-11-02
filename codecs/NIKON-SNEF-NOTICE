@@ -1,0 +1,20 @@
+Nikon small NEF research integration
+
+core/snef_rows.rs is a Rust row-output adaptation of official LibRaw 0.22.2:
+- src/decoders/decoders_libraw.cpp::nikon_load_sraw
+  Copyright 2019-2022 LibRaw LLC (info@libraw.org)
+- src/utils/open.cpp, Nikon sRAW inverse-curve initialization
+  Copyright 2019-2025 LibRaw LLC (info@libraw.org)
+
+Official source: https://github.com/LibRaw/LibRaw/tree/0.22.2
+Tag tree: b93f6e45c194f5df9b02a43b1af9a54b4f41f33f
+Decoder source SHA256: 6563ff7b2fcfe451a29e8ff6606da5f957953b5443a3881e41192cd35f35e2b2
+
+Upstream offers LGPL-2.1 or CDDL-1.0. This candidate uses the LGPL-2.1 option;
+the unmodified full LGPL text is in LICENSE.LibRaw. No claim of independent
+invention or patent clearance is made. Original format coefficients, transfer
+curve, interpolation and highlight rule are preserved, not guessed or fitted.
+
+Official rawpy 0.28.0 / NumPy 2.5.4 wheels are developer-only test oracles in a
+separate virtual environment. Neither rawpy nor NumPy is added to the App.
+No Adobe or Nikon SDK was installed or licensed. No preview pixels are used.

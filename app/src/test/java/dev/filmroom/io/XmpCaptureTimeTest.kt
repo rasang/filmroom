@@ -42,6 +42,15 @@ class XmpCaptureTimeTest {
         try {
             val exif=PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to date)).exifBytes(24,16,"sRGB",0)
             source.writeBytes(byteArrayOf(-1,-40)+segment("Exif\u0000\u0000".toByteArray()+exif)+segment("http://ns.adobe.com/xap/1.0/\u0000".toByteArray()+packet(iso).toByteArray())+byteArrayOf(-1,-39))
+            // Production export now fills an approved compatibility offset. This input
+            // fixture intentionally represents a camera source with only XMP offset.
+            ExifInterface(source.absolutePath).apply {
+                setAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL,null)
+                saveAttributes()
+            }
+            val sourceExif=ExifInterface(source.absolutePath)
+            assertNull(sourceExif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL))
+            assertEquals(iso,XmpCaptureTime.read(sourceExif.getAttributeBytes(ExifInterface.TAG_XMP)))
             val before=source.readBytes()
             val snapshot=PhotoMetadata.fromJson(PhotoMetadata.read(source).toJson())
             assertEquals(Instant.parse("2026-10-24T15:15:59Z").toEpochMilli(),snapshot.captureTimeMillis())

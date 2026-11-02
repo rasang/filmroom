@@ -1,0 +1,65 @@
+{
+  "artwork": "original approved reference-informed illustration",
+  "files": [
+    {
+      "path": "fixed135/bw-double_x_5222-positive-display.webp",
+      "bytes": 174914,
+      "sha256": "2ccf5d7c749763ed7690f31d8feb73c1ee72114fc6719e4cb0fef933c6241447"
+    },
+    {
+      "path": "fixed135/bw-double_x_5222.webp",
+      "bytes": 173514,
+      "sha256": "f5ccf647039af61d963b1c0d425c5fced803d6dc57ec669ffdf3f10568316d7a"
+    },
+    {
+      "path": "fixed135/bw-print_2302.webp",
+      "bytes": 43540,
+      "sha256": "d84db54b27d59e49f615684625b582ea2ef3c29042817d756b23ece59032e595"
+    },
+    {
+      "path": "fixed135/bw-tri_x_7266-super8.webp",
+      "bytes": 94570,
+      "sha256": "1620504f73cdedb865555da5968ecc62beacdbf5a49c1d895afae4037888cc53"
+    },
+    {
+      "path": "film-rolls/kodak_doublex.webp",
+      "bytes": 35468,
+      "sha256": "d83e9bb601900f7a57530303c567952b13c96db9af8179ef3f3265adcf669663"
+    },
+    {
+      "path": "film-rolls/kodak_trix.webp",
+      "bytes": 30428,
+      "sha256": "8989d5fc6db2bc8204a706731c2b23d43ab3d4a484496a9b3f3556638b1bd03f"
+    },
+    {
+      "path": "fixed135/bw-double_x_5222-positive-sampled.webp",
+      "bytes": 165244,
+      "sha256": "608779f0b0c65d838d966e4f1a57da86ddd30dee58c0a2a265ca77b20432528f"
+    }
+  ],
+  "positive_5222_colors": {
+    "base_patch_medians_srgb8": [
+      1,
+      0,
+      1,
+      5
+    ],
+    "target_body_srgb8": [
+      4,
+      4,
+      4
+    ],
+    "target_letter_srgb8": [
+      100,
+      100,
+      100
+    ],
+    "target_letter_gradient_srgb8_top_bottom": [
+      112,
+      88
+    ],
+    "letter_adjustment": "Intentionally brighter for legibility with user-requested restrained vertical gradient centered near100; not measured film density",
+    "source": "Original procedural material and existing original geometry; no reference/photo pixels",
+    "supersedes": "unreleased translucent display candidate; direct negative unchanged"
+  }
+}

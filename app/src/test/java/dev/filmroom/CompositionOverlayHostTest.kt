@@ -25,9 +25,9 @@ class CompositionOverlayHostTest {
             val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
             try {
                 val a=controller.get();val root=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
-                val edit=field(a,"compositionButton") as Button;val compare=field(a,"compare")
+                val edit=if(w>h)root.findViewWithTag<Button>("crop-adjust") else field(a,"compositionButton") as Button;val compare=field(a,"compare")
                 layout(root,w,h);layout(root,w,h)
-                val strip=edit.parent as ViewGroup
+                val strip=if(w>h)generateSequence(edit.parent as? ViewGroup){it.parent as? ViewGroup}.first{it.tag=="parameter-section:composition"} else edit.parent as ViewGroup
                 assertNotSame(compare.parent,strip)
                 if(w>h){
                     assertEquals("parameter-section:composition",strip.tag)
@@ -40,10 +40,22 @@ class CompositionOverlayHostTest {
                     assertEquals("filmStock",strip.getChildAt(index-1).tag)
                     assertEquals("filmFormatMm",strip.getChildAt(index+1).tag)
                 }
-                assertEquals("composition",edit.tag)
+                assertEquals(if(w>h)"crop-adjust" else "composition",edit.tag)
                 assertFalse("No source cannot begin a draft",edit.isEnabled)
-                assertTrue(edit.text.isNotBlank());assertTrue(edit.contentDescription.isNotBlank())
-                assertEquals(1,edit.maxLines)
+                assertTrue(edit.text.isNotBlank())
+                if(w>h){
+                    // A text Button exposes its visible text as its accessibility label;
+                    // unlike the legacy icon action it need not duplicate contentDescription.
+                    val node=edit.createAccessibilityNodeInfo()
+                    try {
+                        assertEquals(edit.text.toString(),node.text.toString())
+                        assertFalse("No-source accessibility action stays disabled",node.isEnabled)
+                    }finally{node.recycle()}
+                }else assertTrue(edit.contentDescription.isNotBlank())
+                if(w>h){
+                    assertTrue("Landscape action keeps 48dp touch height",edit.height>=48)
+                    assertTrue("Landscape action keeps 48dp touch width",edit.width>=48)
+                }else assertEquals(1,edit.maxLines)
             }finally{controller.pause().stop().destroy()}
         }}finally{RuntimeEnvironment.setFontScale(1f)}
     }

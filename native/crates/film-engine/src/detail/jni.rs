@@ -16,6 +16,8 @@ use std::{
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Request {
+    #[serde(default)]
+    region_output: bool,
     schema_version: u32,
     width: u32,
     height: u32,
@@ -48,6 +50,7 @@ fn parse(s: &str) -> Result<DetailConfig, &'static str> {
         }
     })?;
     Ok(DetailConfig {
+        region_output: r.region_output,
         width: r.width,
         height: r.height,
         params,
@@ -173,7 +176,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabil
     reply(env, "capabilities", |_| {
         let profiles:Vec<Value>=crate::profile_catalog::FILMS.iter().map(|film|json!({"filmStock":film,"printSupported":!crate::profile_catalog::is_reversal(film),"directSupported":crate::profile_catalog::is_reversal(film),"reason":"SUPPORTED_ROUTE_FINITE_GRAIN_ONLY"})).collect();
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
+            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
         )
     })
 }
@@ -318,6 +321,53 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeTile(
         result.check_publish().map_err(|e| e.code())?;
         Ok(
             json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":"ExactSameWorkingGrid"}),
+        )
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion(
+    env: JNIEnv<'_>,
+    _: JObject<'_>,
+    session: jlong,
+    operation: jlong,
+    x: jint,
+    y: jint,
+    width: jint,
+    height: jint,
+    buffer: JByteBuffer<'_>,
+) -> jstring {
+    reply(env, "region", |env| {
+        let session = id(session)?;
+        let operation = id(operation)?;
+        let validated = (|| {
+            if x < 0 || y < 0 || width <= 0 || height <= 0 {
+                return Err("INVALID_REQUEST");
+            };
+            let (_, sample) = bridge::region_layout(session, super::Rect{x:x as usize,y:y as usize,w:width as usize,h:height as usize})
+                .map_err(|e| e.code())?;
+            let bytes = sample
+                .w
+                .checked_mul(sample.h)
+                .and_then(|v| v.checked_mul(12))
+                .ok_or("INVALID_REQUEST")?;
+            let ptr = output(env, &buffer, bytes)?;
+            Ok::<_, &'static str>((ptr, bytes))
+        })();
+        let (ptr, bytes) = match validated {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = bridge::release_operation(session, operation);
+                return Err(e);
+            }
+        };
+        // The validated direct buffer remains strongly held by the JNI local ref.
+        // Caller promises exclusive access until this synchronous operation returns.
+        let output=unsafe { std::slice::from_raw_parts_mut(ptr as *mut f32,bytes/4) };
+        let result=bridge::region_into(session,operation,super::Rect{x:x as usize,y:y as usize,w:width as usize,h:height as usize},output)
+            .map_err(|e|e.code())?;
+        result.check_publish().map_err(|e| e.code())?;
+        Ok(
+            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
         )
     })
 }

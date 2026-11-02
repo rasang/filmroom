@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_background_title" formatted="false">Background export</string>
+    <string name="export_background_restricted" formatted="false">Android restricts background activity. Export may pause or fail when you switch apps or lock the screen.</string>
+    <string name="export_background_unknown" formatted="false">Background limits cannot be confirmed. Export may pause or fail when you switch apps or lock the screen.</string>
+    <string name="export_background_help" formatted="false">Always ignore only hides this reminder; it does not change system settings.</string>
+    <string name="export_background_help_generic" formatted="false">Open App info → Battery / background usage, then choose Unrestricted or Allow background activity (names vary by OS version).</string>
+    <string name="export_background_help_vivo" formatted="false">vivo / iQOO: Open App info → Battery / background power use, then allow background activity or high background power use (names vary by OS version).</string>
+    <string name="export_background_help_oppo" formatted="false">OPPO / realme / OnePlus: Open App info → Battery / power management, then allow background activity (names vary by OS version).</string>
+    <string name="export_background_help_xiaomi" formatted="false">Xiaomi / Redmi / POCO: Open App info → Battery saver / background settings, then choose No restrictions (names vary by OS version).</string>
+    <string name="export_background_always_ignore" formatted="false">Always ignore</string>
+    <string name="export_background_ignore" formatted="false">Ignore</string>
+    <string name="export_background_open" formatted="false">Open settings</string>
+    <string name="export_background_settings_missing" formatted="false">System settings could not be opened. Open Settings manually and find Filmroom battery or background usage.</string>
+    <string name="export_background_return_title" formatted="false">Continue export?</string>
+    <string name="export_background_return_allowed" formatted="false">The standard Android background checks passed. This does not confirm that every manufacturer restriction is off.</string>
+    <string name="export_background_return_message" formatted="false">Returning to the app does not start an export. Continue to review export options, or cancel to adjust settings first if restrictions remain.</string>
+    <string name="export_background_continue" formatted="false">Continue export</string>
+    <string name="export_background_cancel" formatted="false">Cancel</string>
+    <string name="export_background_verified_toast" formatted="false">Android background checks passed</string>
+</resources>

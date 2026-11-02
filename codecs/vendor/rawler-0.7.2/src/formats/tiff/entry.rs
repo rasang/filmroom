@@ -88,6 +88,9 @@ impl Entry {
     let compat_typ = if typ == 0 || typ > 12 { 7 } else { typ };
 
     let bytesize: usize = (count as usize) << DATASHIFTS[compat_typ as usize];
+    if !crate::metadata_budget::charge(bytesize.saturating_mul(2), false) {
+      return Err(TiffError::General("Metadata resource budget exceeded".into()));
+    }
     let offset: u32 = if bytesize <= 4 {
       reader.position()? - base
     } else {

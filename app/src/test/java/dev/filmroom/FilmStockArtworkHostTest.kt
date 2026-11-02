@@ -30,7 +30,7 @@ class FilmStockArtworkHostTest {
     @org.junit.Before fun chosenLanguageForLegacyFixture(){resetAndroidViewModelFactoryForHostTest();dev.filmroom.i18n.L10n.choose(org.robolectric.RuntimeEnvironment.getApplication(),"zh")} 
     private fun all(v:View):List<View> = listOf(v)+(if(v is ViewGroup)(0 until v.childCount).flatMap{all(v.getChildAt(it))}else emptyList())
     private fun layout(v:View,w:Int,h:Int){v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h);shadowOf(android.os.Looper.getMainLooper()).idle()}
-    @Test fun filmExposureLeadsAdjustListWithoutMovingPrintExposure() {
+    @Test fun filmExposureLeadsAndPrintExposureFollowsPaper() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val a=controller.get()
             val group=MainActivity::class.java.getDeclaredField("group").apply{isAccessible=true}
@@ -42,15 +42,39 @@ class FilmStockArtworkHostTest {
             assertSame(exposure,row.getChildAt(0));assertEquals("brightness",row.getChildAt(1).tag)
             group.set(a,"print");selected.set(a,"");build.invoke(a)
             val print=all(a.window.decorView).filterIsInstance<Button>().single{it.tag=="printExposureEv"}
-            assertEquals("paper",(print.parent as ViewGroup).getChildAt(0).tag)
+            val printRow=print.parent as ViewGroup
+            assertEquals("paper",printRow.getChildAt(0).tag)
+            assertSame(print,printRow.getChildAt(1))
         }
     }
-    @Test fun allTwentyProfilesHaveCorrectTransparentArtworkAndUnknownNeverBorrowsStock() {
+    @Suppress("UNCHECKED_CAST")
+    @Test fun print2302UsesPlainPaperButtonAndKeepsProfileAcrossSessionRoundTrip() {
+        try { for((w,h) in listOf(360 to 780,740 to 320)) {
+            RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-mdpi")
+            Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+                val a=controller.get()
+                val model=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+                val flow=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(model) as MutableStateFlow<EditorUiState>
+                val state=dev.filmroom.model.EditorState(filmStock="kodak_doublex",paperStock="kodak_2302",outputRoute="print")
+                val restored=dev.filmroom.model.EditorState.fromJson(state.json())
+                assertEquals(state,restored);assertEquals("kodak_2302",restored.paperStock)
+                assertEquals("kodak_doublex",restored.frameStock)
+                flow.value=EditorUiState(parameters=restored)
+                MainActivity::class.java.getDeclaredField("group").apply{isAccessible=true}.set(a,"print")
+                MainActivity::class.java.getDeclaredField("selected").apply{isAccessible=true}.set(a,"paper")
+                MainActivity::class.java.getDeclaredMethod("buildTools").apply{isAccessible=true}.invoke(a)
+                val paper=all(a.window.decorView).filterIsInstance<Button>().single{it.text.contains("2302")}
+                assertTrue(paper.compoundDrawables.all{it==null})
+                assertTrue(paper.compoundDrawablesRelative.all{it==null})
+            }
+        }} finally { RuntimeEnvironment.setQualifiers("w360dp-h780dp-440dpi") }
+    }
+    @Test fun allCameraProfilesHaveCorrectTransparentArtworkAndPrintMediaHaveNone() {
         val context=RuntimeEnvironment.getApplication()
         val profiles=JSONObject(context.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         val ids=(0 until profiles.length()).map{profiles.getJSONObject(it)}.filter{it.getString("kind") in listOf("negative","reversal")}.map{it.getString("id")}.toSet()
-        assertEquals(20,ids.size);assertEquals(ids,FilmStockArtwork.physicalStockByProfile.keys)
-        assertEquals(18,FilmStockArtwork.physicalStockByProfile.values.toSet().size)
+        assertEquals(22,ids.size);assertEquals(ids,FilmStockArtwork.physicalStockByProfile.keys)
+        assertEquals(20,FilmStockArtwork.physicalStockByProfile.values.toSet().size)
         for(id in ids){
             val bitmap=context.assets.open(FilmStockArtwork.assetPath(id)!!).use{BitmapFactory.decodeStream(it)}
             assertNotNull(id,bitmap);assertEquals(240,bitmap.width);assertEquals(240,bitmap.height);assertTrue(bitmap.hasAlpha())
@@ -59,6 +83,8 @@ class FilmStockArtworkHostTest {
         assertEquals(FilmStockArtwork.assetPath("kodak_portra_800"),FilmStockArtwork.assetPath("kodak_portra_800_push1"))
         assertEquals(FilmStockArtwork.assetPath("kodak_portra_800"),FilmStockArtwork.assetPath("kodak_portra_800_push2"))
         assertNotEquals(FilmStockArtwork.cardLabel("kodak_portra_800_push1",""),FilmStockArtwork.cardLabel("kodak_portra_800_push2",""))
+        assertNull(FilmStockArtwork.assetPath("kodak_2302"))
+        assertFalse(context.assets.list("film-rolls")!!.contains("kodak_2302.webp"))
         assertNull(FilmStockArtwork.assetPath("unknown_stock"))
         assertFalse(FilmStockArtwork.drawable(context,"unknown_stock") is BitmapDrawable)
     }
@@ -93,15 +119,17 @@ class FilmStockArtworkHostTest {
                 strip().isSmoothScrollingEnabled=false
                 strip().scrollTo(strip().getChildAt(0).width,0)
                 val cards=strip().getChildAt(0) as ViewGroup
-                assertEquals(20,cards.childCount)
-                val last=cards.getChildAt(19) as Button
+                assertEquals(22,cards.childCount)
+                val last=cards.getChildAt(cards.childCount-1) as Button
                 val x=strip().scrollX;val initialWidth=strip().width;val initialContent=cards.width;assertTrue(x>0);last.performClick();shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400));layout(content,content.width,content.height)
                 // Expanded dialog can relayout its scroll gutters after text reflow. Normal
                 // editor must preserve exact pixels; either surface must retain the last stock.
                 // Film selection is tap-only and keeps the current browsing position.
                 assertTrue("Never reset to the first stock",strip().scrollX>0)
                 val chosen=all(strip()).filterIsInstance<Button>().single{it.isSelected}
-                assertEquals("kodak_vision3_50d",chosen.tag)
+                val catalogRows=org.json.JSONObject(a.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
+                val expectedLast=(0 until catalogRows.length()).map{catalogRows.getJSONObject(it)}.last{it.getString("kind") in setOf("negative","reversal")}.getString("id")
+                assertEquals(expectedLast,chosen.tag)
                 assertTrue(chosen.compoundDrawables.any{it is BitmapDrawable})
                 assertTrue(chosen.width>=48*density);assertTrue(chosen.height>=48*density)
                 assertEquals("Click does not recenter the film list ${width}x$height font$scale oldViewport=$initialWidth newViewport=${strip().width} oldContent=$initialContent newContent=${strip().getChildAt(0).width}",x,strip().scrollX)

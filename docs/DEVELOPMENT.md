@@ -69,3 +69,24 @@ done
 修改和分发时保留 [GPL-3.0](../LICENSE)、上游许可、胶片档案/LUT 的 CC BY-SA 4.0 声明及[第三方 notices](../app/src/main/assets/licenses)。原生对应源码、构建方式和数据声明应与可执行文件一起提供。品牌名称仅识别配置，不暗示品牌背书。
 
 完整旧 README 已逐段保留在[历史开发记录](HISTORY.md)，便于追溯各版变化，而不是堆在产品首页。
+
+## 修改 vendored rawler 后的缓存失效（必需）
+Cargo 把 registry/vendor 来源视为不可变；即使改了源码和 `.cargo-checksum.json`，
+已有 rlib 也可能不重编。仅 `cargo clean -p rawler` 还可能留下 release 产物。
+`codecs/build-android.sh` 现在在每个目标的 release 构建前调用受控指纹检查：
+对完整 `vendor/rawler-0.7.2` 字节计算 SHA256，变化或首次接管缓存时，只清理
+当前 target/profile 的 rawler（release 明确 `--release`），不全清依赖。
+
+Host 构建也必须先运行同一检查，保持同一 `CARGO_TARGET_DIR`，例如：
+```
+cd codecs
+python3 tools/ensure-vendor-fresh.py --profile dev
+cargo test --offline --locked
+python3 tools/ensure-vendor-fresh.py --profile release
+cargo build --offline --locked --release --lib
+```
+可加 `--check` 做不改缓存检查：未记录或指纹变化返回2，匹配返回0。
+记录位于目标目录 `filmroom-vendor-stamps/`；它只证明成功失效缓存，
+不是编译成功或测试通过证明。构建期间须冻结源码并串行操作该target；
+失败时保留日志，最终核对源码清单、`Compiling rawler` 与新库SHA256。
+不要手工伪造指纹标记，不要靠更新时间判断，不需要把registry vendor改成path依赖。

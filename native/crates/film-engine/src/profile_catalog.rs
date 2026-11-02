@@ -20,6 +20,8 @@ pub fn catalog() -> Catalog {
     serde_json::from_str(CATALOG_JSON).expect("compile-time catalog is valid")
 }
 pub const FILMS: &[&str] = &[
+    "kodak_doublex",
+    "kodak_trix",
     "fujifilm_c200",
     "fujifilm_pro_400h",
     "fujifilm_provia_100f",
@@ -42,6 +44,7 @@ pub const FILMS: &[&str] = &[
     "kodak_vision3_50d",
 ];
 pub const PAPERS: &[&str] = &[
+    "kodak_2302",
     "fujifilm_crystal_archive_typeii",
     "kodak_2383",
     "kodak_2393",
@@ -54,7 +57,8 @@ pub const PAPERS: &[&str] = &[
 pub fn is_reversal(id: &str) -> bool {
     matches!(
         id,
-        "fujifilm_provia_100f"
+        "kodak_trix"
+            | "fujifilm_provia_100f"
             | "fujifilm_velvia_100"
             | "kodak_ektachrome_100"
             | "kodak_kodachrome_64"
@@ -73,9 +77,9 @@ mod tests {
     fn catalog_matches_data_and_allowlists() {
         let c = catalog();
         assert_eq!(c.schema_version, 1);
-        assert_eq!(c.profiles.len(), 28);
-        assert_eq!(FILMS.len(), 20);
-        assert_eq!(PAPERS.len(), 8);
+        assert_eq!(c.profiles.len(), 31);
+        assert_eq!(FILMS.len(), 22);
+        assert_eq!(PAPERS.len(), 9);
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
         let mut seen = std::collections::HashSet::new();
         for s in c.profiles {

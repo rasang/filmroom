@@ -21,21 +21,29 @@ import java.util.concurrent.TimeUnit
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[29],application=Application::class)
 class EditorDetailControllerTest {
-    class FakeSession(override val key: RenderKey) : EditorDetailSession {
+    class FakeSession(override val key: RenderKey,override val regionOutput:Boolean=true) : EditorDetailSession {
         @Volatile var closed=false
         var retire:(()->Unit)?=null
+        var retirementGate:CompletableDeferred<Unit>?=null
         val results=CopyOnWriteArrayList<TileResult>()
         val calls=CopyOnWriteArrayList<Pair<Int,Int>>()
         var failure:Throwable?=null
         var block:CountDownLatch?=null
         val entered=CountDownLatch(1)
         override fun onRetired(listener:()->Unit){retire=listener}
+        override suspend fun awaitRetired(){retirementGate?.await()}
         override suspend fun tile(x:Int,y:Int):TileResult {
             failure?.let{throw it}
             check(Looper.myLooper()!=Looper.getMainLooper())
             calls+=x to y;entered.countDown();block?.await(10,TimeUnit.SECONDS)
             val core=TileId(x,y).rect(key);val sample=core.sampleRect(key)
             return TileResult(key,core,sample,Bitmap.createBitmap(sample.width,sample.height,Bitmap.Config.ARGB_8888).apply{eraseColor(0xff88aa44.toInt())},TileQuality.Exact).also{results+=it}
+        }
+        override suspend fun region(rect:PixelRect,cancelled:()->Boolean):TileResult {
+            failure?.let{throw it};check(Looper.myLooper()!=Looper.getMainLooper())
+            calls+=rect.left to rect.top;entered.countDown();block?.await(10,TimeUnit.SECONDS)
+            val sample=rect.sampleRect(key)
+            return TileResult(key,rect,sample,Bitmap.createBitmap(sample.width,sample.height,Bitmap.Config.ARGB_8888),TileQuality.Exact).also{results+=it}
         }
         override fun close(){check(Looper.myLooper()!=Looper.getMainLooper());closed=true}
     }
@@ -44,13 +52,18 @@ class EditorDetailControllerTest {
         var openFailure:Throwable?=null
         var tileFailure:Throwable?=null
         var openCalls=0
+        var regionOutput=true
+        var legacyCalls=0
+        var retirementGate:CompletableDeferred<Unit>?=null
         var tileBlock:CountDownLatch?=null
         var openGate:CompletableDeferred<Unit>?=null
-        override suspend fun open(source:PhotoSource,parameters:EditorState):EditorDetailSession {
+        override suspend fun open(source:PhotoSource,parameters:EditorState):EditorDetailSession = openMode(source,parameters,regionOutput)
+        override suspend fun openLegacy(source:PhotoSource,parameters:EditorState):EditorDetailSession {legacyCalls++;return openMode(source,parameters,false)}
+        private suspend fun openMode(source:PhotoSource,parameters:EditorState,region:Boolean):EditorDetailSession {
             openCalls++;openFailure?.let{throw it}
             // Deliberately non-cooperative provider proves stale opening ownership is still retired.
             openGate?.let{withContext(NonCancellable){it.await()}}
-            return FakeSession(RenderKey(source.cacheKey,parameters.json(),"a","d","orientation-source",1024,768)).also{it.block=tileBlock;it.failure=tileFailure;sessions+=it}
+            return FakeSession(RenderKey(source.cacheKey,parameters.json(),"a","d","orientation-source",1024,768),region).also{it.block=tileBlock;it.failure=tileFailure;it.retirementGate=retirementGate;sessions+=it}
         }
     }
     private fun photo(id:String="source")=PhotoSource(File(id),id,"image/jpeg",4001,3001,0)
@@ -62,7 +75,7 @@ class EditorDetailControllerTest {
         repeat(50){v.drag(1.0,0.0);c.demand(true)}
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertEquals(0,p.sessions.size)
         c.demand(false);await{c.cacheBytes>0};val session=p.sessions.single()
-        await{session.calls.size>=v.visibleTiles(session.key).size};val initial=c.key
+        await{session.calls.size==1};val initial=c.key
         repeat(100){v.drag(if(it%2==0)1.0 else -1.0,0.0);c.demand(true)}
         c.demand(false);await{c.viewportRevision>=100}
         assertSame(initial,c.key);assertEquals(1,p.sessions.size)
@@ -143,4 +156,73 @@ class EditorDetailControllerTest {
         c.foreground(true);await{p.sessions.size==3 && c.key!=null};v.reset();c.demand(false)
         await{p.sessions.last().closed};assertNull(c.key);c.close()
     }
+    @Test fun resourceRecoveryIsBoundedAndWaitsForIdleButOomNeverLoops(){
+        var idle=false
+        val p=FakeProvider().apply{openFailure=dev.filmroom.engine.NativeWorkUnavailable()}
+        val c=EditorDetailController(p,viewport(),{},settleMillis=1,retryIdle={idle},retryDelays=listOf(10L,20L))
+        c.bind(photo(),EditorState(),true);await{c.status.phase==DetailPhase.Fallback}
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));assertEquals(1,p.openCalls)
+        idle=true;shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(5));assertEquals(3,p.openCalls)
+        repeat(20){c.demand(false)};shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(3));assertEquals(3,p.openCalls);c.close()
+        val oom=FakeProvider().apply{openFailure=OutOfMemoryError()}
+        val d=EditorDetailController(oom,viewport(),{},settleMillis=1,retryDelays=listOf(10L))
+        d.bind(photo(),EditorState(),true);await{d.status.phase==DetailPhase.Fallback}
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(3));assertEquals(1,oom.openCalls);assertEquals(DetailFailure.AllocationFailed,d.status.failure);d.close()
+    }
+
+    @Test fun admittedLegacyModeKeepsSame1536GridAndNeverRetriesRegionOnPan(){
+        val p=FakeProvider().apply{regionOutput=false};val v=viewport();val c=EditorDetailController(p,v,{})
+        c.bind(photo(),EditorState(),true);await{c.status.phase==DetailPhase.Ready}
+        val session=p.sessions.single();assertFalse(session.regionOutput)
+        assertTrue(session.results.all{it.coreRect.width<=256 && it.coreRect.height<=256})
+        repeat(20){v.drag(if(it%2==0)2.0 else -2.0,0.0);c.demand(true)};c.demand(false)
+        await{c.status.phase==DetailPhase.Ready};assertEquals(1,p.openCalls);assertEquals(1024,c.key!!.virtualFullWidth);c.close()
+    }
+
+    @Test fun dynamicRegionAdmissionFailureWaitsForFullRetirementThenStaysLegacy(){
+        val gate=CompletableDeferred<Unit>()
+        val p=FakeProvider().apply{tileFailure=dev.filmroom.engine.NativeWorkUnavailable();retirementGate=gate}
+        val v=viewport();val c=EditorDetailController(p,v,{},settleMillis=1,retryDelays=listOf(10L,20L))
+        val source=photo();val params=EditorState()
+        try {
+            c.bind(source,params,true);await{c.status.phase==DetailPhase.Fallback && p.sessions.first().closed}
+            p.tileFailure=null
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3));assertEquals("Cannot rebuild while old native/Java owner is draining",1,p.openCalls)
+            gate.complete(Unit);await{p.legacyCalls==1 && c.status.phase==DetailPhase.Ready}
+            assertFalse(p.sessions.last().regionOutput)
+            repeat(20){v.drag(if(it%2==0)1.0 else -1.0,0.0);c.demand(true)};c.demand(false)
+            await{c.status.phase==DetailPhase.Ready};assertEquals(2,p.openCalls)
+            c.foreground(false);c.foreground(true);await{p.legacyCalls==2 && c.status.phase==DetailPhase.Ready}
+            assertFalse(p.sessions.last().regionOutput)
+            c.bind(source,params.copy(brightness=.25f),true);await{p.sessions.size==4 && c.status.phase==DetailPhase.Ready}
+            assertTrue("New science binding can choose ROI again",p.sessions.last().regionOutput)
+        }finally{gate.complete(Unit);c.close()}
+    }
+    @Test fun runtimeOomDoesNotSelectLegacyOrAutoRetry(){
+        val p=FakeProvider().apply{tileFailure=OutOfMemoryError("synthetic")}
+        val c=EditorDetailController(p,viewport(),{},settleMillis=1,retryDelays=listOf(10L,20L))
+        c.bind(photo(),EditorState(),true);await{c.status.phase==DetailPhase.Fallback}
+        assertEquals(DetailFailure.AllocationFailed,c.status.failure)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(3));assertEquals(1,p.openCalls);assertEquals(0,p.legacyCalls);c.close()
+    }
+
+    @Test fun forcedLegacyForegroundReopenWaitsForCancelledOpenAndItsLateCleanup(){
+        val initialRetirement=CompletableDeferred<Unit>()
+        val p=FakeProvider().apply{tileFailure=dev.filmroom.engine.NativeWorkUnavailable();retirementGate=initialRetirement}
+        val c=EditorDetailController(p,viewport(),{},settleMillis=1,retryDelays=listOf(10L,20L))
+        val gate=CompletableDeferred<Unit>()
+        try {
+            c.bind(photo(),EditorState(),true);await{c.status.phase==DetailPhase.Fallback}
+            p.tileFailure=null;p.retirementGate=null;initialRetirement.complete(Unit)
+            await{c.status.phase==DetailPhase.Ready && p.legacyCalls==1}
+            p.openGate=gate;c.foreground(false);c.foreground(true);await{p.openCalls==3}
+            c.foreground(false);c.foreground(true)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            assertEquals("Prior non-cooperative open still owns its workers",3,p.openCalls)
+            p.openGate=null;gate.complete(Unit)
+            await{p.openCalls==4 && c.status.phase==DetailPhase.Ready}
+            assertTrue(p.sessions[p.sessions.size-2].closed);assertFalse(p.sessions.last().regionOutput)
+        }finally{initialRetirement.complete(Unit);gate.complete(Unit);c.close()}
+    }
+
 }

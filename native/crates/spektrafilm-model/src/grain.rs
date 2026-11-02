@@ -88,13 +88,16 @@ pub fn apply_grain_layers(
         let mu=-0.5*sigma_log*sigma_log;
         let mut rng=rand_mt::Mt::new(seed_offset.wrapping_add(0x51f15e) as u32);
         let mut clump=ImageBuf::new(density.width,density.height);
+        let mut mono_value=from_f64(1.0);
         for (i,x) in clump.data.iter_mut().enumerate() {
-            let mut coordinate=origin.map(|[ox,oy]| CoordinateRng::new(seed_offset.wrapping_add(0x51f15e+(i%3) as u64),ox+(i/3%density.width as usize) as u32,oy+(i/3/density.width as usize) as u32));
+            if monochrome && i%3!=0 { *x=mono_value; continue; }
+            let mut coordinate=origin.map(|[ox,oy]| CoordinateRng::new(seed_offset.wrapping_add(0x51f15e+if monochrome {0}else{(i%3) as u64}),ox+(i/3%density.width as usize) as u32,oy+(i/3/density.width as usize) as u32));
             let u=if let Some(r)=coordinate.as_mut() { spektrafilm_math::numpy_rng::rk_double(r) } else {spektrafilm_math::numpy_rng::rk_double(&mut rng)};
             let u=u.max(f64::MIN_POSITIVE);
             let v=if let Some(r)=coordinate.as_mut() { spektrafilm_math::numpy_rng::rk_double(r) } else {spektrafilm_math::numpy_rng::rk_double(&mut rng)};
             let normal=(-2.0*u.ln()).sqrt()*(std::f64::consts::TAU*v).cos();
             *x=from_f64((mu+sigma_log*normal).exp());
+            mono_value=*x;
         }
         let spread=micro_structure[0]/pixel_size_um;
         if spread>0.4 {clump=gaussian::gaussian_blur(&clump,spread);}

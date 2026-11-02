@@ -34,27 +34,45 @@ object NativeCodecBridge:CodecNativeApi {
 }
 
 /** One fresh handle per operation: cancellation is sticky and cannot be lost/reset. */
-class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeCodecBridge, private val memorySnapshot:()->NativeMemorySnapshot={NativeWorkReservations.unavailableMemory}, private val exportJobsRoot:File?=null, private val memoryBudgetMiB:()->Int={128}) {
+class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeCodecBridge, private val memorySnapshot:()->NativeMemorySnapshot={NativeWorkReservations.unavailableMemory}, private val exportJobsRoot:File?=null, private val rawBatchPreference:()->dev.filmroom.model.RawBatchMode={dev.filmroom.model.RawBatchMode.AUTO}, private val memoryBudgetMiB:()->Int={256}) {
     val available get() = api.available
-    suspend fun decode(input: File, output: File): JSONObject = execute(heavy=true) { handle ->
-        api.nativeDecode(handle, input.canonicalPath, output.canonicalPath, budget().toString())
+    private suspend fun cameraMetadataBytes(input:File):Long=withContext(Dispatchers.IO) {
+        // A resource hint, not a format allowlist. Never read outside the native root.
+        if(input.canonicalFile.toPath().startsWith(root.canonicalFile.toPath()))
+            RawMetadataAdmission.estimatedBytes(input) else 0L
     }
-    suspend fun probe(input: File): JSONObject = execute { handle ->
-        api.nativeProbe(handle, input.canonicalPath, budget(metadataOnly=true).put("metadataOnly",true).toString())
+    fun snapshotRawBatch():RawBatchSnapshot=RawBatchSnapshot(rawBatchPreference())
+    suspend fun decode(input: File, output: File): JSONObject {
+        // Freeze before metadata IO or ledger wait. Repository carries the selection from import start.
+        val batch=currentCoroutineContext()[RawBatchSnapshot] ?: snapshotRawBatch()
+        val request=budget(cameraRaw=cameraMetadataBytes(input)>0).put("rawBatch",batch.mode.id)
+        val reservedBytes=request.getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
+        return execute(heavyBytes=reservedBytes) { handle ->
+            api.nativeDecode(handle,input.canonicalPath,output.canonicalPath,request.toString())
+        }
+    }
+    suspend fun probe(input: File): JSONObject {
+        val metadataBytes=cameraMetadataBytes(input)
+        val request=budget(metadataOnly=true,cameraRaw=metadataBytes>0).put("metadataOnly",true)
+        return execute(metadataBytes=metadataBytes) { handle ->
+            api.nativeProbe(handle,input.canonicalPath,request.toString())
+        }
     }
     suspend fun encode(input: File, output: File, width: Int, height: Int, format: String, quality: Int, outputColorSpace:String="sRGB"): JSONObject {
         val scope=withContext(Dispatchers.IO){CodecExportScope.select(root,exportJobsRoot,input,output)}
-        return execute(heavy=true,operationRoot=scope,failureReason=PhotoException.Reason.EXPORT) { handle ->
-        api.nativeEncode(handle, input.canonicalPath, output.canonicalPath,
-            budget().put("width",width).put("height",height).put("format",format).put("quality",quality).put("outputColorSpace",outputColorSpace).toString())
+        val request=budget().put("width",width).put("height",height).put("format",format).put("quality",quality).put("outputColorSpace",outputColorSpace)
+        val reservedBytes=request.getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
+        return execute(heavyBytes=reservedBytes,operationRoot=scope,failureReason=PhotoException.Reason.EXPORT) { handle ->
+            api.nativeEncode(handle,input.canonicalPath,output.canonicalPath,request.toString())
+        }
     }
+    private fun budget(metadataOnly:Boolean=false,cameraRaw:Boolean=false):JSONObject {
+        val cap=if(cameraRaw)256 else 128
+        val requested=if(metadataOnly)cap else memoryBudgetMiB()
+        if(requested<128)throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_df30ae362f2b))
+        return JSONObject().put("memoryBudgetMiB",minOf(cap,requested)).put("diskBudgetBytes",(root.usableSpace-16L*1024*1024).coerceAtLeast(0))
     }
-    private fun budget(metadataOnly:Boolean=false):JSONObject {
-        val budget=if(metadataOnly)128 else memoryBudgetMiB()
-        if(budget<128)throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_df30ae362f2b))
-        return JSONObject().put("memoryBudgetMiB",minOf(128,budget)).put("diskBudgetBytes",(root.usableSpace-16L*1024*1024).coerceAtLeast(0))
-    }
-    private suspend fun execute(heavy:Boolean=false,operationRoot:File=root,failureReason:PhotoException.Reason=PhotoException.Reason.UNREADABLE,work: (Long)->String): JSONObject = coroutineScope {
+    private suspend fun execute(heavyBytes:Long=0,metadataBytes:Long=0,operationRoot:File=root,failureReason:PhotoException.Reason=PhotoException.Reason.UNREADABLE,work: (Long)->String): JSONObject = coroutineScope {
         if (!available) throw PhotoException(PhotoException.Reason.UNSUPPORTED,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_2c28d802618b))
         ensureActive()
         val handle = api.nativeCreate(operationRoot.canonicalPath)
@@ -67,10 +85,10 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
         try {
             val result=withContext(Dispatchers.IO) {
                 ensureActive()
-                val text=if(heavy) {
-                    // Codec admission is capped at the validated configured 128 MiB
-                    // working budget, not the engine's possible 512 MiB ceiling.
-                    val bytes=budget().getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
+                val text=if(heavyBytes>0 || metadataBytes>0) {
+                    // The native JSON and ledger share one frozen per-operation budget.
+                    // Camera RAW caps at 256 MiB; DNG/export stay at 128 MiB.
+                    val bytes=if(heavyBytes>0)heavyBytes else metadataBytes
                     try {NativeWorkReservations.run(bytes,memorySnapshot){work(handle)}}
                     catch(_:NativeWorkUnavailable){throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_93313da164ac))}
                 }else work(handle)
@@ -84,6 +102,8 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                 val code=safeCode.name
                 if(code=="CANCELLED")throw CancellationException(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c2145ea571e4))
                 val message=when(code){
+                    "UNSUPPORTED_CAMERA_RAW_VARIANT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.camera_raw_variant_unsupported)
+                    "UNSUPPORTED_CAMERA"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.camera_raw_profile_unsupported)
                     "UNSUPPORTED_COMPRESSION","UNSUPPORTED_DNG_VARIANT","UNSUPPORTED_FORMAT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_0105eb1c06a7)
                     "UNSUPPORTED_DNG_OPCODE"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_46ac8768982e)
                     "UNSUPPORTED_DNG_CALIBRATION"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_c946e8a02212)

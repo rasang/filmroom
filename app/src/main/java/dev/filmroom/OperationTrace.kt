@@ -21,7 +21,8 @@ class OperationTrace private constructor(val id:OperationId) {
             var captured:OperationId?=null
             var active:OperationTrace?=null
             try {
-                withContext(Dispatchers.IO){captured=Diagnostics.begin(operation,info)}
+                val correlated=if(operation==Operation.PREVIEW_RENDER)currentCoroutineContext()[PreviewDiagnosticContext]?.enrich(info) ?: info else info
+                withContext(Dispatchers.IO){captured=Diagnostics.begin(operation,correlated)}
                 val id=checkNotNull(captured)
                 val trace=OperationTrace(id);active=trace
                 val result=work(trace)
@@ -107,6 +108,7 @@ fun EditorState.safeInfo(width:Int?=null,height:Int?=null)=SafeInfo(width=width,
     neutralCyan=neutralCyan.toString().toDouble(),
     neutralMagenta=neutralMagenta.toString().toDouble(),
     neutralYellow=neutralYellow.toString().toDouble(),
+    filmDevelopmentTime=filmDevelopmentTime.toString().toDouble(),paperDevelopmentTime=paperDevelopmentTime.toString().toDouble(),
     filmGamma=filmGamma.toString().toDouble(),
     paperGamma=paperGamma.toString().toDouble(),
     paperGammaFast=paperGammaFast.toString().toDouble(),

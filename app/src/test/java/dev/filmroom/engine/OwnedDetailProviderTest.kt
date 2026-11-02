@@ -32,19 +32,33 @@ class OwnedDetailProviderTest {
         override fun nativeCreate(canonicalPrivateAppRoot:String)=ok("create").put("sessionId","1").toString()
         override fun nativeBeginOperation(sessionId:Long)=ok("beginOperation").put("operationId",begins.incrementAndGet().toString()).toString()
         override fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String)=result("build").toString()
+        open fun channel(x:Int,y:Int,ch:Int):Float=0.5f
         override fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String {
             entered.countDown();if(block)check(exit.await(10,TimeUnit.SECONDS))
             val x=cellX*256;val y=cellY*256;val w=minOf(256,key.width-x);val h=minOf(256,key.height-y)
             val sx=maxOf(0,x-1);val sy=maxOf(0,y-1);val sw=minOf(key.width,x+w+1)-sx;val sh=minOf(key.height,y+h+1)-sy
-            repeat(sw*sh*3){output.putFloat(0.5f)}
+            for(py in 0 until sh)for(px in 0 until sw)for(ch in 0..2)output.putFloat(channel(sx+px,sy+py,ch))
             fun rect(x:Int,y:Int,w:Int,h:Int)=JSONObject().put("x",x).put("y",y).put("w",w).put("h",h)
             return result("tile").put("outputValid",true).put("bytesWritten",sw*sh*12+(if(malformed)1 else 0)).put("coreRect",rect(x,y,w,h)).put("sampleRect",rect(sx,sy,sw,sh)).toString()
+        }
+        override fun nativeRegion(sessionId:Long,operationId:Long,x:Int,y:Int,width:Int,height:Int,output:ByteBuffer):String {
+            val sx=maxOf(0,x-1);val sy=maxOf(0,y-1);val sw=minOf(key.width,x+width+1)-sx;val sh=minOf(key.height,y+height+1)-sy
+            for(py in 0 until sh)for(px in 0 until sw)for(ch in 0..2)output.putFloat(channel(sx+px,sy+py,ch))
+            fun rect(x:Int,y:Int,w:Int,h:Int)=JSONObject().put("x",x).put("y",y).put("w",w).put("h",h)
+            return result("region").put("outputValid",true).put("bytesWritten",sw*sh*12).put("coreRect",rect(x,y,width,height)).put("sampleRect",rect(sx,sy,sw,sh)).toString()
         }
         override fun nativeCancel(sessionId:Long,operationId:Long):String{cancels.incrementAndGet();return ok("cancel").toString()}
         override fun nativeReleaseOperation(sessionId:Long,operationId:Long):String{released.incrementAndGet();return ok("releaseOperation").toString()}
         override fun nativeDestroy(sessionId:Long):String{destroyed.countDown();return ok("destroy").toString()}
     }
-    private fun session(fake:Fake,clean:AtomicInteger)=OwnedDetailSession(fake,1,key,true,AutoCloseable{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory)
+    private fun retained(clean:()->Unit):RetainedNativeWork {
+        val owner=NativeWorkReservations.retainForDetail(1L,memory)
+        return object:RetainedNativeWork {
+            override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T=owner.run(memory,work)
+            override fun close(){try{owner.close()}finally{clean()}}
+        }
+    }
+    private fun session(fake:Fake,clean:AtomicInteger)=OwnedDetailSession(fake,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory)
     @Test fun validatesGuttersAndUsesSrgbTransfer()=runBlocking {
         val f=Fake(key);val c=AtomicInteger();val s=session(f,c);s.build("{}")
         val tile=s.tile(1,1)
@@ -176,7 +190,7 @@ class OwnedDetailProviderTest {
     }
     @Test fun cleanupIoFailureStillReleasesReservationWithoutEscaping()=runBlocking {
         val f=Fake(key);val released=AtomicInteger()
-        val s=OwnedDetailSession(f,1,key,true,AutoCloseable{released.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){throw java.io.IOException("injected cleanup failure")},memory)
+        val s=OwnedDetailSession(f,1,key,true,retained{released.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){throw java.io.IOException("injected cleanup failure")},memory)
         s.close();withTimeout(2000){while(released.get()!=1)delay(5)}
         assertTrue(s.isClosed)
     }
@@ -186,4 +200,36 @@ class OwnedDetailProviderTest {
             val lease=photo.retainDetailSource();photo.discardWhenUnused();assertTrue(file.exists());lease.close();assertFalse(file.exists())
         }finally{root.deleteRecursively()}
     }
+    @Test fun closeAfterJniBeforeConversionKeepsReservationUntilConversionExits()=runBlocking {
+        val queued=CountDownLatch(1);var conversion:Runnable?=null
+        val dispatcher=object:CoroutineDispatcher(){
+            override fun dispatch(context:kotlin.coroutines.CoroutineContext,block:Runnable){conversion=block;queued.countDown()}
+        }
+        val clean=AtomicInteger();val f=Fake(key)
+        val s=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,dispatcher)
+        s.build("{}")
+        val result=async(Dispatchers.IO){runCatching{s.tile(0,0)}}
+        assertTrue(withContext(Dispatchers.IO){queued.await(5,TimeUnit.SECONDS)})
+        s.close();val retirement=async(Dispatchers.IO){s.awaitRetired()}
+        assertTrue(withContext(Dispatchers.IO){f.destroyed.await(5,TimeUnit.SECONDS)});delay(30)
+        assertFalse(retirement.isCompleted)
+        assertEquals("JNI returned but direct buffer/conversion still owns reservation",0,clean.get())
+        withContext(Dispatchers.IO){conversion!!.run()}
+        assertTrue(result.await().isFailure);withTimeout(2000){retirement.await()};assertEquals(2,clean.get())
+    }
+
+    @Test fun boundedRowConversionMatchesOriginalTransferForEveryChannelAndGlobalPixel()=runBlocking {
+        val f=object:Fake(key){override fun channel(x:Int,y:Int,ch:Int):Float=when((x+y+ch)%17){0->-.2f;1->2f;else->((x+y*3+ch*7)%1024)/1023f}}
+        val clean=AtomicInteger();val s=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,regionOutput=true)
+        s.build("{}")
+        try {for(tile in listOf(s.tile(0,0),s.region(DetailRect(7,9,271,243)){false})){
+            for(y in 0 until tile.sample.height)for(x in 0 until tile.sample.width){
+                val gx=x+tile.sample.x;val gy=y+tile.sample.y
+                val expected=0xff000000.toInt() or (LinearRgb.toSrgb8(f.channel(gx,gy,0)) shl 16) or (LinearRgb.toSrgb8(f.channel(gx,gy,1)) shl 8) or LinearRgb.toSrgb8(f.channel(gx,gy,2))
+                assertEquals("row/chunk transfer at $gx,$gy",expected,tile.bitmap.getPixel(x,y))
+            };tile.bitmap.recycle()
+        }}finally{s.close()}
+        withTimeout(2000){while(clean.get()!=2)delay(5)}
+    }
+
 }

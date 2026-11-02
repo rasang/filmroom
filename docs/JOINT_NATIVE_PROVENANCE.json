@@ -1,0 +1,137 @@
+{
+  "status": "private-beta3-candidate-not-publicly-released",
+  "version_name": "0.1.19-beta.3",
+  "version_code": 22,
+  "codec_source_commit": "479d2d117a9720bbc6fdb96a129ec5fe1e1ed14f",
+  "codec_reused_from_beta2": true,
+  "codec_tree_unchanged_through": "fb997f184060763ab8291729bc949bec9eee2c5a",
+  "engine_validated_source_commit": "fb997f184060763ab8291729bc949bec9eee2c5a",
+  "engine_production_commit": "dbe3561f",
+  "rust": "1.88.0",
+  "ndk": "27.2.12479018",
+  "android_compiler_api": 26,
+  "api29_undefined_symbol_closure_checked": true,
+  "physical_device_tested": false,
+  "files": [
+    {
+      "path": "app/src/main/jniLibs/arm64-v8a/libfilm_engine.so",
+      "sha256": "c121594aa8e2efa252e8aa40919dfff741e657b1c8cc7fdc47d104a18294ee7d",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ],
+      "needed": [
+        "libandroid.so",
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeBeginOperation",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeBuild",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCancel",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabilities",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCreate",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeDestroy",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativePlan",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeReleaseOperation",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeTile",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeCancel",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeCreate",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeDestroy",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeExportFile",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeGetProgress",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativePlanExport",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeRender"
+      ],
+      "api29_missing_symbols": []
+    },
+    {
+      "path": "app/src/main/jniLibs/x86_64/libfilm_engine.so",
+      "sha256": "ee1928564605759e0b8f38f7ad61ed1233f7ee61c54f68549254f1c7c122fa2b",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ],
+      "needed": [
+        "libandroid.so",
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeBeginOperation",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeBuild",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCancel",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabilities",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeCreate",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeDestroy",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativePlan",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeReleaseOperation",
+        "Java_dev_filmroom_engine_NativeDetailBridge_nativeTile",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeCancel",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeCreate",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeDestroy",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeExportFile",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeGetProgress",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativePlanExport",
+        "Java_dev_filmroom_engine_NativeFilmBridge_nativeRender"
+      ],
+      "api29_missing_symbols": []
+    },
+    {
+      "path": "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so",
+      "sha256": "14985548f245004d4a57f0eaf0b20cc979d3e7dc95289175be08219255f44226",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ],
+      "needed": [
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCancel",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCreate",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDecode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDestroy",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeEncode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeProbe"
+      ],
+      "api29_missing_symbols": []
+    },
+    {
+      "path": "app/src/main/jniLibs/x86_64/libfilm_codecs.so",
+      "sha256": "77cab145bfdde2853494ee4d4c25592c698459182695118ec01637b09bc04db2",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ],
+      "needed": [
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCancel",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCreate",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDecode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDestroy",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeEncode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeProbe"
+      ],
+      "api29_missing_symbols": []
+    }
+  ]
+}

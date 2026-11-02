@@ -86,11 +86,12 @@ pub type Ifd = BTreeMap<u16, Value>;
 pub struct Tiff {
     pub endian: Endian,
     pub ifds: Vec<Ifd>,
+    pub ifd_offsets: Vec<u32>,
     pub size: u64,
 }
 const SELECTED: &[u16] = &[
-    254, 256, 257, 258, 259, 262, 271, 273, 274, 277, 278, 279, 284, 317, 322, 323, 324, 325, 330, 339,
-    33421, 33422, 50706, 50707, 50710, 50711, 50712, 50713, 50714, 50715, 50716, 50717, 50718,
+    254, 256, 257, 258, 259, 262, 271, 273, 274, 277, 278, 279, 284, 317, 322, 323, 324, 325, 330,
+    339, 33421, 33422, 50706, 50707, 50710, 50711, 50712, 50713, 50714, 50715, 50716, 50717, 50718,
     50719, 50720, 50721, 50722, 50723, 50724, 50727, 50728, 50729, 50730, 50778, 50779, 50829,
     50830, 50937, 50938, 50939, 50940, 50941, 50942, 52525, 52530, 52532, 52547, 50964, 50965,
     50966, 50967, 50968, 50969, 50970, 50971, 50972, 50973, 50974, 50975, 51008, 51009, 51022,
@@ -99,6 +100,12 @@ const SELECTED: &[u16] = &[
 ];
 impl Tiff {
     pub fn read(file: &mut File) -> Result<Self> {
+        Self::read_mode(file, false)
+    }
+    pub(crate) fn read_camera(file: &mut File) -> Result<Self> {
+        Self::read_mode(file, true)
+    }
+    fn read_mode(file: &mut File, camera: bool) -> Result<Self> {
         let size = file.metadata().map_err(|e| io_error(e, "probe"))?.len();
         if !(8..=512 * 1024 * 1024).contains(&size) {
             return Err(err("INVALID_INPUT", "probe"));
@@ -116,6 +123,7 @@ impl Tiff {
         let mut todo = vec![endian.u32(&h[4..])];
         let mut seen = BTreeSet::new();
         let mut ifds = Vec::new();
+        let mut ifd_offsets = Vec::new();
         let mut bytes_total = 0usize;
         while let Some(off) = todo.pop() {
             if off == 0 {
@@ -151,11 +159,34 @@ impl Tiff {
                 // untrusted payload or changing legacy metadata admission.
                 // This marker must never be interpreted through nums()/uints().
                 if tag == 52551 {
-                    ifd.insert(tag, Value { typ: endian.u16(&ent[2..]),
-                        count: endian.u32(&ent[4..]), bytes: Vec::new(), endian });
+                    ifd.insert(
+                        tag,
+                        Value {
+                            typ: endian.u16(&ent[2..]),
+                            count: endian.u32(&ent[4..]),
+                            bytes: Vec::new(),
+                            endian,
+                        },
+                    );
                     continue;
                 }
-                if !SELECTED.contains(&tag) {
+                if !SELECTED.contains(&tag)
+                    && !(camera
+                        && matches!(
+                            tag,
+                            272 | 50740
+                                | 0x7010
+                                | 0x7300
+                                | 0x7310
+                                | 33424
+                                | 34665
+                                | 34675
+                                | 34853
+                                | 37500
+                                | 50648
+                                | 50752
+                        ))
+                {
                     continue;
                 }
                 let typ = endian.u16(&ent[2..]);
@@ -193,7 +224,14 @@ impl Tiff {
                     );
                     continue;
                 }
-                if len > 65536 || bytes_total + len > 512 * 1024 {
+                if len
+                    > (if camera && tag == 37500 {
+                        512 * 1024
+                    } else {
+                        65536
+                    })
+                    || bytes_total + len > 512 * 1024
+                {
                     return Err(err("INVALID_INPUT", "probe"));
                 }
                 bytes_total += len;
@@ -216,7 +254,7 @@ impl Tiff {
                     bytes,
                     endian,
                 };
-                if tag == 330 {
+                if camera && matches!(tag, 33424 | 34665 | 34675 | 34853) {
                     if count > 8 {
                         return Err(err("INVALID_INPUT", "probe"));
                     }
@@ -224,12 +262,39 @@ impl Tiff {
                 }
                 ifd.insert(tag, v);
             }
+            if let Some(sub) = ifd.get(&330) {
+                if sub.count > 8 {
+                    return Err(err("INVALID_INPUT", "probe"));
+                }
+                // The A100 transitional container uses SubIFDs as an entropy offset.
+                let legacy_a100 = camera
+                    && ifd.get(&271).is_some_and(|v| {
+                        v.typ == 2
+                            && v.bytes
+                                .strip_suffix(&[0])
+                                .unwrap_or(&v.bytes)
+                                .trim_ascii_end()
+                                == b"SONY"
+                    })
+                    && ifd
+                        .get(&272)
+                        .is_some_and(|v| v.typ == 2 && v.bytes == b"DSLR-A100\0");
+                if !legacy_a100 {
+                    todo.extend(sub.uints()?.into_iter().rev());
+                }
+            }
+            ifd_offsets.push(off);
             ifds.push(ifd);
         }
         if ifds.is_empty() {
             return Err(err("INVALID_INPUT", "probe"));
         }
-        Ok(Self { endian, ifds, size })
+        Ok(Self {
+            endian,
+            ifds,
+            ifd_offsets,
+            size,
+        })
     }
 }
 pub fn uint(ifd: &Ifd, tag: u16, default: Option<u32>) -> Result<u32> {
@@ -245,4 +310,30 @@ pub fn uint(ifd: &Ifd, tag: u16, default: Option<u32>) -> Result<u32> {
 }
 pub fn nums(ifd: &Ifd, tag: u16) -> Result<Option<Vec<f64>>> {
     ifd.get(&tag).map(Value::nums).transpose()
+}
+
+#[cfg(test)]
+mod camera_metadata_tests {
+    use super::*;
+    #[test]
+    fn camera_makernote_can_exceed_legacy_per_tag_limit_but_not_total_bound() {
+        for (index, size) in [122_574usize, 600_000].into_iter().enumerate() {
+            let path = std::env::temp_dir()
+                .join(format!("camera-maker-bound-{}-{index}", std::process::id()));
+            let mut bytes = vec![b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0];
+            bytes.extend_from_slice(&37500u16.to_le_bytes());
+            bytes.extend_from_slice(&7u16.to_le_bytes());
+            bytes.extend_from_slice(&(size as u32).to_le_bytes());
+            bytes.extend_from_slice(&26u32.to_le_bytes());
+            bytes.extend_from_slice(&0u32.to_le_bytes());
+            bytes.resize(26 + size, 0);
+            std::fs::write(&path, bytes).unwrap();
+            let camera = Tiff::read_camera(&mut File::open(&path).unwrap());
+            assert_eq!(camera.is_ok(), size <= 512 * 1024);
+            // DNG's legacy scan still ignores MakerNote payload rather than loading it.
+            let legacy = Tiff::read(&mut File::open(&path).unwrap()).unwrap();
+            assert!(!legacy.ifds[0].contains_key(&37500));
+            std::fs::remove_file(path).unwrap();
+        }
+    }
 }

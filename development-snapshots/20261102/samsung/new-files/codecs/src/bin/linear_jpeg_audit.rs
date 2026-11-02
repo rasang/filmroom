@@ -1,0 +1,2 @@
+use std::{fs::File,io::{BufWriter,Write},sync::atomic::AtomicBool};
+fn main(){let a:Vec<_>=std::env::args().collect();let mut f=File::open(&a[1]).unwrap();let mut out=BufWriter::new(File::create(&a[2]).unwrap());let r=film_codecs::linear_jpeg::rows(&mut f,a[3].parse().unwrap(),a[4].parse().unwrap(),a[5].parse().unwrap(),a[6].parse().unwrap(),a[7].parse().unwrap(),&AtomicBool::new(false),|_,row|{for v in row {out.write_all(&v.to_le_bytes()).unwrap();}Ok(())});match r{Ok(())=>out.flush().unwrap(),Err(e)=>{eprintln!("{} {}",e.code,e.stage);std::process::exit(1)}}}

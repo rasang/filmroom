@@ -98,7 +98,7 @@ class DetailSourceFactory(
                 val size=source.outputSize(maxEdge)
                 val originalBytes=source.originalWidth.toLong()*source.originalHeight*12
                 val gridBytes=size.width.toLong()*size.height*12
-                check(dir.usableSpace>gridBytes+(if(source.linearFile==null)originalBytes else 0)+64L*1024*1024) { "Detail storage budget unavailable" }
+                if(dir.usableSpace<=gridBytes+(if(source.linearFile==null)originalBytes else 0)+64L*1024*1024)throw dev.filmroom.engine.DetailUnavailable("STORAGE_BUDGET")
                 val original=linearFile ?: File(dir,"original.f32le")
                 val target=File(dir,"grid.f32le")
                 NativeWorkReservations.run(128L*1024*1024,memory) {

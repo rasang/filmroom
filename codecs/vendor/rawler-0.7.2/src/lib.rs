@@ -120,6 +120,8 @@ impl<T: Read + Seek> ReadTrait for T {}
 
 #[derive(Error, Debug)]
 pub enum RawlerError {
+  #[error("Bounded Bayer row allocation failed")]
+  RowAllocationFailed,
   #[error("Error: {}, model '{}', make: '{}', mode: '{}'", what, model, make, mode)]
   Unsupported { what: String, model: String, make: String, mode: String },
 
@@ -255,3 +257,6 @@ pub fn global_loader() -> &'static RawLoader {
 pub(crate) fn init_test_logger() {
   let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
 }
+
+/// Filmroom opt-in metadata resource budget.
+pub mod metadata_budget;

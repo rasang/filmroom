@@ -73,15 +73,17 @@ class FilmStripDensityHostTest {
                 strip().isSmoothScrollingEnabled=false
                 strip().scrollTo(strip().getChildAt(0).width,0)
                 val cards=strip().getChildAt(0) as ViewGroup
-                assertEquals(20,cards.childCount)
-                val last=cards.getChildAt(19) as Button
+                assertEquals(22,cards.childCount)
+                val last=cards.getChildAt(cards.childCount-1) as Button
                 val x=strip().scrollX;val initialWidth=strip().width;val initialContent=cards.width;assertTrue(x>0);last.performClick();shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400));layout(content,content.width,content.height)
                 // Expanded dialog can relayout its scroll gutters after text reflow. Normal
                 // editor must preserve exact pixels; either surface must retain the last stock.
                 // Film selection is tap-only and keeps the current browsing position.
                 assertTrue("Never reset to the first stock",strip().scrollX>0)
                 val chosen=all(strip()).filterIsInstance<Button>().single{it.isSelected}
-                assertEquals("kodak_vision3_50d",chosen.tag)
+                val catalogRows=org.json.JSONObject(a.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
+                val expectedLast=(0 until catalogRows.length()).map{catalogRows.getJSONObject(it)}.last{it.getString("kind") in setOf("negative","reversal")}.getString("id")
+                assertEquals(expectedLast,chosen.tag)
                 assertTrue(chosen.compoundDrawables.any{it is BitmapDrawable})
                 assertTrue(chosen.width>=48*density);assertTrue(chosen.height>=48*density)
                 assertEquals("Click does not recenter the film list ${width}x$height font$scale oldViewport=$initialWidth newViewport=${strip().width} oldContent=$initialContent newContent=${strip().getChildAt(0).width}",x,strip().scrollX)

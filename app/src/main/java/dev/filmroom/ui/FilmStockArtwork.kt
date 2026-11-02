@@ -10,6 +10,8 @@ import dev.filmroom.R
 /** Original model renders, keyed by immutable engine profile IDs, never display order/name. */
 object FilmStockArtwork {
     val physicalStockByProfile: Map<String, String> = mapOf(
+        "kodak_doublex" to "kodak_doublex",
+        "kodak_trix" to "kodak_trix",
         "kodak_portra_160" to "kodak_portra_160",
         "kodak_portra_400" to "kodak_portra_400",
         "kodak_portra_800" to "kodak_portra_800",

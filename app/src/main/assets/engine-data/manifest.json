@@ -12,8 +12,8 @@
     },
     {
       "path": "filters/neutral_print_filters.json",
-      "bytes": 22195,
-      "sha256": "8bbf8d8db76aecdc9e94bc0b1e31f3329553eeda56d210ab36294fa5e4bf3b13"
+      "bytes": 27174,
+      "sha256": "eb287267df909ce8a8d0e348e52ca0fbb639b86566d0de2c5dff274de2ed8a0f"
     },
     {
       "path": "profiles/kodak_portra_400.json",
@@ -49,6 +49,24 @@
       "path": "SPEKTRAFILM_LICENSE.txt",
       "bytes": 23677,
       "sha256": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9"
+    },
+    {
+      "path": "profiles/kodak_doublex.json",
+      "sha256": "37c333046554151ac5538e6eeb1f2cadef919876c63d0dd861c547952874fac3",
+      "upstreamRustRevision": "9dd59b0380194b93686aaa230a8bb9680aa270a4",
+      "bytes": 286995
+    },
+    {
+      "path": "profiles/kodak_trix.json",
+      "sha256": "4576c0f34ed7e69dd99551b28560e08f597cca3d71385c1e35577edf4ae4a986",
+      "upstreamRustRevision": "9dd59b0380194b93686aaa230a8bb9680aa270a4",
+      "bytes": 107844
+    },
+    {
+      "path": "profiles/kodak_2302.json",
+      "sha256": "3c04bb2e7701eae97eaaf14100cbf80c8f00dd07db3deda3f14b37ac060ca2be",
+      "upstreamRustRevision": "9dd59b0380194b93686aaa230a8bb9680aa270a4",
+      "bytes": 287554
     }
   ]
 }

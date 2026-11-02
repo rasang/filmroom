@@ -19,7 +19,6 @@ use crate::RawlerError;
 use crate::alloc_image_plain;
 use crate::analyze::FormatDump;
 use crate::bits::LookupTable;
-use crate::bits::clampbits;
 use crate::decompressors::ljpeg::*;
 use crate::exif::Exif;
 use crate::formats::tiff::Entry;
@@ -49,11 +48,85 @@ use super::Result;
 use super::WhiteLevel;
 
 mod colordata;
+mod chroma;
+mod bayer_layout;
+mod bayer_black;
+mod bayer_linearization;
+mod bayer_streaming;
+mod streaming;
+pub use streaming::CanonSrawStorage;
 
 pub(crate) use colordata::parse_colordata;
 
 const CANON_EF_MOUNT: &str = "ef-mount";
 const CANON_CN_MOUNT: &str = "cn-mount";
+
+fn sraw_interpolation_enabled() -> bool {
+  std::env::var("RAWLER_CR2_YUV_INTERPOLATE").ok()
+    .map(|v| v.parse::<bool>().expect("RAWLER_CR2_YUV_INTERPOLATE must by of type bool"))
+    .unwrap_or(true)
+}
+
+fn checked_sraw_wb(coeffs: [f32; 4]) -> Result<[f32; 4]> {
+  if coeffs[..3].iter().any(|v| !v.is_finite() || *v <= 0. || *v > 65535.) {
+    return Err("CR2: invalid sRAW white balance".into());
+  }
+  Ok(coeffs)
+}
+
+/// Filmroom: lossless in-place unslicing for already-expanded three-channel RAW.
+/// Mapping follows the original two-buffer implementation below. A one-bit/sample
+/// visited map replaces the second u16 image; this does not alter pixel precision.
+fn unslice_rgb_in_place(data: &mut [u16], width: usize, height: usize, ljpeg_width: usize,
+                        fields: &[usize], super_h: usize, super_v: usize) -> Result<()> {
+  let fail = || RawlerError::DecoderFailed("Invalid CR2 RGB slice layout".into());
+  if width == 0 || height == 0 || data.len() != width.checked_mul(height).ok_or_else(fail)?
+      || super_h != 2 || !matches!(super_v, 1 | 2) || fields.is_empty() || fields.len() > 4096 {
+    return Err(fail());
+  }
+  let widths: Vec<usize> = fields.iter().map(|f| if super_v == 2 { *f } else { f / 2 * 3 }).collect();
+  if fields.iter().any(|f| *f == 0 || (super_v == 1 && f % 2 != 0))
+      || widths.iter().any(|f| f % 3 != 0) || widths.iter().sum::<usize>() != width
+      || (super_v == 2 && (height % 2 != 0 || ljpeg_width == 0 || ljpeg_width % 3 != 0
+          || widths.iter().any(|f| *f != widths[0]))) {
+    return Err(fail());
+  }
+  let mut starts = vec![0usize];
+  for w in &widths { starts.push(starts.last().unwrap() + w); }
+  let source = |dest: usize| -> usize {
+    let row = dest / width;
+    let col = dest % width;
+    let field = starts.partition_point(|v| *v <= col) - 1;
+    let local = col - starts[field];
+    if super_v == 1 {
+      starts[field] * height + row * widths[field] + local
+    } else {
+      let linear = starts[field] * (height / 2) + (row / 2) * widths[field] + local;
+      (linear / ljpeg_width) * (2 * ljpeg_width) + linear % ljpeg_width + (row % 2) * ljpeg_width
+    }
+  };
+  // Validate the mapping as a bijection before mutating any source pixels.
+  let mut visited = vec![0u8; data.len().div_ceil(8)];
+  for dest in 0..data.len() {
+    let src = source(dest);
+    if src >= data.len() || visited[src / 8] & (1 << (src % 8)) != 0 { return Err(fail()); }
+    visited[src / 8] |= 1 << (src % 8);
+  }
+  visited.fill(0);
+  for start in 0..data.len() {
+    if visited[start / 8] & (1 << (start % 8)) != 0 { continue; }
+    let value = data[start];
+    let mut current = start;
+    loop {
+      visited[current / 8] |= 1 << (current % 8);
+      let next = source(current);
+      if next == start { data[current] = value; break; }
+      data[current] = data[next];
+      current = next;
+    }
+  }
+  Ok(())
+}
 
 /// CR2 Decoder
 pub struct Cr2Decoder<'a> {
@@ -77,6 +150,12 @@ pub struct Cr2Format {
 }
 
 impl<'a> Decoder for Cr2Decoder<'a> {
+  fn canon_bayer_stream(&self, file: &RawSource, storage: &mut dyn CanonSrawStorage) -> Result<RawImage> {self.stream_bayer(file, storage)}
+
+  fn canon_sraw_stream(&self, file: &RawSource, storage: &mut dyn CanonSrawStorage) -> Result<RawImage> {
+    self.stream_sraw(file, storage)
+  }
+
   fn format_dump(&self) -> FormatDump {
     FormatDump::Cr2(Cr2Format { tiff: self.tiff.clone() })
   }
@@ -114,6 +193,8 @@ impl<'a> Decoder for Cr2Decoder<'a> {
       let mut width = ljpegwidth;
       let mut height = decompressor.height();
       let cpp = if decompressor.super_h() == 2 { 3 } else { 1 };
+      // Validate conversion-specific coefficients even in metadata-only probes.
+      if cpp == 3 { self.get_sraw_wb(file, camera)?; }
       debug!("CR2 ljpeg components: {}", decompressor.components());
       debug!("CR2 final cpp: {}", cpp);
       debug!("CR2 dimension: {},{}", width / cpp, height);
@@ -176,6 +257,18 @@ impl<'a> Decoder for Cr2Decoder<'a> {
             (width, height, cpp, ljpegout)
           }
            */
+        } else if cpp == 3 {
+          if !dummy {
+            let count = canoncol.value.force_usize(0);
+            if count > 4095 { return Err("Too many CR2 slices".into()); }
+            let mut fields = vec![canoncol.value.force_usize(1); count];
+            fields.push(canoncol.value.force_usize(2));
+            unslice_rgb_in_place(ljpegout.pixels_mut(), width, height, ljpegwidth, &fields,
+                                 decompressor.super_h(), decompressor.super_v())?;
+            self.convert_to_rgb(file, camera, &decompressor, width, height, ljpegout.pixels_mut(), dummy)?;
+          }
+          ljpegout.update_dimension(Dim2::new(width, height));
+          (cpp, ljpegout)
         } else {
           let mut out = alloc_image_plain!(width, height, dummy);
           if !dummy {
@@ -265,6 +358,7 @@ impl<'a> Decoder for Cr2Decoder<'a> {
     };
 
     let mut img = RawImage::new(camera.clone(), image, cpp, wb, photometric, blacklevel, whitelevel, dummy);
+    img.source_ifd_offset = Some(raw.offset);
 
     if let Some(file_crop) = self.get_sensor_area()? {
       assert!(
@@ -279,6 +373,20 @@ impl<'a> Decoder for Cr2Decoder<'a> {
     }
 
     if cpp == 3 {
+      // YCbCr reconstruction is a black-subtracted RGB domain scaled by four
+      // (coeff * value >> 8, with nominal coeff1024). Bayer masked black levels
+      // must not be subtracted a second time. Canon metadata white is unscaled.
+      // Keep the camera's explicitly calibrated fallback only when no file white
+      // exists; do not let stale profile constants override valid file metadata.
+      img.blacklevel = BlackLevel::zero(1, 1, 3);
+      if let Some(mut white) = self.get_whitelevel(3)? {
+        for value in &mut white.0 {
+          *value = if value.checked_add(1).is_some_and(u32::is_power_of_two) {
+            value.checked_add(1).and_then(|v| v.checked_mul(4)).and_then(|v| v.checked_sub(1))
+          } else { value.checked_mul(4) }.ok_or("CR2: sRAW white level overflow")?;
+        }
+        img.whitelevel = white;
+      }
       // We have a sRAW or mRAW: the active_area from camera config is invalid now!
       // We just apply the crop_area that comes from metadata, which is correct.
       img.active_area = img.crop_area;
@@ -533,14 +641,14 @@ impl<'a> Cr2Decoder<'a> {
       .transpose()?
     {
       let offset = 78;
-      return Ok([
+      return checked_sraw_wb([
         levels.get_force_u16(offset) as f32,
         (levels.get_force_u16(offset + 1) as f32 + levels.get_force_u16(offset + 2) as f32) / 2.0,
         levels.get_force_u16(offset + 3) as f32,
         f32::NAN,
       ]);
     }
-    Ok([f32::NAN, f32::NAN, f32::NAN, f32::NAN])
+    Err("CR2: missing sRAW white balance".into())
   }
 
   /// Get the white balance coefficents from COLORDATA tag
@@ -575,7 +683,7 @@ impl<'a> Cr2Decoder<'a> {
         match cpp {
           1 => return Ok(Some(BlackLevel::new(&blacklevel, cam.cfa.width, cam.cfa.height, cpp))),
           3 => {
-            let avg = blacklevel.into_iter().sum::<u16>() / 4;
+            let avg = (blacklevel.into_iter().map(u32::from).sum::<u32>() / 4) as u16;
             let levels: [u16; 3] = [avg, avg, avg];
             return Ok(Some(BlackLevel::new(&levels, 1, 1, cpp)));
           }
@@ -619,18 +727,16 @@ impl<'a> Cr2Decoder<'a> {
     }
   }
 
-  /// Interpolate YCbCr (YUV) data
-  fn interpolate_yuv(&self, ljpeg: &LjpegDecompressor, width: usize, _height: usize, image: &mut [u16]) {
-    if ljpeg.super_h() == 1 && ljpeg.super_v() == 1 {
-      return; // No interpolation needed
+  /// Interpolate expanded YCbCr using physical raster coordinates.
+  fn interpolate_yuv(&self, ljpeg: &LjpegDecompressor, width: usize, height: usize, image: &mut [u16]) {
+    if ljpeg.super_h() == 2 && ljpeg.super_v() == 2 {
+      chroma::interpolate_420(width, height, image);
+      return;
     }
-    // Iterate over a block of 3 rows, smaller chunks are okay
-    // but must always a multiple of row width.
+    if ljpeg.super_h() == 1 && ljpeg.super_v() == 1 { return; }
+    // Keep the established 4:2:2 arithmetic and right-edge duplication unchanged.
     image.par_chunks_mut(width * 3).for_each(|slice| {
-      // Do horizontal interpolation.
-      // [y1 Cb Cr ] [ y2 . . ] [y1 Cb Cr ] [ y2 . . ] ...
       if ljpeg.super_h() == 2 {
-        debug_assert_eq!(slice.len() % width, 0);
         for row in 0..(slice.len() / width) {
           for col in (6..width).step_by(6) {
             let pix1 = row * width + col - 6;
@@ -641,49 +747,7 @@ impl<'a> Cr2Decoder<'a> {
           }
         }
       }
-      // Do vertical interpolation
-      //          pixel n      pixel n+1       pixel n+2    pixel n+3       ...
-      // row i  : [y1 Cb  Cr ] [ y2 Cb*  Cr* ] [y1 Cb  Cr ] [ y2 Cb*  Cr* ] ...
-      // row i+1: [y3 Cb* Cr*] [ y4 Cb** Cr**] [y3 Cb* Cr*] [ y4 Cb** Cr**] ...
-      // row i+2: [y1 Cb  Cr ] [ y2 Cb*  Cr* ] [y1 Cb  Cr ] [ y2 Cb*  Cr* ] ...
-      // row i+3: [y3 Cb* Cr*] [ y4 Cb** Cr**] [y3 Cb* Cr*] [ y4 Cb** Cr**] ...
-      if ljpeg.super_v() == 2 && slice.len() == width * 3 {
-        for col in (0..width).step_by(3) {
-          let pix1 = col;
-          let pix2 = width + col;
-          let pix3 = 2 * width + col;
-          slice[pix2 + 1] = ((slice[pix1 + 1] as i32 + slice[pix3 + 1] as i32 + 1) / 2) as u16;
-          slice[pix2 + 2] = ((slice[pix1 + 2] as i32 + slice[pix3 + 2] as i32 + 1) / 2) as u16;
-        }
-      }
     });
-
-    /* Old non-parallel code
-    if ljpeg.super_h() == 2 {
-      for row in 0..height {
-        for col in (6..width).step_by(6) {
-          let pix1 = row * width + col - 6;
-          let pix2 = pix1 + 3;
-          let pix3 = row * width + col;
-          image[pix2 + 1] = ((image[pix1 + 1] as i32 + image[pix3 + 1] as i32 + 1) / 2) as u16;
-          image[pix2 + 2] = ((image[pix1 + 2] as i32 + image[pix3 + 2] as i32 + 1) / 2) as u16;
-        }
-      }
-    }
-
-
-    if ljpeg.super_v() == 2 {
-      for row in (1..height - 1).step_by(2) {
-        for col in (0..width).step_by(3) {
-          let pix1 = (row - 1) * width + col;
-          let pix2 = row * width + col;
-          let pix3 = (row + 1) * width + col;
-          image[pix2 + 1] = ((image[pix1 + 1] as i32 + image[pix3 + 1] as i32 + 1) / 2) as u16;
-          image[pix2 + 2] = ((image[pix1 + 2] as i32 + image[pix3 + 2] as i32 + 1) / 2) as u16;
-        }
-      }
-    }
-    */
   }
 
   /// Convert YCbCr (YUV) data to linear RGB
@@ -697,6 +761,13 @@ impl<'a> Cr2Decoder<'a> {
     image: &mut [u16],
     dummy: bool,
   ) -> Result<()> {
+    self.convert_to_rgb_inner(rawfile, cam, ljpeg, width, height, image, dummy, true)
+  }
+
+  fn convert_to_rgb_inner(
+    &self, rawfile: &RawSource, cam: &Camera, ljpeg: &LjpegDecompressor,
+    width: usize, height: usize, image: &mut [u16], dummy: bool, interpolate: bool,
+  ) -> Result<()> {
     debug!("YUV2RGB: Regular WB: {:?}", self.get_wb(rawfile, cam));
     debug!("YUV2RGB: SRAW WB: {:?}", self.get_sraw_wb(rawfile, cam));
     debug!("Model ID: 0x{:X}", self.model_id.unwrap_or(0));
@@ -704,22 +775,18 @@ impl<'a> Cr2Decoder<'a> {
       return Ok(());
     }
 
-    let do_interpolate = std::env::var("RAWLER_CR2_YUV_INTERPOLATE")
-      .ok()
-      .map(|id| id.parse::<bool>().expect("RAWLER_CR2_YUV_INTERPOLATE must by of type bool"))
-      .unwrap_or(true);
-    if do_interpolate {
+    if interpolate && sraw_interpolation_enabled() {
       self.interpolate_yuv(ljpeg, width, height, image);
     }
 
     let coeffs = self.get_sraw_wb(rawfile, cam)?;
     let (c1, c2, c3) = if cam.find_hint("invert_sraw_wb") {
-      let c1 = (1024.0 * 1024.0 / coeffs[0]) as i32;
-      let c2 = coeffs[1] as i32;
-      let c3 = (1024.0 * 1024.0 / coeffs[2]) as i32;
+      let c1 = (1024.0 * 1024.0 / coeffs[0]) as i64;
+      let c2 = coeffs[1] as i64;
+      let c3 = (1024.0 * 1024.0 / coeffs[2]) as i64;
       (c1, c2, c3)
     } else {
-      (coeffs[0] as i32, coeffs[1] as i32, coeffs[2] as i32)
+      (coeffs[0] as i64, coeffs[1] as i64, coeffs[2] as i64)
     };
 
     // Starting with 40D, sRaw format was introduced. This uses
@@ -744,9 +811,9 @@ impl<'a> Cr2Decoder<'a> {
       None => 0,
       Some(model_id) => {
         if model_id >= 0x80000281 || (model_id == 0x80000218 && fw.unwrap_or(0) > 1000006) {
-          (((ljpeg.super_h() * ljpeg.super_v()) - 1) >> 1) as i32
+          (((ljpeg.super_h() * ljpeg.super_v()) - 1) >> 1) as i64
         } else {
-          (ljpeg.super_h() * ljpeg.super_v()) as i32
+          (ljpeg.super_h() * ljpeg.super_v()) as i64
         }
       }
     };
@@ -754,18 +821,18 @@ impl<'a> Cr2Decoder<'a> {
 
     // Now calculate RGB for each YUV tuple.
     image.par_chunks_exact_mut(3).for_each(|pix| {
-      let y = pix[0] as i32;
-      let cb = pix[1] as i32 - 16383;
-      let cr = pix[2] as i32 - 16383;
+      let y = pix[0] as i64;
+      let cb = pix[1] as i64 - 16383;
+      let cr = pix[2] as i64 - 16383;
       match version {
         0 => {
           let y = y - 512; // correction for 40D and others
           let r = c1 * (y + cr);
           let g = c2 * (y + ((-778 * cb - (cr << 11)) >> 12));
           let b = c3 * (y + cb);
-          pix[0] = clampbits(r >> 8, 16);
-          pix[1] = clampbits(g >> 8, 16);
-          pix[2] = clampbits(b >> 8, 16);
+          pix[0] = (r >> 8).clamp(0, 65535) as u16;
+          pix[1] = (g >> 8).clamp(0, 65535) as u16;
+          pix[2] = (b >> 8).clamp(0, 65535) as u16;
         }
         1 => {
           // found in EOS 5D Mark II
@@ -774,18 +841,18 @@ impl<'a> Cr2Decoder<'a> {
           let r = c1 * (y + ((50 * cb + 22929 * cr) >> 14));
           let g = c2 * (y + ((-5640 * cb - 11751 * cr) >> 14));
           let b = c3 * (y + ((29040 * cb - 101 * cr) >> 14));
-          pix[0] = clampbits(r >> 8, 16);
-          pix[1] = clampbits(g >> 8, 16);
-          pix[2] = clampbits(b >> 8, 16);
+          pix[0] = (r >> 8).clamp(0, 65535) as u16;
+          pix[1] = (g >> 8).clamp(0, 65535) as u16;
+          pix[2] = (b >> 8).clamp(0, 65535) as u16;
         }
         2 => {
           // found in EOS 5D Mark III and others
           let r = c1 * (y + cr);
           let g = c2 * (y + ((-778 * cb - (cr << 11)) >> 12));
           let b = c3 * (y + cb);
-          pix[0] = clampbits(r >> 8, 16);
-          pix[1] = clampbits(g >> 8, 16);
-          pix[2] = clampbits(b >> 8, 16);
+          pix[0] = (r >> 8).clamp(0, 65535) as u16;
+          pix[1] = (g >> 8).clamp(0, 65535) as u16;
+          pix[2] = (b >> 8).clamp(0, 65535) as u16;
         }
         _ => {
           unreachable!()
@@ -901,3 +968,73 @@ pub enum Cr2MakernoteTag {
 }
 
 //const CR2_MODEL_40D: u32 = 0x80000190;
+
+#[cfg(test)]
+mod filmroom_unslice_tests {
+  use super::{unslice_rgb_in_place, checked_sraw_wb};
+  #[test]
+  fn missing_zero_or_nonfinite_sraw_coefficients_fail() {
+    assert!(checked_sraw_wb([1024.,1024.,1024.,f32::NAN]).is_ok());
+    for bad in [0.,-1.,f32::NAN,f32::INFINITY] {
+      assert!(checked_sraw_wb([bad,1024.,1024.,f32::NAN]).is_err());
+    }
+  }
+  #[test]
+  fn in_place_rgb_unslice_equals_original_copy_layout() {
+    for sv in [1usize, 2] {
+      for fields in [vec![12usize, 12, 12], vec![24, 24], vec![12, 6, 18]] {
+        if sv == 2 && fields.iter().any(|f| *f != fields[0]) { continue; }
+        let widths: Vec<_> = fields.iter().map(|f| if sv == 2 { *f } else { f / 2 * 3 }).collect();
+        let width: usize = widths.iter().sum();
+        for height in [4usize, 10, 16] {
+          for ljpeg_width in [width, width / 2] {
+          let source: Vec<u16> = (0..width*height).map(|i| i as u16).collect();
+          let mut expected = vec![0; source.len()];
+          // Independent literal copy of the pre-patch vendor loops.
+
+          if sv == 2 {
+            let mut fieldstart = 0;
+            let mut inpos = 0;
+            for _ in 0..fields.len() {
+              for row in (0..height).step_by(2) {
+                for col in (0..fields[0]).step_by(3) {
+                  let outpos = row*width+fieldstart+col;
+                  expected[outpos..outpos+3].copy_from_slice(&source[inpos..inpos+3]);
+                  let outpos = (row+1)*width+fieldstart+col;
+                  expected[outpos..outpos+3].copy_from_slice(&source[inpos+ljpeg_width..inpos+ljpeg_width+3]);
+                  inpos += 3;
+                  if inpos % ljpeg_width == 0 { inpos += ljpeg_width; }
+                }
+              }
+              fieldstart += fields[0];
+            }
+          } else {
+            let mut fieldstart=0;
+            let mut fieldpos=0;
+            for fw in &widths {
+              for row in 0..height {
+                expected[row*width+fieldstart..row*width+fieldstart+fw]
+                  .copy_from_slice(&source[fieldpos+row*fw..fieldpos+(row+1)*fw]);
+              }
+              fieldstart+=fw; fieldpos+=fw*height;
+            }
+          }
+          let mut got=source;
+          unslice_rgb_in_place(&mut got,width,height,ljpeg_width,&fields,2,sv).unwrap();
+          assert_eq!(got,expected,"sv={sv} fields={fields:?} height={height}");
+          }
+        }
+      }
+    }
+  }
+  #[test]
+  fn rejects_invalid_rgb_slice_geometry_before_mutation() {
+    let mut input=vec![123;144]; let before=input.clone();
+    assert!(unslice_rgb_in_place(&mut input,36,4,15,&[12,12,12],2,2).is_err());
+    assert_eq!(input,before);
+    assert!(unslice_rgb_in_place(&mut input,36,4,36,&[12,24],2,2).is_err());
+    assert_eq!(input,before);
+    assert!(unslice_rgb_in_place(&mut input,36,4,36,&[12,12],2,2).is_err());
+    assert_eq!(input,before);
+  }
+}

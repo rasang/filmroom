@@ -203,7 +203,30 @@ impl<'a> Decoder for NefDecoder<'a> {
     debug!("TIFF compression flag: {}, NEF compression mode: {:?}", compression, nef_compression);
 
     if matches!(nef_compression, Some(NefCompression::HighEfficency)) || matches!(nef_compression, Some(NefCompression::HighEfficencyStar)) {
-      return Err(RawlerError::DecoderFailed(format!("NEF compression {:?} is not supported", nef_compression)));
+      // Metadata only: never route these bytes through legacy34713 decoding.
+      if !dummy || bps != 14 || cpp != 1 {
+        return Err(RawlerError::DecoderFailed("NEF HE pixels require the separate bounded codec".into()));
+      }
+      // HE must carry genuine WB metadata: get_wb's legacy neutral fallback
+      // is not a valid color source for this separately admitted pixel path.
+      if self.camera.find_hint("nowb") ||
+        (self.makernote.get_entry(TiffCommonTag::NefWB0).is_none() &&
+         self.makernote.get_entry(TiffCommonTag::NrwWB).is_none() &&
+         self.makernote.get_entry(TiffCommonTag::NefWB1).is_none()) {
+        return Err(RawlerError::DecoderFailed("HE requires explicit white-balance metadata".into()));
+      }
+      let coeffs = normalize_wb(self.get_wb()?);
+      let blacklevel = self.get_blacklevel(bps)?;
+      if self.camera.make_blacklevel(1).is_none() && (self.camera.find_hint("invalid_blacklevel") || blacklevel.is_none()) {
+        return Err(RawlerError::DecoderFailed("HE requires explicit black-level metadata".into()));
+      }
+      let photo = RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&self.camera));
+      let mut img = RawImage::new_with_data(self.camera.clone(), crate::RawImageData::Integer(Vec::new()),
+        width, height, 1, coeffs, photo, blacklevel, None, true);
+      img.source_ifd_offset = Some(raw.offset);
+      img.nikon_he_mode = Some(if matches!(nef_compression, Some(NefCompression::HighEfficency)) {13} else {14});
+      if let Some(crop) = self.get_crop()? { img.crop_area = Some(crop); }
+      return Ok(img);
     }
 
     let offset = fetch_tiff_tag!(raw, TiffCommonTag::StripOffsets).force_usize(0);
@@ -215,7 +238,7 @@ impl<'a> Decoder for NefDecoder<'a> {
     // chunk at once, instead of iterating over every strip.
     // It would be safer to process each strip offset, but it is not need for any known model so far.
     let src = if rows_per_strip == height {
-      file.subview_padded(offset as u64, size as u64)?
+      if dummy { PaddedBuf::new_ref(file.subview(offset as u64, size as u64)?, size) } else { file.subview_padded(offset as u64, size as u64)? }
     } else {
       let full_size: u32 = match fetch_tiff_tag!(raw, TiffCommonTag::StripByteCounts) {
         Value::Long(data) => data.iter().copied().sum(),
@@ -223,7 +246,7 @@ impl<'a> Decoder for NefDecoder<'a> {
           return Err("StripByteCounts is not of type LONG".into());
         }
       };
-      file.subview_padded(offset as u64, full_size as u64)?
+      if dummy { PaddedBuf::new_ref(file.subview(offset as u64, full_size as u64)?, full_size as usize) } else { file.subview_padded(offset as u64, full_size as u64)? }
     };
 
     let coeffs = normalize_wb(self.get_wb()?);
@@ -296,6 +319,7 @@ impl<'a> Decoder for NefDecoder<'a> {
       _ => todo!(),
     };
     let mut img = RawImage::new(self.camera.clone(), image, cpp, coeffs, photometric, blacklevel, whitelevel, dummy);
+    img.source_ifd_offset = Some(raw.offset);
 
     if let Some(crop) = self.get_crop()? {
       debug!("RAW Crops: {:?}", crop);
@@ -309,6 +333,21 @@ impl<'a> Decoder for NefDecoder<'a> {
     }
 
     Ok(img)
+  }
+
+  fn bayer_rows_supported(&self, _file: &RawSource) -> Result<bool> {
+    Ok(self.ordinary_row_layout()?.is_some())
+  }
+
+  fn bayer_rows(&self, file: &RawSource, sink: &mut dyn FnMut(usize, &[u16]) -> Result<()>, cancel: &dyn Fn() -> bool) -> Result<()> {
+    let (width,height,bps,offset,size,compressed) = self.ordinary_row_layout()?.ok_or_else(|| RawlerError::DecoderFailed("NEF row layout unsupported".into()))?;
+    let src = file.subview(offset as u64,size as u64)?;
+    if !compressed {
+      let little=if bps==16 {self.tiff.little_endian()}else{(self.tiff.little_endian()||self.camera.find_hint("little_endian"))&&!self.camera.find_hint("big_endian")};
+      return Self::do_uncompressed_rows(src,width,height,bps,little,sink,cancel);
+    }
+    let meta = self.makernote.get_entry(TiffCommonTag::NefMeta2).or_else(||self.makernote.get_entry(TiffCommonTag::NefMeta1)).ok_or_else(||RawlerError::DecoderFailed("NEF row metadata missing".into()))?;
+    Self::do_decode_rows(src,meta.get_data(),self.makernote.endian,width,height,bps,sink,cancel)
   }
 
   fn format_dump(&self) -> FormatDump {
@@ -568,6 +607,71 @@ impl<'a> NefDecoder<'a> {
     })
   }
 
+  /// Deliberately narrow first stage: a single ordinary entropy-coded or exact unpacked Bayer strip.
+  /// Special Coolpix packing, sNEF, HE, unknown modes and derived black levels
+  /// remain on the existing path; no implicit full-Vec fallback after admission.
+  fn ordinary_row_layout(&self) -> Result<Option<(usize,usize,usize,usize,usize,bool)>> {
+    let Some(raw) = self.tiff.find_first_ifd_with_tag(TiffCommonTag::CFAPattern).or_else(||self.tiff.find_ifd_with_new_subfile_type(0)) else { return Ok(None); };
+    let width=fetch_tiff_tag!(raw,TiffCommonTag::ImageWidth).force_usize(0);
+    let height=fetch_tiff_tag!(raw,TiffCommonTag::ImageLength).force_usize(0);
+    let bits=fetch_tiff_tag!(raw,TiffCommonTag::BitsPerSample);
+    let bps=bits.force_usize(0);
+    let compression=fetch_tiff_tag!(raw,TiffCommonTag::Compression).force_usize(0);
+    // Row conversion for uncompressed layouts is retained as a research
+    // helper with synthetic equivalence tests only. Until a real single-strip
+    // fixture is verified, preserve the established full decoder by default.
+    if compression == 1 { return Ok(None); }
+    let offsets=fetch_tiff_tag!(raw,TiffCommonTag::StripOffsets);
+    let sizes=fetch_tiff_tag!(raw,TiffCommonTag::StripByteCounts);
+    if width==0 || width>16384 || width%2!=0 || height==0 || height%2!=0 || width.checked_mul(height).is_none_or(|n|n>52_000_000) || bits.count()!=1 || !matches!(bps,12|14|16) || !matches!(compression,1|34713) || offsets.count()!=1 || sizes.count()!=1 { return Ok(None); }
+    let offset=offsets.force_usize(0); let size=sizes.force_usize(0);
+    if size==width*height*3 || self.camera.model=="NIKON D100" || ["coolpixsplit","msb32","unpacked"].iter().any(|h|self.camera.find_hint(h)) { return Ok(None); }
+    if raw.get_entry(TiffCommonTag::RowsPerStrip).is_some_and(|v|v.force_usize(0)!=height) { return Ok(None); }
+    let mode=if let Some(v)=self.makernote.get_entry(NikonMakernote::Makernotes0x51) {
+      if v.get_data().len()<12 { return Err(RawlerError::DecoderFailed("NEF mode metadata".into())); }
+      Some(crate::bits::LEu16(v.get_data(),10))
+    } else if let Some(v)=self.makernote.get_entry(NikonMakernote::NefCompression) {Some(v.force_u16(0))} else {None};
+    let compressed=compression==34713;
+    if compressed {
+      if !matches!(mode,Some(1|3|4)) || !matches!(bps,12|14) || self.is_uncompressed(raw)?.is_some() {return Ok(None);}
+    } else {
+      // Exact established packed12 / unpacked14 / word16 layout only.
+      // Packed14, row padding and multi-strip variants remain on legacy path.
+      // Older uncompressed NEF may omit the MakerNote mode. Compression=1
+      // plus exact byte geometry is sufficient; do not invent a mode tag.
+      let row_bytes=if bps==12 {width*3/2}else{width*2};
+      if !matches!(mode,None|Some(2|9)) || (mode==Some(9) && bps!=12) || size!=row_bytes*height {return Ok(None);}
+    }
+    if self.camera.find_hint("nowb") || [TiffCommonTag::NefWB0,TiffCommonTag::NrwWB,TiffCommonTag::NefWB1].iter().all(|tag|self.makernote.get_entry(*tag).is_none()) {return Ok(None);}
+    if self.camera.make_blacklevel(1).is_none() && (self.camera.find_hint("invalid_blacklevel") || self.get_blacklevel(bps)?.is_none()) {return Ok(None);}
+    if compressed && self.makernote.get_entry(TiffCommonTag::NefMeta2).or_else(||self.makernote.get_entry(TiffCommonTag::NefMeta1)).is_none() {return Ok(None);}
+    Ok(Some((width,height,bps,offset,size,compressed)))
+  }
+
+  fn do_uncompressed_rows(src:&[u8],width:usize,height:usize,bps:usize,little:bool,sink:&mut dyn FnMut(usize,&[u16])->Result<()>,cancel:&dyn Fn()->bool)->Result<()> {
+    if width==0 || width>16384 || width%2!=0 || height==0 || !matches!(bps,12|14|16) || width.checked_mul(height).is_none_or(|n|n>52_000_000) {return Err(RawlerError::DecoderFailed("NEF row dimensions".into()));}
+    let row_bytes=if bps==12 {width*3/2}else{width*2};
+    if src.len()!=row_bytes*height {return Err(RawlerError::DecoderFailed("NEF row bytes".into()));}
+    let mut row=Vec::new();row.try_reserve_exact(width).map_err(|_|RawlerError::RowAllocationFailed)?;row.resize(width,0);
+    for (y,bytes) in src.chunks_exact(row_bytes).enumerate() {
+      if cancel(){return Err(RawlerError::DecoderFailed("NEF row cancelled".into()));}
+      if bps==12 {
+        for (i,b) in bytes.chunks_exact(3).enumerate() {
+          let (a,c,d)=(u16::from(b[0]),u16::from(b[1]),u16::from(b[2]));
+          if little {row[2*i]=((c&15)<<8)|a;row[2*i+1]=(d<<4)|(c>>4);}
+          else {row[2*i]=(a<<4)|(c>>4);row[2*i+1]=((c&15)<<8)|d;}
+          if i%128==0 && cancel(){return Err(RawlerError::DecoderFailed("NEF row cancelled".into()));}
+        }
+      } else {
+        for (i,b) in bytes.chunks_exact(2).enumerate() {
+          let v=if little {u16::from_le_bytes([b[0],b[1]])}else{u16::from_be_bytes([b[0],b[1]])};row[i]=if bps==14 {v&0x3fff}else{v};
+          if i%256==0 && cancel(){return Err(RawlerError::DecoderFailed("NEF row cancelled".into()));}
+        }
+      }
+      sink(y,&row)?;
+    }Ok(())
+  }
+
   fn decode_compressed(&self, src: &PaddedBuf, width: usize, height: usize, bps: usize, dummy: bool) -> Result<PixU16> {
     let meta = if let Some(meta) = self.makernote.get_entry(TiffCommonTag::NefMeta2) {
       debug!("Found NefMeta2");
@@ -576,10 +680,14 @@ impl<'a> NefDecoder<'a> {
       debug!("Fallback NefMeta1");
       fetch_tiff_tag!(self.makernote, TiffCommonTag::NefMeta1)
     };
-    Self::do_decode(src, meta.get_data(), self.makernote.endian, width, height, bps, dummy)
+    Self::do_decode_checked(src, meta.get_data(), self.makernote.endian, width, height, bps, dummy, src.size())
   }
 
   pub(crate) fn do_decode(src: &[u8], meta: &[u8], endian: Endian, width: usize, height: usize, bps: usize, dummy: bool) -> Result<PixU16> {
+    Self::do_decode_checked(src, meta, endian, width, height, bps, dummy, src.len())
+  }
+
+  fn do_decode_checked(src: &[u8], meta: &[u8], endian: Endian, width: usize, height: usize, bps: usize, dummy: bool, encoded_bytes: usize) -> Result<PixU16> {
     debug!("NEF decode with: endian: {:?}, width: {}, height: {}, bps: {}", endian, width, height, bps);
     let mut out = alloc_image_ok!(width, height, dummy);
     let mut stream = ByteStream::new(meta, endian);
@@ -670,7 +778,137 @@ impl<'a> NefDecoder<'a> {
       }
     }
 
+    // PaddedBuf allows entropy lookahead, never missing sensor samples. Keep
+    // the original algorithm and padding allocation, but reject any actual
+    // consumption beyond the file-declared encoded bytes. Unconsumed trailing
+    // pad bytes remain valid; no guessed "must consume every byte" rule.
+    let consumed = src.len().checked_mul(8).and_then(|n| n.checked_sub(pump.remaining_bits()));
+    if consumed.zip(encoded_bytes.checked_mul(8)).is_none_or(|(used, available)| used > available) {
+      return Err(RawlerError::DecoderFailed("NEF entropy consumed beyond declared payload".into()));
+    }
+
     Ok(out)
+  }
+
+  // Row variant preserves the legacy predictor, curve and global dither sequence.
+  fn do_decode_rows(src: &[u8], meta: &[u8], endian: Endian, width: usize, height: usize, bps: usize, sink: &mut dyn FnMut(usize, &[u16]) -> Result<()>, cancel: &dyn Fn() -> bool) -> Result<()> {
+    debug!("NEF decode with: endian: {:?}, width: {}, height: {}, bps: {}", endian, width, height, bps);
+    if width == 0 || width > 16384 || width % 2 != 0 || height == 0 || width.checked_mul(height).is_none_or(|n| n > 52_000_000) || !matches!(bps, 12 | 14) || meta.len() < 12 || src.len()<3 {
+      return Err(RawlerError::DecoderFailed("NEF row dimensions/metadata".into()));
+    }
+    let mut out = Vec::new();
+    out.try_reserve_exact(width).map_err(|_| RawlerError::RowAllocationFailed)?;
+    out.resize(width, 0);
+    let mut stream = ByteStream::new(meta, endian);
+    let v0 = stream.get_u8();
+    let v1 = stream.get_u8();
+    debug!("Nef version v0:{}, v1:{}", v0, v1);
+
+    let mut huff_select = 0;
+    if v0 == 73 || v1 == 88 {
+      if stream.remaining_bytes()<2120 {return Err(RawlerError::DecoderFailed("NEF predictor metadata truncated".into()));}
+      stream.consume_bytes(2110);
+    }
+    if v0 == 70 {
+      huff_select = 2;
+    }
+    if bps == 14 {
+      huff_select += 3;
+    }
+
+    // Create the huffman table used to decode
+    let mut htable = Self::create_hufftable(huff_select)?;
+
+    // Setup the predictors
+    let mut pred_up1: [i32; 2] = [stream.get_u16() as i32, stream.get_u16() as i32];
+    let mut pred_up2: [i32; 2] = [stream.get_u16() as i32, stream.get_u16() as i32];
+
+    // Get the linearization curve
+    let mut points = [0_u16; 1 << 16];
+    for i in 0..points.len() {
+      points[i] = i as u16;
+    }
+
+    // Some models reports 14 bits, but the data is 12 bits.
+    // So we reduce the bps to calculate the max value which
+    // is needed in the next steps.
+    let real_bps = if v0 == 68 && v1 == 64 {
+      bps as u32 - 2 // Special for D780, Z7 and others
+    } else {
+      bps as u32
+    };
+    let mut max = 1 << real_bps;
+
+    let csize = stream.get_u16() as usize;
+    let mut split = 0_usize;
+    let step = if csize > 1 { max / (csize - 1) } else { 0 };
+    if v0 == 68 && (v1 == 32 || v1 == 64) && step > 0 {
+      if meta.len()<564 || stream.remaining_bytes()<csize*2 || (csize-1)*step>=points.len() || max.div_ceil(step)*step>=points.len() {return Err(RawlerError::DecoderFailed("NEF curve metadata bounds".into()));}
+      for i in 0..csize {
+        points[i * step] = stream.get_u16();
+      }
+      for i in 0..max {
+        let b_scale = i % step;
+        let a_pos = i - b_scale;
+        let b_pos = a_pos + step;
+        //assert!(a_pos < max);
+        //assert!(b_pos > 0);
+        //assert!(b_pos < max);
+        //assert!(a_pos < b_pos);
+        let a_scale = step - b_scale;
+        points[i] = ((a_scale * points[a_pos] as usize + b_scale * points[b_pos] as usize) / step) as u16;
+      }
+      split = endian.read_u16(meta, 562) as usize;
+    } else if v0 != 70 && csize <= 0x4001 {
+      if csize==0 || stream.remaining_bytes()<csize*2 {return Err(RawlerError::DecoderFailed("NEF curve metadata truncated".into()));}
+      for i in 0..csize {
+        points[i] = stream.get_u16();
+      }
+      max = csize;
+    }
+    // LookupTable subtraction requires a nondecreasing transfer curve.
+    if points[..max].windows(2).any(|p|p[1]<p[0]) {return Err(RawlerError::DecoderFailed("NEF curve is not monotonic".into()));}
+    for i in 0..max {
+      let center=points[i]; let lower=points[i.saturating_sub(1)]; let upper=points[(i+1).min(max-1)];
+      let delta=u32::from(upper)-u32::from(lower);
+      if delta+2>u16::MAX as u32 || (center!=0 && u32::from(center)<(delta+2)/4) {return Err(RawlerError::DecoderFailed("NEF curve arithmetic bounds".into()));}
+    }
+    let curve = LookupTable::new(&points[0..max]);
+
+    let mut pump = NefBorrowedPump::new(src);
+    let mut random = pump.peek_bits(24);
+
+    for row in 0..height {
+      if cancel() { return Err(RawlerError::DecoderFailed("NEF row cancelled".into())); }
+      if split > 0 && row == split {
+        htable = Self::create_hufftable(huff_select + 1)?;
+      }
+      pred_up1[row & 1] = pred_up1[row & 1].checked_add(Self::row_diff(&htable,&mut pump)?).ok_or_else(||RawlerError::DecoderFailed("NEF predictor overflow".into()))?;
+      pred_up2[row & 1] = pred_up2[row & 1].checked_add(Self::row_diff(&htable,&mut pump)?).ok_or_else(||RawlerError::DecoderFailed("NEF predictor overflow".into()))?;
+      let mut pred_left1 = pred_up1[row & 1];
+      let mut pred_left2 = pred_up2[row & 1];
+      for col in (0..width).step_by(2) {
+        if col > 0 {
+          pred_left1 = pred_left1.checked_add(Self::row_diff(&htable,&mut pump)?).ok_or_else(||RawlerError::DecoderFailed("NEF predictor overflow".into()))?;
+          pred_left2 = pred_left2.checked_add(Self::row_diff(&htable,&mut pump)?).ok_or_else(||RawlerError::DecoderFailed("NEF predictor overflow".into()))?;
+        }
+        if pump.used > src.len() * 8 { return Err(RawlerError::DecoderFailed("NEF entropy consumed beyond declared payload".into())); }
+        let index1=clampbits(pred_left1, real_bps);let index2=clampbits(pred_left2, real_bps);
+        if index1 as usize>=max || index2 as usize>=max {return Err(RawlerError::DecoderFailed("NEF curve sample bounds".into()));}
+        out[col + 0] = curve.dither(index1, &mut random);
+        out[col + 1] = curve.dither(index2, &mut random);
+        if col % 256 == 0 && cancel() { return Err(RawlerError::DecoderFailed("NEF row cancelled".into())); }
+      }
+      sink(row, &out)?;
+    }
+
+    Ok(())
+  }
+
+  fn row_diff(table:&HuffTable,pump:&mut NefBorrowedPump<'_>)->Result<i32> {
+    let before=pump.used;let value=table.huff_decode(pump)?;
+    if pump.used==before {return Err(RawlerError::DecoderFailed("NEF invalid Huffman prefix".into()));}
+    Ok(value)
   }
 
   // Decodes 12 bit data in an YUY2-like pattern (2 Luma, 1 Chroma per 2 pixels).
@@ -813,5 +1051,31 @@ impl TryFrom<u16> for NefCompression {
       14 => Self::HighEfficencyStar,
       _ => return Err(format!("unknown nef compression: {}", v)),
     })
+  }
+}
+
+/// Borrow the encoded bytes; entropy lookahead beyond EOF sees zero, exactly as
+/// an EOF-padded PaddedBuf. Non-EOF legacy padding may contain subsequent file
+/// bytes; only consumed payload bits may affect successful output. Actual
+/// consumption is checked before a completed row is exposed.
+/// No encoded payload copy and no full sensor allocation.
+struct NefBorrowedPump<'a> { src: &'a [u8], pos: usize, bits: u64, nbits: u32, used: usize }
+impl<'a> NefBorrowedPump<'a> {
+  fn new(src: &'a [u8]) -> Self { Self { src, pos: 0, bits: 0, nbits: 0, used: 0 } }
+}
+impl BitPump for NefBorrowedPump<'_> {
+  fn peek_bits(&mut self, n: u32) -> u32 {
+    if n == 0 { return 0; }
+    assert!(n <= 32);
+    if n > self.nbits {
+      let mut v = 0u32;
+      for _ in 0..4 { v = (v << 8) | u32::from(self.src.get(self.pos).copied().unwrap_or(0)); self.pos += 1; }
+      self.bits = (self.bits << 32) | u64::from(v); self.nbits += 32;
+    }
+    (self.bits >> (self.nbits - n)) as u32
+  }
+  fn consume_bits(&mut self, n: u32) {
+    assert!(n <= self.nbits); self.nbits -= n; self.used += n as usize;
+    self.bits &= (1u64 << self.nbits) - 1;
   }
 }

@@ -40,7 +40,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     internal val compositionGeometryReady: Boolean get() {
         if(freeEdit)return true // Free handles alter aspect in source coordinates, not a fixed aperture.
         val requested=composition.aspect(canonicalWidth,canonicalHeight)
-        val shown=presentation?.let{if(it.geometryVersion==1)return true else if(it.portrait)2.0/3.0 else 1.5}
+        val shown=presentation?.let{if(it.geometryVersion==1)return true else it.composition.aspect(it.canonicalWidth,it.canonicalHeight)}
             ?: cropPresentation?.settings?.effectiveTransform(canonicalWidth,canonicalHeight)?.aspect(canonicalWidth,canonicalHeight)
             ?: return false
         return kotlin.math.abs(requested-shown)<=1e-9*maxOf(1.0,shown)
@@ -76,15 +76,20 @@ class PhotoView(context: Context): View(context), AutoCloseable {
             (viewport.left+(p.apertureLeft+p.photoWidth)*sx).toFloat(),(viewport.top+(p.apertureTop+p.photoHeight)*sy).toFloat())
     }
     /** Aperture-only canonical demand. Controller adapter must opt in; never samples frame art. */
-    internal fun compositionVisibleTiles(key:RenderKey):List<TileId> {
-        val a=compositionAperture() ?: return viewport.visibleTiles(key)
-        val p=presentedPhotoRect() ?: return emptyList()
-        if(p.width()<=0 || p.height()<=0 || !a.intersect(0f,0f,width.toFloat(),height.toFloat()))return emptyList()
+    internal fun compositionVisibleRect(key:RenderKey):PixelRect? {
+        val a=compositionAperture() ?: return viewport.visibleRect(key)
+        val p=presentedPhotoRect() ?: return null
+        if(p.width()<=0 || p.height()<=0 || !a.intersect(0f,0f,width.toFloat(),height.toFloat()))return null
         val x0=kotlin.math.floor(((a.left-p.left)/p.width()).coerceIn(0f,1f)*key.virtualFullWidth).toInt()
         val y0=kotlin.math.floor(((a.top-p.top)/p.height()).coerceIn(0f,1f)*key.virtualFullHeight).toInt()
         val x1=kotlin.math.ceil(((a.right-p.left)/p.width()).coerceIn(0f,1f)*key.virtualFullWidth).toInt()
         val y1=kotlin.math.ceil(((a.bottom-p.top)/p.height()).coerceIn(0f,1f)*key.virtualFullHeight).toInt()
-        if(x1<=x0 || y1<=y0)return emptyList()
+        if(x1<=x0 || y1<=y0)return null
+        return PixelRect(x0,y0,x1,y1)
+    }
+    internal fun compositionVisibleTiles(key:RenderKey):List<TileId> {
+        val r=compositionVisibleRect(key) ?: return emptyList()
+        val x0=r.left;val y0=r.top;val x1=r.right;val y1=r.bottom
         val result=mutableListOf<TileId>()
         for(y in y0/TileId.EDGE..(y1-1)/TileId.EDGE)for(x in x0/TileId.EDGE..(x1-1)/TileId.EDGE)result+=TileId(x,y)
         return result.sortedBy{val r=it.rect(key);val dx=(r.left+r.right-x0-x1).toDouble();val dy=(r.top+r.bottom-y0-y1).toDouble();dx*dx+dy*dy}
@@ -183,7 +188,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     init { contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c85ef88eb1b1);isFocusable=true;setBackgroundColor(Color.rgb(17,20,19)) }
     fun configureDetail(provider: EditorDetailProvider) {
         check(!disposed)
-        detail?.close(); detail=EditorDetailController(provider,viewport,{invalidate();onDetailStatusChanged?.invoke(detailStatus)},visibleTiles=::compositionVisibleTiles,effectiveZoom=::compositionDetailZoom,retainContextWhileEditing={compositionEditing}).also{it.foreground(foreground)}
+        detail?.close(); detail=EditorDetailController(provider,viewport,{invalidate();onDetailStatusChanged?.invoke(detailStatus)},visibleRegion=::compositionVisibleRect,effectiveZoom=::compositionDetailZoom,retainContextWhileEditing={compositionEditing}).also{it.foreground(foreground)}
     }
     fun disableDetail(){detail?.close();detail=null;logicalAspect=null;bitmap?.let{viewport.sourceAspect(it.width.toDouble()/it.height)}}
     fun bindDetail(source: PhotoSource?, parameters: EditorState, eligible: Boolean, compareOriginal:Boolean=false, presentedBorder:Boolean=parameters.filmBorder && !compareOriginal) {
@@ -238,10 +243,23 @@ class PhotoView(context: Context): View(context), AutoCloseable {
             val photo=compositionPhotoRect()!!
             val save=canvas.save()
             // The precomputed overlay supplies the narrow frame alpha edge; no frame resynthesis here.
-            if(p!=null)aperture.inset(-(p.featherRadius*viewport.imageWidth/p.outputWidth).toFloat(),
-                -(p.featherRadius*viewport.imageHeight/p.outputHeight).toFloat())
-            canvas.clipRect(target);canvas.clipRect(aperture)
-            canvas.drawBitmap(compositionSource!!,null,photo,paint)
+            if(p!=null){
+                val guard=if(p.geometryVersion==4)4*p.pixelsPerMm else p.featherRadius
+                aperture.inset(-(guard*viewport.imageWidth/p.outputWidth).toFloat(),
+                    -(guard*viewport.imageHeight/p.outputHeight).toFloat())
+            }
+            canvas.clipRect(target)
+            val pitch=p?.layout?.pitch ?: 0.0
+            val shifts=if(pitch>0)listOf(-1,0,1)else listOf(0)
+            for(shift in shifts){
+                val dx=if(p?.portrait==true)(shift*pitch*p.pixelsPerMm*viewport.imageWidth/p.outputWidth).toFloat()else 0f
+                val dy=if(p!=null && !p.portrait)(shift*pitch*p.pixelsPerMm*viewport.imageHeight/p.outputHeight).toFloat()else 0f
+                val clip=RectF(aperture).apply{offset(dx,dy)}
+                val destination=RectF(photo).apply{offset(dx,dy)}
+                val repeatSave=canvas.save();canvas.clipRect(clip)
+                canvas.drawBitmap(compositionSource!!,null,destination,paint)
+                canvas.restoreToCount(repeatSave)
+            }
             canvas.restoreToCount(save)
             interactiveFrame?.takeUnless{it.isRecycled}?.let{canvas.drawBitmap(it,null,target,paint)}
         }
@@ -257,7 +275,13 @@ class PhotoView(context: Context): View(context), AutoCloseable {
             // Detail cells must never overwrite the final compositor's aperture feather band.
             val p=presentation!!;val interior=RectF(aperture)
             interior.inset((p.featherRadius*viewport.imageWidth/p.outputWidth).toFloat(),(p.featherRadius*viewport.imageHeight/p.outputHeight).toFloat())
-            canvas.clipRect(interior)
+            if(p.geometryVersion==4){
+                val scale=(p.pixelsPerMm*viewport.imageWidth/p.outputWidth).toFloat()
+                interior.inset(4*scale,4*scale)
+                val radius=(if(p.stock=="kodak_trix")40f else if(p.stock=="kodak_2302")12f else 4f)*scale
+                val mask=android.graphics.Path().apply{addRoundRect(interior,radius,radius,android.graphics.Path.Direction.CW)}
+                canvas.clipPath(mask)
+            }else canvas.clipRect(interior)
         }
         canvas.translate(sourceBounds.left,sourceBounds.top)
         canvas.scale(sourceBounds.width()/key.virtualFullWidth,sourceBounds.height()/key.virtualFullHeight)

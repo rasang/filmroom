@@ -21,14 +21,15 @@ object StraightAlphaBorderLoader {
             require(holeMatteSrgb in 0..0xffffff)
             require(sha256.matches(Regex("[a-f0-9]{64}")))
             require(encodedBytes in 1..MAX_ENCODED_BYTES)
-            require(width==1520 && height==1400 && width.toLong()*35==height.toLong()*38)
+            val bw=BwFrameGeometry.forStock(stock)
+            require(if(bw==null)width==1520 && height==1400 && width.toLong()*35==height.toLong()*38 else width.toDouble()==bw.width && height.toDouble()==bw.height)
             require(featherTotalAt3072.isFinite() && featherTotalAt3072 in 0.0..16.0)
         }
     }
-    fun load(spec:Spec,open:()->InputStream,checkActive:()->Unit={}):StraightAlphaFixed135Raster {
+    fun load(spec:Spec,open:()->InputStream,checkActive:()->Unit={}):BorderRaster {
         val pixels=decodeStraight(spec,open,checkActive)
         checkActive()
-        val raster=StraightAlphaFixed135Raster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb)
+        val raster=if(BwFrameGeometry.forStock(spec.stock)!=null)AuthoredBwBorderRaster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb) else StraightAlphaFixed135Raster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb)
         checkActive()
         return raster
     }

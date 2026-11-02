@@ -80,7 +80,7 @@ class LocaleLayoutHostTest {
                 MainActivity::class.java.getDeclaredMethod("buildTools").apply{isAccessible=true}.invoke(a)
                 capture(a,tag,"main",w,h)
                 val root=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
-                val composition=all(root).filterIsInstance<android.widget.Button>().firstOrNull{it.text.toString()==L10n.text(R.string.text_f02806d5dc08)}
+                val composition=all(root).filterIsInstance<android.widget.Button>().firstOrNull{it.tag=="crop-adjust" || it.tag=="composition"}
                 assertNotNull("Composition tool missing in $tag",composition)
                 assertTrue("Composition tool disabled in $tag: ${flow.value.message}",composition!!.isEnabled)
                 composition.performClick()

@@ -9,7 +9,7 @@
 - 编解码采用当前经过预算检查的 128 MiB 工作上限。生产工厂明确传入 `ActivityManager.MemoryInfo`；缺少内存证据时重型编解码默认拒绝，不假定设备内存无限。
 - 每操作另加 16 MiB 余量；保留系统 low-memory threshold 加 64 MiB，再只允许已预留总量占用剩余当前可用内存的一半。当前 `availMem` 可能已经扣掉运行任务的 RSS，再扣预留是保守的双计，不是精确 RSS 模型。
 - 每次等待重试都重新查询 MemoryInfo。已有重型工作时可取消等待；空闲仍不满足/系统报告低内存时明确返回预算不足。等待不阻塞 UI 主线程。
-- 只包围重型 native 调用；plan/probe/getProgress 不占重型名额。导出计算释放后才进入图片编码，避免嵌套申请同一名额死锁。
+- 重型 native 调用占用名额；plan/引擎 probe/getProgress 与 DNG metadata-only 不占名额，相机 RAW metadata 的 32 MiB 准入见下文。导出计算释放后才进入图片编码，避免嵌套申请同一名额死锁。
 - 成功、异常、等待取消、已获名额后取消均经 `finally` 释放。引擎/codec 原有 nativeCancel 与 nativeDestroy 生命周期保持不变。
 
 这只是保守准入与并发限制，不是分配器硬上限；无法约束整个 Android framework、驱动、JVM、其他应用或系统杀进程。不能以 host RSS 宣称手机 APP 总内存。
@@ -23,3 +23,7 @@ Kotlin host 单测覆盖：导出和预览允许重叠、第三个重型调用�
 ## HEIC 系统解码
 
 HEIC原尺寸导入同样使用共享准入，按64MiB +所有描述编码像素×32B +原始编码文件字节数预留，不套用RAW codec的128MiB预算。包含可能的整图系统缓冲，不将region/subsample API当作低内存保证。准入后一次完整解码到规范化线性spool，所有预览/导出共用；详细支持范围与未真机验证边界见docs/HEIC_IMPORT.md。
+
+## 相机 RAW metadata
+
+NEF/CR2/ARW 候选的 metadata probe 用有界根 IFD 资源提示进入共享准入（32 MiB估计+原有16 MiB余量），与其他原生工作共享两个名额。DNGVersion 仍走原metadata-only恢复路由，不嵌套或新增128 MiB预留。RawLoader profile 初始化后常驻；lease释放不是RSS释放，后续系统可用内存快照会反映它。参见 docs/CAMERA_RAW_IMPORT.md。

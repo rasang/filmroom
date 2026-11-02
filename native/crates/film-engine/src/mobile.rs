@@ -71,11 +71,13 @@ pub struct MobileParams {
     pub paper_gamma_green:f64,
     pub paper_gamma_blue:f64,
     pub paper_developer_exhaustion:f64,
+    /// Zero selects upstream floor-middle development family; positive minutes select nearest.
+    pub film_development_time:f64,pub paper_development_time:f64,
 
 
 }
 impl Default for MobileParams {
-    fn default() -> Self { Self { checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0., } }
+    fn default() -> Self { Self { checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
 }
 impl MobileParams {
     pub fn parse(json: &str) -> Result<Self> {
@@ -97,7 +99,7 @@ impl MobileParams {
         if self.output_color_space!="sRGB" && self.output_gamut {return Err(EngineError::new("INVALID_PARAMS","Output gamut compression currently requires sRGB; disable explicitly for wide gamut"));}
         if self.scan_black_level>=self.scan_white_level || (self.output_route=="direct"&&!crate::profile_catalog::is_reversal(&self.film_stock)&&(self.scan_black_correction||self.scan_white_correction)){return Err(EngineError::new("INVALID_PARAMS","Invalid scanner correction or endpoints"));}
         if !["stock","red","amber","neutral"].contains(&self.halation_color.as_str()){return Err(EngineError::new("INVALID_PARAMS","Unknown halation color"));}
-        for (name,v,min,max) in [("grainRedScale",self.grain_red_scale,0.25,3.),("grainGreenScale",self.grain_green_scale,0.25,3.),("grainBlueScale",self.grain_blue_scale,0.25,3.),("neutralCyan",self.neutral_cyan,0.,200.),("neutralMagenta",self.neutral_magenta,0.,200.),("neutralYellow",self.neutral_yellow,0.,200.),("filmGamma",self.film_gamma,0.5,2.),("paperGamma",self.paper_gamma,0.5,2.),("paperGammaFast",self.paper_gamma_fast,0.5,2.),("paperGammaSlow",self.paper_gamma_slow,0.5,2.),("paperGammaRed",self.paper_gamma_red,0.5,2.),("paperGammaGreen",self.paper_gamma_green,0.5,2.),("paperGammaBlue",self.paper_gamma_blue,0.5,2.),("paperDeveloperExhaustion",self.paper_developer_exhaustion,0.,1.),("printDiffusionStrength",self.print_diffusion_strength,0.,2.),("printDiffusionSize",self.print_diffusion_size,0.25,2.),("printExposureEv",self.print_exposure_ev,-4.0,4.0),("preflashYellow",self.preflash_yellow,-30.0,30.0),("preflashMagenta",self.preflash_magenta,-30.0,30.0),("scanWhiteLevel",self.scan_white_level,0.5,1.0),("scanBlackLevel",self.scan_black_level,0.0,0.2),("highlightBoostEv",self.highlight_boost_ev,0.0,3.0),("highlightBoostRange",self.highlight_boost_range,0.0,1.0),("highlightProtectEv",self.highlight_protect_ev,0.0,4.0),("scanGlarePercent",self.scan_glare_percent,0.0,5.0),("scanGlareRoughness",self.scan_glare_roughness,0.0,1.0),("scanGlareBlur",self.scan_glare_blur,0.0,20.0),("grainClumpSizeUm",self.grain_clump_size_um,0.0,100.0),("grainClumpStrengthNm",self.grain_clump_strength_nm,0.0,1000.0),("filmFormatMm",self.film_format_mm,8.,120.),("lensBlurUm",self.lens_blur_um,0.,100.),("scanBlur",self.scan_blur,0.,3.),("scatterAmount",self.scatter_amount,0.,2.),("scatterSize",self.scatter_size,0.25,3.),("halationDecay",self.halation_decay,0.,1.),("dirAmount",self.dir_amount,0.,2.),("dirDiffusionUm",self.dir_diffusion_um,0.,100.),("dirSameLayer",self.dir_same_layer,0.,2.),("dirInterLayer",self.dir_inter_layer,0.,2.),("grainBlur",self.grain_blur,0.,2.),("grainDyeCloud",self.grain_dye_cloud,0.,3.),("grainUniformity",self.grain_uniformity,0.5,1.),("diffusionStrength",self.diffusion_strength,0.,2.),("diffusionSize",self.diffusion_size,0.25,2.),("printYellow",self.print_yellow,-30.,30.),("printMagenta",self.print_magenta,-30.,30.),("preflash",self.preflash,0.,0.2),("scanSharpenAmount",self.scan_sharpen_amount,0.,2.),("scanSharpenRadius",self.scan_sharpen_radius,0.2,3.),("filmExposureEv",self.film_exposure_ev,-4.,4.),("brightnessEv",self.brightness_ev,-2.,2.),("contrast",self.contrast,0.5,1.5),("warmth",self.warmth,-1.,1.),("saturation",self.saturation,0.,2.),("grainAmount",self.grain_amount,0.,2.),("grainSize",self.grain_size,0.25,3.),("halationAmount",self.halation_amount,0.,2.),("halationSize",self.halation_size,0.25,3.)] {
+        for (name,v,min,max) in [("filmDevelopmentTime",self.film_development_time,0.,12.),("paperDevelopmentTime",self.paper_development_time,0.,9.),("grainRedScale",self.grain_red_scale,0.25,3.),("grainGreenScale",self.grain_green_scale,0.25,3.),("grainBlueScale",self.grain_blue_scale,0.25,3.),("neutralCyan",self.neutral_cyan,0.,200.),("neutralMagenta",self.neutral_magenta,0.,200.),("neutralYellow",self.neutral_yellow,0.,200.),("filmGamma",self.film_gamma,0.5,2.),("paperGamma",self.paper_gamma,0.5,2.),("paperGammaFast",self.paper_gamma_fast,0.5,2.),("paperGammaSlow",self.paper_gamma_slow,0.5,2.),("paperGammaRed",self.paper_gamma_red,0.5,2.),("paperGammaGreen",self.paper_gamma_green,0.5,2.),("paperGammaBlue",self.paper_gamma_blue,0.5,2.),("paperDeveloperExhaustion",self.paper_developer_exhaustion,0.,1.),("printDiffusionStrength",self.print_diffusion_strength,0.,2.),("printDiffusionSize",self.print_diffusion_size,0.25,2.),("printExposureEv",self.print_exposure_ev,-4.0,4.0),("preflashYellow",self.preflash_yellow,-30.0,30.0),("preflashMagenta",self.preflash_magenta,-30.0,30.0),("scanWhiteLevel",self.scan_white_level,0.5,1.0),("scanBlackLevel",self.scan_black_level,0.0,0.2),("highlightBoostEv",self.highlight_boost_ev,0.0,3.0),("highlightBoostRange",self.highlight_boost_range,0.0,1.0),("highlightProtectEv",self.highlight_protect_ev,0.0,4.0),("scanGlarePercent",self.scan_glare_percent,0.0,5.0),("scanGlareRoughness",self.scan_glare_roughness,0.0,1.0),("scanGlareBlur",self.scan_glare_blur,0.0,20.0),("grainClumpSizeUm",self.grain_clump_size_um,0.0,100.0),("grainClumpStrengthNm",self.grain_clump_strength_nm,0.0,1000.0),("filmFormatMm",self.film_format_mm,8.,120.),("lensBlurUm",self.lens_blur_um,0.,100.),("scanBlur",self.scan_blur,0.,3.),("scatterAmount",self.scatter_amount,0.,2.),("scatterSize",self.scatter_size,0.25,3.),("halationDecay",self.halation_decay,0.,1.),("dirAmount",self.dir_amount,0.,2.),("dirDiffusionUm",self.dir_diffusion_um,0.,100.),("dirSameLayer",self.dir_same_layer,0.,2.),("dirInterLayer",self.dir_inter_layer,0.,2.),("grainBlur",self.grain_blur,0.,2.),("grainDyeCloud",self.grain_dye_cloud,0.,3.),("grainUniformity",self.grain_uniformity,0.5,1.),("diffusionStrength",self.diffusion_strength,0.,2.),("diffusionSize",self.diffusion_size,0.25,2.),("printYellow",self.print_yellow,-30.,30.),("printMagenta",self.print_magenta,-30.,30.),("preflash",self.preflash,0.,0.2),("scanSharpenAmount",self.scan_sharpen_amount,0.,2.),("scanSharpenRadius",self.scan_sharpen_radius,0.2,3.),("filmExposureEv",self.film_exposure_ev,-4.,4.),("brightnessEv",self.brightness_ev,-2.,2.),("contrast",self.contrast,0.5,1.5),("warmth",self.warmth,-1.,1.),("saturation",self.saturation,0.,2.),("grainAmount",self.grain_amount,0.,2.),("grainSize",self.grain_size,0.25,3.),("halationAmount",self.halation_amount,0.,2.),("halationSize",self.halation_size,0.25,3.)] {
             if !v.is_finite() || v<min || v>max {return Err(EngineError::new("INVALID_PARAMS",format!("{name} must be finite in [{min}, {max}]")));}
         } Ok(())
     }
@@ -156,6 +158,26 @@ impl MobileParams {
         p.film_render.halation.halation_n_bounces=self.halation_bounces;p.film_render.halation.halation_bounce_decay=self.halation_decay;p.film_render.halation.halation_renormalize=self.halation_normalize;
         p.film_render.halation.halation_amount=self.halation_amount;
         p.film_render.halation.halation_spatial_scale=self.halation_size;
+        p.film_render.development_time=if self.film_development_time>0. {Some(self.film_development_time)}else{None};
+        p.print_render.development_time=if self.paper_development_time>0. {Some(self.paper_development_time)}else{None};
+        // Added upstream BW pair entries exist for TH-KG3 only. Preserve manual
+        // preferences for other illuminants; never invent a calibration.
+        if (matches!(self.film_stock.as_str(),"kodak_doublex"|"kodak_trix") || self.paper_stock=="kodak_2302") && self.print_illuminant!="TH-KG3" {
+            p.settings.neutral_print_filters_from_database=false;
+        }
+        // BW is a single silver-density channel, not three independently coloured layers.
+        // Preserve saved colour controls but do not reinterpret them as silver controls.
+        if matches!(self.film_stock.as_str(),"kodak_doublex"|"kodak_trix") {
+            p.film_render.dir_couplers.amount=self.dir_amount;
+            p.film_render.grain.agx_particle_scale=RuntimeParams::default().film_render.grain.agx_particle_scale;
+        }
+        if self.paper_stock=="kodak_2302" {
+            // 2302's fitted model includes skew alphas not supported by the colour morph.
+            // Use the supplied measured density table with scalar gamma, never a false fit.
+            p.print_render.density_curves_morph.active=false;
+            p.print_render.density_curve_gamma=(self.paper_gamma*self.contrast) as f32;
+            p.enlarger.y_filter_shift=self.print_yellow as f32;
+        }
         p
     }
     pub(crate) fn runtime_for_film(&self,film:&Profile)->RuntimeParams {
@@ -165,7 +187,7 @@ impl MobileParams {
             let strength=match film.info.antihalation.as_str() {"strong"=>Some([0.015,0.005,0.]),"weak"=>Some([0.08,0.02,0.]),"no"=>Some([0.30,0.10,0.015]),_=>None};
             if let Some(strength)=strength {runtime.film_render.halation.halation_strength=strength;runtime.film_render.halation.halation_first_sigma_um=[if film.info.usage=="cine" {50.} else {65.};3];}
         }
-        if self.halation_color!="stock" {
+        if self.halation_color!="stock" && !film.is_bw() {
             let total: f64=runtime.film_render.halation.halation_strength.iter().sum();
             let weights=match self.halation_color.as_str(){"red"=>[1.,0.,0.],"amber"=>[0.8,0.2,0.],_=>[1./3.;3]};
             runtime.film_render.halation.halation_strength=weights.map(|v|v*total);
@@ -481,4 +503,76 @@ mod color_control_tests {
   p.neutral_filters_from_database=false;p.neutral_cyan=10.;p.neutral_magenta=40.;p.neutral_yellow=75.;let runtime=p.runtime();assert!(!runtime.settings.neutral_print_filters_from_database);assert_eq!([runtime.enlarger.c_filter_neutral,runtime.enlarger.m_filter_neutral,runtime.enlarger.y_filter_neutral],[10.,40.,75.]);let neutral=check(&p);assert!(neutral.iter().zip(&baseline).any(|(a,b)|(a-b).abs()>1e-4));
   p.grain_red_scale=2.5;p.grain_green_scale=0.5;p.grain_blue_scale=1.5;let scaled=p.runtime().film_render.grain.agx_particle_scale;let default=RuntimeParams::default().film_render.grain.agx_particle_scale;assert_eq!(scaled,[default[0]*2.5,default[1]*0.5,default[2]*1.5]);let grain=check(&p);assert!(grain.iter().zip(&neutral).any(|(a,b)|(a-b).abs()>1e-6));
  }
+}
+
+#[cfg(test)]
+mod bw_mobile_tests {
+    use super::*;
+    fn data()->PathBuf {Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data")}
+    #[test]
+    fn bw_mobile_controls_preserve_saved_values_but_use_supported_physics() {
+        let p=MobileParams::parse(r#"{"filmStock":"kodak_doublex","paperStock":"kodak_2302","filmDevelopmentTime":9,"paperDevelopmentTime":7,"saturation":2,"grainRedScale":3,"paperGammaRed":2,"paperGammaFast":2,"paperDeveloperExhaustion":1,"contrast":1.2,"paperGamma":1.25,"warmth":1,"printYellow":4,"halationColor":"red"}"#).unwrap();
+        let film=load_profile_by_name(&data(),&p.film_stock).unwrap();let r=p.runtime_for_film(&film);
+        assert_eq!(p.saturation,2.);assert_eq!(p.grain_red_scale,3.);assert_eq!(p.paper_developer_exhaustion,1.);
+        assert_eq!(r.film_render.development_time,Some(9.));assert_eq!(r.print_render.development_time,Some(7.));
+        assert_eq!(r.film_render.dir_couplers.amount,p.dir_amount);
+        assert!(r.settings.neutral_print_filters_from_database);assert!(!r.print_render.density_curves_morph.active);assert_eq!(r.print_render.density_curve_gamma,1.5);
+        assert_eq!(r.enlarger.y_filter_shift,4.);assert_eq!(r.film_render.halation.halation_strength,[0.015,0.005,0.]);
+        for invalid in [r#"{"filmDevelopmentTime":-1}"#,r#"{"paperDevelopmentTime":10}"#,r#"{"filmStock":"kodak_2302"}"#,r#"{"filmStock":"kodak_trix","outputRoute":"print"}"#] {assert!(MobileParams::parse(invalid).is_err());}
+    }
+    #[test]
+    fn bw_upstream_neutral_database_is_used_and_manual_preferences_remain_effective() {
+        let db=spektrafilm_core::neutral_filters::NeutralFilters::load(&data());
+        let id=create(data().to_str().unwrap()).unwrap();let engine=get(id).unwrap();
+        let input=vec![0.18f32;9*7*3];
+        for &paper in crate::profile_catalog::PAPERS {
+            let mut p=MobileParams::default();p.film_stock="kodak_doublex".into();p.paper_stock=paper.into();p.use_gpu=false;
+            p.grain_amount=0.;p.halation_amount=0.;p.scatter_amount=0.;p.dir_amount=0.;
+            let values=db.lookup(paper,"TH-KG3","kodak_doublex").expect("every print medium has upstream Double-X entry");
+            assert!(p.runtime().settings.neutral_print_filters_from_database);
+            let auto=render(&engine,0,&input,9,7,&p).unwrap();
+            p.neutral_filters_from_database=false;p.neutral_cyan=values[0];p.neutral_magenta=values[1];p.neutral_yellow=values[2];
+            assert!(!p.runtime().settings.neutral_print_filters_from_database);
+            let manual=render(&engine,0,&input,9,7,&p).unwrap();
+            for(a,b)in auto.pixels.iter().zip(manual.pixels){assert!(a.is_finite()&&b.is_finite());assert!((*a-b).abs()<2e-5,"{paper}: {a} vs {b}");}
+            p.neutral_filters_from_database=true;p.print_illuminant="D65".into();
+            assert!(!p.runtime().settings.neutral_print_filters_from_database);
+            assert_eq!(p.runtime().enlarger.m_filter_neutral,values[1] as f32);
+            assert!(db.lookup(paper,"D65","kodak_doublex").is_none());
+        }
+        let exact=db.lookup("fujifilm_crystal_archive_typeii","TH-KG3","kodak_doublex").unwrap();
+        assert_eq!(exact,[0.,94.3863254258598,115.91640660609802]);
+        destroy(id);
+    }
+    #[test]
+    fn bw_default_mobile_export_matches_whole_with_all_stock_effects() {
+        for (film,direct) in [("kodak_doublex",false),("kodak_doublex",true),("kodak_trix",true)] {
+            let mut p=MobileParams::default();p.film_stock=film.into();p.paper_stock="kodak_2302".into();p.use_gpu=false;
+            if direct {p.output_route="direct".into();}if film=="kodak_trix" {p.film_format_mm=8.;}
+            p.validate().unwrap();let film_profile=load_profile_by_name(&data(),film).unwrap();
+            let mut runtime=p.runtime_for_film(&film_profile);runtime.film_render.grain.coordinate_origin=Some([0,0]);
+            let (w,h)=(17,13);let input:Vec<f32>=(0..w*h*3).map(|i|0.02+(i%97)as f32/110.).collect();
+            let pipe=Pipeline::new_with_spectral(film_profile,load_profile_by_name(&data(),"kodak_2302").unwrap(),runtime.clone(),&data()).unwrap();
+            let expected=pipe.process(ImageBuf::from_data(w,h,input.iter().map(|&x|from_f64(x as f64)).collect()),&spektrafilm_gpu::cpu_backend::CpuBackend);
+            let root=std::env::temp_dir().join(format!("bw-default-mobile-{}-{film}-{direct}",std::process::id()));std::fs::create_dir(&root).unwrap();
+            let inp=root.join("input");let out=root.join("output");std::fs::write(&inp,input.iter().flat_map(|x|x.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+            let metrics=crate::streamed::export_file(&data(),film,"kodak_2302",runtime,&inp,&out,&root.join("scratch"),w,h,384,0.,||false,|_,_,_|{}).unwrap();
+            assert_eq!(metrics.pixel_count,(w*h)as u64);
+            let actual=std::fs::read(&out).unwrap();assert_eq!(actual.len(),input.len()*4);
+            for (a,b) in actual.chunks_exact(4).zip(expected.data) {let a=f32::from_le_bytes(a.try_into().unwrap());assert!(a.is_finite()&&b.is_finite());assert!((a as f64-b as f32 as f64).abs()<2e-5);}
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+    #[test]
+    fn bw_default_mobile_preview_and_measured_development_are_finite_and_effective() {
+        let id=create(data().to_str().unwrap()).unwrap();let engine=get(id).unwrap();
+        let input:Vec<f32>=(0..17*13*3).map(|i|0.02+(i%97)as f32/110.).collect();
+        for film in ["kodak_doublex","kodak_trix"] {
+            let mut p=MobileParams::default();p.film_stock=film.into();p.paper_stock="kodak_2302".into();p.use_gpu=false;
+            if film=="kodak_trix" {p.output_route="direct".into();p.film_format_mm=8.;}
+            let first=render(&engine,0,&input,17,13,&p).unwrap();assert!(first.pixels.iter().all(|x|x.is_finite()));
+            if film=="kodak_doublex" {p.film_development_time=12.;p.paper_development_time=9.;let changed=render(&engine,0,&input,17,13,&p).unwrap();assert!(first.pixels.iter().zip(&changed.pixels).any(|(a,b)|(a-b).abs()>1e-5));}
+        }
+        destroy(id);
+    }
 }

@@ -215,7 +215,9 @@ impl Pipeline {
 
 impl Pipeline {
     /// Create pipeline without spectral LUT (simplified path).
-    pub fn new(film: Profile, print: Profile, params: RuntimeParams) -> Self {
+    pub fn new(film: Profile, print: Profile, mut params: RuntimeParams) -> Self {
+        // Only the previously unsupported monochrome path changes here.
+        if film.is_bw() { apply_film_specific_params(&film, &mut params); }
         // B&W profiles must be resolved on every construction path —
         // an unresolved family would read development-time columns as
         // R/G/B channels.

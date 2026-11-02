@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="raw_batch_title">RAW処理バッチ</string>
+    <string name="raw_batch_auto">自動（推奨）</string>
+    <string name="raw_batch_small">小さいバッチ</string>
+    <string name="raw_batch_standard">標準バッチ</string>
+    <string name="raw_batch_large">大きいバッチ</string>
+    <string name="raw_batch_description">画質を変えずに、RAW読み込みの速度とメモリ使用量を調整します。次回の読み込みから適用されます。実際のバッチは形式とメモリに応じて制限され、一部の形式は調整できません。</string>
+    <string name="raw_batch_apply">適用</string>
+</resources>

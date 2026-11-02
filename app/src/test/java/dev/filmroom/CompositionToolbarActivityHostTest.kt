@@ -399,7 +399,7 @@ class CompositionToolbarActivityHostTest {
             val tools=field(a,"tools") as ViewGroup
             fun bind(p:EditorState){
                 mutable.value=EditorUiState(photo=PhotoSource(File(app.cacheDir,"holes-controls"),"fixture","image/jpeg",96,64,0),original=source,rendered=source,parameters=p,renderedParameters=p)
-                await{all(tools).filterIsInstance<Switch>().any{it.tag=="negative-white-holes-switch" && it.isChecked==p.negativeWhiteHoles && it.isEnabled==p.filmBorder}}
+                await{all(tools).filterIsInstance<Switch>().any{it.tag=="negative-white-holes-switch" && it.isChecked==p.negativeWhiteHoles && it.isEnabled==(p.filmBorder && p.negativeWhiteHolesSupported)}}
                 if(!tools.isShown){
                     all(root).filterIsInstance<Button>().single{it.text.toString().startsWith("调整") && it.text.toString()!="调整"}.performClick();idle()
                 }

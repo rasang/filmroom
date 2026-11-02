@@ -1,6 +1,6 @@
 # Profile, route and output-color extension
 
-This source extension bundles 20 shooting profiles (16 negative, including cinema and push variants, plus 4 reversal), 6 paper and 2 cinema-print profiles. There are no supplied monochrome profiles. `data/profile_catalog.json` is mirrored to Android assets; native `profile_catalog` supplies the same explicit ID allowlist.
+This source extension bundles 22 shooting profiles (17 negative, including cinema and push variants, plus 5 reversal), 6 paper and 3 cinema-print profiles. Beta 2 adds two monochrome shooting profiles and one monochrome print medium; see BW_PROFILE_SUPPORT.md. `data/profile_catalog.json` is mirrored to Android assets; native `profile_catalog` supplies the same explicit ID allowlist.
 
 ## Routes
 

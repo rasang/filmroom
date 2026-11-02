@@ -53,8 +53,8 @@ class Complete18BorderCorpusHostTest {
                 }
             }
             assertEquals(18,physical.size);assertEquals(20,profiles.size)
-            assertEquals(FilmProfile.entries.map{it.id}.toSet(),profiles.keys)
-            assertEquals(FilmStockArtwork.physicalStockByProfile,profiles)
+            assertEquals(FilmProfile.entries.map{it.id}.toSet()-setOf("kodak_doublex","kodak_trix"),profiles.keys)
+            assertEquals(FilmStockArtwork.physicalStockByProfile.filterKeys{it !in setOf("kodak_doublex","kodak_trix","kodak_2302")},profiles)
             val aliases=manifest.getJSONObject("profile_aliases")
             assertEquals("kodak_portra_800",aliases.getString("kodak_portra_800_push1"));assertEquals("kodak_portra_800",aliases.getString("kodak_portra_800_push2"))
             assertFalse(dev.filmroom.model.EditorState().filmBorder) // User-facing default stays OFF even in authorized candidate registry.

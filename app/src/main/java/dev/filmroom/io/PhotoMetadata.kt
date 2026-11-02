@@ -1,6 +1,7 @@
 package dev.filmroom.io
 
 import androidx.exifinterface.media.ExifInterface
+import dev.filmroom.diagnostics.*
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -10,6 +11,7 @@ import java.nio.ByteOrder
 import java.time.OffsetDateTime
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
@@ -17,8 +19,8 @@ import java.util.Locale
 
 /** A bounded, typed capture snapshot, never a copy of source offsets or opaque MakerNotes. */
 @ConsistentCopyVisibility
-data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null) {
-    fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).toString()
+data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false) {
+    fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).toString()
 
     /** A timestamp without its original offset is a local wall time, not an invented UTC instant. */
     fun captureTimeMillis():Long?=runCatching {
@@ -29,6 +31,28 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
         val sub=attributes["SubSecTimeOriginal"].orEmpty().take(3).padEnd(3,'0').toIntOrNull() ?: 0
         Math.addExact(base,sub.toLong())
     }.getOrNull()
+
+    /** Gallery indexing needs an epoch even for old cameras without OffsetTimeOriginal.
+     * Preserve the original wall clock using the import device's frozen local zone. This
+     * indexing assumption does not alter source facts or export time; the approved output
+     * compatibility writer may add an explicitly diagnosed inferred offset. */
+    fun mediaStoreCaptureTimeMillis():Long?=captureTimeMillis() ?: if(sourceOffsetPresent)null else indexTimeMillis ?: localIndexTime(attributes,indexTimeZone ?: ZoneId.systemDefault().id)
+
+    /** Approved compatibility interpretation, not a claim about the original camera zone. */
+    internal fun inferredOriginalOffset():String? {
+        if(sourceOffsetPresent || captureTimeMillis()!=null)return null
+        return runCatching {
+            val date=attributes["DateTimeOriginal"] ?: return null
+            val wall=LocalDateTime.parse(date,DATE).toInstant(ZoneOffset.UTC).toEpochMilli()
+            val sub=attributes["SubSecTimeOriginal"].orEmpty().take(3).padEnd(3,'0').toIntOrNull() ?: 0
+            val epoch=mediaStoreCaptureTimeMillis() ?: return null
+            val offset=Math.subtractExact(Math.addExact(wall,sub.toLong()),epoch)
+            require(offset%60000L==0L && offset in -64800000L..64800000L)
+            ZoneOffset.ofTotalSeconds((offset/1000).toInt()).id.let{if(it=="Z")"+00:00" else it}
+        }.getOrNull()
+    }
+    val diagnosticDateBasis:MetadataDateBasis? get()=if(inferredOriginalOffset()!=null)MetadataDateBasis.ASSUMED_IMPORT_ZONE else null
+
 
     fun exifBytes(width:Int,height:Int,colorSpace:String,exportMillis:Long):ByteArray {
         require(width>0 && height>0)
@@ -42,6 +66,10 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             if(attributes["OffsetTimeOriginal"]==null)add(1,0x9011,2,if(source.offset==ZoneOffset.UTC)"+00:00" else source.offset.id)
             if(attributes["SubSecTimeOriginal"]==null && source.nano!=0)add(1,0x9291,2,source.nano.toString().padStart(9,'0').trimEnd('0'))
         }
+        // User-approved gallery compatibility: retain the original wall clock, but supply
+        // a missing offset from the frozen import-zone interpretation. Snapshot attributes
+        // remain the source facts; diagnostics explicitly label this offset as assumed.
+        inferredOriginalOffset()?.let{add(1,0x9011,2,it)}
         val now=Instant.ofEpochMilli(exportMillis).atOffset(ZoneOffset.UTC)
         add(0,0x100,4,width.toString());add(0,0x101,4,height.toString());add(0,0x112,3,"1")
         add(0,0x132,2,DATE.format(now));add(1,0x9010,2,"+00:00");add(1,0x9290,2,String.format(Locale.ROOT,"%03d",now.nano/1_000_000))
@@ -85,47 +113,88 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             for((key,tag) in listOf("GPSLatitude" to 2,"GPSLongitude" to 4,"GPSTimeStamp" to 7,"GPSDestLatitude" to 20,"GPSDestLongitude" to 22))put(key,Spec(2,tag,5,3))
             put("GPSVersionID",Spec(2,0,1,4));put("GPSProcessingMethod",Spec(2,27,7));put("GPSAreaInformation",Spec(2,28,7))
         }
-        fun unavailable():PhotoMetadata=PhotoMetadata(emptyMap(),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_62634ce08e7b))
+        fun unavailable():PhotoMetadata=PhotoMetadata(emptyMap(),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_62634ce08e7b),issues=listOf(MetadataIssue(MetadataField.METADATA,MetadataIssueReason.READ_FAILED)))
         fun read(file:File):PhotoMetadata=try {
             val exif=ExifInterface(file.absolutePath)
             var unsupportedText=false
+            val textIssues=mutableListOf<MetadataIssue>()
             val fields=SCHEMA.keys.mapNotNull { key->
-                val value=if(key in setOf("UserComment","GPSProcessingMethod","GPSAreaInformation")) {
+                val value=if(key=="GPSVersionID") {
+                    // EXIF type BYTE[4], not an ASCII string (AndroidX exposes raw controls).
+                    exif.getAttributeBytes(key)?.let{bytes->if(bytes.size==4)bytes.joinToString(","){(it.toInt() and 255).toString()}else ""}
+                } else if(key in setOf("UserComment","GPSProcessingMethod","GPSAreaInformation")) {
                     val bytes=exif.getAttributeBytes(key)
-                    if(bytes==null)null else try {decodeComment(bytes)}catch(_:Exception){unsupportedText=true;null}
+                    // Several cameras reserve an entirely zero-filled, unspecified-encoding
+                    // comment. It contains no text to lose; do not report a metadata failure.
+                    if(bytes==null || (bytes.size in 8..8192 && bytes.all { it==0.toByte() }))null else try {decodeComment(bytes)}catch(_:Exception){unsupportedText=true;textIssues+=MetadataIssue(checkNotNull(MetadataField.fromId(key)),MetadataIssueReason.UNSUPPORTED_TEXT_ENCODING);null}
                 } else exif.getAttribute(key) ?: if(key=="PhotographicSensitivity")exif.getAttribute("ISOSpeedRatings")else null
                 value?.let{key to it}
             }.toMap()
-            val result=fromAttributes(fields).let { metadata ->
-                val hint=runCatching { XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP)) }.getOrNull()
-                if(hint!=null && validatedSourceInstant(fields,hint)!=null)metadata.copy(sourceCreateDate=hint) else metadata
+            val checked=fromAttributes(fields)
+            val sourceHint=runCatching { XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP)) }.getOrNull()?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
+            val safeFields=checked.attributes
+            val nikon=fields["Make"]?.trim()?.uppercase(Locale.ROOT) in setOf("NIKON", "NIKON CORPORATION")
+            val fallback=if(nikon && (safeFields["PhotographicSensitivity"]==null || safeFields["LensSpecification"]==null || (safeFields["OffsetTimeOriginal"]==null && sourceHint==null)))NikonCaptureFallback.read(file)else emptyMap()
+            val merged=fields.toMutableMap()
+            fallback.forEach{(key,value)->if(safeFields[key]==null && !(key=="OffsetTimeOriginal" && (sourceHint!=null || fields.containsKey("OffsetTimeOriginal"))))merged[key]=value}
+            val result=(if(fallback.isEmpty())checked else fromAttributes(merged)).let { metadata ->
+                if(sourceHint!=null)metadata.copy(sourceCreateDate=sourceHint) else metadata
             }
-            if(unsupportedText)result.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1))else result
+            val sourceResult=result.copy(sourceOffsetPresent=result.sourceOffsetPresent || exif.hasAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL))
+            if(unsupportedText)sourceResult.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1),issues=MetadataIssues.bounded(sourceResult.issues+textIssues))else sourceResult
         } catch(_:Exception){unavailable()} catch(_:OutOfMemoryError){unavailable()}
         fun fromJson(text:String):PhotoMetadata=try {
             require(text.toByteArray(Charsets.UTF_8).size<=BUDGET)
             val j=JSONObject(text);require(j.getInt("version")==1);val a=j.getJSONObject("attributes")
             val fields=a.keys().asSequence().associateWith { key->a.getString(key) }
             val hint=j.optString("sourceCreateDate").takeIf{it.isNotEmpty() && validatedSourceInstant(fields,it)!=null}
-            val result=fromAttributes(fields).copy(sourceCreateDate=hint)
+            val checked=fromAttributes(fields)
+            val persistedZone=j.optString("indexTimeZone").takeIf{it.length in 1..128 && runCatching{ZoneId.of(it)}.isSuccess}
+            val zone=persistedZone ?: checked.indexTimeZone
+            val derived=zone?.let{localIndexTime(fields,it)}
+            val stored=if(j.has("indexTimeMillis") && !j.isNull("indexTimeMillis"))runCatching{j.getLong("indexTimeMillis")}.getOrNull() else null
+            // Accept only an indexing instant consistent with the persisted original wall time.
+            val frozen=stored?.takeIf{derived!=null && it==derived} ?: derived
+            val result=checked.copy(sourceCreateDate=hint,indexTimeZone=zone,indexTimeMillis=frozen,sourceOffsetPresent=checked.sourceOffsetPresent || j.optBoolean("sourceOffsetPresent",false),issues=MetadataIssues.bounded(checked.issues+MetadataIssues.parse(j.optString("issues"))))
             result.copy(warning=result.warning ?: if(j.isNull("warning"))null else j.optString("warning").take(160).takeIf{it.isNotEmpty()})
         }catch(_:Exception){unavailable()}
         internal fun fromAttributes(input:Map<String,String>):PhotoMetadata {
-            val accepted=linkedMapOf<String,String>();var omitted=false
-            input.forEach { (key,raw)->val s=SCHEMA[key];if(s==null){omitted=true;return@forEach}
-                try {
-                    require(raw.length<=4096 && !raw.contains('\u0000'))
-                    val value=if(key=="GPSTimeStamp" && raw.contains(':'))raw.replace(':',',') else if(key=="GPSVersionID")raw.replace('.',',') else raw
-                    if(key.startsWith("DateTime"))LocalDateTime.parse(value,DATE)
-                    if(key.startsWith("OffsetTime")) {require(value.matches(Regex("[+-]\\d{2}:\\d{2}")));ZoneOffset.of(value)}
-                    if(key.startsWith("SubSec"))require(value.matches(Regex("[0-9]{1,12}")))
-                    encode(s,value);accepted[key]=value
-                    // JSON overhead can exceed binary size; reserve space for generated export fields.
-                    if(PhotoMetadata(accepted).toJson().toByteArray().size>BUDGET-4096 || PhotoMetadata(accepted).exifBytes(1,1,"sRGB",0).size>BUDGET-4096){accepted.remove(key);omitted=true}
-                }catch(_:Exception){accepted.remove(key);omitted=true}
+            val accepted=linkedMapOf<String,String>();val rejected=mutableListOf<MetadataIssue>()
+            fun reject(key:String,reason:MetadataIssueReason) {
+                val issue=MetadataIssue(MetadataField.fromId(key) ?: MetadataField.UNKNOWN,reason)
+                if(issue !in rejected) {
+                    if(rejected.size<MetadataIssues.MAX_ITEMS)rejected+=issue
+                    else rejected[MetadataIssues.MAX_ITEMS-1]=MetadataIssue(MetadataField.METADATA,MetadataIssueReason.ISSUE_LIMIT)
+                }
             }
-            return PhotoMetadata(accepted.toMap(),if(omitted)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_97154723b761) else null)
+            input.forEach { (key,raw)->val spec=SCHEMA[key]
+                if(spec==null){reject(key,MetadataIssueReason.UNKNOWN_FIELD);return@forEach}
+                if(raw.length>4096){reject(key,MetadataIssueReason.FIELD_TOO_LONG);return@forEach}
+                var reason=MetadataIssueReason.INVALID_TEXT
+                try {
+                    require(!raw.contains('\u0000'))
+                    val value=if(key=="GPSTimeStamp" && raw.contains(':'))raw.replace(':',',') else if(key=="GPSVersionID")raw.replace('.',',') else raw
+                    if(key.startsWith("DateTime")){reason=MetadataIssueReason.INVALID_DATE;LocalDateTime.parse(value,DATE)}
+                    if(key.startsWith("OffsetTime")){reason=MetadataIssueReason.INVALID_OFFSET;require(value.matches(Regex("[+-]\\d{2}:\\d{2}")));ZoneOffset.of(value)}
+                    if(key.startsWith("SubSec")){reason=MetadataIssueReason.INVALID_SUBSECONDS;require(value.matches(Regex("[0-9]{1,12}")))}
+                    reason=if(spec.type in listOf(1,3,4,5,10))MetadataIssueReason.INVALID_NUMERIC else MetadataIssueReason.INVALID_TEXT
+                    encode(spec,value);accepted[key]=value
+                    // Keep the original 48 KiB budget and reserve generated fields/diagnostic codes.
+                    if(PhotoMetadata(accepted).toJson().toByteArray().size>BUDGET-4096 || PhotoMetadata(accepted).exifBytes(1,1,"sRGB",0).size>BUDGET-4096){accepted.remove(key);reject(key,MetadataIssueReason.SNAPSHOT_BUDGET)}
+                }catch(_:Exception){accepted.remove(key);reject(key,reason)}
+            }
+            val zone=if(accepted.containsKey("DateTimeOriginal") && !accepted.containsKey("OffsetTimeOriginal"))ZoneId.systemDefault().id else null
+            return PhotoMetadata(accepted.toMap(),if(rejected.isNotEmpty())dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_97154723b761) else null,issues=rejected.toList(),indexTimeZone=zone,indexTimeMillis=zone?.let{localIndexTime(accepted,it)},sourceOffsetPresent=input.containsKey("OffsetTimeOriginal"))
         }
+
+        private fun localIndexTime(fields:Map<String,String>,zone:String):Long?=runCatching {
+            val date=fields["DateTimeOriginal"] ?: return null
+            val local=LocalDateTime.parse(date,DATE)
+            val sub=fields["SubSecTimeOriginal"].orEmpty().take(3).padEnd(3,'0').toIntOrNull() ?: 0
+            // java.time resolves gaps forward and overlaps to the earlier valid offset.
+            Math.addExact(local.atZone(ZoneId.of(zone)).toInstant().toEpochMilli(),sub.toLong())
+        }.getOrNull()
+
         /** XMP supplies an explicit source offset; never infer a zone from the exporting phone. */
         private fun validatedSourceInstant(fields:Map<String,String>,iso:String):Long?=runCatching {
             require(iso.length<=64)

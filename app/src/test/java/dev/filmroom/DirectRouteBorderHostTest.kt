@@ -33,7 +33,7 @@ class DirectRouteBorderHostTest {
     @Test fun allTwentyProfilesSelectRouteAndMatteWithoutChangingPrintContracts() {
         initialize();assertEquals(28,DirectBorderDefinitions.definitions.size)
         assertEquals(14,DirectBorderDefinitions.definitions.map{it.spec.stock}.distinct().size)
-        for((profile,kind) in FrameProfileCatalog.kinds)for(white in listOf(false,true))for((w,h)in listOf(144 to 96,96 to 144)) {
+        for((profile,kind) in FrameProfileCatalog.kinds.filterKeys{it in CandidateBorderDefinitions.profiles})for(white in listOf(false,true))for((w,h)in listOf(144 to 96,96 to 144)) {
             val route=if(kind==FrameAppearanceContext.FilmKind.REVERSAL)"direct"else "print"
             val positive=BorderCatalog.snapshot(profile,w,h,w,h,CompositionTransform(),white,route)
             assertEquals(CandidateBorderDefinitions.selectedDefinition(profile,white).spec.version,positive.assetVersion)

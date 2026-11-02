@@ -1,6 +1,9 @@
 package dev.filmroom.i18n
 internal object ResourceKeys {
     val names:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.camera_raw_profile_unsupported to "camera_raw_profile_unsupported",
+        dev.filmroom.R.string.camera_raw_variant_unsupported to "camera_raw_variant_unsupported",
+        dev.filmroom.R.string.camera_raw_basic_development to "camera_raw_basic_development",
         dev.filmroom.R.string.text_3d05fc7cf7e4 to "text_3d05fc7cf7e4",
         dev.filmroom.R.string.text_5ec95121dc94 to "text_5ec95121dc94",
         dev.filmroom.R.string.text_b3622bcacaaf to "text_b3622bcacaaf",
@@ -725,6 +728,9 @@ internal object ResourceKeys {
     )
     val ids:Map<String,Int> = names.entries.associate { it.value to it.key }
     val arities:Map<String,Int> = mapOf(
+        "camera_raw_profile_unsupported" to 0,
+        "camera_raw_variant_unsupported" to 0,
+        "camera_raw_basic_development" to 0,
         "text_3d05fc7cf7e4" to 0,
         "text_5ec95121dc94" to 1,
         "text_b3622bcacaaf" to 0,

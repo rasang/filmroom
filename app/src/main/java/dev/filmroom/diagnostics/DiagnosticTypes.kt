@@ -1,11 +1,13 @@
 package dev.filmroom.diagnostics
 
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
-enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
+enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
 enum class Stage { START, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
 enum class ErrorCode { ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
 enum class FilmProfile(val id: String) {
+    KODAK_DOUBLEX_5222("kodak_doublex"),
+    KODAK_TRIX_7266("kodak_trix"),
     C200("fujifilm_c200"),
     FUJIFILM_PRO_400H("fujifilm_pro_400h"),
     FUJIFILM_PROVIA_100F("fujifilm_provia_100f"),
@@ -29,6 +31,7 @@ enum class FilmProfile(val id: String) {
     companion object { fun fromId(id: String): FilmProfile? = entries.firstOrNull { it.id == id } }
 }
 enum class PaperProfile(val id: String) {
+    KODAK_2302("kodak_2302"),
     CRYSTAL_ARCHIVE_II("fujifilm_crystal_archive_typeii"),
     KODAK_2383("kodak_2383"),
     KODAK_2393("kodak_2393"),
@@ -134,6 +137,8 @@ data class SafeInfo(
     val paperGammaGreen: Double? = null,
     val paperGammaBlue: Double? = null,
     val paperDeveloperExhaustion: Double? = null,
+    val filmDevelopmentTime: Double? = null,
+    val paperDevelopmentTime: Double? = null,
     val grainRedScale: Double? = null,
     val grainGreenScale: Double? = null,
     val grainBlueScale: Double? = null,
@@ -165,6 +170,19 @@ data class SafeInfo(
     val codecCode: CodecErrorCode? = null,
     val codecStage: CodecStage? = null,
     val rawTechnical: RawTechnicalInfo? = null,
+    val metadataIssues: List<MetadataIssue> = emptyList(),
+    val metadataPhase: MetadataIssuePhase? = null,
+    val captureTimeBasis: MetadataDateBasis? = null,
+    val previewSourceToken: Long? = null,
+    val previewGeneration: Long? = null,
+    val previewOriginGeneration: Long? = null,
+    val previewScienceFingerprint: Long? = null,
+    val previewKind: PreviewFrameKind? = null,
+    val previewOriginKind: PreviewFrameKind? = null,
+    val previewDisposition: PreviewDisposition? = null,
+    val previewNativeCompleted: Boolean? = null,
+    val previewSuppressed: Long? = null,
+    val previewObservedElapsedMs: Long? = null,
 ) {
     internal fun fields(): Map<String, String> = typedFields().mapValues { it.value.toString() }
 
@@ -174,6 +192,16 @@ data class SafeInfo(
         fun decimal(key: String, value: Double?, min: Double, max: Double) {
             if (value != null && value.isFinite() && value in min..max) put(key, value)
         }
+        integer("previewSourceToken",previewSourceToken,Long.MAX_VALUE,1)
+        integer("previewGeneration",previewGeneration,Long.MAX_VALUE,1)
+        integer("previewOriginGeneration",previewOriginGeneration,Long.MAX_VALUE,1)
+        integer("previewScienceFingerprint",previewScienceFingerprint,Long.MAX_VALUE)
+        integer("previewSuppressed",previewSuppressed,1_000_000)
+        integer("previewObservedElapsedMs",previewObservedElapsedMs,Long.MAX_VALUE)
+        previewKind?.let{put("previewKind",it.name)}
+        previewOriginKind?.let{put("previewOriginKind",it.name)}
+        previewDisposition?.let{put("previewDisposition",it.name)}
+        previewNativeCompleted?.let{put("previewNativeCompleted",it)}
         integer("width", width?.toLong(), 30_000, 1); integer("height", height?.toLong(), 30_000, 1)
         integer("durationMs", durationMs, 7L * 24 * 60 * 60 * 1000)
         integer("javaUsedBytes", javaUsedBytes, 1L shl 40); integer("javaMaxBytes", javaMaxBytes, 1L shl 40)
@@ -249,6 +277,8 @@ data class SafeInfo(
         decimal("paperGammaGreen",paperGammaGreen,0.5,2.0)
         decimal("paperGammaBlue",paperGammaBlue,0.5,2.0)
         decimal("paperDeveloperExhaustion",paperDeveloperExhaustion,0.0,1.0)
+        decimal("filmDevelopmentTime",filmDevelopmentTime,0.0,12.0)
+        decimal("paperDevelopmentTime",paperDevelopmentTime,0.0,9.0)
         decimal("grainRedScale",grainRedScale,0.25,3.0)
         decimal("grainGreenScale",grainGreenScale,0.25,3.0)
         decimal("grainBlueScale",grainBlueScale,0.25,3.0)
@@ -280,6 +310,8 @@ data class SafeInfo(
         codecCode?.let { put("codecCode", it.name) }
         codecStage?.let { put("codecStage", it.id) }
         rawTechnical?.let { putAll(it.fields()) }
+        captureTimeBasis?.let{put("captureTimeBasis",it.name)}
+        MetadataIssues.encode(metadataIssues).takeIf{it.isNotEmpty()}?.let{put("metadataIssues",it);metadataPhase?.let{phase->put("metadataPhase",phase.name)}}
     }
 
     internal companion object {
@@ -290,6 +322,19 @@ data class SafeInfo(
             codecCode = fields["codecCode"]?.let(CodecErrorCode::fromId),
             codecStage = fields["codecStage"]?.let(CodecStage::fromId),
             rawTechnical = RawTechnicalInfo.fromFields(fields),
+            metadataIssues = MetadataIssues.parse(fields["metadataIssues"].orEmpty()),
+            metadataPhase = MetadataIssuePhase.entries.firstOrNull{it.name==fields["metadataPhase"]},
+            captureTimeBasis = MetadataDateBasis.entries.firstOrNull{it.name==fields["captureTimeBasis"]},
+            previewSourceToken=fields["previewSourceToken"]?.toLongOrNull(),
+            previewGeneration=fields["previewGeneration"]?.toLongOrNull(),
+            previewOriginGeneration=fields["previewOriginGeneration"]?.toLongOrNull(),
+            previewScienceFingerprint=fields["previewScienceFingerprint"]?.toLongOrNull(),
+            previewSuppressed=fields["previewSuppressed"]?.toLongOrNull(),
+            previewObservedElapsedMs=fields["previewObservedElapsedMs"]?.toLongOrNull(),
+            previewKind=fields["previewKind"]?.let{v->PreviewFrameKind.entries.firstOrNull{it.name==v}},
+            previewOriginKind=fields["previewOriginKind"]?.let{v->PreviewFrameKind.entries.firstOrNull{it.name==v}},
+            previewDisposition=fields["previewDisposition"]?.let{v->PreviewDisposition.entries.firstOrNull{it.name==v}},
+            previewNativeCompleted=fields["previewNativeCompleted"]?.toBooleanStrictOrNull(),
             width = fields["width"]?.toIntOrNull(), height = fields["height"]?.toIntOrNull(),
             durationMs = fields["durationMs"]?.toLongOrNull(), javaUsedBytes = fields["javaUsedBytes"]?.toLongOrNull(),
             javaMaxBytes = fields["javaMaxBytes"]?.toLongOrNull(), nativeAllocatedBytes = fields["nativeAllocatedBytes"]?.toLongOrNull(),
@@ -363,6 +408,8 @@ data class SafeInfo(
             paperGammaGreen=fields["paperGammaGreen"]?.toDoubleOrNull(),
             paperGammaBlue=fields["paperGammaBlue"]?.toDoubleOrNull(),
             paperDeveloperExhaustion=fields["paperDeveloperExhaustion"]?.toDoubleOrNull(),
+            filmDevelopmentTime=fields["filmDevelopmentTime"]?.toDoubleOrNull(),
+            paperDevelopmentTime=fields["paperDevelopmentTime"]?.toDoubleOrNull(),
             grainRedScale=fields["grainRedScale"]?.toDoubleOrNull(),
             grainGreenScale=fields["grainGreenScale"]?.toDoubleOrNull(),
             grainBlueScale=fields["grainBlueScale"]?.toDoubleOrNull(),

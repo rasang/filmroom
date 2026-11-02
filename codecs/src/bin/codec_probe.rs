@@ -1,12 +1,14 @@
-use film_codecs::{
-    develop::{Budget, admit, decode},
-    dng::Dng,
-};
-use std::{fs::File, path::Path, sync::atomic::AtomicBool};
+use film_codecs::{develop::Budget, raw::decode};
+use std::{path::Path, sync::atomic::AtomicBool};
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let result = if a.len() >= 3 && a[1] == "probe" {
-        File::open(&a[2]).map_err(|e|film_codecs::error::io_error(e,"probe")).and_then(|mut f|Dng::read(&mut f)).and_then(|d|Ok(serde_json::json!({"ok":true,"probe":d.probe(),"admission":admit(&d,&Budget::default())?})))
+        film_codecs::raw::probe(
+            Path::new(&a[2]),
+            &Budget::default(),
+            a.get(3).is_some_and(|v| v == "metadata"),
+        )
+        .map(|(p, b)| serde_json::json!({"ok":true,"probe":p,"admission":b}))
     } else if a.len() >= 4 && a[1] == "decode" {
         let mut b = Budget::default();
         if a.len() > 4 {

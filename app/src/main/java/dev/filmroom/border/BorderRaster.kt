@@ -17,13 +17,16 @@ interface BorderRaster {
     val residentBytes: Long
     val featherTotalAt3072: Double
     val supportsFixed135:Boolean get()=true
+    val supportsAuthoredLayout:Boolean get()=false
     /** Fully opaque border RGB in sRGB encoding, in [0,1]. Only called near/outside aperture. */
     fun validate(snapshot:BorderSnapshot) {
         require(residentBytes in 1..BorderCompositor.MAX_ATLAS_BYTES)
         val expected=if(snapshot.geometryVersion==1)BorderSnapshot.create(stock,version,snapshot.photoWidth,snapshot.photoHeight,railRatio,endRatio,featherTotalAt3072)
-            else {require(supportsFixed135);BorderSnapshot.fixed135(stock,version,snapshot.sourceWidth,snapshot.sourceHeight,snapshot.canonicalWidth,snapshot.canonicalHeight,snapshot.composition,featherTotalAt3072)}
+            else {require(if(snapshot.geometryVersion==4)supportsAuthoredLayout else supportsFixed135);BorderSnapshot.authored(stock,version,snapshot.sourceWidth,snapshot.sourceHeight,snapshot.canonicalWidth,snapshot.canonicalHeight,snapshot.composition,featherTotalAt3072)}
         require(snapshot==expected.copy(appearance=snapshot.appearance)) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5c82a6b4a003) }
     }
+    /** null preserves historical rectangular feather math; v4 supplies reviewed image-window alpha. */
+    fun photoCoverage(snapshot:BorderSnapshot,x:Double,y:Double):Double?=null
     fun sample(snapshot: BorderSnapshot, x: Double, y: Double, rgb: FloatArray)
 }
 
@@ -32,7 +35,7 @@ interface BorderProvider {
     fun snapshot(stock:String,width:Int,height:Int):BorderSnapshot
     fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform):BorderSnapshot {
         val legacy=snapshot(stock,width,height)
-        return BorderSnapshot.fixed135(stock,legacy.assetVersion,width,height,canonicalWidth,canonicalHeight,composition,legacy.featherTotalAt3072).also{verifySnapshot(it)}
+        return BorderSnapshot.authored(stock,legacy.assetVersion,width,height,canonicalWidth,canonicalHeight,composition,legacy.featherTotalAt3072).also{verifySnapshot(it)}
     }
     /** Presentation preference; providers without selectable mattes retain their authored fixture. */
     fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean):BorderSnapshot =
@@ -58,7 +61,7 @@ object BorderCatalog:BorderProvider {
         source=Source(assets,memory)
     }
     private val registry by lazy {
-        LazyBorderRegistry(CandidateBorderDefinitions.definitions+CandidateBorderDefinitions.legacyDefinitions+DirectBorderDefinitions.definitions,CandidateBorderDefinitions.profiles){definition,checkActive->
+        LazyBorderRegistry(CandidateBorderDefinitions.definitions+CandidateBorderDefinitions.legacyDefinitions+DirectBorderDefinitions.definitions+BwBorderDefinitions.definitions+BwBorderDefinitions.legacyDefinitions,CandidateBorderDefinitions.profiles+BwBorderDefinitions.profiles){definition,checkActive->
             check(android.os.Looper.myLooper()!=android.os.Looper.getMainLooper()){"Border atlas decoding must run off Main"}
             val input=checkNotNull(source){"Border asset source not initialized"}
             BorderMemoryAdmission.withBudget(BorderMemoryAdmission.DECODE_ESTIMATE_BYTES,input.memory){
@@ -67,6 +70,17 @@ object BorderCatalog:BorderProvider {
             }
         }
     }
+    /** New editor/export captures always show the capture film. Print media affect science only. */
+    @Suppress("UNUSED_PARAMETER")
+    fun frameStock(film:String,paper:String,route:String)=film
+    /** Strict compatibility for already-frozen Beta2/3 2302 print-medium frames only.
+     * This is not a selection path for new work; old immutable queues must not be reinterpreted. */
+    internal fun isFrozen2302Frame(snapshot:BorderSnapshot,film:String,paper:String,route:String)=
+        route=="print" && paper=="kodak_2302" && FrameProfileCatalog.kinds[film]==FrameAppearanceContext.FilmKind.NEGATIVE &&
+            snapshot.stock=="kodak_2302" && snapshot.geometryVersion==4 &&
+            snapshot.assetVersion=="bw-v4-print_2302-white-d84db54b27" &&
+            snapshot.appearance?.filmKind==FrameAppearanceContext.FilmKind.PRINT && snapshot.appearance?.outputRoute=="print"
+    fun frameAspect(stock:String,portrait:Boolean):Double {val a=BwFrameGeometry.forStock(stock)?.aspect ?: 1.5;return if(portrait)1/a else a}
     fun available(stock:String)=PROTOTYPE_ENABLED && registry.available(stock)
     fun clearCache(){registry.clearCache()}
     override fun verifySnapshot(snapshot:BorderSnapshot){enabled();registry.verifySnapshot(snapshot)}
@@ -79,16 +93,16 @@ object BorderCatalog:BorderProvider {
     }
     override fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean):BorderSnapshot {
         enabled()
-        val spec=CandidateBorderDefinitions.selectedDefinition(stock,negativeWhiteHoles).spec
-        return BorderSnapshot.fixed135(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072).also{registry.verifySnapshot(it)}
+        val spec=if(BwFrameGeometry.forStock(stock)!=null)BwBorderDefinitions.selected(stock,FrameAppearanceContext.forProfile(stock,if(stock=="kodak_trix")"direct" else "print",negativeWhiteHoles)).spec else CandidateBorderDefinitions.selectedDefinition(stock,negativeWhiteHoles).spec
+        return BorderSnapshot.authored(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072).also{registry.verifySnapshot(it)}
     }
     override fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String):BorderSnapshot {
         enabled()
         val context=FrameAppearanceContext.forProfile(stock,outputRoute,negativeWhiteHoles)
-        val definition=if(context.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION)DirectBorderDefinitions.selectedDefinition(stock,context)
+        val definition=if(BwFrameGeometry.forStock(stock)!=null)BwBorderDefinitions.selected(stock,context) else if(context.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION)DirectBorderDefinitions.selectedDefinition(stock,context)
             else CandidateBorderDefinitions.selectedDefinition(stock,negativeWhiteHoles)
         val spec=definition.spec
-        return BorderSnapshot.fixed135(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072)
+        return BorderSnapshot.authored(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072)
             .copy(appearance=context).also{registry.verifySnapshot(it)}
     }
     override fun resolve(snapshot:BorderSnapshot)=resolve(snapshot,{})

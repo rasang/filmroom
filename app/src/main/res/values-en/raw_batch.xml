@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="raw_batch_title">RAW batch size</string>
+    <string name="raw_batch_auto">Automatic (recommended)</string>
+    <string name="raw_batch_small">Small batches</string>
+    <string name="raw_batch_standard">Standard batches</string>
+    <string name="raw_batch_large">Large batches</string>
+    <string name="raw_batch_description">Adjust RAW import speed and memory use without changing image quality. Applies to future imports. Actual batches depend on format and memory; some formats cannot be adjusted.</string>
+    <string name="raw_batch_apply">Apply</string>
+</resources>

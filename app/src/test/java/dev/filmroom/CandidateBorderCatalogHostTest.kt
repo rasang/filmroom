@@ -29,7 +29,7 @@ class CandidateBorderCatalogHostTest {
         BorderCatalog.initialize(app.assets){dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
         val profiles=JSONObject(app.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         val films=(0 until profiles.length()).map{profiles.getJSONObject(it)}.filter{it.getString("kind") in setOf("negative","reversal")}.map{it.getString("id")}.toSet()
-        assertEquals(20,films.size);assertEquals(films,CandidateBorderDefinitions.profiles.keys)
+        assertEquals(22,films.size);assertEquals(films,CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix"))
         assertEquals(18,CandidateBorderDefinitions.definitions.size)
         for(stock in films){assertTrue(BorderCatalog.available(stock));assertEquals(stock,BorderCatalog.snapshot(stock,96,64).stock)}
         assertFalse(BorderCatalog.available("kodak_2383"));assertFalse(BorderCatalog.available("missing"))
@@ -86,8 +86,8 @@ class CandidateBorderCatalogHostTest {
         }
         assertEquals(73,assets.length()+oldAssets.length()+direct.length())
         assertEquals(38,allRows.size)
-        assertEquals(allRows.keys.map{it.removePrefix("fixed135/")}.toSet(),filenames.filter{it.endsWith(".webp")}.toSet())
-        assertEquals(38,filenames.count{it.endsWith(".webp")});assertEquals(0,filenames.count{it.endsWith(".png")})
+        assertEquals((allRows.keys+(BwBorderDefinitions.definitions+BwBorderDefinitions.legacyDefinitions).map{it.assetPath}).map{it.removePrefix("fixed135/")}.toSet(),filenames.filter{it.endsWith(".webp")}.toSet())
+        assertEquals(43,filenames.count{it.endsWith(".webp")});assertEquals(0,filenames.count{it.endsWith(".png")})
         assertTrue(filenames.containsAll(listOf("runtime-manifest.json","provenance.json","PROVENANCE-AND-NOTICES.md")))
         val notices=app.assets.open("fixed135/PROVENANCE-AND-NOTICES.md").bufferedReader().use{it.readText()}
         assertTrue(notices.contains("LoMit"));assertTrue(notices.contains("creativecommons.org/licenses/by/4.0"))

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="raw_batch_title">RAW 처리 배치</string>
+    <string name="raw_batch_auto">자동(권장)</string>
+    <string name="raw_batch_small">작은 배치</string>
+    <string name="raw_batch_standard">표준 배치</string>
+    <string name="raw_batch_large">큰 배치</string>
+    <string name="raw_batch_description">화질을 변경하지 않고 RAW 가져오기 속도와 메모리 사용량을 조정합니다. 다음 가져오기부터 적용됩니다. 실제 배치는 형식과 메모리에 따라 제한되며 일부 형식은 조정할 수 없습니다.</string>
+    <string name="raw_batch_apply">적용</string>
+</resources>

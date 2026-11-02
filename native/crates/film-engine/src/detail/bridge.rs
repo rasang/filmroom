@@ -25,6 +25,8 @@ pub enum BridgeError {
     Cancelled,
     Unsupported,
     Budget,
+    StorageBudget,
+    MemoryPlan,
     InvalidRequest,
     Processing,
 }
@@ -38,6 +40,8 @@ impl BridgeError {
             Self::Cancelled => "CANCELLED",
             Self::Unsupported => "UNSUPPORTED",
             Self::Budget => "BUDGET_EXCEEDED",
+            Self::StorageBudget => "STORAGE_BUDGET",
+            Self::MemoryPlan => "WORKING_MEMORY_BUDGET",
             Self::InvalidRequest => "INVALID_REQUEST",
             Self::Processing => "PROCESSING_FAILED",
         }
@@ -51,6 +55,8 @@ impl BridgeError {
             Self::Cancelled => "Detail operation was cancelled",
             Self::Unsupported => "Requested detail mode requires an unsupported global stage",
             Self::Budget => "Detail resource budget is insufficient",
+            Self::StorageBudget => "Detail temporary storage budget is insufficient",
+            Self::MemoryPlan => "Detail working-memory plan exceeds budget",
             Self::InvalidRequest => "Detail request is invalid",
             Self::Processing => "Detail processing failed",
         }
@@ -68,6 +74,8 @@ impl From<DetailError> for BridgeError {
             DetailError::Cancelled => Self::Cancelled,
             DetailError::InvalidGeometry(_) => Self::InvalidRequest,
             DetailError::BudgetExceeded { .. } => Self::Budget,
+            DetailError::StorageBudgetExceeded { .. } => Self::StorageBudget,
+            DetailError::MemoryPlanExceeded { .. } => Self::MemoryPlan,
             DetailError::Unsupported(_) => Self::Unsupported,
             DetailError::Processing(_) => Self::Processing,
         }
@@ -553,6 +561,31 @@ pub fn tile(session: u64, operation: u64, x: usize, y: usize) -> Result<TileResu
     lease.check_publish()?;
     Ok(TileResult { tile, lease })
 }
+pub struct RegionResult {
+    pub identity:DetailIdentity,
+    pub backend:super::DetailBackendInfo,
+    pub core_rect:super::Rect,
+    pub sample_rect:super::Rect,
+    pub lease:OperationLease,
+}
+impl RegionResult {pub fn check_publish(&self)->Result<()> {self.lease.check_publish()}}
+pub fn region_into(session:u64,operation:u64,core:super::Rect,output:&mut[f32])->Result<RegionResult> {
+    let lease=acquire(session,operation)?;
+    let context=lease.session.context.lock().map_err(|_|BridgeError::Processing)?.clone().ok_or(BridgeError::InvalidRequest)?;
+    context.render_region_into(core,output,&lease.operation.token).map_err(BridgeError::from)?;
+    lease.check_publish()?;
+    let sample=core.expand(1,context.identity().width as usize,context.identity().height as usize);
+    Ok(RegionResult{identity:context.identity().clone(),backend:context.backend_info(),core_rect:core,sample_rect:sample,lease})
+}
+pub fn region_layout(session:u64, core:super::Rect) -> Result<(super::Rect,super::Rect)> {
+    let s=get(session)?;
+    let context=s.context.lock().map_err(|_|BridgeError::Processing)?;
+    let context=context.as_ref().ok_or(BridgeError::InvalidRequest)?;
+    if !context.resource_plan().region_output {return Err(BridgeError::Unsupported);}
+    let (w,h)=(context.identity().width as usize,context.identity().height as usize);
+    if !core.valid(w,h) { return Err(BridgeError::InvalidRequest); }
+    Ok((core,core.expand(1,w,h)))
+}
 /// Cheap tile shape query; does not begin/allocate an operation or output plane.
 pub fn tile_layout(session: u64, x: usize, y: usize) -> Result<(super::Rect, super::Rect)> {
     let s = get(session)?;
@@ -592,6 +625,7 @@ mod tests {
         let mut p = crate::mobile::MobileParams::default();
         p.use_gpu = false;
         DetailConfig {
+            region_output: true,
             width: 16,
             height: 12,
             params: p,

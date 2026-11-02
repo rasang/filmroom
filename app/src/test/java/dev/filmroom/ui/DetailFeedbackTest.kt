@@ -32,4 +32,12 @@ class DetailFeedbackTest {
         assertNotNull(feedback.takeFailureToast(status,"photo",true,true))
         assertNull(feedback.takeFailureToast(DetailStatus(DetailPhase.Ready),"new",true,true))
     }
+    @Test fun recoverableResourceFailuresStaySilent(){
+        val feedback=DetailFeedback()
+        for(reason in listOf(DetailFailure.MemoryAdmission,DetailFailure.MemoryPressure))repeat(20){
+            assertNull(feedback.takeFailureToast(DetailStatus(DetailPhase.Fallback,failure=reason),"photo",true,true))
+        }
+        assertTrue(feedback.savedKeys().isEmpty())
+    }
+
 }

@@ -196,6 +196,27 @@
       "kind": "negative",
       "defaultPaper": "kodak_2383",
       "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_doublex",
+      "name": "Kodak Double-X 5222",
+      "kind": "negative",
+      "defaultPaper": "kodak_2302",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_trix",
+      "name": "Kodak Tri-X 7266 \u00b7 Super 8",
+      "kind": "reversal",
+      "defaultPaper": "kodak_2302",
+      "defaultRoute": "direct"
+    },
+    {
+      "id": "kodak_2302",
+      "name": "Kodak B&W Print Film 2302",
+      "kind": "cine_print",
+      "defaultPaper": "kodak_2302",
+      "defaultRoute": "print"
     }
   ]
 }

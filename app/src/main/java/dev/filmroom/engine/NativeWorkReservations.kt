@@ -11,10 +11,16 @@ import kotlinx.coroutines.withContext
 /** Admission estimates, not allocator caps or a guarantee against Android killing the process. */
 data class NativeMemorySnapshot(val availableBytes:Long,val thresholdBytes:Long,val lowMemory:Boolean)
 class NativeWorkUnavailable:Exception("Native working-memory admission unavailable")
+/** Full peak + safety are prepaid; a run borrows only one worker slot. */
+interface RetainedNativeWork:AutoCloseable {
+    suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T
+}
 
 /** Shared by engine and codec callers. Only heavyweight JNI work holds a lease; planning never does. */
 object NativeWorkReservations {
     private val limiter=NativeWorkLimiter()
+    /** Read-only retry gate; does not raise capacity or alter reservation accounting. */
+    fun detailRetryIdle():Boolean=limiter.activeCount()==0
     val unavailableMemory=NativeMemorySnapshot(0,0,true)
     fun snapshot(context:Context):NativeMemorySnapshot {
         val manager=context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -23,6 +29,7 @@ object NativeWorkReservations {
     }
     suspend fun <T> run(estimatedBytes:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T = limiter.run(estimatedBytes,memory,work)
     /** Passive contexts consume bytes, never worker slots. Admission fails instead of waiting on itself. */
+    fun retainForDetail(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPressure:(()->Unit)?=null):RetainedNativeWork = limiter.retainForWork(estimatedBytes,memory(),onPressure)
     fun retain(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPressure:(()->Unit)?=null):AutoCloseable = limiter.retain(estimatedBytes,memory(),onPressure)
     fun previewEstimate(width:Int,height:Int):Long {
         require(width in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE && height in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE)
@@ -62,6 +69,34 @@ internal class NativeWorkLimiter {
         reserved+=estimate
         val id=++passiveSerial;if(onPressure!=null)passive[id]=onPressure
         Lease { synchronized(lock){reserved-=estimate;passive.remove(id);evicting.remove(id);check(reserved>=0)} }
+    }
+    /** Detail-only ownership. Normal export/codec admission and eviction stay unchanged. */
+    fun retainForWork(estimate:Long,memory:NativeMemorySnapshot,onPressure:(()->Unit)?=null):RetainedNativeWork {
+        val reservation=retain(Math.addExact(estimate,16L*NativeMemoryPolicy.MIB),memory,onPressure)
+        return object:RetainedNativeWork {
+            private var closed=false
+            private var workers=0
+            override fun close(){synchronized(lock){if(!closed){closed=true;if(workers==0)reservation.close()}}}
+            override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
+                var acquired=false
+                while(!acquired){
+                    currentCoroutineContext().ensureActive()
+                    val snapshot=memory()
+                    acquired=synchronized(lock){
+                        if(closed)throw kotlinx.coroutines.CancellationException("Retained owner closed")
+                        val headroom=if(snapshot.thresholdBytes>=0 && snapshot.availableBytes>snapshot.thresholdBytes) snapshot.availableBytes-snapshot.thresholdBytes else 0L
+                        val capacity=(headroom-64L*NativeMemoryPolicy.MIB).coerceAtLeast(0)/2
+                        // Do not add a second 16 MiB or evict our own passive owner.
+                        // OS available memory is still conservative; never add RSS back.
+                        if(snapshot.lowMemory || reserved>capacity)throw NativeWorkUnavailable()
+                        if(count>=2 || workers!=0)false else {count++;workers++;true}
+                    }
+                    if(!acquired)delay(100)
+                }
+                try {currentCoroutineContext().ensureActive();work()}
+                finally {synchronized(lock){count--;workers--;check(count>=0 && workers==0);if(closed)reservation.close()}}
+            }
+        }
     }
     private fun acquire(estimate:Long,memory:NativeMemorySnapshot):Attempt=synchronized(lock) {
         require(estimate in 1..(2L*1024*NativeMemoryPolicy.MIB))

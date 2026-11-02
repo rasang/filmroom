@@ -78,6 +78,7 @@ class CompositionPhotoViewHostTest {
         val key=dev.filmroom.roi.RenderKey("source","params","algorithm","data","oriented",1536,1536)
         f.bind(true)
         val fit=f.view.compositionVisibleTiles(key)
+        val fitRegion=f.view.compositionVisibleRect(key)!!
         assertTrue(fit.isNotEmpty())
         f.view.pinch(16.0,250.0,300.0);f.view.pan(1e6,-1e6)
         assertEquals("ROI must track displayed composition, not a pending gesture",fit,f.view.compositionVisibleTiles(key))
@@ -89,6 +90,10 @@ class CompositionPhotoViewHostTest {
         for(tile in demand){assertTrue(tile.x in 0..5);assertTrue(tile.y in 0..5)}
         // Crop moved to source's left/bottom, not frame-art coordinates.
         assertTrue(demand.all{it.x==0 && it.y==5})
+        val region=f.view.compositionVisibleRect(key)!!
+        assertTrue(region.width<fitRegion.width && region.height<fitRegion.height)
+        assertTrue(region.left>=0 && region.right<=256 && region.top>=1280 && region.bottom<=1536)
+        assertTrue("Tight ROI does not round back to a full cell",region.width<256 && region.height<256)
     }}
     @Test fun framedRoiUsesCropDemandAndReusesPresentationFreeSession(){Fixture().use{f->
         val seen=mutableListOf<dev.filmroom.model.EditorState>()
@@ -103,7 +108,10 @@ class CompositionPhotoViewHostTest {
         fun await(done:()->Boolean){repeat(1000){org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(10));if(done())return;Thread.sleep(2)};error("ROI timed out")}
         await{f.view.detailCacheBytes>0}
         assertEquals(1,seen.size);assertFalse(seen.single().filmBorder);assertEquals(CompositionTransform(),seen.single().composition)
-        assertTrue(sessions.single().calls.all{it.first==0 && it.second==5})
+        val visible=f.view.compositionVisibleRect(sessions.single().key)!!
+        assertEquals(visible,sessions.single().results.single().coreRect)
+        assertTrue("Same bottom-left canonical location, now tight pixels rather than cell IDs",visible.left>=0 && visible.right<=256 && visible.top>=1280 && visible.bottom<=1536)
+        assertTrue("No rounding the visible ROI back to a whole cell",visible.width<256 && visible.height<256)
         f.view.pan(-20.0,10.0);f.end()
         f.view.bindDetail(source,dev.filmroom.model.EditorState(filmBorder=true,composition=f.composition),true,presentedBorder=true)
         f.bind(true)

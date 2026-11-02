@@ -319,7 +319,7 @@
     <string name="text_564eb6dfeaca" formatted="false">オープンソースライセンスとクレジット</string>
     <string name="text_d6d466c03f8e" formatted="false">読み込み元</string>
     <string name="text_543b8fb9aa67" formatted="false">フォトライブラリから写真を選択</string>
-    <string name="text_85534f27f5d9" formatted="false">ファイルから写真／DNGを選択</string>
+    <string name="text_85534f27f5d9" formatted="false">ファイルから写真／RAWを選択</string>
     <string name="text_c69504e36552" formatted="true">元の写真 %1$s × %2$s\nSDR · 新しいファイルに保存し、元の画像は上書きしません</string>
     <string name="text_42a85b8d8038" formatted="false">保存形式</string>
     <string name="text_b4a83add8f8c" formatted="false">JPEG · 共有に最適</string>
@@ -384,7 +384,7 @@
     <string name="text_41db58446aa4" formatted="false">端末内の画像コーデックを起動できません。</string>
     <string name="text_93313da164ac" formatted="false">端末の空きメモリが不足しています。後で再試行してください。元の画像は縮小していません。</string>
     <string name="text_c2145ea571e4" formatted="false">端末内のエンコード／デコードをキャンセルしました</string>
-    <string name="text_0105eb1c06a7" formatted="false">この写真の符号化方式は未対応です。DNGは現在、検証済みの16ビット非圧縮およびロスレスJPEG圧縮に対応しています。RAWの代わりに埋め込みプレビューを使用することはありません。</string>
+    <string name="text_0105eb1c06a7" formatted="false">この写真の圧縮形式にはまだ対応していません。</string>
     <string name="text_46ac8768982e" formatted="false">このDNGには未対応の必須補正処理が含まれています。補正を無視したり、RAWの代わりに埋め込みプレビューを使用したりしていません。</string>
     <string name="text_c946e8a02212" formatted="false">このDNGのカメラキャリブレーション行列は未対応です。推測した色への置き換えは行っていません。</string>
     <string name="text_19b3b0255d08" formatted="false">端末内での写真の読み書きに失敗しました。空き容量を確認して元のファイルを選択し直してください。</string>
@@ -669,7 +669,7 @@
     <string name="text_ccd803200ef6" formatted="false">拡大プレビューを一時停止</string>
     <string name="text_9f37f3d6b8c1" formatted="false">通常プレビュー · </string>
     <string name="text_b5dc9ebea612" formatted="false">この効果は未対応です</string>
-    <string name="text_d4e2c673d344" formatted="false">空きメモリ不足</string>
+    <string name="text_d4e2c673d344" formatted="false">詳細処理のリソース予算超過</string>
     <string name="text_b9dd18aa35d1" formatted="false">元ファイルの検証に失敗</string>
     <string name="text_f5c716cc5054" formatted="false">元ファイルの読み込みに失敗</string>
     <string name="text_dc0ed989d876" formatted="false">拡大プレビューエンジンは利用できません</string>
@@ -755,4 +755,17 @@
     <string name="toast_budget">処理上限です。設定を下げてください</string>
     <string name="toast_incomplete">処理未完了。写真は未保存です</string>
     <string name="toast_workdir">作業領域エラー。更新してください</string>
+    <string name="composition_adjust_action">調整</string>
+    <string name="detail_admission" formatted="false">計算リソース待ち</string>
+    <string name="detail_pressure" formatted="false">リソース不足により詳細キャッシュを解放</string>
+    <string name="detail_storage" formatted="false">一時ストレージの予算超過</string>
+    <string name="detail_allocation" formatted="false">メモリ割り当て失敗</string>
+    <string name="camera_raw_basic_development" formatted="false">カメラ RAW は黒・白レベル、ホワイトバランス、色変換行列による基本現像を行います。カメラの画作りやすべてのレンズ補正は適用しないため、色や形状がカメラや他のソフトウェアと異なる場合があります。</string>
+    <string name="camera_raw_variant_unsupported" formatted="false">このカメラ RAW の画素配置または圧縮方式は未対応、または未検証です。埋め込みプレビューへの置換や原画像の解像度低下は行いません。</string>
+    <string name="camera_raw_profile_unsupported" formatted="false">この RAW に有効なカメラ色プロファイルがありません。色の推測や埋め込みプレビューへの置換は行いません。</string>
+
+    <string name="bw_film_development">フィルム現像時間</string>
+    <string name="bw_print_development">プリント現像時間</string>
+    <string name="bw_development_help">上流の測定済み現像時間系列を使用。既定は中央の値で、一般的な薬品処方ではありません。</string>
+    <string name="bw_development_default">上流の既定値</string>
 </resources>

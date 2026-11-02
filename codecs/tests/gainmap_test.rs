@@ -370,6 +370,7 @@ fn dng_parser_decode_strips_and_cancel_cleanup() {
             &input,
             &out,
             &Budget {
+                raw_batch: film_codecs::raw_batch::RawBatch::Standard,
                 memory_budget_mi_b: mem,
                 disk_budget_bytes: 64 * 1024 * 1024,
             },

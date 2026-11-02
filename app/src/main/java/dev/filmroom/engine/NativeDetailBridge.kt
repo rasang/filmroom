@@ -10,6 +10,7 @@ interface DetailNativeApi {
     fun nativeBeginOperation(sessionId:Long):String
     fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String):String
     fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String
+    fun nativeRegion(sessionId:Long,operationId:Long,x:Int,y:Int,width:Int,height:Int,output:ByteBuffer):String = throw UnsupportedOperationException("Region ABI unavailable")
     fun nativeCancel(sessionId:Long,operationId:Long):String
     fun nativeReleaseOperation(sessionId:Long,operationId:Long):String
     fun nativeDestroy(sessionId:Long):String
@@ -22,6 +23,7 @@ object NativeDetailBridge:DetailNativeApi {
     external override fun nativeBeginOperation(sessionId:Long):String
     external override fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String):String
     external override fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String
+    external override fun nativeRegion(sessionId:Long,operationId:Long,x:Int,y:Int,width:Int,height:Int,output:ByteBuffer):String
     external override fun nativeCancel(sessionId:Long,operationId:Long):String
     external override fun nativeReleaseOperation(sessionId:Long,operationId:Long):String
     external override fun nativeDestroy(sessionId:Long):String

@@ -54,6 +54,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "arw6-bounded-prototype"
+version = "0.0.0"
+dependencies = [
+ "bitstream-io",
+ "libc",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,6 +255,7 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 name = "film-photo-codecs"
 version = "0.1.0"
 dependencies = [
+ "arw6-bounded-prototype",
  "image",
  "jni",
  "jpeg-encoder",

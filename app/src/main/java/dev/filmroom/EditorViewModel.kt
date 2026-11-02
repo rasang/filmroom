@@ -22,6 +22,7 @@ data class EditorUiState(
     val startupReady:Boolean=true, val recoveryFailed:Boolean=false,
     val photo: PhotoSource?=null, val original: Bitmap?=null, val rendered: Bitmap?=null,
     val parameters: EditorState=EditorState(), val renderedParameters: EditorState?=null,
+    val renderedDiagnosticContext:PreviewDiagnosticContext?=null,
     val compositionEditing:Boolean=false, val presentation:dev.filmroom.border.BorderSnapshot?=null,
     val compositionSource:Bitmap?=null, val interactiveBorder:Bitmap?=null,
     val cropPresentation:dev.filmroom.crop.CropSnapshot?=null,
@@ -61,6 +62,14 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     private var renderJob: Job?=null
     private var operationJob: Job?=null
     private var generation=0L
+    private var diagnosticPhoto:java.lang.ref.WeakReference<PhotoSource>?=null
+    private var diagnosticSourceToken=0L
+    private var processedDiagnosticContext:PreviewDiagnosticContext?=null
+    internal var previewAdoptionSink:(PreviewAdoptionRecord)->Unit = { PreviewAdoptionDiagnostics.record(it) }
+    /** Called only after PhotoView.bitmap has actually been assigned; not proof of display scanout. */
+    internal fun previewBound(context:PreviewDiagnosticContext){
+        runCatching{previewAdoptionSink(PreviewAdoptionRecord(context,PreviewDisposition.BOUND,false))}
+    }
     private var intakeCancellation:PendingExportCancellation?=null
     init {
         viewModelScope.launch {
@@ -109,7 +118,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             try {
                 OperationTrace.run(Operation.IMPORT) { trace ->
                 val newPhoto=repository.import(uri,ENGINE_EDGE);loaded=newPhoto
-                trace.mark(Stage.DECODE_HEADER,SafeInfo(width=newPhoto.source.originalWidth,height=newPhoto.source.originalHeight))
+                trace.mark(Stage.DECODE_HEADER,SafeInfo(width=newPhoto.source.originalWidth,height=newPhoto.source.originalHeight,metadataIssues=newPhoto.source.photoMetadata.issues,metadataPhase=dev.filmroom.diagnostics.MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=newPhoto.source.photoMetadata.diagnosticDateBasis))
                 engine.cancel();renderJob?.cancelAndJoin()
                 val old=mutable.value.photo
                 generation++;compositionBaseline=null;history=EditHistory(importParameters)
@@ -154,7 +163,8 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         val s=mutable.value;val p=s.photo ?: return
         if(!s.compositionEditing)return
         val next=if(s.parameters.filmBorder){
-            val aspect=when(mode){CropMode.RATIO_3_2->1.5;CropMode.RATIO_2_3->2.0/3.0;else->return}
+            val portrait=when(mode){CropMode.RATIO_3_2->false;CropMode.RATIO_2_3->true;else->return}
+            val aspect=dev.filmroom.border.BorderCatalog.frameAspect(s.parameters.frameStock,portrait)
             s.parameters.copy(composition=s.parameters.composition.copy(targetAspect=aspect).clamped(p.originalWidth,p.originalHeight))
         }else s.parameters.copy(crop=if(mode==CropMode.ORIGINAL)CropSettings() else s.parameters.crop.copy(mode=mode))
         compositionGestureActive=false
@@ -288,6 +298,9 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         }
         engine.cancel();renderJob?.cancel()
         val request=++generation
+        if(diagnosticSourceToken==0L || diagnosticPhoto?.get()!==s.photo){diagnosticPhoto=s.photo?.let{java.lang.ref.WeakReference(it)};diagnosticSourceToken=PreviewDiagnosticContext.nextSourceToken()}
+        val diagnosticToken=diagnosticSourceToken
+        val diagnosticFingerprint=PreviewDiagnosticContext.fingerprint(params)
         renderingScience=params.json(includePresentation=false);renderingPhoto=s.photo
         activePresentationRequest=if(cachedPresentation)request else null
         pendingPresentationSettled=false
@@ -302,11 +315,19 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                 if(presentationOnly && cached==null)return@launch
                 val cachedDetailed=cached!=null && processedDetailed
                 suspend fun publish(detail:Boolean,existing:Bitmap?=null) {
+                    val diagnostic=PreviewDiagnosticContext(diagnosticToken,request,diagnosticFingerprint,
+                        if(existing!=null)PreviewFrameKind.CACHED else if(detail)PreviewFrameKind.REFINED else PreviewFrameKind.QUICK,
+                        if(existing!=null)processedDiagnosticContext?.originGeneration ?: request else request,
+                        if(existing!=null)processedDiagnosticContext?.originKind ?: PreviewFrameKind.CACHED else if(detail)PreviewFrameKind.REFINED else PreviewFrameKind.QUICK)
+                    var disposition=PreviewDisposition.FAILED
+                    var nativeCompleted=false
+                    try {
                     val existingDetailed=existing!=null && existing===processedBitmap && processedDetailed
                     val filmResult=existing ?: run {
                         scientificRequest=request
-                        try {renderPreview(source,params,s.photo,detail)}
-                        catch(t:Throwable){if(scientificRequest==request)scientificRequest=null;throw t}
+                        var returned:Bitmap?=null
+                        try {withContext(diagnostic){renderPreview(source,params,s.photo,detail).also{returned=it;nativeCompleted=true}}}
+                        catch(t:Throwable){returned?.takeUnless{it.isRecycled}?.recycle();if(scientificRequest==request)scientificRequest=null;throw t}
                     }
                     if(!detail)responsivePhotoEdge=maxOf(filmResult.width,filmResult.height)
                     var adopted=false
@@ -319,7 +340,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                         val newest=mutable.value.parameters
                         if(mutable.value.photo===s.photo && newest.json(includePresentation=false)==science)params=newest
                         val photo=checkNotNull(s.photo)
-                        val border=if(params.filmBorder)borderProvider.snapshot(params.filmStock,filmResult.width,filmResult.height,
+                        val border=if(params.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(params.filmStock,params.paperStock,params.outputRoute),filmResult.width,filmResult.height,
                             photo.originalWidth,photo.originalHeight,params.composition,params.negativeWhiteHoles,params.outputRoute) else null
                         val crop=if(border==null)dev.filmroom.crop.CropSnapshot.create(filmResult.width,filmResult.height,photo.originalWidth,photo.originalHeight,params.crop)else null
                         val coroutine=currentCoroutineContext()
@@ -345,24 +366,32 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                         ensureActive()
                         if(request==generation && mutable.value.photo===s.photo) {
                             processedBitmap=filmResult;processedPhoto=s.photo;processedScience=science
+                            if(existing==null)processedDiagnosticContext=diagnostic
                             processedDetailed=if(existing!=null)existingDetailed else detail
+                            disposition=PreviewDisposition.CACHE_ONLY
                             adopted=true // Keep scientifically valid cache even if this presentation became obsolete.
                             if(mutable.value.parameters==params && !compositionGestureActive){
                                 interactiveBorderKey=layerKey;interactiveBorderCache=layer
-                                mutable.value=mutable.value.copy(rendered=rendered,renderedParameters=params,
+                                mutable.value=mutable.value.copy(rendered=rendered,renderedParameters=params,renderedDiagnosticContext=diagnostic,
                                     compositionSource=filmResult,presentation=border,cropPresentation=crop,interactiveBorder=layer,updating=false)
+                                disposition=PreviewDisposition.ADOPTED
                             }else{
                                 // The live view owns the gesture until UP. Never replace it with a late
                                 // source/ratio/crop, and never rerun science merely to discard an old frame.
                                 if(rendered!==filmResult)rendered?.recycle()
                                 newInteractive?.takeUnless{it.isRecycled}?.recycle()
                             }
-                        }
+                        } else disposition=if(mutable.value.photo!==s.photo)PreviewDisposition.STALE_SOURCE else PreviewDisposition.STALE_GENERATION
                     } finally {
                         // Ownership spans post-engine composition until the completed science result
                         // is retained in the processed cache, not merely until native render returns.
                         if(existing==null && scientificRequest==request)scientificRequest=null
                         if(!adopted){newInteractive?.takeUnless{it.isRecycled}?.recycle();if(rendered!==filmResult)rendered?.recycle();if(existing==null)filmResult.recycle()}
+                    }
+                    } catch(c:CancellationException){disposition=PreviewDisposition.CANCELLED;throw c}
+                    finally {
+                        // A diagnostic failure must never change ownership, rendering or cancellation.
+                        runCatching{previewAdoptionSink(PreviewAdoptionRecord(diagnostic,disposition,nativeCompleted))}
                     }
                 }
                 var refineRequested=settled

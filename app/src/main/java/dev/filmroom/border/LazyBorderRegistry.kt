@@ -46,7 +46,7 @@ class LazyBorderRegistry(
     override fun snapshot(stock:String,width:Int,height:Int)=snapshot(stock,width,height,width,height,CompositionTransform())
     override fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:CompositionTransform):BorderSnapshot {
         val spec=definition(stock).spec
-        return BorderSnapshot.fixed135(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072)
+        return BorderSnapshot.authored(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072)
     }
     /** Main-thread safe: never waits for stream I/O/decode or the serialized load lock.
      * Incrementing the epoch prevents an already-running load from undoing this trim.
@@ -54,9 +54,9 @@ class LazyBorderRegistry(
      */
     fun clearCache(){synchronized(cacheStateLock){cached=null;cacheGeneration++}}
     override fun verifySnapshot(snapshot:BorderSnapshot) {
-        if(snapshot.geometryVersion !in 2..3)unsupported()
+        if(snapshot.geometryVersion !in 2..4)unsupported()
         val definition=definition(snapshot.stock,snapshot.assetVersion)
-        val expected=BorderSnapshot.fixed135(snapshot.stock,definition.spec.version,snapshot.sourceWidth,snapshot.sourceHeight,
+        val expected=BorderSnapshot.authored(snapshot.stock,definition.spec.version,snapshot.sourceWidth,snapshot.sourceHeight,
             snapshot.canonicalWidth,snapshot.canonicalHeight,snapshot.composition,definition.spec.featherTotalAt3072)
         if(definition.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION)requireNotNull(snapshot.appearance) { "Missing negative frame appearance contract" }
         snapshot.appearance?.let {

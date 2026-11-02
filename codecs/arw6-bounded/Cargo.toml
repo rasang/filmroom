@@ -1,0 +1,8 @@
+[package]
+name = "arw6-bounded-prototype"
+version = "0.0.0"
+edition = "2024"
+license = "LGPL-2.1"
+[dependencies]
+bitstream-io = "=4.10.0"
+libc = "0.2"

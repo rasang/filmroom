@@ -7630,5 +7630,132 @@
     "model_limit": "Per-stock D65 profile Dmin and channelwise Dmax contrast illustration, not factory edge-exposure measurement or calibrated scan",
     "portra800_push": "push1/push2 share base physical border; no simulated factory marking development change",
     "fuji_policy": "C200/XTRA manufacturer red/green track categories plus profile separated-dye model; PRO400H dark single-line illustration, actual line color unverified"
-  }
+  },
+  "bw_assets": [
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v4-double_x_5222-black-f5ccf64703",
+      "sha256": "f5ccf647039af61d963b1c0d425c5fced803d6dc57ec669ffdf3f10568316d7a",
+      "bytes": 173514,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 0,
+      "asset_path": "fixed135/bw-double_x_5222.webp",
+      "geometry_version": 4
+    },
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v4-double_x_5222-white-f5ccf64703",
+      "sha256": "f5ccf647039af61d963b1c0d425c5fced803d6dc57ec669ffdf3f10568316d7a",
+      "bytes": 173514,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-double_x_5222.webp",
+      "geometry_version": 4
+    },
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v4-double_x_5222-positive-display-black-2ccf5d7c74",
+      "sha256": "2ccf5d7c749763ed7690f31d8feb73c1ee72114fc6719e4cb0fef933c6241447",
+      "bytes": 174914,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 0,
+      "asset_path": "fixed135/bw-double_x_5222-positive-display.webp",
+      "geometry_version": 4
+    },
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v4-double_x_5222-positive-display-white-2ccf5d7c74",
+      "sha256": "2ccf5d7c749763ed7690f31d8feb73c1ee72114fc6719e4cb0fef933c6241447",
+      "bytes": 174914,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-double_x_5222-positive-display.webp",
+      "geometry_version": 4
+    },
+    {
+      "physical_stock": "kodak_trix",
+      "asset_version": "bw-v4-tri_x_7266-super8-white-1620504f73",
+      "sha256": "1620504f73cdedb865555da5968ecc62beacdbf5a49c1d895afae4037888cc53",
+      "bytes": 94570,
+      "canvas_px": [
+        1404,
+        926
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-tri_x_7266-super8.webp",
+      "geometry_version": 4
+    },
+    {
+      "physical_stock": "kodak_2302",
+      "asset_version": "bw-v4-print_2302-white-d84db54b27",
+      "sha256": "d84db54b27d59e49f615684625b582ea2ef3c29042817d756b23ece59032e595",
+      "bytes": 43540,
+      "canvas_px": [
+        1400,
+        760
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-print_2302.webp",
+      "geometry_version": 4
+    }
+  ],
+  "bw_note": "Six immutable BW contracts sharing four original reviewed lossless WebP payloads. Super8 7266 and print-stock 2302 use dedicated authored geometry v4; all pre-existing arrays remain unchanged.",
+  "bw_edge_fix_assets": [
+    {
+      "physical_stock": "kodak_trix",
+      "asset_version": "bw-v5-tri_x_7266-super8-fringe-1620504f73",
+      "sha256": "1620504f73cdedb865555da5968ecc62beacdbf5a49c1d895afae4037888cc53",
+      "bytes": 94570,
+      "canvas_px": [
+        1404,
+        926
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-tri_x_7266-super8.webp",
+      "geometry_version": 4,
+      "sampling_contract": "super8-aperture-fringe-nearest-hole-v1"
+    }
+  ],
+  "bw_positive_sampled_assets": [
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v6-double_x_5222-positive-sampled-black-608779f0b0",
+      "sha256": "608779f0b0c65d838d966e4f1a57da86ddd30dee58c0a2a265ca77b20432528f",
+      "bytes": 165244,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 0,
+      "asset_path": "fixed135/bw-double_x_5222-positive-sampled.webp",
+      "geometry_version": 4,
+      "presentation": "positive display near-black4 gray-letter112-to-88; independently selectable hole matte"
+    },
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v6-double_x_5222-positive-sampled-white-608779f0b0",
+      "sha256": "608779f0b0c65d838d966e4f1a57da86ddd30dee58c0a2a265ca77b20432528f",
+      "bytes": 165244,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-double_x_5222-positive-sampled.webp",
+      "geometry_version": 4,
+      "presentation": "positive display near-black4 gray-letter112-to-88; independently selectable hole matte"
+    }
+  ]
 }

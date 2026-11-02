@@ -323,7 +323,21 @@ impl RawMetadata {
 }
 
 pub trait Decoder: Send {
+  /// Bounded Canon Bayer decode; caller first validates all entropy/control bytes.
+  fn canon_bayer_stream(&self, _file: &RawSource, _storage: &mut dyn cr2::CanonSrawStorage) -> Result<RawImage> {Err("Not a Canon Bayer streaming decoder".into())}
+
+  /// Bounded Canon RGB decode. Caller validates JPEG entropy before invocation.
+  fn canon_sraw_stream(&self, _file: &RawSource, _storage: &mut dyn cr2::CanonSrawStorage) -> Result<RawImage> {
+    Err("Not a Canon sRAW streaming decoder".into())
+  }
+
   fn raw_image(&self, file: &RawSource, params: &RawDecodeParams, dummy: bool) -> Result<RawImage>;
+
+  /// Exact Bayer row output; unsupported by default, never a preview fallback.
+  fn bayer_rows_supported(&self, _file: &RawSource) -> Result<bool> { Ok(false) }
+  fn bayer_rows(&self, _file: &RawSource, _sink: &mut dyn FnMut(usize, &[u16]) -> Result<()>, _cancel: &dyn Fn() -> bool) -> Result<()> {
+    Err(RawlerError::DecoderFailed("Bayer row output unsupported".into()))
+  }
 
   fn raw_image_count(&self) -> Result<usize> {
     Ok(1)

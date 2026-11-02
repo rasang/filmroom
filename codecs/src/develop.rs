@@ -1,7 +1,7 @@
 //! Strip adaptation of pinned RawDevelop, with no full-image RGB allocation.
 //! Rawler retains its own LGPL-2.1 license; no SRgb transfer step is applied.
 use crate::{
-    dng::{Dng, Probe},
+    dng::{Dng, Probe, Rect},
     error::{Result, err, io_error},
 };
 use rawler::{
@@ -29,12 +29,15 @@ const HALO: usize = 8;
 pub struct Budget {
     pub memory_budget_mi_b: u64,
     pub disk_budget_bytes: u64,
+    #[serde(default)]
+    pub raw_batch: crate::raw_batch::RawBatch,
 }
 impl Default for Budget {
     fn default() -> Self {
         Self {
             memory_budget_mi_b: 128,
             disk_budget_bytes: 1024 * MIB,
+            raw_batch: crate::raw_batch::RawBatch::Auto,
         }
     }
 }
@@ -61,7 +64,12 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let rows = ((memory - base) / (d.active.w as u64 * 96)) as usize;
-    let rows = rows.saturating_sub(HALO * 2).min(128);
+    let capacity = rows.saturating_sub(HALO * 2);
+    let classic = capacity.min(128);
+    // Automatic growth is validated for Bayer DNG. LinearRaw retains its classic
+    // default; explicit Large may still request a larger memory-bounded batch.
+    let rows = if d.cpp == 1 { b.raw_batch.dng_rows(classic, capacity) }
+        else { b.raw_batch.camera_rows(classic, capacity, 256) };
     if rows < 8 {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
@@ -76,7 +84,49 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         strip_rows: rows as u32,
     })
 }
-fn tile_raw(d: &Dng, y: usize, h: usize, data: Vec<f32>) -> RawImage {
+/// Format-neutral, already validated sensor-to-linear development contract.
+/// Storage decoding and black/white normalization belong to the input adapter.
+#[derive(Clone, Debug)]
+pub struct Development<'a> {
+    pub width: usize,
+    pub height: usize,
+    pub cpp: usize,
+    pub orientation: u8,
+    pub active: crate::dng::Rect,
+    pub crop: crate::dng::Rect,
+    pub cfa: String,
+    pub wb: [f32; 4],
+    pub matrix: Vec<f32>,
+    pub baseline_exposure_ev: f32,
+    pub gain_maps: &'a [crate::gainmap::GainMap],
+}
+impl Development<'_> {
+    pub fn oriented_dim(&self) -> (usize, usize) {
+        if self.orientation >= 5 {
+            (self.crop.h, self.crop.w)
+        } else {
+            (self.crop.w, self.crop.h)
+        }
+    }
+}
+impl<'a> From<&'a Dng> for Development<'a> {
+    fn from(d: &'a Dng) -> Self {
+        Self {
+            width: d.width,
+            height: d.height,
+            cpp: d.cpp,
+            orientation: d.orientation,
+            active: d.active,
+            crop: d.crop,
+            cfa: d.cfa.clone(),
+            wb: d.wb,
+            matrix: d.matrix.clone(),
+            baseline_exposure_ev: d.baseline_exposure_ev,
+            gain_maps: &d.gain_maps,
+        }
+    }
+}
+fn tile_raw(d: &Development, y: usize, h: usize, data: Vec<f32>) -> RawImage {
     let mut cam = Camera::default();
     cam.real_bps = 16;
     cam.cfa = if d.cpp == 1 {
@@ -109,10 +159,10 @@ pub fn develop_tile(
     h: usize,
     data: Vec<f32>,
 ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
-    develop_tile_cancel(d, y, h, data, &AtomicBool::new(false))
+    develop_tile_cancel(&Development::from(d), y, h, data, &AtomicBool::new(false))
 }
-fn develop_tile_cancel(
-    d: &Dng,
+pub(crate) fn develop_tile_cancel(
+    d: &Development,
     y: usize,
     h: usize,
     data: Vec<f32>,
@@ -198,8 +248,8 @@ pub fn mapped(x: usize, y: usize, w: usize, h: usize, o: u8) -> (usize, usize) {
         _ => unreachable!(),
     }
 }
-fn emit(
-    d: &Dng,
+pub(crate) fn emit(
+    d: &Development,
     out: &File,
     p: &rawler::pixarray::Color2D<f32, 3>,
     tile_y: usize,
@@ -312,6 +362,7 @@ fn decode_with_reserve(
         .stack_size(1024 * 1024)
         .build()
         .map_err(|_| err("MEMORY_BUDGET", "develop"))?;
+    let development = Development::from(&d);
     let mut first = d.crop.y;
     while first < d.crop.y + d.crop.h {
         if cancel.load(Ordering::Relaxed) {
@@ -321,9 +372,10 @@ fn decode_with_reserve(
         let tile_y = first.saturating_sub(HALO).max(d.active.y);
         let tile_end = (last + HALO).min(d.active.y + d.active.h);
         let data = d.read_tile_cancellable(&mut file, tile_y, tile_end - tile_y, cancel)?;
-        let p =
-            pool.install(|| develop_tile_cancel(&d, tile_y, tile_end - tile_y, data, cancel))?;
-        emit(&d, &out, &p, tile_y, first, last, cancel)?;
+        let p = pool.install(|| {
+            develop_tile_cancel(&development, tile_y, tile_end - tile_y, data, cancel)
+        })?;
+        emit(&development, &out, &p, tile_y, first, last, cancel)?;
         first = last;
     }
     if cancel.load(Ordering::Relaxed) {
@@ -361,6 +413,162 @@ mod failure_tests {
                 if kind == 0 { "NO_SPACE" } else { "CANCELLED" }
             );
             assert!(!output.exists());
+        }
+    }
+}
+
+/// Emit a fully developed rectangle into the global oriented crop. Used only
+/// when independent LinearRaw tiles need no demosaic halo across their edges.
+pub(crate) fn emit_region(
+    d: &Development,
+    out: &File,
+    p: &rawler::pixarray::Color2D<f32, 3>,
+    tile: Rect,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    // All dimensions originate from the admitted <=52MP descriptor. Recheck
+    // rectangular storage here so this emitter remains safe if reused later.
+    if p.width != tile.w
+        || p.height != tile.h
+        || tile.w.checked_mul(tile.h) != Some(p.data.len())
+        || tile.x.checked_add(tile.w).is_none_or(|v| v > d.width)
+        || tile.y.checked_add(tile.h).is_none_or(|v| v > d.height)
+        || !(1..=8).contains(&d.orientation)
+        || d.crop.x.checked_add(d.crop.w).is_none_or(|v| v > d.width)
+        || d.crop.y.checked_add(d.crop.h).is_none_or(|v| v > d.height)
+        || (d.width as u64)
+            .checked_mul(d.height as u64)
+            .is_none_or(|v| v > crate::MAX_PIXELS)
+    {
+        return Err(err("INVALID_INPUT", "spool"));
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(err("CANCELLED", "spool"));
+    }
+    let crop = d.crop;
+    let left = tile.x.max(crop.x);
+    let right = (tile.x + tile.w).min(crop.x + crop.w);
+    let first = tile.y.max(crop.y);
+    let last = (tile.y + tile.h).min(crop.y + crop.h);
+    if left >= right || first >= last {
+        return Ok(());
+    }
+    let (ow, _) = d.oriented_dim();
+    let get = |x: usize, y: usize| p.data[(y - tile.y) * tile.w + x - tile.x];
+    if d.orientation <= 4 {
+        let reverse = matches!(d.orientation, 2 | 3);
+        let mut row = Vec::with_capacity((right - left) * 12);
+        for y in first..last {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(err("CANCELLED", "spool"));
+            }
+            row.clear();
+            for i in 0..right - left {
+                let x = if reverse { right - 1 - i } else { left + i };
+                for c in get(x, y) {
+                    row.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+            let x = if reverse { right - 1 } else { left };
+            let (ox, oy) = mapped(x - crop.x, y - crop.y, crop.w, crop.h, d.orientation);
+            write_at_all(out, &row, ((oy * ow + ox) * 12) as u64)
+                .map_err(|e| io_error(e, "spool"))?;
+        }
+    } else {
+        let reverse = matches!(d.orientation, 6 | 7);
+        let mut line = Vec::with_capacity((last - first) * 12);
+        for x in left..right {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(err("CANCELLED", "spool"));
+            }
+            line.clear();
+            for i in 0..last - first {
+                let y = if reverse { last - 1 - i } else { first + i };
+                for c in get(x, y) {
+                    line.extend_from_slice(&c.to_le_bytes());
+                }
+            }
+            let y = if reverse { last - 1 } else { first };
+            let (ox, oy) = mapped(x - crop.x, y - crop.y, crop.w, crop.h, d.orientation);
+            write_at_all(out, &line, ((oy * ow + ox) * 12) as u64)
+                .map_err(|e| io_error(e, "spool"))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod rectangle_emit_tests {
+    use super::*;
+    #[test]
+    fn independent_tiles_match_global_crop_all_orientations() {
+        for orientation in 1..=8 {
+            let d = Development {
+                width: 17,
+                height: 13,
+                cpp: 3,
+                orientation,
+                active: Rect {
+                    x: 0,
+                    y: 0,
+                    w: 17,
+                    h: 13,
+                },
+                crop: Rect {
+                    x: 3,
+                    y: 2,
+                    w: 11,
+                    h: 9,
+                },
+                cfa: String::new(),
+                wb: [1.; 4],
+                matrix: vec![1.; 9],
+                baseline_exposure_ev: 0.,
+                gain_maps: &[],
+            };
+            let path = std::env::temp_dir().join(format!(
+                "raw-tile-emit-{}-{orientation}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_file(&path);
+            let out = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .unwrap();
+            let pixel = |x: usize, y: usize| [(x + 100 * y) as f32, x as f32, y as f32];
+            for y in (0..13).step_by(4) {
+                for x in (0..17).step_by(5) {
+                    let tile = Rect {
+                        x,
+                        y,
+                        w: 5.min(17 - x),
+                        h: 4.min(13 - y),
+                    };
+                    let mut data = Vec::new();
+                    for yy in y..y + tile.h {
+                        for xx in x..x + tile.w {
+                            data.push(pixel(xx, yy));
+                        }
+                    }
+                    let p = rawler::pixarray::Color2D::new_with(data, tile.w, tile.h);
+                    emit_region(&d, &out, &p, tile, &AtomicBool::new(false)).unwrap();
+                }
+            }
+            drop(out);
+            let got = std::fs::read(&path).unwrap();
+            let (ow, oh) = d.oriented_dim();
+            assert_eq!(got.len(), ow * oh * 12);
+            for y in 0..d.crop.h {
+                for x in 0..d.crop.w {
+                    let (ox, oy) = mapped(x, y, d.crop.w, d.crop.h, orientation);
+                    let at = (oy * ow + ox) * 12;
+                    for (c, v) in pixel(x + d.crop.x, y + d.crop.y).into_iter().enumerate() {
+                        assert_eq!(&got[at + c * 4..at + (c + 1) * 4], &v.to_le_bytes());
+                    }
+                }
+            }
+            std::fs::remove_file(path).unwrap();
         }
     }
 }

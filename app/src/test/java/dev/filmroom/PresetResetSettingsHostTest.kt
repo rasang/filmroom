@@ -96,6 +96,7 @@ class PresetResetSettingsHostTest {
             val a=c.get();val p=EditorState(filmStock="kodak_ektachrome_100",brightness=2f,grain=.2f,filmBorder=false,negativeWhiteHoles=false)
             val(vm,flow)=setup(a,p)
             val appChoices=EditorPreferences(a);appChoices.resetOnImport=true;appChoices.restoreLastPhoto=false
+            RawBatchPreferences(a).mode=RawBatchMode.LARGE
             val reset=button(a,"恢复预设");assertTrue(reset.isEnabled)
             reset.performClick();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(32));val first=ShadowAlertDialog.getLatestAlertDialog();assertTrue(first.isShowing)
             reset.performClick();assertSame(first,ShadowAlertDialog.getLatestAlertDialog())
@@ -106,6 +107,7 @@ class PresetResetSettingsHostTest {
             assertEquals(p.filmStock,flow.value.parameters.filmStock);assertFalse(flow.value.parameters.negativeWhiteHoles)
             assertTrue("Restoring a film preset must preserve explicit app settings",EditorPreferences(a).resetOnImport)
             assertFalse(EditorPreferences(a).restoreLastPhoto)
+            assertEquals("Photo preset reset preserves app-level RAW batching",RawBatchMode.LARGE,RawBatchPreferences(a).mode)
             assertTrue(flow.value.canUndo);vm.undo();assertEquals(p,flow.value.parameters);assertFalse(flow.value.canUndo)
             vm.cancel()
         }
@@ -220,10 +222,10 @@ class PresetResetSettingsHostTest {
         app.getSharedPreferences("local-session",0).edit().clear().commit()
         val prefs=EditorPreferences(app)
         org.robolectric.shadows.ShadowStatFs.registerStats(app.filesDir.path,4096,1_000_000,1_000_000)
-        try{for((reset,whiteHoles) in listOf(false to false,true to false,false to true,true to true)){
+        try{for((reset,whiteHoles) in listOf(false to false,true to false,false to true,true to true))for(stock in listOf("kodak_gold_200","kodak_ektachrome_100")){
             prefs.resetOnImport=reset
             Robolectric.buildActivity(MainActivity::class.java).setup().use{c->
-                val a=c.get();val p=EditorState(filmStock="kodak_gold_200",brightness=2f,grain=.2f,filmBorder=true,negativeWhiteHoles=whiteHoles,composition=CompositionTransform(.4,.6,1.7),crop=CropSettings(CropMode.SQUARE))
+                val a=c.get();val p=EditorState(filmStock=stock,outputRoute=if(stock=="kodak_ektachrome_100")"direct" else "print",brightness=2f,grain=.2f,filmBorder=true,negativeWhiteHoles=whiteHoles,composition=CompositionTransform(.4,.6,1.7),crop=CropSettings(CropMode.SQUARE))
                 val(vm,flow)=setup(a,p);val original=flow.value.photo
                 val oldHistory=EditHistory().apply{update(p)}
                 EditorViewModel::class.java.getDeclaredField("history").apply{isAccessible=true}.set(vm,oldHistory)
@@ -245,12 +247,13 @@ class PresetResetSettingsHostTest {
                 vm.importPhoto(uri)
                 awaitOperation(vm)
                 assertNotSame("${flow.value.message}",original,flow.value.photo)
-                assertEquals("kodak_gold_200",flow.value.parameters.filmStock)
+                assertEquals(stock,flow.value.parameters.filmStock)
                 assertEquals(if(reset)0f else 2f,flow.value.parameters.brightness)
                 assertEquals(if(reset)1f else .2f,flow.value.parameters.grain)
                 assertEquals(CropSettings(),flow.value.parameters.crop);assertEquals(CompositionTransform(),flow.value.parameters.composition)
                 assertEquals("Only successful reset-ON import disables the border",!reset,flow.value.parameters.filmBorder)
                 assertEquals("White-hole preference is independent of border enablement",whiteHoles,flow.value.parameters.negativeWhiteHoles)
+                assertEquals("Import retains film-specific white-hole capability",stock=="kodak_gold_200",flow.value.parameters.negativeWhiteHolesSupported)
                 assertEquals("Old photo edit/history must not be mutated",p,oldHistory.current)
                 assertEquals(flow.value.parameters.json(),app.getSharedPreferences("local-session",0).getString("parameters",null))
                 assertFalse(flow.value.canUndo);assertFalse(flow.value.canRedo)

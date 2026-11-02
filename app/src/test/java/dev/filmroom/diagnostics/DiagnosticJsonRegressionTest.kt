@@ -40,7 +40,12 @@ class DiagnosticJsonRegressionTest {
             checkNotNull(field.type.enumConstants).forEach { value ->
                 val enum=value as Enum<*>
                 val id=runCatching { value.javaClass.getMethod("getId").invoke(value) as String }.getOrDefault(enum.name)
-                val safe=SafeInfo.parse(mapOf(field.name to id))
+                val fields=mutableMapOf(field.name to id)
+                if(field.name=="metadataPhase") {
+                    assertFalse(SafeInfo.parse(fields).fields().containsKey("metadataPhase"))
+                    fields["metadataIssues"]=MetadataIssues.encode(listOf(MetadataIssue(MetadataField.METADATA,MetadataIssueReason.READ_FAILED)))
+                }
+                val safe=SafeInfo.parse(fields)
                 assertEquals(id,safe.fields()[field.name])
                 val text=report(safe);strictJson(text)
                 val parsed=JSONObject(text).getJSONArray("events").getJSONObject(0).getJSONObject("info")

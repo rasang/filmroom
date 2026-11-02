@@ -4,10 +4,12 @@
 
 保留范围：可读取且有效的相机/镜头、曝光/光圈/ISO/焦距、原始/数字化时间及各自时区/亚秒、标准 GPS、作者/版权/描述/用户注释。当前 AndroidX 读取器未公开评分字段，因此暂不能从原图保留评分。AndroidX 可能规范化文本/有理数字符串，不承诺元信息字节级相同；特殊注释只接受明确 ASCII 头或带 BOM 的 Unicode/UTF-16；未知、JIS 或无 BOM 的歧义编码省略并显示提示。AndroidX ExifInterface 1.4.2 负责读取，不用于改写 TIFF。只保留允许列表中的标准语义字段，**不保证任意私有元数据无损复制**：不复制 MakerNote、未知私有字段、XMP/IPTC 原始包、旧缩略图、RAW 校正结构或输入文件的偏移指针。某些字段/容器不被读取器公开时无法保留。ASCII EXIF 文本中的非 ASCII 值不强制转码；注释使用 EXIF Unicode 编码。
 
-每次实际编码前持久记录一个导出时刻；未提交的失败任务重试使用本次新时刻，已提交的成片恢复只复用原有条目、不重复编码；DateTime、OffsetTime、SubSecTime 写同一 UTC 时刻；PNG tIME 写该时刻（秒精度）。DateTimeOriginal / DateTimeDigitized 不改写。原拍摄时区缺失时保留壁钟字符串，不推测 epoch。MediaStore DATE_TAKEN 有明确原时区时以毫秒提交；DATE_ADDED/DATE_MODIFIED 是系统索引（秒），由 provider 管理，不能保证设备相册索引/文件 mtime 与 EXIF 亚秒精确一致。
+每次实际编码前持久记录一个导出时刻；未提交的失败任务重试使用本次新时刻，已提交的成片恢复只复用原有条目、不重复编码；DateTime、OffsetTime、SubSecTime 写同一 UTC 时刻；PNG tIME 写该时刻（秒精度）。DateTimeOriginal / DateTimeDigitized 不改写。原拍摄时区优先取有效原 EXIF、匹配原 XMP，或有界读取的 Nikon WorldTime 相机记录。仅在原时区缺失时，按用户批准的兼容方案：保留原拍摄壁钟字符串，按导入设备在该历史日期的本地时区解释并冻结 epoch；在输出 EXIF 补充兼容 OffsetTimeOriginal，使系统发布后重扫仍能索引原拍摄日。日志以 ASSUMED_IMPORT_ZONE 明确标注推定，源快照字段仍保留“原无 offset”的事实，不把推定称为相机记录。已有明确时区不覆盖，显式无效时区不静默推定。MediaStore DATE_TAKEN 提交该捕获时刻；DATE_ADDED/DATE_MODIFIED 是系统索引（秒），由 provider 管理，不能保证设备相册索引/文件 mtime 与 EXIF 亚秒精确一致。
 
 输出方向为 1，尺寸为实际输出尺寸；ICC/PNG 色彩标签来自实际所选输出色域，不复制输入 ICC。JPEG/TIFF 的事务替换临时增加一份编码文件的磁盘空间，失败时保留原成片并提示。JPEG 只替换 EXIF APP1（TIFF payload 最多 48 KiB，低于 65527 字节上限），保留编码像素与 ICC。PNG 按原有行流式编码后写 eXIf/tIME，不重新压缩图像。TIFF16 保留原文件全部条带与 ICC 字节，追加重定位元信息及新根 IFD，不经 ExifInterface 或 8 位位图重编码。
 
 快照预算 48 KiB，单字段限长且验证类型/分母/日期/时区。无效或超预算字段省略，并在已完成任务卡显示提示。容器写入使用临时文件+原子替换；元信息写入失败不损坏原编码成片，显示保留范围受限提示。无照片/位置元信息进入诊断日志或网络。没有新增广泛照片/位置权限；系统选择器若提供已脱敏照片，无法恢复其未提供的 GPS。
 
 验证：主机合成夹具与单元测试，真实 Android 相册索引行为、OEM 解码器及设备端 HEIC 元信息仍需设备验证；未进行设备/模拟器运行验证；发布构建情况见最终验证记录。
+
+诊断补充：本地日志可包含被省略字段的固定标签名、固定原因码及读取校验/输出校验/写入异常阶段，不包含字段值、原始 EXIF、路径、GPS 坐标、序列号或注释内容。问题列表最多 24 项，超限以 ISSUE_LIMIT 标记；无效字段警告不等于照片导出失败。

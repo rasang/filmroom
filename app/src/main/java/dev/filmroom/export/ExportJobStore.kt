@@ -51,14 +51,15 @@ data class ExportJob(
     val outputWidth get()=border?.outputWidth ?: crop?.outputWidth ?: width
     val outputHeight get()=border?.outputHeight ?: crop?.outputHeight ?: height
     init {
+        val frozen2302=border?.let{dev.filmroom.border.BorderCatalog.isFrozen2302Frame(it,parameters.filmStock,parameters.paperStock,parameters.outputRoute)}==true
         require(crop==null || (border==null && !parameters.filmBorder && crop.sourceWidth==width && crop.sourceHeight==height &&
             crop.canonicalWidth==sourceWidth && crop.canonicalHeight==sourceHeight && crop.settings==parameters.crop)) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_101df955ba5b) }
-        require(border==null || (parameters.filmBorder && border.stock==parameters.filmStock && border.sourceWidth==width && border.sourceHeight==height))
+        require(border==null || (parameters.filmBorder && (border.stock==parameters.frameStock || frozen2302) && border.sourceWidth==width && border.sourceHeight==height))
         require(border==null || border.geometryVersion==1 ||
             (border.canonicalWidth==sourceWidth && border.canonicalHeight==sourceHeight &&
-             border.composition==parameters.composition.clamped(sourceWidth,sourceHeight))) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_eca4546685f7) }
+             border.composition==parameters.presentationTransformForFrame(sourceWidth,sourceHeight,if(frozen2302)border.stock else parameters.frameStock))) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_eca4546685f7) }
         border?.appearance?.let {
-            require(it==dev.filmroom.border.FrameAppearanceContext.forProfile(parameters.filmStock,parameters.outputRoute,parameters.negativeWhiteHoles)) { "Queued frame appearance differs from frozen parameters" }
+            require(it==dev.filmroom.border.FrameAppearanceContext.forProfile(border.stock,parameters.outputRoute,parameters.negativeWhiteHoles)) { "Queued frame appearance differs from frozen parameters" }
         }
         require(!parameters.filmBorder || border!=null) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_02d5c30befc6) }
     }
@@ -148,7 +149,7 @@ class ExportJobStore(val root:File) {
             val crop=j.optString("crop").takeIf{it.isNotEmpty()}?.let(CropSnapshot::fromJson)
             require(version==5 || border?.appearance==null)
             if(version==5){
-                require(border?.appearance!=null && border.geometryVersion in 2..3 && crop==null)
+                require(border?.appearance!=null && border.geometryVersion in 2..4 && crop==null)
             }else if(version<4){
                 require((version>=2)==j.has("border") && !j.has("crop"))
                 require(border==null || border.geometryVersion==version-1)

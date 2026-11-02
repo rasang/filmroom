@@ -26,10 +26,14 @@ enum RawSourceImpl {
 impl RawSource {
   pub fn new(path: &Path) -> std::io::Result<Self> {
     let file = File::open(path)?;
-    let mmap = unsafe { MmapOptions::new().populate().map(&file)? };
+    Self::new_from_file(&file,path)
+  }
+
+  /// Filmroom: bind TIFF metadata and pixel view to the identical already-open fd.
+  pub fn new_from_file(file:&File,path:&Path)->std::io::Result<Self> {
+    let mmap = unsafe { MmapOptions::new().map(file)? };
     #[cfg(unix)]
     {
-      mmap.advise(memmap2::Advice::WillNeed)?;
       mmap.advise(memmap2::Advice::Sequential)?;
     }
     Ok(Self {

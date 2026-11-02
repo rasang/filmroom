@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_background_title" formatted="false">后台导出提醒</string>
+    <string name="export_background_restricted" formatted="false">系统限制了后台运行。切换应用或锁屏后，导出可能暂停或失败。</string>
+    <string name="export_background_unknown" formatted="false">无法确认后台限制状态。切换应用或锁屏后，导出可能暂停或失败。</string>
+    <string name="export_background_help" formatted="false">永久忽略仅关闭提醒，不会修改系统设置。</string>
+    <string name="export_background_help_generic" formatted="false">前往应用信息 → 电池/后台耗电，选择不限制或允许后台活动（名称随系统版本不同）。</string>
+    <string name="export_background_help_vivo" formatted="false">vivo / iQOO：前往应用信息 → 电池/后台耗电，允许后台运行或后台高耗电（名称随系统版本不同）。</string>
+    <string name="export_background_help_oppo" formatted="false">OPPO / realme / OnePlus：前往应用信息 → 电池/耗电管理，允许后台活动（名称随系统版本不同）。</string>
+    <string name="export_background_help_xiaomi" formatted="false">小米 / Redmi / POCO：前往应用信息 → 省电策略/后台设置，选择无限制（名称随系统版本不同）。</string>
+    <string name="export_background_always_ignore" formatted="false">永久忽略</string>
+    <string name="export_background_ignore" formatted="false">忽略</string>
+    <string name="export_background_open" formatted="false">去打开</string>
+    <string name="export_background_settings_missing" formatted="false">无法打开系统设置，请手动进入设置，查找 Filmroom 的电池或后台使用选项。</string>
+    <string name="export_background_return_title" formatted="false">继续导出？</string>
+    <string name="export_background_return_allowed" formatted="false">Android 标准后台限制检测已通过，但这不代表所有厂商限制均已关闭。</string>
+    <string name="export_background_return_message" formatted="false">返回应用不会自动开始导出。继续后仍可确认导出选项；若仍受限制，也可选择取消并先调整设置。</string>
+    <string name="export_background_continue" formatted="false">继续导出</string>
+    <string name="export_background_cancel" formatted="false">取消</string>
+    <string name="export_background_verified_toast" formatted="false">Android 后台检测已通过</string>
+</resources>

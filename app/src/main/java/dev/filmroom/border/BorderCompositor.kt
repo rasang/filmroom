@@ -32,7 +32,7 @@ object BorderCompositor {
         val yd=minOf(y+.5-s.apertureTop,s.apertureTop+s.photoHeight-y-.5)
         for(x in 0 until s.outputWidth){
             val distance=minOf(x+.5-s.apertureLeft,s.apertureLeft+s.photoWidth-x-.5,yd)
-            val a=if(s.featherRadius==0.0)if(distance>=0)1.0 else 0.0 else ((distance+s.featherRadius)/(2*s.featherRadius)).coerceIn(0.0,1.0).let{it*it*(3-2*it)}
+            val a=raster.photoCoverage(s,x+.5,y+.5) ?: if(s.featherRadius==0.0)if(distance>=0)1.0 else 0.0 else ((distance+s.featherRadius)/(2*s.featherRadius)).coerceIn(0.0,1.0).let{it*it*(3-2*it)}
             val at=x*3
             if(a<1.0){raster.sample(s,x+.5,y+.5,rgb);BorderColor.convert(rgb,color)}
             if(a<=0.0){for(c in 0..2)output[at+c]=rgb[c];continue}

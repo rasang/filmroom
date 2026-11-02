@@ -10,15 +10,16 @@ data class FrameAppearanceContext(
     val negativeWhiteHoles:Boolean,
     val contractVersion:Int=1,
 ) {
-    enum class FilmKind { NEGATIVE, REVERSAL }
+    enum class FilmKind { NEGATIVE, REVERSAL, PRINT }
     enum class Material { POSITIVE_DISPLAY, NEGATIVE_TRANSMISSION }
     init {
         require(contractVersion==1)
         require(outputRoute=="print" || outputRoute=="direct")
         require(filmKind!=FilmKind.REVERSAL || outputRoute=="direct")
+        require(filmKind!=FilmKind.PRINT || outputRoute=="print")
     }
     val material get()=if(filmKind==FilmKind.NEGATIVE && outputRoute=="direct")Material.NEGATIVE_TRANSMISSION else Material.POSITIVE_DISPLAY
-    val holeMatteSrgb get()=if(filmKind==FilmKind.REVERSAL || negativeWhiteHoles)0xffffff else 0
+    val holeMatteSrgb get()=if(filmKind!=FilmKind.NEGATIVE || negativeWhiteHoles)0xffffff else 0
     fun json()=JSONObject().apply {
         put("version",contractVersion);put("outputRoute",outputRoute)
         put("filmKind",filmKind.name);put("negativeWhiteHoles",negativeWhiteHoles)
@@ -33,8 +34,10 @@ data class FrameAppearanceContext(
  * guards every profile. No stock-name guessing, asset I/O, or atlas decode on Main. */
 internal object FrameProfileCatalog {
     // BEGIN GENERATED CATALOG
-    const val catalogSha256="7783788474ef730d170c3313a15964c4b3ec0075049d7a20d42b2bc80b67115d"
+    const val catalogSha256="047892d6754b6c55c91a3fdcb8a75e252e3400069908a51aa39c617219f09596"
     val kinds:Map<String,FrameAppearanceContext.FilmKind> = mapOf(
+        "kodak_doublex" to FrameAppearanceContext.FilmKind.NEGATIVE,
+        "kodak_trix" to FrameAppearanceContext.FilmKind.REVERSAL,
         "fujifilm_c200" to FrameAppearanceContext.FilmKind.NEGATIVE,
         "fujifilm_pro_400h" to FrameAppearanceContext.FilmKind.NEGATIVE,
         "fujifilm_provia_100f" to FrameAppearanceContext.FilmKind.REVERSAL,
@@ -57,5 +60,5 @@ internal object FrameProfileCatalog {
         "kodak_vision3_50d" to FrameAppearanceContext.FilmKind.NEGATIVE,
     )
     // END GENERATED CATALOG
-    fun kind(profile:String)=requireNotNull(kinds[profile]) { "Unknown frame film profile" }
+    fun kind(profile:String)=if(profile=="kodak_2302")FrameAppearanceContext.FilmKind.PRINT else requireNotNull(kinds[profile]) { "Unknown frame film profile" }
 }

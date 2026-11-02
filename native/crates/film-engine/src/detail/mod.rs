@@ -31,6 +31,8 @@ pub enum DetailError {
     Cancelled,
     InvalidGeometry(String),
     BudgetExceeded { required: usize, budget: usize },
+    StorageBudgetExceeded { required: u64, budget: u64 },
+    MemoryPlanExceeded { required: usize, budget: usize },
     Unsupported(String),
     Processing(String),
 }
@@ -126,6 +128,7 @@ pub struct DetailIdentity {
 }
 #[derive(Clone, Debug)]
 pub struct DetailConfig {
+    pub region_output: bool,
     pub width: u32,
     pub height: u32,
     pub params: MobileParams,
@@ -140,6 +143,7 @@ pub struct DetailConfig {
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourcePlan {
+    pub region_output: bool,
     pub peak_reserved_bytes: usize,
     pub disk_reserved_bytes: u64,
     pub stage_cache_bytes: usize,
@@ -182,11 +186,29 @@ struct Block {
     pixels: ImageBuf,
     touch: u64,
 }
+// Tight output is used only when it fits one bounded FFT call and removes at
+// least half of the old-cell output. Larger demands retain canonical samples:
+// this preserves their cache/halo shapes rather than inventing many tail FFTs.
+fn tight_region(core:Rect, sample:Rect, w:usize, h:usize)->bool {
+    if sample.w>CELL+2 || sample.h>CELL+2 {return false;}
+    let mut legacy_pixels=0;
+    for y in core.y/CELL..=(core.y+core.h-1)/CELL {
+        for x in core.x/CELL..=(core.x+core.w-1)/CELL {
+            let cell=Rect{x:x*CELL,y:y*CELL,w:CELL.min(w-x*CELL),h:CELL.min(h-y*CELL)}.expand(1,w,h);
+            legacy_pixels+=cell.w*cell.h;
+        }
+    }
+    sample.w*sample.h*2<=legacy_pixels
+}
+#[cfg(test)]
+#[derive(Debug,Default)]
+struct RegionWorkStats { stage_hits:u64, stage_misses:u64, samples:BTreeMap<(usize,usize),u64> }
 struct Worker {
     blocks: BTreeMap<(usize, usize), Block>,
     bytes: usize,
     clock: u64,
     fft: fft::ValidFft,
+    #[cfg(test)] stats:RegionWorkStats,
 }
 pub struct DetailContext {
     identity: DetailIdentity,
@@ -198,6 +220,7 @@ pub struct DetailContext {
     kernel: Option<ExactDiffusionKernel>,
     support: usize,
     brightness: f64,
+    render_guard: Mutex<()>,
     worker: Mutex<Worker>,
     _root: PrivateRoot,
 }
@@ -261,13 +284,17 @@ impl DetailContext {
         // profiles/LUT setup, and BOTH persistent caches, never just returned bitmap bytes.
         let n = w * h;
         let fft_side = (258 + w.min(h)) * 11 / 10 + 16;
-        let scratch = n * 24 + fft_side * fft_side * 64 + 64 * MIB + if print_fft {256*1024} else {0};
+        // Region JNI streams chunks directly into the caller's float buffer.
+        // Java converts using bounded 16-row staging: float buffer + Bitmap = 16 B/pixel.
+        // Legacy cells retain their original estimate and can be chosen on ROI admission refusal.
+        let region_extra=if config.region_output {n*16+128*1024}else{0};
+        let scratch = n * 24 + region_extra + fft_side * fft_side * 64 + 64 * MIB + if print_fft {256*1024} else {0};
         let peak = scratch
             .checked_add(config.stage_cache_bytes)
             .and_then(|n| n.checked_add(config.spectrum_cache_bytes))
             .ok_or_else(|| DetailError::InvalidGeometry("Budget overflow".into()))?;
         if peak > config.memory_budget_bytes {
-            return Err(DetailError::BudgetExceeded {
+            return Err(DetailError::MemoryPlanExceeded {
                 required: peak,
                 budget: config.memory_budget_bytes,
             });
@@ -283,12 +310,10 @@ impl DetailContext {
         };
         let disk = base_disk.max(camera_disk) + 12 * n as u64 + if print_fft {PRINT_SPECTRA_DISK_BYTES} else {0};
         if disk > config.disk_budget_bytes {
-            return Err(DetailError::BudgetExceeded {
-                required: disk as usize,
-                budget: config.disk_budget_bytes.min(usize::MAX as u64) as usize,
-            });
+            return Err(DetailError::StorageBudgetExceeded { required: disk, budget: config.disk_budget_bytes });
         }
         Ok(ResourcePlan {
+            region_output: config.region_output,
             peak_reserved_bytes: peak,
             disk_reserved_bytes: disk,
             stage_cache_bytes: config.stage_cache_bytes,
@@ -417,11 +442,13 @@ impl DetailContext {
             kernel,
             support,
             brightness: 2f64.powf(config.params.brightness_ev),
+            render_guard: Mutex::new(()),
             worker: Mutex::new(Worker {
                 blocks: BTreeMap::new(),
                 bytes: 0,
                 clock: 0,
                 fft,
+                #[cfg(test)] stats:RegionWorkStats::default(),
             }),
             plan,
             _root: root,
@@ -469,6 +496,65 @@ impl DetailContext {
             .map_err(|_| DetailError::Processing("Worker lock poisoned".into()))?;
         Ok(w.bytes)
     }
+    /// One visible-region result. Internal samples remain <=258 per axis so FFT
+    /// scratch does not grow with viewport size. Large views reuse full canonical
+    /// cell samples (including offscreen parts); only the ROI is published.
+    pub fn render_region(
+        self: &Arc<Self>, core: Rect, cancel: &CancellationToken,
+    ) -> Result<OwnedDetailTile, DetailError> {
+        cancel.check()?;
+        if !self.plan.region_output {return Err(DetailError::Unsupported("Context uses legacy cell output budget".into()));}
+        let (w,h)=(self.identity.width as usize,self.identity.height as usize);
+        if !core.valid(w,h) { return Err(DetailError::InvalidGeometry("Region outside working grid".into())); }
+        let sample=core.expand(1,w,h);
+        let mut rgb=vec![0f32;sample.w*sample.h*3];
+        self.render_region_into(core,&mut rgb,cancel)?;
+        Ok(OwnedDetailTile{identity:self.identity.clone(),backend:self.backend,core_rect:core,sample_rect:sample,rgb})
+    }
+    /// Caller owns a full, exclusive output slice through return. Cancellation may
+    /// leave partial bytes, which must never be published as a completed region.
+    pub fn render_region_into(self:&Arc<Self>,core:Rect,rgb:&mut[f32],cancel:&CancellationToken)->Result<(),DetailError> {
+        cancel.check()?;
+        let _render_guard=self.render_guard.try_lock().map_err(|_|DetailError::Processing("Context already has an active worker".into()))?;
+        if !self.plan.region_output {return Err(DetailError::Unsupported("Context uses legacy cell output budget".into()));}
+        let (w,h)=(self.identity.width as usize,self.identity.height as usize);
+        if !core.valid(w,h) {return Err(DetailError::InvalidGeometry("Region outside working grid".into()));}
+        let sample=core.expand(1,w,h);
+        if rgb.len()!=sample.w*sample.h*3 {return Err(DetailError::InvalidGeometry("Region output shape".into()));}
+        let mut copy_sample=|part:Rect,owned:Rect|->Result<(),DetailError>{
+            cancel.check()?;
+            let output=self.render_sample(part,part,cancel)?;
+            let left=sample.x.max(owned.x);let top=sample.y.max(owned.y);
+            let right=(sample.x+sample.w).min(owned.x+owned.w);
+            let bottom=(sample.y+sample.h).min(owned.y+owned.h);
+            for y in top..bottom {
+                cancel.check()?;
+                let dst=((y-sample.y)*sample.w+left-sample.x)*3;
+                let src=((y-part.y)*part.w+left-part.x)*3;
+                let n=(right-left)*3;
+                rgb[dst..dst+n].copy_from_slice(&output.rgb[src..src+n]);
+            }
+            Ok(())
+        };
+        if tight_region(core,sample,w,h) {copy_sample(sample,sample)?;} else {
+            // Same canonical sample order/shapes as legacy cells. Keep one atomic
+            // ROI externally; no public render_cell recursion under render_guard.
+            for y in core.y/CELL..=(core.y+core.h-1)/CELL {
+                for x in core.x/CELL..=(core.x+core.w-1)/CELL {
+                    let cell=Rect{x:x*CELL,y:y*CELL,w:CELL.min(w-x*CELL),h:CELL.min(h-y*CELL)};
+                    // Preserve canonical core ownership at seams: a neighbour's
+                    // gutter must not overwrite this cell's visible core. Only
+                    // outer ROI gutters are owned by the boundary cell sample.
+                    let left=if x==core.x/CELL {sample.x}else{cell.x};
+                    let top=if y==core.y/CELL {sample.y}else{cell.y};
+                    let right=if x==(core.x+core.w-1)/CELL {sample.x+sample.w}else{cell.x+cell.w};
+                    let bottom=if y==(core.y+core.h-1)/CELL {sample.y+sample.h}else{cell.y+cell.h};
+                    copy_sample(cell.expand(1,w,h),Rect{x:left,y:top,w:right-left,h:bottom-top})?;
+                }
+            }
+        }
+        cancel.check()?;Ok(())
+    }
     pub fn render_cell(
         self: &Arc<Self>,
         cell_x: usize,
@@ -477,6 +563,7 @@ impl DetailContext {
     ) -> Result<OwnedDetailTile, DetailError> {
         let _interactive=crate::export_execution::interactive_work();
         cancel.check()?;
+        let _render_guard=self.render_guard.try_lock().map_err(|_|DetailError::Processing("Context already has an active worker".into()))?;
         let (w, h) = (self.identity.width as usize, self.identity.height as usize);
         let x = cell_x
             .checked_mul(CELL)
@@ -496,12 +583,18 @@ impl DetailContext {
             h: CELL.min(h - y),
         };
         let sample = core.expand(1, w, h);
+        self.render_sample(core,sample,cancel)
+    }
+    fn render_sample(self: &Arc<Self>, core: Rect, sample: Rect, cancel: &CancellationToken) -> Result<OwnedDetailTile, DetailError> {
+        let _interactive=crate::export_execution::interactive_work();
+        let (w,h)=(self.identity.width as usize,self.identity.height as usize);
         let needed = sample.expand(self.kernel.as_ref().map_or(0, |k| k.radius), w, h);
         let mut worker = self
             .worker
             .try_lock()
             .map_err(|_| DetailError::Processing("Context already has an active worker".into()))?;
         cancel.check()?;
+        #[cfg(test)] { *worker.stats.samples.entry((sample.w,sample.h)).or_default()+=1; }
         let mut raw = ImageBuf::new(needed.w as u32, needed.h as u32);
         for by in needed.y / CELL..=(needed.y + needed.h - 1) / CELL {
             for bx in needed.x / CELL..=(needed.x + needed.w - 1) / CELL {
@@ -514,6 +607,7 @@ impl DetailContext {
                     w: CELL.min(w - bx * CELL),
                     h: CELL.min(h - by * CELL),
                 };
+                #[cfg(test)] {if worker.blocks.contains_key(&(bx,by)){worker.stats.stage_hits+=1;}else{worker.stats.stage_misses+=1;}}
                 if !worker.blocks.contains_key(&(bx, by)) {
                     let pixels = self.make_block(rect, cancel)?;
                     let bytes = pixels.data.len() * 8;
@@ -666,7 +760,7 @@ fn crop(
 mod tests {
     use super::*;
     fn config(w: u32, h: u32) -> DetailConfig {
-        DetailConfig{width:w,height:h,params:MobileParams::parse(r#"{"paperStock":"kodak_2383","useGpu":false,"autoExposure":true,"metering":"partial","diffusionFilter":"black_pro_mist","printDiffusionFilter":"black_pro_mist","brightnessEv":0.859999895}"#).unwrap(),source_revision:"fixture-v1".into(),mapping_revision:"oriented-v1".into(),data_revision:"bundled-v1".into(),memory_budget_bytes:512*MIB,disk_budget_bytes:1024*1024*1024,stage_cache_bytes:CELL*CELL*24,spectrum_cache_bytes:64*MIB}
+        DetailConfig{region_output:true,width:w,height:h,params:MobileParams::parse(r#"{"paperStock":"kodak_2383","useGpu":false,"autoExposure":true,"metering":"partial","diffusionFilter":"black_pro_mist","printDiffusionFilter":"black_pro_mist","brightnessEv":0.859999895}"#).unwrap(),source_revision:"fixture-v1".into(),mapping_revision:"oriented-v1".into(),data_revision:"bundled-v1".into(),memory_budget_bytes:512*MIB,disk_budget_bytes:1024*1024*1024,stage_cache_bytes:CELL*CELL*24,spectrum_cache_bytes:64*MIB}
     }
     fn root() -> PathBuf {
         static N: AtomicU64 = AtomicU64::new(0);
@@ -701,6 +795,106 @@ mod tests {
         )
     }
     #[test]
+    #[ignore = "host-only timing probe; run explicitly under the shared heavy-work slot"]
+    fn visible_region_cost_probe() {
+        use std::time::Instant;
+        let root=root();let (w,h)=(1024,768);let (path,_,_)=input(&root,w,h);
+        let mut c=config(w,h);c.stage_cache_bytes=16*MIB;c.spectrum_cache_bytes=32*MIB;
+        let token=CancellationToken::new();let started=Instant::now();
+        let ctx=DetailContext::build(c,&data(),&path,&root,&token).unwrap();
+        eprintln!("REGION_COST context_ms={:.3} grid={}x{}",started.elapsed().as_secs_f64()*1000.,w,h);
+        for (name,core) in [("boundary20",Rect{x:250,y:250,w:20,h:20}),("viewport512x384",Rect{x:256,y:256,w:512,h:384}),("wide768x576",Rect{x:128,y:96,w:768,h:576})] {
+            for round in 0..2 {
+                for region in if round==0 {[false,true]}else{[true,false]} {
+                    ctx.clear_cache().unwrap();ctx.worker.lock().unwrap().stats=RegionWorkStats::default();
+                    let before=ctx.print_cache_stats().unwrap();let start=Instant::now();let mut output_pixels=0usize;let mut calls=0;
+                    if region {let out=ctx.render_region(core,&token).unwrap();output_pixels=out.rgb.len()/3;calls=1;}
+                    else {for y in core.y/CELL..=(core.y+core.h-1)/CELL {for x in core.x/CELL..=(core.x+core.w-1)/CELL {
+                        let out=ctx.render_cell(x,y,&token).unwrap();output_pixels+=out.rgb.len()/3;calls+=1;
+                    }}}
+                    eprintln!("REGION_COST name={name} round={round} mode={} ms={:.3} output_pixels={output_pixels} calls={calls} stage_bytes={}",if region{"region"}else{"cells"},start.elapsed().as_secs_f64()*1000.,ctx.cache_bytes().unwrap());
+                    let after=ctx.print_cache_stats().unwrap();
+                    eprintln!("REGION_STATS name={name} round={round} region={region} {:?} fft_builds={} fft_ram_hits={} fft_disk_hits={} fft_evictions={}",ctx.worker.lock().unwrap().stats,after.kernel_builds-before.kernel_builds,after.ram_hits-before.ram_hits,after.disk_hits-before.disk_hits,after.ram_evictions-before.ram_evictions);
+
+                }
+            }
+        }
+        drop(ctx);fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn region_partition_policy_uses_single_tight_call_only_for_large_output_savings(){
+        let (w,h)=(1024,768);
+        for (core,expected) in [
+            (Rect{x:250,y:250,w:20,h:20},true),
+            (Rect{x:10,y:10,w:20,h:20},true),
+            (Rect{x:256,y:256,w:512,h:384},false),
+            (Rect{x:128,y:96,w:768,h:576},false),
+            (Rect{x:2,y:2,w:250,h:250},false),
+            (Rect{x:250,y:250,w:256,h:256},true),
+        ] {assert_eq!(tight_region(core,core.expand(1,w,h),w,h),expected,"{core:?}");}
+    }
+    #[test]
+    fn visible_region_crosses_four_cells_matches_reference_and_cancels() {
+        let root=root();let (w,h)=(273,269);
+        let c=config(w,h);let (path,image,bytes)=input(&root,w,h);
+        let token=CancellationToken::new();
+        let ctx=DetailContext::build(c,&data(),&path,&root,&token).unwrap();
+        let mut reference=ctx.pipe.process(image,&CpuBackend);
+        for v in &mut reference.data {*v*=from_f64(ctx.brightness);}
+        for core in [Rect{x:249,y:247,w:18,h:17},Rect{x:0,y:0,w:12,h:19},Rect{x:260,y:260,w:13,h:9},Rect{x:7,y:9,w:266,h:260},Rect{x:0,y:0,w:w as usize,h:h as usize}] {
+            let output=ctx.render_region(core,&token).unwrap();
+            let mut borrowed=vec![-123f32;output.rgb.len()];
+            ctx.render_region_into(core,&mut borrowed,&token).unwrap();assert_eq!(borrowed,output.rgb);
+            assert_eq!(output.core_rect,core);assert_eq!(output.sample_rect,core.expand(1,w as usize,h as usize));
+            let expected=crop(&reference,Rect{x:0,y:0,w:w as usize,h:h as usize},output.sample_rect,&token).unwrap();
+            let max=output.rgb.iter().zip(&expected.data).map(|(a,b)|(*a-*b as f32).abs()).fold(0f32,f32::max);
+            assert!(max<1e-5,"region same-grid max error {max}");
+            let mut changed_srgb8=0usize;let mut compared=0usize;let mut old_cell_max=0f32;
+            let srgb8=|v:f32| {let l=(v as f64).clamp(0.,1.);let e=if l<=0.0031308{12.92*l}else{1.055*l.powf(1./2.4)-0.055};(e*255.).round() as i32};
+            for by in output.sample_rect.y/CELL..=(output.sample_rect.y+output.sample_rect.h-1)/CELL {
+                for bx in output.sample_rect.x/CELL..=(output.sample_rect.x+output.sample_rect.w-1)/CELL {
+                    let old=ctx.render_cell(bx,by,&token).unwrap();
+                    let sx=output.sample_rect.x.max(old.core_rect.x);let sy=output.sample_rect.y.max(old.core_rect.y);
+                    let ex=(output.sample_rect.x+output.sample_rect.w).min(old.core_rect.x+old.core_rect.w);
+                    let ey=(output.sample_rect.y+output.sample_rect.h).min(old.core_rect.y+old.core_rect.h);
+                    for y in sy..ey {for x in sx..ex {for ch in 0..3 {
+                        let a=output.rgb[((y-output.sample_rect.y)*output.sample_rect.w+x-output.sample_rect.x)*3+ch];
+                        let b=old.rgb[((y-old.sample_rect.y)*old.sample_rect.w+x-old.sample_rect.x)*3+ch];
+                        assert!((a-b).abs()<1e-5,"new region vs prior cell {a} {b}");
+                        if !tight_region(core,output.sample_rect,w as usize,h as usize) && x>=core.x && x<core.x+core.w && y>=core.y && y<core.y+core.h {
+                            assert_eq!(a.to_bits(),b.to_bits(),"Canonical cell core ownership at {x},{y},{ch}");
+                        }
+                        old_cell_max=old_cell_max.max((a-b).abs());compared+=1;if srgb8(a)!=srgb8(b){changed_srgb8+=1;}
+                    }}}
+                }
+            }
+            eprintln!("REGION_PARITY core={core:?} reference_max={max} old_cell_max={old_cell_max} srgb8_changed={changed_srgb8}/{compared}");
+            let first=output.rgb;ctx.clear_cache().unwrap();
+            assert_eq!(first,ctx.render_region(core,&token).unwrap().rgb);
+        }
+        assert!(matches!(ctx.render_region(Rect{x:usize::MAX,y:0,w:1,h:1},&token),Err(DetailError::InvalidGeometry(_))));
+        let cancelled=CancellationToken::new();cancelled.cancel_after_checks(20);
+        assert!(matches!(ctx.render_region(Rect{x:0,y:0,w:273,h:269},&cancelled),Err(DetailError::Cancelled)));
+        assert!(ctx.render_region(Rect{x:250,y:250,w:15,h:15},&token).is_ok());
+        assert_eq!(fs::read(path).unwrap(),bytes);drop(ctx);fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn legacy_output_keeps_original_budget_when_region_plan_does_not_fit() {
+        let mut c=config(1024,768);c.region_output=false;
+        let legacy=DetailContext::preflight(&c).unwrap();
+        assert!(!legacy.region_output);
+        c.region_output=true;let region=DetailContext::preflight(&c).unwrap();
+        assert_eq!(region.peak_reserved_bytes-legacy.peak_reserved_bytes,1024*768*16+128*1024);
+        c.memory_budget_bytes=legacy.peak_reserved_bytes;
+        assert!(matches!(DetailContext::preflight(&c),Err(DetailError::MemoryPlanExceeded{..})));
+        c.region_output=false;assert_eq!(DetailContext::preflight(&c).unwrap().peak_reserved_bytes,legacy.peak_reserved_bytes);
+        let root=root();let (path,_,_)=input(&root,32,24);let mut small=config(32,24);small.region_output=false;
+        let token=CancellationToken::new();let ctx=DetailContext::build(small,&data(),&path,&root,&token).unwrap();
+        assert!(ctx.render_cell(0,0,&token).is_ok());let mut output=vec![123f32;32*24*3];
+        assert!(matches!(ctx.render_region_into(Rect{x:0,y:0,w:32,h:24},&mut output,&token),Err(DetailError::Unsupported(_))));
+        assert!(output.iter().all(|&v|v==123.));drop(ctx);fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn print_disk_quota_preserves_1536_cap_and_conservative_memory_plan() {
         let mut c=config(1152,1536);
         c.params.diffusion_filter="off".into();c.params.print_diffusion_filter="off".into();
@@ -714,7 +908,7 @@ mod tests {
         assert!(matches!(DetailContext::preflight(&c),Err(DetailError::BudgetExceeded{..})));
         c.spectrum_cache_bytes=original_cache;
         c.disk_budget_bytes=on.disk_reserved_bytes-1;
-        assert!(matches!(DetailContext::preflight(&c),Err(DetailError::BudgetExceeded{..})));
+        assert!(matches!(DetailContext::preflight(&c),Err(DetailError::StorageBudgetExceeded{..})));
         c.disk_budget_bytes=1024*1024*1024;c.params.print_diffusion_filter="off".into();c.height=2048;
         assert!(matches!(DetailContext::preflight(&c),Err(DetailError::InvalidGeometry(_))));
         c.height=1536;c.source_revision="x".repeat(1025);
@@ -733,7 +927,7 @@ mod tests {
         c.memory_budget_bytes = 1;
         assert!(matches!(
             DetailContext::preflight(&c),
-            Err(DetailError::BudgetExceeded { .. })
+            Err(DetailError::MemoryPlanExceeded { .. })
         ));
         c.memory_budget_bytes = 512 * MIB;
         c.params.scan_blur = 1.;
@@ -904,7 +1098,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
-    fn all_twenty_stock_profiles_are_rendered_or_explicitly_unsupported() {
+    fn all_catalog_stock_profiles_are_rendered_or_explicitly_unsupported() {
         let root = root();
         let (path, image, original) = input(&root, 32, 24);
         let token = CancellationToken::new();
@@ -947,7 +1141,8 @@ mod tests {
             rendered += 1;
             drop(ctx);
         }
-        assert_eq!((rendered, unsupported), (16, 4));
+        assert_eq!(rendered + unsupported, crate::profile_catalog::FILMS.len());
+        assert_eq!((rendered, unsupported), (17, 5));
         assert_eq!(fs::read(path).unwrap(), original);
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();

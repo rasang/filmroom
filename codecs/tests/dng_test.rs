@@ -79,6 +79,7 @@ fn reject_bad_header_truncated_and_budget_before_allocation() {
         admit(
             &d,
             &Budget {
+                raw_batch: film_codecs::raw_batch::RawBatch::Standard,
                 memory_budget_mi_b: 1,
                 disk_budget_bytes: u64::MAX
             }
@@ -91,6 +92,7 @@ fn reject_bad_header_truncated_and_budget_before_allocation() {
         admit(
             &d,
             &Budget {
+                raw_batch: film_codecs::raw_batch::RawBatch::Standard,
                 memory_budget_mi_b: 128,
                 disk_budget_bytes: 1
             }

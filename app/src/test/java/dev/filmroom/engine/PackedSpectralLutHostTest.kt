@@ -29,4 +29,26 @@ class PackedSpectralLutHostTest {
         assertFalse(File(restored.parentFile,PackedSpectralLut.PACKED_NAME).exists())
         assertFalse(root.walkTopDown().any{it.name.endsWith(".tmp")})
     }
+    @Test fun existingInstalledNeutralDatabaseIsReplacedByCurrentAssetBytes()=runBlocking {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val expected=context.assets.open("engine-data/filters/neutral_print_filters.json").use { it.readBytes() }
+        val old=org.json.JSONObject(String(expected,Charsets.UTF_8))
+        old.remove("kodak_2302")
+        old.keys().forEach { paper ->
+            val lights=old.getJSONObject(paper)
+            lights.keys().forEach { light -> lights.getJSONObject(light).apply { remove("kodak_doublex");remove("kodak_trix") } }
+        }
+        val installed=File(context.filesDir,"engine-data/filters/neutral_print_filters.json")
+        installed.parentFile!!.mkdirs();installed.writeText(old.toString())
+        assertFalse(expected.contentEquals(installed.readBytes()))
+        val engine=FilmEngine(context)
+        val method=FilmEngine::class.java.getDeclaredMethod("copyData",Continuation::class.java).apply{isAccessible=true}
+        repeat(2) {
+            suspendCoroutine<File>{continuation->val result=method.invoke(engine,continuation);if(result!==COROUTINE_SUSPENDED)continuation.resume(result as File)}
+            assertArrayEquals(expected,installed.readBytes())
+        }
+        assertTrue(org.json.JSONObject(installed.readText()).has("kodak_2302"))
+        assertFalse(installed.parentFile!!.walkTopDown().any { it.name.endsWith(".tmp") })
+    }
+
 }

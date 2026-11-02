@@ -1,3 +1,5 @@
+> **Development backup, not an installable release.** This branch preserves unintegrated work and omits native binaries. It is not a build/validation claim. See [recovery baselines, patches and validation status](development-snapshots/20261102/README.md).
+
 <div align="center">
 
 # Filmroom
@@ -102,6 +104,7 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | --- | --- |
 | JPEG / PNG | System decoding; transparent PNG areas are composited over white. |
 | HEIC | A limited subset of ordinary, static 8-bit HEVC primary/grid images; requires a device decoder and sufficient memory. Supported P3 input is converted to sRGB SDR, not edited as HDR. |
+| NEF / CR2 / ARW (development candidate) | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Final joint validation and release approval remain required. |
 | DNG | Supported 16-bit uncompressed strip-based Bayer/linear RGB and tested lossless JPEG (SOF3) strip-based/tiled variants. Reads RAW data rather than substituting an embedded preview. |
 
 | Output | Best for |
@@ -110,7 +113,9 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | PNG · 8-bit | Avoiding another JPEG compression pass; does not recover missing input precision. |
 | TIFF · 16-bit | Further editing; larger files, not displayed by every gallery. An 8-bit source does not become RAW. |
 
-**Know the limits:** A `.dng` extension does not guarantee compatibility. HEIC export, other camera RAW formats, AVIF, EXR and HDR enhancement/preservation are not implemented. DNG/HEIC import is limited to 52 megapixels; final encoding is limited to 84 megapixels, subject to format, memory and storage constraints. Zoomed previews have a maximum long edge of 1536 pixels—**not source-resolution detail**. Unsupported variants or insufficient memory/temporary storage produce an explicit failure, rather than silently downsizing a full-resolution export.
+**Know the limits:** A `.dng` extension does not guarantee compatibility. HEIC export, other unlisted camera RAW formats, AVIF, EXR and HDR enhancement/preservation are not implemented. RAW/HEIC import is limited to 52 megapixels; final encoding is limited to 84 megapixels, subject to format, memory and storage constraints. Zoomed previews have a maximum long edge of 1536 pixels—**not source-resolution detail**. Unsupported variants or insufficient memory/temporary storage produce an explicit failure, rather than silently downsizing a full-resolution export.
+
+**Camera RAW scope:** The list describes tested formats and pixel layouts, not a camera-model allowlist. Identification uses file contents and offline color profiles, not the suffix alone. It does not guarantee every unknown camera, future compression variant or damaged file. Basic matrix development does not reproduce camera styles; small NEF uses an independently verified already-balanced linear-sRGB path without applying white balance twice. Host validation is not physical Android-device validation. No installation package is delivered before release approval.
 
 Detailed contracts: [HEIC](docs/HEIC_IMPORT.md) · [DNG/codecs](codecs/README.md) · [Xiaomi DNG scope](docs/XIAOMI_DNG_COMPAT.md) · [Previews](docs/LOCAL_DETAIL_UI.md). These technical documents are primarily in Chinese.
 

@@ -134,6 +134,16 @@ impl<'a> Decoder for ArwDecoder<'a> {
         // Data is RGGB for bayer readout and YCbCr for reduced resolution files.
         ArwDecoder::decode_ljpeg(&self.camera, file, raw, dummy)?
       }
+      32766 => {
+        // Only metadata is returned here. Pixel decoding belongs to the bounded FD adapter.
+        if !dummy { return Err("ARW6 requires bounded row-plane adapter".into()); }
+        let values = self.get_blacklevel(raw).ok_or("ARW6 missing raw IFD black")?;
+        let mut doubled=[0u16;4];
+        for (out,value) in doubled.iter_mut().zip(values) { *out=value.checked_mul(2).ok_or("ARW6 black overflow")?; }
+        black=Some(doubled);
+        white=Some(fetch_tiff_tag!(raw, TiffCommonTag::WhiteLevel).force_u16(0).checked_mul(2).ok_or("ARW6 white overflow")?);
+        PixU16::new_uninit(width,height)
+      }
       32767 => {
         if (width * height * bps) != count * 8 {
           height += 8;
@@ -182,6 +192,7 @@ impl<'a> Decoder for ArwDecoder<'a> {
     };
 
     let mut img = RawImage::new(self.camera.clone(), image, cpp, params.wb, photometric, blacklevel, whitelevel, dummy);
+    img.source_ifd_offset = Some(raw.offset);
 
     if cpp == 3 {
       // For debayer images, we assume WB coeffs already applied
@@ -326,30 +337,22 @@ impl<'a> ArwDecoder<'a> {
       assert_eq!(entry.value_type(), 0x1);
       LEu32(entry.get_data(), 0)
     };
-    let buf = file.subview_until_eof(priv_offset as u64)?;
-    if BEu32(buf, 0) != 0x4D5249 {
-      // MRI
-      return Err(format!("Invalid DNGPRIVATEDATA tag: 0x{:X}, expected 0x4D5249 ", BEu32(buf, 0)).into());
+    // MRI is a bounded metadata block, never scan into the entropy payload.
+    if priv_offset as usize >= offset || offset - (priv_offset as usize) < 8 {
+      return Err("A100: invalid private block offset".into());
     }
-    let mut currpos: usize = 8;
-    let mut wb_coeffs: [f32; 4] = [1.0, 1.0, 1.0, f32::NAN];
-    // At most we read 20 bytes from currpos so check we don't step outside that
-    while currpos + 20 < buf.len() {
-      let tag: u32 = BEu32(buf, currpos);
-      let len: usize = LEu32(buf, currpos + 4) as usize;
-      if tag == 0x574247 {
-        // WBG
-        wb_coeffs[0] = LEu16(buf, currpos + 12) as f32;
-        wb_coeffs[1] = LEu16(buf, currpos + 14) as f32;
-        wb_coeffs[2] = LEu16(buf, currpos + 14) as f32;
-        wb_coeffs[3] = LEu16(buf, currpos + 18) as f32;
-        break;
-      }
-      currpos += len + 8;
+    let header = file.subview(priv_offset as u64, 8)?;
+    let metadata_len = (LEu32(header, 4) as usize).checked_add(8).ok_or("A100: private block overflow")?;
+    if metadata_len > 512 * 1024 || metadata_len > offset - priv_offset as usize {
+      return Err("A100: private block crosses raw data".into());
     }
+    let buf = file.subview(priv_offset as u64, metadata_len as u64)?;
+    let wb_coeffs = a100_mri_wb(buf)?;
 
     let cpp = 1;
-    ok_cfa_image(self.camera.clone(), cpp, normalize_wb(wb_coeffs), image, dummy)
+    let mut image = ok_cfa_image(self.camera.clone(), cpp, normalize_wb(wb_coeffs), image, dummy)?;
+    image.source_ifd_offset = Some(raw.offset);
+    Ok(image)
   }
 
   fn image_srf(&self, file: &RawSource, dummy: bool) -> Result<RawImage> {
@@ -365,7 +368,7 @@ impl<'a> ArwDecoder<'a> {
     let image = if dummy {
       PixU16::new_uninit(width, height)
     } else {
-      let buffer = file.as_vec()?;
+      let buffer = file.buf(); // Filmroom: immutable borrowed input, no whole-file clone.
       let len = width * height * 2;
 
       // Constants taken from dcraw
@@ -484,7 +487,7 @@ impl<'a> ArwDecoder<'a> {
         format!("ARW LJPEG: trying to decode {} tiles from {} offsets", coltiles * rowtiles, offsets.count()),
       ));
     }
-    let buffer = file.as_vec()?;
+    let buffer = file.buf(); // Filmroom: immutable borrowed input, no whole-file clone.
 
     if cpp == 3 {
       let mut image = decode_threaded_multiline(
@@ -580,12 +583,18 @@ impl<'a> ArwDecoder<'a> {
 
     let sony_offset = fetch_tiff_tag!(priv_tiff, TiffCommonTag::SonyOffset).force_u32(0);
     let sony_length = fetch_tiff_tag!(priv_tiff, TiffCommonTag::SonyLength).force_usize(0);
+    if sony_offset as usize > file.len()
+      || sony_length.checked_add(4).is_none()
+      || (sony_offset as usize).checked_add(sony_length).is_none_or(|end| end > file.len())
+      || !crate::metadata_budget::charge(sony_length.saturating_add(4), false) {
+      return Err(RawlerError::DecoderFailed("Sony metadata resource bound".into()));
+    }
     // This tag is of type UNDEFINED and contains a 32 bit value
     let sony_key = {
       let tag = fetch_tiff_tag!(priv_tiff, TiffCommonTag::SonyKey).get_data();
       LEu32(tag, 0)
     };
-    let buffer = file.as_vec()?;
+    let buffer = file.buf(); // Filmroom: immutable borrowed input, no whole-file clone.
     let decrypted_buf = ArwDecoder::sony_decrypt(&buffer, sony_offset as usize, sony_length, sony_key)?;
 
     let decrypted_tiff = IFD::new(&mut Cursor::new(decrypted_buf), 0, 0, -(sony_offset as i32), Endian::Little, &[])?;
@@ -713,6 +722,28 @@ impl<'a> ArwDecoder<'a> {
   }
 }
 
+fn a100_mri_wb(buf: &[u8]) -> Result<[f32; 4]> {
+  if buf.len() < 8 || BEu32(buf, 0) != 0x4D5249 || (LEu32(buf, 4) as usize).checked_add(8) != Some(buf.len()) {
+    return Err("A100: invalid MRI header".into());
+  }
+  let mut pos = 8usize;
+  let mut wb = None;
+  while pos < buf.len() {
+    if buf.len() - pos < 8 { return Err("A100: truncated MRI entry".into()); }
+    let len = LEu32(buf, pos + 4) as usize;
+    let end = pos.checked_add(8).and_then(|v| v.checked_add(len)).ok_or("A100: MRI entry overflow")?;
+    if end > buf.len() { return Err("A100: MRI entry outside private block".into()); }
+    if BEu32(buf, pos) == 0x574247 {
+      if len < 12 || wb.is_some() { return Err("A100: invalid or duplicate WBG".into()); }
+      let values = [LEu16(buf,pos+12), LEu16(buf,pos+14), LEu16(buf,pos+16), LEu16(buf,pos+18)];
+      if values.contains(&0) { return Err("A100: zero white balance coefficient".into()); }
+      wb = Some(values.map(|v| v as f32));
+    }
+    pos = end;
+  }
+  wb.ok_or_else(|| "A100: missing WBG".into())
+}
+
 fn normalize_wb(raw_wb: [f32; 4]) -> [f32; 4] {
   debug!("ARW raw wb: {:?}", raw_wb);
   // We never have more then RGB colors so far (no RGBE etc.)
@@ -794,4 +825,26 @@ pub enum SR2SubIFD {
   BlackLevel1 = 0x7300,
   BlackLevel2 = 0x7310,
   WhiteLevel = 0x787f,
+}
+
+#[cfg(test)]
+mod filmroom_a100_tests {
+  use super::a100_mri_wb;
+  fn mri() -> Vec<u8> {
+    let mut v=vec![0,0x4d,0x52,0x49,20,0,0,0,0,0x57,0x42,0x47,12,0,0,0,2,2,2,2];
+    for wb in [401u16,256,256,574] { v.extend(wb.to_le_bytes()); }
+    v
+  }
+  #[test]
+  fn a100_wb_must_be_present_and_stay_in_bounded_private_block() {
+    let valid=mri(); assert_eq!(a100_mri_wb(&valid).unwrap(),[401.,256.,256.,574.]);
+    let mut missing=valid.clone(); missing[9]=0;
+    assert!(a100_mri_wb(&missing).is_err());
+    let mut crossing=valid.clone(); crossing[12]=13;
+    assert!(a100_mri_wb(&crossing).is_err());
+    let mut huge=valid.clone(); huge[12..16].fill(255);
+    assert!(a100_mri_wb(&huge).is_err());
+    let mut zero=valid; zero[20..22].fill(0);
+    assert!(a100_mri_wb(&zero).is_err());
+  }
 }

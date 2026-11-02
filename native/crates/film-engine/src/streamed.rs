@@ -140,7 +140,7 @@ fn grain_density(execution:Option<&crate::export_execution::ExportPermit>,mut de
    inplace_with(&accum,&[&contribution],n,c,|a,x|a+x[0])?;s.remove(&contribution)?;
   }
   if micro_active {
-    let field=s.path("grain-clump");p.begin_work("grain_microstructure");crate::streamed_global::write_microstructure_field(&field,w,h,ch,g.micro_structure,pitch,g.seed,&mut *c,|done,total|p.pass("grain_microstructure",done,total)).map_err(io)?;s.observe()?;p.end_work();
+    let field=s.path("grain-clump");p.begin_work("grain_microstructure");crate::streamed_global::write_microstructure_field(&field,w,h,if g.monochrome {0}else{ch},g.micro_structure,pitch,g.seed,&mut *c,|done,total|p.pass("grain_microstructure",done,total)).map_err(io)?;s.observe()?;p.end_work();
     let spread=g.micro_structure[0]/pitch;let field=if spread>0.4 {let b=s.blur(&field,w,h,spread,"grain_microstructure",c,p)?;s.remove(&field)?;b}else{field};
     inplace_with(&accum,&[&field],n,c,|a,v|a*v[0])?;s.remove(&field)?;
   }
@@ -221,7 +221,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
 
  params.camera.pixel_size_um_override=Some(pitch);params.film_render.grain.coordinate_origin=Some([0,0]);params.settings.use_enlarger_lut=true;params.settings.use_scanner_lut=true;params.settings.lut_resolution=33;
  cancel(&mut cancelled)?;progress.pass("setup",0,1);let film=load_profile_by_name(data_dir,film_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;let paper=load_profile_by_name(data_dir,paper_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;
- if film.is_bw()||(!film.is_negative()&&!film.is_positive())||film.is_positive()&&!params.io.scan_film{return Err(error("UNSUPPORTED_PROFILE","Unsupported film or reversal print route"));}
+ if (!film.is_negative()&&!film.is_positive())||film.is_positive()&&!params.io.scan_film{return Err(error("UNSUPPORTED_PROFILE","Unsupported film or reversal print route"));}
  let mut checkpoints=if let Some(root)=checkpoint_dir {
    let config=serde_json::to_string(&(film_stock,paper_stock,&params,brightness_ev,use_gpu)).map_err(|_|error("INVALID_PARAMETERS","Checkpoint configuration serialization failed"))?;
    let identity=crate::checkpoint::Identity::new(data_dir,input_path,width,height,config,&mut cancelled).map_err(checkpoint_error)?;

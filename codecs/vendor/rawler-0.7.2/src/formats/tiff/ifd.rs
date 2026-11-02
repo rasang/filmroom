@@ -54,6 +54,9 @@ impl IFD {
   }
 
   pub fn new_root_with_correction<R: Read + Seek>(reader: &mut R, offset: u32, base: u32, corr: i32, max_chain: usize, sub_tags: &[u16]) -> Result<IFD> {
+    if !crate::metadata_budget::charge(0, true) {
+      return Err(TiffError::General("Metadata IFD budget exceeded".into()));
+    }
     reader.seek(SeekFrom::Start((base + offset) as u64))?;
     let endian = match reader.read_u16::<LittleEndian>()? {
       0x4949 => Endian::Little,
@@ -101,6 +104,9 @@ impl IFD {
   }
 
   pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, base: u32, corr: i32, endian: Endian, sub_tags: &[u16]) -> Result<IFD> {
+    if !crate::metadata_budget::charge(0, true) {
+      return Err(TiffError::General("Metadata IFD budget exceeded".into()));
+    }
     reader.seek(SeekFrom::Start((base + offset) as u64))?;
     let mut sub_ifd_offsets = HashMap::new();
     let mut reader = EndianReader::new(reader, endian);
@@ -200,6 +206,9 @@ impl IFD {
     let pos = reader.position()?;
     let reader = reader.into_inner();
     for subs in sub_ifd_offsets {
+      // Sony A100's SubIFDs is an entropy pointer, not a malformed TIFF child.
+      if subs.0 == 330 && entries.get(&271).and_then(|e| e.value.as_string()).is_some_and(|v| v.trim_end() == "SONY")
+          && entries.get(&272).and_then(|e| e.value.as_string()).is_some_and(|v| v == "DSLR-A100") { continue; }
       let mut ifds = Vec::new();
       for offset in subs.1 {
         match Self::new(reader, apply_corr(offset, corr), base, corr, endian, &[]) {
@@ -236,6 +245,9 @@ impl IFD {
 
   /*
   pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, base: u32, corr: i32, endian: Endian, sub_tags: &[u16]) -> Result<Self> {
+    if !crate::metadata_budget::charge(0, true) {
+      return Err(TiffError::General("Metadata IFD budget exceeded".into()));
+    }
     reader.seek(SeekFrom::Start((base + offset) as u64))?;
     let mut sub_ifd_offsets = Vec::new();
     let mut reader = EndianReader::new(reader, endian);

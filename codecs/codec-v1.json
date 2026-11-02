@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "0.1.1 revision: bounded modern SOF3 lossless JPEG DNG tiles/strips, exposure baseline applied once. Final validation recorded in FINAL_CODEC_MANIFEST.v2.json; Android runtime not claimed.",
+  "status": "Development branch: content-identified DNG/NEF/CR2/ARW facade; camera capability remains conditional on validated variant and 128 MiB admission. See docs/CAMERA_RAW_IMPORT.md and executed validation matrix; no Android runtime claim.",
   "library": "film_codecs",
   "jniClass": "dev.filmroom.codec.NativeCodecBridge",
   "methods": {
@@ -19,7 +19,7 @@
     "layout": "RGB interleaved row-major, float32 LITTLE-ENDIAN, exactly width*height*12 bytes",
     "colorSpace": "linear sRGB D65; NO sRGB transfer",
     "orientation": "codec applies EXIF orientation once; final dimensions already swapped when required; engine and shell MUST NOT rotate again",
-    "crop": "codec applies DNG ActiveArea and DefaultCrop exactly once; no hidden resize",
+    "crop": "codec applies validated active/default crop exactly once; no hidden resize",
     "alpha": "none",
     "range": "finite output from pinned RawDevelop calibration/gamut policy; no added upper clamp"
   },
@@ -49,13 +49,12 @@
   ],
   "notSupportedYet": [
     "Unvalidated DNG compression/layout variants; float DNG; lossless JPEG restarts, point transforms and legacy DNG < 1.1",
-    "generic CR2/CR3/NEF/ARW/RAF/ORF/otherRAW",
+    "Nikon HE/HE*, Canon mRAW/sRAW and CR3/C-RAW, Sony ARW1/ARW6 and reduced YCbCr, RAF/ORF/otherRAW",
     "TIFF/EXR import",
     "EXR export",
     "RAW or DNG reconstruction from JPEG",
     "embedded-preview fallback"
   ],
-  "memoryModel": "No entire sensor/RGB plane: bounded rows with 8-row PPG halo, RawDevelop on each strip; stripRows<=128 chosen before sample allocation; conservative 32MiB + 96*activeWidth*(stripRows+16). Two worker threads. Entire original is never mmap-populated. Compressed blocks add actual max encoded bytes + bounded decoded block bytes + 4MiB decoder overhead; max 8MiB encoded and 4M scalar samples per block.",
   "diskModel": "Output only: finalWidth*finalHeight*12, posix_fallocate before develop; source copy is separately owned and budgeted by shell. No transpose/fullRGB temporary spool.",
   "privacy": "No network code. Diagnostics only fixed codes/messages/stages and numeric dimensions/budgets/timings. No input paths, EXIF/GPS, maker/model strings, file names, photo bytes or decoder exception text.",
   "errors": [
@@ -77,9 +76,11 @@
     "DECODE_FAILED",
     "ENCODE_FAILED",
     "UNSUPPORTED_DNG_CALIBRATION",
-    "UNSUPPORTED_DNG_OPCODE"
+    "UNSUPPORTED_DNG_OPCODE",
+    "UNSUPPORTED_CAMERA_RAW_VARIANT",
+    "UNSUPPORTED_CAMERA"
   ],
-  "license": "GPL-3.0-or-later adapter; rawler=0.7.2 LGPL-2.1, pinned registry checksum in Cargo.lock. Preserve dependency source and relink/rebuild materials.",
+  "license": "GPL-3.0-or-later adapter; rawler=0.7.2 LGPL-2.1, pinned registry checksum in Cargo.lock. Preserve dependency source and relink/rebuild materials. Filmroom opt-in resource patches and selected-source-IFD provenance are retained in vendored source with updated file checksums; package lock identity remains 0.7.2.",
   "capabilityLabel": "DNG（已验证的未压缩类型）",
   "importCapabilities": [
     {
@@ -144,5 +145,15 @@
       "result": "decoded via strips, finite output, preview visually inspected"
     }
   ],
-  "rawDevelopmentPolicy": "ColorMatrix(D65), AsShotNeutral, black/white levels, crop/orientation; finite SRATIONAL BaselineExposure applied exactly once in linear RGB. ProfileToneCurve validated and explicitly not applied before film look; optional lens correction warning retained. Mandatory unsupported opcodes still rejected."
+  "rawDevelopmentPolicy": "ColorMatrix(D65), AsShotNeutral, black/white levels, crop/orientation; finite SRATIONAL BaselineExposure applied exactly once in linear RGB. ProfileToneCurve validated and explicitly not applied before film look; optional lens correction warning retained. Mandatory unsupported opcodes still rejected.",
+  "formats": [
+    "DNG",
+    "NEF",
+    "CR2",
+    "ARW"
+  ],
+  "memoryModelDng": "No entire sensor/RGB plane: bounded rows with 8-row PPG halo, RawDevelop on each strip; stripRows<=128 chosen before sample allocation; conservative 32MiB + 96*activeWidth*(stripRows+16). Two worker threads. Entire original is never mmap-populated. Compressed blocks add actual max encoded bytes + bounded decoded block bytes + 4MiB decoder overhead; max 8MiB encoded and 4M scalar samples per block.",
+  "memoryModelCameraRaw": "128 MiB maximum; bounded allocation-free dummy sensor metadata, lazy input mmap; actual full integer sensor is admitted. Decode peak = 32 MiB + inputBytes + 2*sensorPixels + format-specific scratch (CR2 another 2*sensorPixels; NEF actual EOF padded block; Sony borrowed input). Develop peak = 32 MiB + 2*sensorPixels + 96*activeWidth*(stripRows+16); use max of stages. No full float/RGB plane, no automatic resizing.",
+  "cameraWarningCode": "CAMERA_RAW_BASIC_DEVELOPMENT",
+  "metadataAdmissionCamera": "Android wrapper inspects only classic TIFF root entries to choose resource reservation, not support. Non-DNG candidate metadata reserves 32 MiB through shared NativeWorkReservations (+16 MiB existing margin, max two active jobs). DNGVersion retains legacy no-heavy metadata restore. RawLoader profile database remains resident after lease release; fresh OS snapshots reflect it."
 }

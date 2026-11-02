@@ -33,7 +33,8 @@ data class TileResult(val key: RenderKey, val coreRect: PixelRect, val sampleRec
     val outputRect get() = coreRect // Global logical coverage, excluding display-filter samples.
 }
 fun interface TileProvider {
-    /** Only worker calls this. outputRect is the 256-grid core; return its 1px valid-image sampleRect.
+    /** Only worker calls this. Return the requested core and its 1px valid-image sampleRect.
+     * RegionScheduler requests a tight visible rectangle; legacy TileScheduler requests fixed cells.
      * Render gutter from the SAME global coordinates/phase, not replicated core edges.
      * Read cancellation cooperatively; no global engine.cancel(). */
     fun render(key: RenderKey, outputRect: PixelRect, cancelled: () -> Boolean): TileResult
@@ -79,13 +80,18 @@ class Viewport {
         if (imageHeight <= height || imageHeight <= 0) centerY = .5
         else centerY = centerY.coerceIn(height / (2 * imageHeight), 1 - height / (2 * imageHeight))
     }
-    fun visibleTiles(k: RenderKey): List<TileId> {
-        if (width <= 0 || height <= 0) return emptyList()
+    fun visibleRect(k: RenderKey): PixelRect? {
+        if (width <= 0 || height <= 0) return null
         val x0 = ((-left / imageWidth).coerceIn(0.0, 1.0) * k.virtualFullWidth).toInt()
         val y0 = ((-top / imageHeight).coerceIn(0.0, 1.0) * k.virtualFullHeight).toInt()
         val x1 = ceil(((width - left) / imageWidth).coerceIn(0.0, 1.0) * k.virtualFullWidth).toInt()
         val y1 = ceil(((height - top) / imageHeight).coerceIn(0.0, 1.0) * k.virtualFullHeight).toInt()
-        if (x1 <= x0 || y1 <= y0) return emptyList()
+        if (x1 <= x0 || y1 <= y0) return null
+        return PixelRect(x0,y0,x1,y1)
+    }
+    fun visibleTiles(k: RenderKey): List<TileId> {
+        val r=visibleRect(k) ?: return emptyList()
+        val x0=r.left;val y0=r.top;val x1=r.right;val y1=r.bottom
         val result = mutableListOf<TileId>()
         for (y in y0 / 256..(y1 - 1) / 256) for (x in x0 / 256..(x1 - 1) / 256) result += TileId(x,y)
         return result.sortedBy { val r = it.rect(k); (r.left + r.right - x0 - x1).toDouble().pow(2) + (r.top + r.bottom - y0 - y1).toDouble().pow(2) }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_background_title" formatted="false">バックグラウンド書き出し</string>
+    <string name="export_background_restricted" formatted="false">システムがバックグラウンド動作を制限しています。アプリの切り替えや画面ロックで、書き出しが停止または失敗する可能性があります。</string>
+    <string name="export_background_unknown" formatted="false">バックグラウンド制限の状態を確認できません。アプリの切り替えや画面ロックで、書き出しが停止または失敗する可能性があります。</string>
+    <string name="export_background_help" formatted="false">「今後表示しない」は案内のみを非表示にし、システム設定は変更しません。</string>
+    <string name="export_background_help_generic" formatted="false">アプリ情報 → バッテリー／バックグラウンド使用で「制限なし」または動作の許可を選択してください（名称は OS により異なります）。</string>
+    <string name="export_background_help_vivo" formatted="false">vivo / iQOO：アプリ情報 → バッテリー／バックグラウンド電力管理で、動作または高い電力消費を許可してください（名称は OS により異なります）。</string>
+    <string name="export_background_help_oppo" formatted="false">OPPO / realme / OnePlus：アプリ情報 → バッテリー／電力管理で、バックグラウンド動作を許可してください（名称は OS により異なります）。</string>
+    <string name="export_background_help_xiaomi" formatted="false">Xiaomi / Redmi / POCO：アプリ情報 → バッテリーセーバー／バックグラウンド設定で「制限なし」を選択してください（名称は OS により異なります）。</string>
+    <string name="export_background_always_ignore" formatted="false">今後表示しない</string>
+    <string name="export_background_ignore" formatted="false">今回は無視</string>
+    <string name="export_background_open" formatted="false">設定を開く</string>
+    <string name="export_background_settings_missing" formatted="false">システム設定を開けませんでした。手動で設定を開き、Filmroom のバッテリーやバックグラウンド使用を確認してください。</string>
+    <string name="export_background_return_title" formatted="false">書き出しを続けますか？</string>
+    <string name="export_background_return_allowed" formatted="false">Android 標準のバックグラウンド制限チェックを通過しました。ただし、メーカー独自の制限がすべて解除されたとは限りません。</string>
+    <string name="export_background_return_message" formatted="false">アプリに戻っても書き出しは自動で開始されません。続けると書き出し設定を確認できます。制限が残っている場合はキャンセルして先に設定を変更できます。</string>
+    <string name="export_background_continue" formatted="false">書き出しを続ける</string>
+    <string name="export_background_cancel" formatted="false">キャンセル</string>
+    <string name="export_background_verified_toast" formatted="false">Android のバックグラウンド確認が完了</string>
+</resources>

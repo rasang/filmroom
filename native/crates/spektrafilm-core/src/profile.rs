@@ -90,7 +90,7 @@ fn default_d50() -> String {
 pub struct ProfileData {
     #[serde(default)]
     pub wavelengths: Vec<f64>,
-    #[serde(default, deserialize_with = "deser_zero_matrix")]
+    #[serde(default, deserialize_with = "deser_log_sensitivity")]
     pub log_sensitivity: Vec<Vec<f64>>,
     #[serde(default, deserialize_with = "deser_zero_vec")]
     pub hanatos2025_adaptation_window_params: Vec<f64>,
@@ -170,6 +170,13 @@ where
         .into_iter()
         .map(|x| x.unwrap_or(0.0))
         .collect())
+}
+// A missing log-sensitivity sample means zero linear sensitivity, not log10(1).
+// All shipped colour samples are finite, so their bytes/arithmetic are unchanged.
+fn deser_log_sensitivity<'de,D>(deserializer:D)->Result<Vec<Vec<f64>>,D::Error>
+where D:serde::Deserializer<'de> {
+    let v:Option<Vec<Vec<Option<f64>>>>=Deserialize::deserialize(deserializer)?;
+    Ok(v.unwrap_or_default().into_iter().map(|r|r.into_iter().map(|x|x.unwrap_or(f64::NEG_INFINITY)).collect()).collect())
 }
 fn deser_zero_matrix<'de, D>(deserializer: D) -> Result<Vec<Vec<f64>>, D::Error>
 where
@@ -442,7 +449,7 @@ pub fn resolve_for_render(mut profile: Profile, development_time: Option<f64>) -
     for layer_row in &mut d.density_curves_layers {
         for layer in layer_row.iter_mut() {
             let i = idx.min(layer.len().saturating_sub(1));
-            *layer = vec![layer.get(i).copied().unwrap_or(0.0)];
+            *layer = vec![layer.get(i).copied().unwrap_or(0.0); 3];
         }
     }
     if !d.development_time.is_empty() {
@@ -473,6 +480,10 @@ pub fn resolve_for_render(mut profile: Profile, development_time: Option<f64>) -
         bcast(&mut model.amplitudes);
         bcast(&mut model.sigmas);
     }
+    // The upstream BW printing fits carry skew-normal alphas. The colour
+    // sum-of-normal-CDF morph cannot represent that model, even at identity.
+    // Retain the original measured table and scalar gamma on every print path.
+    if profile.info.stage == "printing" { profile.data.density_curves_model = None; }
     profile
 }
 

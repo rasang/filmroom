@@ -13,6 +13,8 @@ internal class DetailFeedback(savedKeys:List<String> = emptyList()) {
     fun takeFailureToast(status:DetailStatus,sourceKey:String?,enabled:Boolean,foreground:Boolean):String? {
         if(!enabled || !foreground || sourceKey==null || status.phase!=DetailPhase.Fallback)return null
         val reason=status.failure ?: DetailFailure.RenderFailed
+        // Transient admission/pressure recovery stays silent; details retain the reason.
+        if(reason==DetailFailure.MemoryAdmission || reason==DetailFailure.MemoryPressure)return null
         if(!seen.add("$sourceKey\u0000${reason.name}"))return null
         while(seen.size>64)seen.remove(seen.first())
         return when(reason){

@@ -1,9 +1,11 @@
 # Image import compatibility boundaries
 
-This is a behavior-preserving organization change, not new format support. Detection
-uses file contents, never provider MIME, extension, camera Make, or camera Model.
-A DNG named `.jpg` must continue through the TIFF/DNG route. BigTIFF and ordinary
-TIFF are not newly supported; only the existing native validator may authorize RAW.
+Routing uses file contents, never provider MIME or extension. Classic TIFF is
+only a routing hint: a DNG or camera RAW named `.jpg` still uses the native RAW
+validator. BigTIFF and ordinary TIFF are not enabled by the adapter. Native
+validation, not a camera Make/Model string alone, must authorize a supported RAW
+variant and its memory budget. The common Kotlin contract accepts exactly DNG,
+NEF, CR2 and ARW identities; this is not a promise that every variant is supported.
 
 ## Kotlin orchestration
 
@@ -19,8 +21,8 @@ TIFF are not newly supported; only the existing native validator may authorize R
 - `HeicInputAdapter` composes existing `HeicContainer`, `HeicMemoryPolicy`,
   `HeicImport`, ICC/SDR policies and canonical linear-spool validation. It does not
   implement HDR, alternate HEVC decoding, or new container policy.
-- `DngInputAdapter` depends on `DngSourceDecoder`, not native calls directly.
-  `NativeDngSourceDecoder` wraps `PhotoCodecs`, retaining native-handle ownership,
+- `RawInputAdapter` depends on `RawSourceDecoder`, not native calls directly.
+  `NativeRawSourceDecoder` wraps `PhotoCodecs`, retaining native-handle ownership,
   admission, cancellation, errors and exact metadata interpretation.
 - A new route supplies an adapter and is registered at the repository composition
   root. It must still pass memory/disk/cancellation, metadata, color, restore,
@@ -29,6 +31,13 @@ TIFF are not newly supported; only the existing native validator may authorize R
 `onNewRaw` is invoked **before** writing a newly allocated spool so the repository
 can remove partial output after any failure. Reused spools must belong to the
 canonical private source directory; adapter extraction does not relax that check.
+
+`RawMetadata` validates the native format identity and maps it to its own MIME;
+encoded filenames never determine that MIME. Output remains full-sized, oriented
+linear RGB float32 spool data with an exact byte-count check. Camera RAW basic
+development warnings are allowlisted resource descriptors, not native text.
+Unsupported camera profiles/variants fail explicitly, with no embedded JPEG
+fallback. DNG warning codes and HEIC routing retain their existing semantics.
 
 ## Native DNG compatibility policies
 

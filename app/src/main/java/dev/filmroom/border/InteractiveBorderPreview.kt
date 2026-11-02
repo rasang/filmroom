@@ -21,7 +21,7 @@ internal object InteractiveBorderPreview {
                 checkActive();val dy=minOf(y+.5-s.apertureTop,s.apertureTop+s.photoHeight-y-.5)
                 for(x in row.indices){
                     val d=minOf(x+.5-s.apertureLeft,s.apertureLeft+s.photoWidth-x-.5,dy)
-                    val photo=if(s.featherRadius==0.0){if(d>=0)1.0 else 0.0}else ((d+s.featherRadius)/(2*s.featherRadius)).coerceIn(0.0,1.0).let{it*it*(3-2*it)}
+                    val photo=raster.photoCoverage(s,x+.5,y+.5) ?: if(s.featherRadius==0.0){if(d>=0)1.0 else 0.0}else ((d+s.featherRadius)/(2*s.featherRadius)).coerceIn(0.0,1.0).let{it*it*(3-2*it)}
                     val alpha=((1-photo)*255).roundToInt().coerceIn(0,255)
                     if(alpha==0){row[x]=0;continue}
                     raster.sample(s,x+.5,y+.5,rgb)

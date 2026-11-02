@@ -13,11 +13,14 @@ class DetailStatusTest {
             IllegalArgumentException(secret) to DetailFailure.SourceValidation,
             IOException(secret) to DetailFailure.SourceRead,
             UnsatisfiedLinkError(secret) to DetailFailure.EngineUnavailable,
-            NativeWorkUnavailable() to DetailFailure.MemoryBudget,
-            OutOfMemoryError(secret) to DetailFailure.MemoryBudget,
+            NativeWorkUnavailable() to DetailFailure.MemoryAdmission,
+            OutOfMemoryError(secret) to DetailFailure.AllocationFailed,
             DetailUnavailable("UNSUPPORTED") to DetailFailure.Unsupported,
+            DetailUnavailable("STORAGE_BUDGET") to DetailFailure.StorageBudget,
+            DetailUnavailable("RESOURCE_PRESSURE") to DetailFailure.MemoryPressure,
             DetailUnavailable(secret) to DetailFailure.RenderFailed,
             DetailUnavailable("BUDGET_EXCEEDED") to DetailFailure.MemoryBudget,
+            DetailUnavailable("WORKING_MEMORY_BUDGET") to DetailFailure.MemoryBudget,
             DetailUnavailable("INVALID_RESULT") to DetailFailure.InvalidResult
         )
         for((error,expected) in cases){

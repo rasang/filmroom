@@ -51,4 +51,29 @@ class RawMetadataWarningHostTest {
         assertNull(RawMetadata.parse(missing).displayWarning)
     }
 
+    @Test fun nativeCameraFormatAndBasicDevelopmentWarningAreStrictlyTyped() {
+        val json=JSONObject("""{"ok":true,"schemaVersion":1,"format":"NEF","width":8,"height":8,"outputOrientation":1,"orientationApplied":true,"outputBytes":768,"warnings":[{"code":"CAMERA_RAW_BASIC_DEVELOPMENT","message":"PRIVATE camera serial GPS"},{"code":"CAMERA_RAW_BASIC_DEVELOPMENT"}]}""")
+        for(format in dev.filmroom.codec.RawFormat.entries) {
+            val p=RawMetadata.parse(json.put("format",format.name))
+            assertEquals(format,p.format);assertTrue(p.cameraBasicDevelopmentWarning)
+            assertEquals(1,p.displayMessages.size)
+            assertFalse(p.displayWarning!!.contains("PRIVATE"))
+            assertTrue(p.displayWarning!!.contains("基础开发"))
+            assertEquals(p.displayMessages.single(),dev.filmroom.i18n.UiMessage.fromJson(p.displayMessages.single().toJson()))
+        }
+        assertEquals(dev.filmroom.codec.RawFormat.DNG,RawMetadata(8,8,768,false).format)
+    }
+
+    @Test fun cameraFailureCodesAreAllowlistedAndMessagesPersistWithoutNativeText() {
+        for((code,resource) in listOf(
+            "UNSUPPORTED_CAMERA" to dev.filmroom.R.string.camera_raw_profile_unsupported,
+            "UNSUPPORTED_CAMERA_RAW_VARIANT" to dev.filmroom.R.string.camera_raw_variant_unsupported)) {
+            assertEquals(code,dev.filmroom.diagnostics.CodecErrorCode.fromId(code).name)
+            val message=dev.filmroom.i18n.UiMessage.of(resource)
+            assertNotNull(message.render())
+            assertEquals(message,dev.filmroom.i18n.UiMessage.fromJson(message.toJson()))
+        }
+        assertEquals(dev.filmroom.diagnostics.CodecErrorCode.UNKNOWN,dev.filmroom.diagnostics.CodecErrorCode.fromId("UNSUPPORTED_CAMERA_PRIVATE"))
+    }
+
 }

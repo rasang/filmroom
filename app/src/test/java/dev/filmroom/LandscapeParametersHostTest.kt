@@ -117,6 +117,58 @@ class LandscapeParametersHostTest {
             assertNotNull(section(a,"composition"));assertNotNull(section(a,"filmStock"))
         }
     }
+    @Test(timeout=60000) fun compositionOffersDisabledModesThenExplicitAdjustCancelConfirmAndKeepsScroll(){
+        Robolectric.buildActivity(MainActivity::class.java).setup().use{c->
+            val a=c.get();fixture(a,true);val model=vm(a)
+            fun tagged(tag:String)=all(section(a,"composition")).single{it.tag==tag}
+            fun modes()=all(section(a,"composition")).filterIsInstance<Button>().filter{(it.tag as? String)?.startsWith("crop-mode:")==true}
+            val initial=model.state.value.parameters
+            assertEquals(9,modes().size);assertTrue(modes().all{!it.isEnabled && it.alpha<1f})
+            tagged("crop-mode:SQUARE").performClick();assertEquals(initial,model.state.value.parameters)
+            assertFalse(model.state.value.compositionEditing)
+            val title=tagged("crop-title") as TextView
+            assertNotNull(title.compoundDrawablesRelative[0]);assertFalse(title.isClickable)
+            assertTrue(tagged("crop-adjust").isEnabled)
+            scroll(a).scrollTo(0,section(a,"composition").top);val y=scroll(a).scrollY
+            tagged("crop-adjust").performClick();await{model.state.value.compositionEditing};layout(a)
+            assertEquals(y,scroll(a).scrollY);assertTrue(modes().all{it.isEnabled})
+            assertFalse(all(section(a,"composition")).any{it.tag=="crop-adjust"})
+            for(tag in listOf("crop-cancel","crop-confirm")){
+                val action=tagged(tag);assertTrue(action.width>=48);assertTrue(action.height>=48)
+            }
+            tagged("crop-mode:RATIO_9_16").performClick();layout(a)
+            assertTrue(tagged("crop-mode:RATIO_9_16").isSelected)
+            val rail=all(section(a,"composition")).filterIsInstance<HorizontalScrollView>().single()
+            val x=rail.scrollX;assertTrue(x>0)
+            tagged("crop-cancel").performClick();await{!model.state.value.compositionEditing && model.state.value.canExport};layout(a)
+            assertEquals(initial,model.state.value.parameters);assertTrue(modes().all{!it.isEnabled})
+            tagged("crop-adjust").performClick();await{model.state.value.compositionEditing};layout(a)
+            tagged("crop-mode:RATIO_9_16").performClick();layout(a)
+            tagged("crop-confirm").performClick();await{!model.state.value.compositionEditing && model.state.value.canExport};layout(a)
+            assertEquals(CropMode.RATIO_9_16,model.state.value.parameters.crop.mode)
+            assertTrue(tagged("crop-mode:RATIO_9_16").isSelected);assertTrue(modes().all{!it.isEnabled})
+            assertEquals(x,all(section(a,"composition")).filterIsInstance<HorizontalScrollView>().single().scrollX)
+            dev.filmroom.border.BorderCatalog.initialize(a.assets){model.borderMemorySnapshot()}
+            model.parameters(model.state.value.parameters.copy(filmBorder=true));await{model.state.value.canExport};layout(a)
+            assertEquals(setOf("crop-mode:RATIO_3_2","crop-mode:RATIO_2_3"),modes().map{it.tag}.toSet())
+            assertTrue(modes().all{!it.isEnabled})
+            tagged("crop-adjust").performClick();await{model.state.value.compositionEditing};layout(a)
+            assertEquals(2,modes().size);assertTrue(modes().all{it.isEnabled})
+            tagged("crop-cancel").performClick();await{!model.state.value.compositionEditing}
+        }
+    }
+    @Test(timeout=60000) fun emptyPhotoStillShowsCompleteDisabledCompositionLayout(){
+        Robolectric.buildActivity(MainActivity::class.java).setup().use{c->
+            val a=c.get();layout(a)
+            val views=all(section(a,"composition"))
+            assertEquals(9,views.count{(it.tag as? String)?.startsWith("crop-mode:")==true})
+            assertTrue(views.filterIsInstance<Button>().all{!it.isEnabled})
+            assertTrue(views.any{it.tag=="crop-adjust"});assertFalse(views.any{it.tag=="composition"})
+            scroll(a).scrollTo(0,section(a,"composition").top);layout(a)
+            val image=Bitmap.createBitmap(780,360,Bitmap.Config.ARGB_8888)
+            try{root(a).draw(Canvas(image));File("build/landscape-parameter-renders").apply{mkdirs()}.resolve("empty-composition.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)}}finally{image.recycle()}
+        }
+    }
     @Test(timeout=120000) fun fourLanguagesNormalAndLargeTextHaveReadableScrollableSectionsAndScreens(){
         val app=RuntimeEnvironment.getApplication()
         try{for(language in L10n.supported)for((w,h) in listOf(780 to 360,640 to 320))for(font in listOf(1f,2f)){
@@ -127,17 +179,36 @@ class LandscapeParametersHostTest {
                 assertNull("No large-font modal replaces landscape sections",field(a,"expandedTools"))
                 for(id in listOf("filmStock","composition","filmFormatMm"))assertTrue(section(a,id).width<=viewport.width)
                 val out=File("build/landscape-parameter-renders").apply{mkdirs()}
-                fun capture(suffix:String){val image=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root(a).draw(Canvas(image));File(out,"$language-${w}x$h-font$font-$suffix.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)};image.recycle()}
-                capture("film-top");viewport.scrollTo(0,viewport.getChildAt(0).height);layout(a,w,h);capture("film-bottom")
+                fun capture(suffix:String){
+                    val image=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root(a).draw(Canvas(image));File(out,"$language-${w}x$h-font$font-$suffix.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)};image.recycle()
+                    File(out,"$language-${w}x$h-font$font-$suffix-layout.txt").writeText(all(root(a)).filterIsInstance<TextView>().filter{(it.tag as? String)?.startsWith("crop-")==true}.joinToString("\n"){"${it.tag} ${it.text}: ${it.left}..${it.right} ${it.width}x${it.height}, padding=${it.paddingLeft},${it.paddingRight}; lines=${it.lineCount}"})
+                }
+                capture("film-top")
+                viewport.scrollTo(0,section(a,"composition").top);layout(a,w,h);capture("composition-idle")
+                all(section(a,"composition")).single{it.tag=="crop-adjust"}.performClick();await{vm(a).state.value.compositionEditing};layout(a,w,h);capture("composition-editing")
+                for(tag in listOf("crop-cancel","crop-confirm")){
+                    val action=all(section(a,"composition")).single{it.tag==tag} as Button
+                    assertTrue("Touch target $language $w $font",action.width>=48 && action.height>=48)
+                    assertTrue("Action text not clipped $language $w $font",action.layout.getEllipsisCount(0)==0)
+                    assertTrue(action.right<=(action.parent as View).width)
+                }
+                all(section(a,"composition")).single{it.tag=="crop-cancel"}.performClick();await{!vm(a).state.value.compositionEditing};layout(a,w,h)
+                viewport.scrollTo(0,viewport.getChildAt(0).height);layout(a,w,h);capture("film-bottom")
                 val last=(viewport.getChildAt(0) as ViewGroup).let{it.getChildAt(it.childCount-1)};val bounds=android.graphics.Rect();assertTrue("Last section reachable $language $w font$font",last.getGlobalVisibleRect(bounds));assertTrue(bounds.height()>0)
                 category(a,"adjust");layout(a,w,h);capture("adjust")
+                for(section in all(scroll(a)).filterIsInstance<LinearLayout>().filter{(it.tag as? String)?.startsWith("parameter-section:")==true}){
+                    val title=(section.getChildAt(0) as ViewGroup).getChildAt(0) as TextView
+                    val icon=title.compoundDrawablesRelative[0]
+                    assertNotNull("Each parameter keeps its icon $language ${section.tag}",icon)
+                    assertTrue(kotlin.math.abs((title.textSize*1.15f).toInt()-icon!!.bounds.height())<=1)
+                }
                 val exposure=section(a,"filmExposure")
                 if(font>1.35f){
                     val heading=exposure.getChildAt(0) as LinearLayout
-                    assertEquals("Large-text headings separate title from value",LinearLayout.VERTICAL,heading.orientation)
                     val title=heading.getChildAt(0) as TextView
-                    assertTrue("Title keeps the whole section width",title.width>=exposure.width)
-                    assertEquals("Film exposure remains readable, not broken into fragments",1,title.lineCount)
+                    if(heading.orientation==LinearLayout.VERTICAL)assertTrue("Stacked title keeps the whole section width",title.width>=exposure.width)
+                    assertTrue("Title keeps its matching icon",title.compoundDrawablesRelative[0]!=null)
+                    assertTrue("Title never ellipsizes",title.layout.getEllipsisCount(0)==0)
                 }
                 val categoryParent=(field(a,"categoryBar") as View).parent as View
                 assertTrue(categoryParent.bottom<=scroll(a).top)

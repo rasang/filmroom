@@ -23,6 +23,11 @@ import dev.filmroom.OperationTrace
 import dev.filmroom.diagnostics.Operation
 import dev.filmroom.diagnostics.Stage
 import dev.filmroom.diagnostics.SafeInfo
+import dev.filmroom.diagnostics.MetadataIssue
+import dev.filmroom.diagnostics.MetadataField
+import dev.filmroom.diagnostics.MetadataIssueReason
+import dev.filmroom.diagnostics.MetadataIssuePhase
+import dev.filmroom.diagnostics.Diagnostics
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -40,7 +45,7 @@ private fun deviceCodecs(context:Context):PhotoCodecs {
         val manager=app.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memory=android.app.ActivityManager.MemoryInfo();manager.getMemoryInfo(memory)
         dev.filmroom.engine.NativeMemoryPolicy.chooseBudgetMiB(memory.availMem,memory.threshold,memory.lowMemory) ?: 0
-    })
+    },rawBatchPreference={dev.filmroom.model.RawBatchPreferences(app).mode})
 }
 
 /** An app-private copy: selection permissions are not needed for later decoding. */
@@ -167,7 +172,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             RasterImportPreview(bitmap,width,height,alpha)
         }),
         HeicInputAdapter(heicImporter),
-        DngInputAdapter(NativeDngSourceDecoder(codecs)),
+        RawInputAdapter(NativeRawSourceDecoder(codecs)),
     ))
     private val outputAssets = context.applicationContext.assets
     private val resolver = context.applicationContext.contentResolver
@@ -220,7 +225,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         var produced: LoadedPhoto? = null
         var handedOff = false
         try {
-            val result = withContext(Dispatchers.IO) {
+            val rawBatch=codecs.snapshotRawBatch()
+            val result = withContext(Dispatchers.IO+rawBatch) {
                 val job = currentCoroutineContext()
                 job.ensureActive()
                 if (uri.scheme != "content") {
@@ -397,11 +403,12 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }finally{if(!completed)target.delete()}
     }
 
-    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onMetadataWarning:(String)->Unit={}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height)) { trace ->
+    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onMetadataWarning:(String)->Unit={}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,metadataIssues=photoMetadata.issues,metadataPhase=MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=photoMetadata.diagnosticDateBasis)) { trace ->
         OutputColorSpace.parse(outputColorSpace)
         val committed:(ExportResult)->Unit={result->trace.committed();onCommitted(result)}
         trace.mark(Stage.ENCODE_START)
-        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning)
+        val metadataIssue:(MetadataIssuePhase,MetadataIssue)->Unit={phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
+        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning,onMetadataIssue=metadataIssue)
         val input=privateFile(file)
         require(input.length()==LinearRgb.byteCount(width,height))
         val encoded=File(input.parentFile,"codec-output-${UUID.randomUUID()}.${format.extension}")
@@ -410,8 +417,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             // Preserve lexical input for symlink rejection; native receives canonical paths after scoped validation.
             codecs.encode(file,encoded,width,height,if(format==ExportFormat.TIFF16)"TIFF16" else "JPEG",quality.coerceIn(1,100),outputColorSpace)
             trace.mark(Stage.NATIVE_EXIT)
-            applyMetadata(encoded,format,photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning)
-            return@run exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),committed,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.captureTimeMillis()){out,job->
+            applyMetadata(encoded,format,photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning,metadataIssue)
+            return@run exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),committed,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
                 encoded.inputStream().buffered().use{stream->val bytes=ByteArray(64*1024);while(true){job.ensureActive();val n=stream.read(bytes);if(n<0)break;out.write(bytes,0,n)}};true
             }
         }finally{encoded.delete()}
@@ -524,6 +531,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(),
         exportMillis: Long = System.currentTimeMillis(),
         onMetadataWarning: (String) -> Unit = {},
+        onMetadataIssue: (MetadataIssuePhase,MetadataIssue) -> Unit = {_,_->},
     ): ExportResult {
         val colorSpace=OutputColorSpace.parse(outputColorSpace)
         val profile=if(colorSpace==OutputColorSpace.SRGB)null else outputAssets.open("color-profiles/${colorSpace.iccAsset}").use{it.readBytes()}
@@ -534,20 +542,26 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }
         photoMetadata.warning?.let(onMetadataWarning)
         val exif=try {photoMetadata.exifBytes(width,height,outputColorSpace,exportMillis)} catch(e:Exception) {
+            onMetadataIssue(MetadataIssuePhase.WRITE_VALIDATE,MetadataIssue(MetadataField.METADATA,MetadataIssueReason.OUTPUT_VALIDATION_FAILED))
             onMetadataWarning(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_23fcd93377e5));null
         }
-        return exportEncoded(width,height,ExportFormat.PNG,"暗房_原尺寸",onCommitted,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.captureTimeMillis()) { output,job ->
+        return exportEncoded(width,height,ExportFormat.PNG,"暗房_原尺寸",onCommitted,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()) { output,job ->
             input.inputStream().buffered(256*1024).use { source ->
                 LinearRgbPng.encode(source,width,height,output,checkActive={job.ensureActive()},onRowEncoded={onProgress(it,height)},colorSpace=colorSpace,iccProfile=profile,exifMetadata=exif,exportMillis=exportMillis)
             };true
         }
     }
 
-    private fun applyMetadata(file:File,format:ExportFormat,metadata:PhotoMetadata,width:Int,height:Int,colorSpace:String,exportMillis:Long,warn:(String)->Unit) {
+    private fun applyMetadata(file:File,format:ExportFormat,metadata:PhotoMetadata,width:Int,height:Int,colorSpace:String,exportMillis:Long,warn:(String)->Unit,issue:(MetadataIssuePhase,MetadataIssue)->Unit) {
         metadata.warning?.let(warn)
-        try { PhotoMetadataContainer.inject(file,format,metadata.exifBytes(width,height,colorSpace,exportMillis)) }
-        catch(e:Exception) {
-            // Container replacement is transactional. Keep the encoder's valid original on failure.
+        val bytes=try {metadata.exifBytes(width,height,colorSpace,exportMillis)}catch(_:Exception) {
+            issue(MetadataIssuePhase.WRITE_VALIDATE,MetadataIssue(MetadataField.METADATA,MetadataIssueReason.OUTPUT_VALIDATION_FAILED))
+            warn(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_23fcd93377e5));return
+        }
+        try { PhotoMetadataContainer.inject(file,format,bytes) }
+        catch(_:Exception) {
+            // Transactional replacement keeps the valid image; no exception text is recorded.
+            issue(MetadataIssuePhase.WRITE_EXCEPTION,MetadataIssue(MetadataField.METADATA,MetadataIssueReason.CONTAINER_WRITE_FAILED))
             warn(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_23fcd93377e5))
         }
     }

@@ -1,0 +1,51 @@
+[
+  {
+    "path": "rawler/src/decompressors/arw6/bitstream.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/bitstream.rs",
+    "git_blob": "04ac98ff76b44204a9d3bad8d8c2a9c9feb8dd84",
+    "sha256": "1b80d1d518faa989cf550c3d8115990ac19bdb548c9e4e05493fe79f3c8b6ab0",
+    "bytes": 5722
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/container.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/container.rs",
+    "git_blob": "c1c1965aed3188a5316c7b04f904c0652f0014fb",
+    "sha256": "ea2725b16e0283d3c8ce632b997e4496c316f637175eb6342bc623135380fced",
+    "bytes": 11423
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/delin_curve.csv",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/delin_curve.csv",
+    "git_blob": "007fe5331f3317c368de444441bf67c4c8776d14",
+    "sha256": "fa3e1c76d79e40e16cb019812c4d7ad05a02fe4368ce5ed471c544856f9d00f1",
+    "bytes": 20306
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/geometry.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/geometry.rs",
+    "git_blob": "26998cf719c2d08312dff2178052dd79a91afb87",
+    "sha256": "2eb586f8359cad69888fcffc2b5b18d3c447592006e7b99fed586e578618e073",
+    "bytes": 6898
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/idwt.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/idwt.rs",
+    "git_blob": "223e3558177c3efad2465dd4ffdc6541b8dc6c6a",
+    "sha256": "b1c643f4e32bc5aa145a53aa2696dd83167955454b0d630776c4366a5fa263a7",
+    "bytes": 5324
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/mod.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/mod.rs",
+    "git_blob": "e1e3e0587ae6b38e8bf8a0a50886f17f3f149cbc",
+    "sha256": "aeb39904c11f1fef659ea43fc9a51c2c354f47b374488ec29770c684b469cab5",
+    "bytes": 8559
+  },
+  {
+    "path": "rawler/src/decompressors/arw6/pixelops.rs",
+    "url": "https://raw.githubusercontent.com/dnglab/dnglab/41cc1e012222d2bebbaf7623bf771ae5f0c356a4/rawler/src/decompressors/arw6/pixelops.rs",
+    "git_blob": "756c4fd2a728d11d570c4092b40860d1405a8b1f",
+    "sha256": "65e0eec6090bbbb9402b7b61a5a6f4d921779f9790bf53abab410bafdebbe45c",
+    "bytes": 2787
+  }
+]
