@@ -8,6 +8,11 @@ object ToastText {
     fun forMessage(message:UiMessage?):String = L10n.text(
         if(message!=null && ResourceKeys.arities[message.key]==message.args.size)resourceForKey(message.key) else R.string.toast_failed)
     internal fun resourceForKey(key:String?):Int = when(key) {
+        // Known HEIC failure categories must not collapse to generic "operation failed".
+        // Keep short localized summaries; detailed technical subcodes remain in share logs.
+        "text_58a07dbdf8d7","text_986742c74398" -> R.string.toast_format
+        "text_8b96428c13f4","text_1e6cd3983af1" -> R.string.toast_read
+        "text_dfe135051811" -> R.string.toast_format
         "text_bb8990972dce" -> R.string.toast_queued
         "text_834295cc897b","text_420e35e0302a" -> R.string.toast_queued_check
         "text_afb4ebeb2c42" -> R.string.toast_cancel_requested

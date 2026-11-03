@@ -1,4 +1,4 @@
-> **Development branch · 0.1.19-beta.5**: This is integrated application source, not a patch-only recovery snapshot. Prebuilt JNI libraries are omitted; rebuild them from source using the [development guide](docs/DEVELOPMENT.md) before building an APK. Host tests are not physical Android device validation. See the release page for final acceptance and package availability.
+> **Development branch · 0.1.19-beta.6**: This is integrated application source, not a patch-only recovery snapshot. Prebuilt JNI libraries are omitted; rebuild them from source using the [development guide](docs/DEVELOPMENT.md) before building an APK. Host tests are not physical Android device validation. See the release page for final acceptance and package availability.
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current development source version: 0.1.19-beta.5.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current development source version: 0.1.19-beta.6.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.

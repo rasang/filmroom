@@ -11,7 +11,14 @@ internal class HeicInputAdapter(private val heicImporter: HeicImport): PhotoInpu
     override suspend fun load(request: PhotoImportRequest, header: PhotoInputHeader): LoadedPhoto = with(request) {
         val info=try{HeicContainer.inspect(file){job.ensureActive()}}catch(e:HeicContainer.Rejected){
             val reason=when(e.failure){HeicContainer.Failure.UNSUPPORTED->PhotoException.Reason.UNSUPPORTED;HeicContainer.Failure.LIMIT->PhotoException.Reason.TOO_LARGE;else->PhotoException.Reason.UNREADABLE}
-            throw PhotoException(reason,e.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0e98e94d0aff),e,uiMessage=e.uiMessage ?: if(e.message==null)dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_0e98e94d0aff)else null)
+            val code=when(e.failure){
+                HeicContainer.Failure.UNSUPPORTED->dev.filmroom.diagnostics.CodecErrorCode.HEIC_CONTAINER_UNSUPPORTED
+                HeicContainer.Failure.LIMIT->dev.filmroom.diagnostics.CodecErrorCode.HEIC_CONTAINER_LIMIT
+                else->dev.filmroom.diagnostics.CodecErrorCode.HEIC_CONTAINER_INVALID
+            }
+            throw PhotoException(reason,e.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0e98e94d0aff),e,
+                codecCode=code,codecStage=dev.filmroom.diagnostics.CodecStage.PROBE,
+                uiMessage=e.uiMessage ?: if(e.message==null)dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_0e98e94d0aff)else null)
         }
         HeicMemoryPolicy.estimatedBytes(info,file.length()) // Same size limit on restore; no allocation here.
         val linear=if(existingRaw!=null && existingRaw.isFile && existingRaw.canonicalFile.parentFile==sourceDirectory.canonicalFile){

@@ -8,7 +8,7 @@
 
 颜色仅接受可核验的 SDR 子集：关联主图的 NCLX 必须为 primaries=1、transfer=13、matrix=1（检查 range 保留位）；或关联的 ICC 是经过有界解析核验的 sRGB / Display P3 primaries v4 RGB matrix/TRC profile（标准曲线，以及下文列明的单一精确量化 SDR 曲线）。ICC 不按名称放行：检查 D50 色度矩阵、已批准的实际参数曲线、白点/Bradford 适应、tag 边界及冲突；未知/LUT/HDR profile 拒绝。grid 主图未声明颜色时，必须全部 HEVC tile 明确声明同一身份；缺失或冲突拒绝。NCLX-only Display P3/BT.2020 仍不接入，避免系统忽略 NCLX 后的 sRGB 回退。
 
-系统 ImageDecoder 的**源**颜色空间必须在设置目标之前与已验证的 ICC/NCLX 身份匹配（参数曲线及适应到 D50 的矩阵，不只检查名称或目标标签）。随后由 ImageDecoder 真正转换到 sRGB，而不是重标 P3 像素。P3 超出 sRGB 的颜色不保留；界面明确显示转换提示。原文件及其 profile 不修改。
+ImageDecoder 的 ImageInfo.colorSpace 是默认输出空间，官方明确不保证等于编码源空间。设置目标之前先做严格descriptor匹配；仅对下文精确rounded Display P3数值能力，允许由平台 ColorSpace.match 对实际矩阵/TRC计算出的命名P3报告，且仍核对矩阵/range。此报告规范化不修改文件ICC，也不把P3像素重标sRGB；实际转换由保留编码ICC的native ImageDecoder完成。P3 超出 sRGB 的颜色不保留；界面明确显示转换提示。原文件及其 profile 不修改。
 
 仍明确拒绝 10 位/高位深、PQ/HLG 主图、标准容器辅助图（包括深度/alpha）、`imir` 镜像、`clap` 裁切、非方形像素、未支持的必需属性与动画/视频轨。**某些手机的普通拍摄 HEIC 也可能带这些辅助项，因此不能宣称兼容全部 iPhone/OPPO HEIC。** 这里的 HDR/辅助项检查针对解析到的标准容器属性；不声称能够识别每家厂商的不透明尾部扩展。SDR 主图导入不解释或传递这些私有扩展，因而不是 HDR 往返。拒绝不修改源文件，也不自动改用内嵌 JPEG、缩略图或低分辨率转换。
 
@@ -68,7 +68,7 @@
 - colr 的 ICC 只允许声明长度完全相符，或恰好多出固定8字节 `46 50 58 52 00 00 00 00`。
   后者仅是有界解析视图；tag必须完整落在声明的ICC内，不把任意尾部当padding，原片交给系统时不改写。
 - grid比较完整descriptor。标准ICC量化值与同义标准NCLX按原已批准容差保持兼容；自定义曲线不等同标准曲线。
-- Android源ColorSpace必须在target设置前与实际descriptor匹配。若系统忽略ICC、回退sRGB、把该曲线报告成标准P3，仍明确拒绝；不能通过输出标签冒充源颜色识别。
+- Java头颜色报告先做严格匹配。仅此精确rounded Display P3 descriptor可另外接受运行中ColorSpace.match返回的命名P3，且观察值必须与该平台命名对象相等；未知curve/不匹配matrix、sRGB回退、任意同名自建ColorSpace仍拒绝。文件ICC白名单及数值容差不变。此处不把头颜色报告当作源ICC或源像素，也不据输出标签证明设备ICC正确。
 
 验证层次必须区分：
 1. 纯JVM容器/ICC/合成恶意边界测试与原件准入。
@@ -79,3 +79,16 @@
 前三层不代替第四层。本轮host直接调用ImageDecoder时，能力查询返回true，实际nCreate报
 `DecodeException: unimplemented`；这不是成功或可忽略的测试。未取得目标设备实测之前，
 只能交付有严格失败保护的兼容实现，不能宣称所有Android/OEM已成功导入该变体。
+
+
+## 诊断版真机反馈后的头颜色合同修复
+
+`HEIC_SOURCE_TRANSFER_MISMATCH` 可对应旧版将 Java 头颜色报告逐项当成编码源 ICC 的检查失败；仅凭错误码不能证明设备返回了命名 P3。
+
+官方依据：
+- [ImageInfo.getColorSpace](https://developer.android.com/reference/android/graphics/ImageDecoder.ImageInfo)：返回预计解码Bitmap的空间，不保证是编码空间。
+- [GraphicsJNI颜色映射](https://android.googlesource.com/platform/frameworks/base.git/+/refs/heads/android10-dev/core/jni/android/graphics/Graphics.cpp)：先调用ColorSpace.match，匹配则返回命名对象。
+- [ColorSpace.match](https://android.googlesource.com/platform/frameworks/base/+/4fda9095ba9b/graphics/java/android/graphics/ColorSpace.java)：其中TRC的d比较允许小于0.002，足以规范化此精确rounded曲线；实现调用运行平台方法，不复制/扩宽这些容差。若某版本不返回预期命名P3，fallback仍拒绝。
+- [SkHeifCodec](https://skia.googlesource.com/skia/+/3296f7ba1f66bad209eb6a861a8bcbd89634f6ae/src/codec/SkHeifCodec.cpp)保留mIccData为编码profile；[SkCodec](https://skia.googlesource.com/skia/+/5f3e5240dc364bad6a744d6ea16608e06ecb4883/src/codec/SkCodec.cpp)将fEncodedInfo.profile()传入skcms_Transform。Java报告规范化不替换这个native源ICC。
+
+实现仍只请求一次目标sRGB、一次原尺寸decode；无重新标记源bitmap、无把目标像素当raw重复套ICC。尺寸/配置/输出sRGB/gainmap方向/内存全部保留。API29与35 host合同测试验证ColorSpace.match规范化及负例；现有384色LittleCMS对照验证实际曲线转换而非标准P3曲线。host ImageDecoder nCreate限制尚未消失，这些不是API37 OEM原片像素的端到端实测。需要真机重新导入并对照色块/原图色彩后才可声明该设备兼容成功。

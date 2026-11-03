@@ -7,8 +7,9 @@ import kotlin.math.abs
  * Narrow ICC v4 RGB matrix/TRC admission, not a general ICC engine. Only independently
  * specified sRGB/Display P3 primaries and explicitly validated SDR transfers are accepted.
  * Descriptions, manufacturer names,
- * profile IDs and hashes never establish identity. The platform must separately prove it
- * recognized this color space BEFORE a target-sRGB request, otherwise importing is unsafe.
+ * profile IDs and hashes never establish identity. Java ImageInfo reports a default output
+ * space, not necessarily this encoded source descriptor; header canonicalization is checked
+ * separately without changing the native encoded ICC used for the target-sRGB conversion.
  *
  * Primaries/curve: https://registry.color.org/rgb-registry/{srgb,displayp3}
  * Colorants below: standard D65 primaries, Bradford adaptation to ICC PCS D50
@@ -44,6 +45,10 @@ internal object HeicIccProfile {
     // One independently checked SDR type-3 curve, represented exactly as ICC s15Fixed16.
     // Numeric capability allowlist, never a manufacturer/description/profile-ID exception.
     private val roundedSdrTransfer=Transfer(157286/65536.0,62128/65536.0,3408/65536.0,5046/65536.0,2556/65536.0)
+    /** Exact admitted numeric capability; not a device/name exception or wider ICC tolerance. */
+    fun isRoundedDisplayP3(profile:Profile)=profile.identity==ColorIdentity.DISPLAY_P3 &&
+        profile.transfer==roundedSdrTransfer &&
+        near(profile.toXyzD50.values(),ColorIdentity.DISPLAY_P3.expectedToXyzD50,PROFILE_MATRIX_TOLERANCE)
     private fun transferValues(t:Transfer)=doubleArrayOf(t.g,t.a,t.b,t.c,t.d,t.e,t.f)
     private fun standardTransfer(t:Transfer)=near(transferValues(t),transferValues(ColorIdentity.SRGB.expectedTransfer),TRANSFER_TOLERANCE)
     /** Preserve legacy equivalence of standard ICC quantization and exact NCLX declarations.
