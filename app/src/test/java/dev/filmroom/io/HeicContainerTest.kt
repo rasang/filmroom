@@ -10,6 +10,92 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HeicContainerTest {
+    @Test fun standardSrgbIccAndNclxRemainEquivalentWithoutLosingActualDescriptor() {
+        val root=listOf(File("src/androidTest/assets/heic"),File("app/src/androidTest/assets/heic")).first{it.isDirectory}
+        val bytes=File(root,"original-display-p3.icc").readBytes()
+        val buffer=java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.BIG_ENDIAN)
+        val xyz=mapOf("rXYZ" to listOf(.436041,.222485,.013920),"gXYZ" to listOf(.385113,.716905,.097067),"bXYZ" to listOf(.143046,.060610,.713913))
+        repeat(buffer.getInt(128)){i->
+            val at=132+i*12;val name=String(bytes,at,4,Charsets.US_ASCII)
+            xyz[name]?.let{values->val offset=buffer.getInt(at+4);values.forEachIndexed{j,value->buffer.putInt(offset+8+j*4,kotlin.math.round(value*65536).toInt())}}
+        }
+        val icc=box("colr","prof".toByteArray()+bytes)
+        val props=listOf(ispe(96,64),hvcc(profile=3),colr(13),icc)
+        val single=inspect(file(listOf(item(1,"hvc1")),props,listOf(1 to listOf(1,2,3,4))))
+        val expected=HeicIccProfile.inspectProfile(bytes)
+        assertEquals(expected,single.sourceProfile)
+        val refs=full("iref",data{write(box("dimg",data{writeShort(1);writeShort(2);writeShort(2);writeShort(3)}))})
+        val grid=inspect(file(listOf(item(1,"grid"),item(2,"hvc1",true),item(3,"hvc1",true)),props,
+            listOf(1 to listOf(1,3),2 to listOf(1,2,4),3 to listOf(1,2,4)),refs))
+        assertEquals(expected,grid.sourceProfile)
+        assertNotEquals(HeicIccProfile.Profile.standard(HeicIccProfile.ColorIdentity.SRGB),grid.sourceProfile)
+        // Same sRGB primaries do not make a rounded/custom curve equivalent to NCLX sRGB.
+        repeat(buffer.getInt(128)){i->
+            val at=132+i*12;val name=String(bytes,at,4,Charsets.US_ASCII)
+            if(name in listOf("rTRC","gTRC","bTRC")) {
+                val offset=buffer.getInt(at+4)
+                listOf(157286,62128,3408,5046,2556).forEachIndexed{j,value->buffer.putInt(offset+12+j*4,value)}
+            }
+        }
+        val roundedSrgb=box("colr","prof".toByteArray()+bytes)
+        rejects(HeicContainer.Failure.UNSUPPORTED,file(listOf(item(1,"hvc1")),listOf(ispe(96,64),hvcc(profile=3),colr(13),roundedSrgb),listOf(1 to listOf(1,2,3,4))))
+    }
+
+    @Test fun exactRoundedIccWithFpxrReachesDescriptorWithoutRelabeling() {
+        val root=System.getProperty("filmroom.heic.referenceDir")?.let(::File)
+            ?: listOf(File("src/androidTest/assets/heic"),File("app/src/androidTest/assets/heic")).first{it.isDirectory}
+        val icc=File(root,"original-rounded-p3.icc").readBytes()
+        val color=box("colr","prof".toByteArray()+icc+byteArrayOf(0x46,0x50,0x58,0x52,0,0,0,0))
+        val info=inspect(file(listOf(item(1,"hvc1")),listOf(ispe(96,64),hvcc(profile=3),color),listOf(1 to listOf(1,2,3))))
+        assertEquals(HeicIccProfile.ColorIdentity.DISPLAY_P3,info.sourceColor)
+        assertEquals(2556/65536.0,info.sourceProfile.transfer.d,0.0)
+        try{info.copy(sourceColor=HeicIccProfile.ColorIdentity.SRGB);fail("Contradictory identity/descriptor")}
+        catch(_:IllegalArgumentException){}
+    }
+
+    @Test fun gridRequiresActualTransferAgreementNotOnlyP3Primaries() {
+        val base=listOf(File("src/androidTest/assets/heic"),File("app/src/androidTest/assets/heic")).first{it.isDirectory}
+        val root=System.getProperty("filmroom.heic.referenceDir")?.let(::File) ?: base
+        fun color(name:String)=box("colr","prof".toByteArray()+File(if(name=="original-display-p3.icc")base else root,name).readBytes())
+        val props=listOf(ispe(96,64),hvcc(profile=3),color("original-rounded-p3.icc"),color("original-display-p3.icc"))
+        val items=listOf(item(1,"grid"),item(2,"hvc1",true),item(3,"hvc1",true))
+        val refs=full("iref",data{write(box("dimg",data{writeShort(1);writeShort(2);writeShort(2);writeShort(3)}))})
+        val valid=inspect(file(items,props,listOf(1 to listOf(1),2 to listOf(1,2,3),3 to listOf(1,2,3)),refs))
+        assertEquals(2556/65536.0,valid.sourceProfile.transfer.d,0.0)
+        rejects(HeicContainer.Failure.UNSUPPORTED,file(items,props,listOf(1 to listOf(1),2 to listOf(1,2,3),3 to listOf(1,2,4)),refs))
+        rejects(HeicContainer.Failure.UNSUPPORTED,file(items,props,listOf(1 to listOf(1,4),2 to listOf(1,2,3),3 to listOf(1,2,3)),refs))
+    }
+
+    @Test fun mainStillPictureSdr8IsAdmittedForSingleImageAndGrid() {
+        for (profile in 1..3) {
+            val single = inspect(heic(hvcc = hvcc(profile = profile)))
+            assertEquals(96, single.width); assertEquals(64, single.height)
+        }
+        val props = listOf(ispe(96,64), ispe(48,64), hvcc(profile=3), colr(13))
+        val grid = inspect(file(
+            listOf(item(1,"grid"), item(2,"hvc1",true), item(3,"hvc1",true)),
+            props, listOf(1 to listOf(1), 2 to listOf(2,3,4), 3 to listOf(2,3,4)),
+            full("iref",data { write(box("dimg",data { writeShort(1);writeShort(2);writeShort(2);writeShort(3) })) }),
+        ))
+        assertEquals(96,grid.displayWidth);assertEquals(64,grid.displayHeight)
+        assertEquals(6144L,grid.estimatedDecodePixels)
+    }
+
+    @Test fun mainStillPictureDoesNotBypassDepthChromaColorOrContainerGuards() {
+        for (depth in 1..7) rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3,depth=depth)))
+        for (chroma in listOf(0,2,3)) rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3,chroma=chroma)))
+        for (profile in listOf(0,4,5,31)) rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=profile)))
+        for (type in listOf("imir","clap","auxC","mdcv","clli"))
+            rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3),extra=listOf(box(type,byteArrayOf(0)))))
+        rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3),extra=listOf(colr(16))))
+        rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3),extra=listOf(full("pixi",byteArrayOf(3,10,10,10)))))
+        rejects(HeicContainer.Failure.UNSUPPORTED,file(listOf(item(1,"hvc1")),listOf(ispe(96,64),hvcc(profile=3)),listOf(1 to listOf(1,2))))
+        rejects(HeicContainer.Failure.UNSUPPORTED,heic(hvcc=hvcc(profile=3))+box("moov",byteArrayOf()))
+        rejects(HeicContainer.Failure.LIMIT,heic(width=30001,hvcc=hvcc(profile=3)))
+        // Profile support must not silently repair or ignore a malformed ICC declaration.
+        rejects(HeicContainer.Failure.INVALID,heic(hvcc=hvcc(profile=3),extra=listOf(box("colr","prof".toByteArray()+ByteArray(132)))))
+    }
+
     /** Real HEVC bitstreams; this test validates container admission, NOT Android pixel decoding. */
     @Test fun realCc0HevcFixturesAndRotationsHaveExpectedContainerAdmission() {
         val root = listOf(File("src/androidTest/assets/heic"), File("app/src/androidTest/assets/heic"))

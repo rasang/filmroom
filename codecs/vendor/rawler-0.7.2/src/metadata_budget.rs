@@ -41,3 +41,16 @@ pub(crate) fn charge(bytes: usize, ifd: bool) -> bool {
     !s.failed
   })
 }
+
+// Filmroom's sensor-only RW2 route must not copy the embedded JPEG while probing.
+// This scoped opt-in is active only with metadata admission enabled and II55 magic.
+thread_local! { static OMIT_RW2_PREVIEW: Cell<bool> = const { Cell::new(false) }; }
+pub(crate) struct PanasonicPreviewScope(bool);
+impl Drop for PanasonicPreviewScope { fn drop(&mut self) { OMIT_RW2_PREVIEW.with(|s|s.set(self.0)); } }
+pub(crate) fn panasonic_preview_scope(is_rw2:bool)->PanasonicPreviewScope {
+  let enabled=is_rw2 && BUDGET.with(|b|b.get().is_some());
+  PanasonicPreviewScope(OMIT_RW2_PREVIEW.with(|s|s.replace(enabled)))
+}
+pub(crate) fn omit_panasonic_preview(tag:u16)->bool {
+  matches!(tag,0x002e|0x0127) && OMIT_RW2_PREVIEW.with(|s|s.get())
+}

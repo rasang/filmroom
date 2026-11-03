@@ -1,4 +1,4 @@
-> **Development backup, not an installable release.** This branch preserves unintegrated work and omits native binaries. It is not a build/validation claim. See [recovery baselines, patches and validation status](development-snapshots/20261102/README.md).
+> **Development branch · 0.1.19-beta.5**: This is integrated application source, not a patch-only recovery snapshot. Prebuilt JNI libraries are omitted; rebuild them from source using the [development guide](docs/DEVELOPMENT.md) before building an APK. Host tests are not physical Android device validation. See the release page for final acceptance and package availability.
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.18.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current development source version: 0.1.19-beta.5.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
@@ -90,7 +90,7 @@ See [0.1.18 notes](docs/RELEASE_0_1_18.md) for inset compact export thumbnails, 
 
 ## Your first photo
 
-1. **Import** — Choose one photo through the system gallery or file picker. Use the file picker for DNG; see compatibility below.
+1. **Import** — Choose one photo through the system gallery or file picker. Use the file picker for RAW; see compatibility below.
 2. **Choose a stock and adjust** — Tap a film stock, tune exposure, grain and halation, then choose a print/direct-scan path, crop or add a frame as needed. Compare with the original as you work.
 3. **Export a new file** — Choose a format, size and color space, then add it to the queue. JPEG/PNG files go to the gallery's “暗房” album; TIFF files go to “Downloads/暗房”.
 
@@ -105,7 +105,8 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | JPEG / PNG | System decoding; transparent PNG areas are composited over white. |
 | HEIC | A limited subset of ordinary, static 8-bit HEVC primary/grid images; requires a device decoder and sufficient memory. Supported P3 input is converted to sRGB SDR, not edited as HDR. |
 | NEF / CR2 / ARW (development candidate) | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Final joint validation and release approval remain required. |
-| DNG | Supported 16-bit uncompressed strip-based Bayer/linear RGB and tested lossless JPEG (SOF3) strip-based/tiled variants. Reads RAW data rather than substituting an embedded preview. |
+| DNG | Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
+| Panasonic RW2 (development candidate) | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
 
 | Output | Best for |
 | --- | --- |

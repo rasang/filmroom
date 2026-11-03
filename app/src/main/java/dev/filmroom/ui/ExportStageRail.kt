@@ -40,10 +40,10 @@ class ExportStageRail(context:Context):View(context) {
         val segment=((width-gap*6)/7).coerceAtLeast(0f)
         for(i in 0..6) {
             val x=i*(segment+gap)
-            paint.color=Color.rgb(56,61,57)
+            paint.color=FilmroomPalette.divider
             canvas.drawRoundRect(x,0f,x+segment,height.toFloat(),height/2f,height/2f,paint)
             val amount=when {completed || i<stage-1->1f;i==stage-1->fraction;else->0f}
-            paint.color=if(running && i==stage-1)Color.rgb(220,185,132)else Color.rgb(171,183,169)
+            paint.color=if(running && i==stage-1)FilmroomPalette.accent else FilmroomPalette.muted
             if(amount>0)canvas.drawRoundRect(x,0f,x+segment*amount,height.toFloat(),height/2f,height/2f,paint)
             if(i==stage-1 && !measured && !completed) {
                 paint.style=Paint.Style.STROKE;paint.strokeWidth=resources.displayMetrics.density

@@ -159,7 +159,11 @@ pub fn develop_tile(
     h: usize,
     data: Vec<f32>,
 ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
-    develop_tile_cancel(&Development::from(d), y, h, data, &AtomicBool::new(false))
+    develop_dng_tile_cancel(d,&Development::from(d), y, h, data, &AtomicBool::new(false))
+}
+fn develop_dng_tile_cancel(d:&Dng,development:&Development,y:usize,h:usize,data:Vec<f32>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
+    if let Some(profile)=&d.profile { profile.develop(d.active,y,h,data,d.baseline_exposure_ev,cancel) }
+    else { develop_tile_cancel(development,y,h,data,cancel) }
 }
 pub(crate) fn develop_tile_cancel(
     d: &Development,
@@ -363,6 +367,43 @@ fn decode_with_reserve(
         .build()
         .map_err(|_| err("MEMORY_BUDGET", "develop"))?;
     let development = Development::from(&d);
+    if d.streaming_linear {
+        let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
+        let mut batch_y=d.active.y;
+        let mut expected_y=0usize;
+        let flush = |batch:&mut Vec<f32>, y:usize| -> Result<()> {
+            let h=batch.len()/(d.active.w*3);
+            let first=y.max(d.crop.y); let last=(y+h).min(d.crop.y+d.crop.h);
+            if first<last {
+                let data=std::mem::take(batch);
+                let pix=pool.install(||develop_dng_tile_cancel(&d,&development,y,h,data,cancel))?;
+                emit(&development,&out,&pix,y,first,last,cancel)?;
+            } else {batch.clear();}
+            Ok(())
+        };
+        for (strip,(&offset,&bytes)) in d.offsets.iter().zip(&d.counts).enumerate() {
+            let start_y=strip*d.rows_per_strip;
+            let h=d.rows_per_strip.min(d.height-start_y);
+            crate::linear_jpeg::rows(&mut file,offset as u64,bytes as u64,d.width,h,d.sample_bits,cancel,|local_y,row|{
+                let y=start_y+local_y;
+                if y!=expected_y || row.len()!=d.width*3 {return Err(err("INVALID_INPUT","decode"));}
+                expected_y+=1;
+                if y>=d.active.y && y<d.active.y+d.active.h {
+                    if batch.is_empty(){batch_y=y;}
+                    for pixel in row[d.active.x*3..(d.active.x+d.active.w)*3].chunks_exact(3) {
+                        for c in 0..3 {
+                            let value=d.linearization.as_ref().map_or(pixel[c],|t|t.apply(pixel[c])) as f32;
+                            batch.push((value-d.black[c]).max(0.)/(d.white[c]-d.black[c]));
+                        }
+                    }
+                    if batch.len()==d.active.w*admission.strip_rows as usize*3 {flush(&mut batch,batch_y)?;}
+                }
+                Ok(())
+            })?;
+        }
+        if expected_y!=d.height{return Err(err("INVALID_INPUT","decode"));}
+        if !batch.is_empty(){flush(&mut batch,batch_y)?;}
+    } else {
     let mut first = d.crop.y;
     while first < d.crop.y + d.crop.h {
         if cancel.load(Ordering::Relaxed) {
@@ -373,10 +414,11 @@ fn decode_with_reserve(
         let tile_end = (last + HALO).min(d.active.y + d.active.h);
         let data = d.read_tile_cancellable(&mut file, tile_y, tile_end - tile_y, cancel)?;
         let p = pool.install(|| {
-            develop_tile_cancel(&development, tile_y, tile_end - tile_y, data, cancel)
+            develop_dng_tile_cancel(&d,&development, tile_y, tile_end - tile_y, data, cancel)
         })?;
         emit(&development, &out, &p, tile_y, first, last, cancel)?;
         first = last;
+    }
     }
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "spool"));

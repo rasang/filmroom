@@ -1,5 +1,7 @@
 package dev.filmroom
 
+import dev.filmroom.ui.FilmroomPalette
+
 import android.app.AlertDialog
 import android.content.Intent
 import android.text.InputType
@@ -55,8 +57,8 @@ class MainActivity:ComponentActivity() {
         verifiedProceed={exportOptionsDialog()})
     private fun exportBackgroundGuidanceFinished(){exportBackgroundGuidance.finish()}
     private val exportNotifications=dev.filmroom.ui.ExportNotificationPermission(this)
-    private val ink=Color.rgb(244,241,233); private val muted=Color.rgb(184,187,178)
-    private val accent=Color.rgb(229,163,93);private val surface=Color.rgb(26,30,27);private val raised=Color.rgb(36,42,37)
+    private val ink=FilmroomPalette.ink; private val muted=FilmroomPalette.muted
+    private val accent=FilmroomPalette.accent;private val surface=FilmroomPalette.surface;private val raised=FilmroomPalette.raised
     private lateinit var root:LinearLayout;private lateinit var photo:PhotoView;private lateinit var tools:LinearLayout
     private lateinit var categoryBar:LinearLayout;private lateinit var badge:TextView
     private var lastToastMessage:String?=null
@@ -177,8 +179,8 @@ class MainActivity:ComponentActivity() {
     private fun shape(color:Int,stroke:Int?=null)=GradientDrawable().apply{setColor(color);cornerRadius=dp(12).toFloat();if(stroke!=null)setStroke(dp(1),stroke)}
     private fun button(label:String,icon:Int?=null,primary:Boolean=false,action:()->Unit)=Button(this).apply{
         text=label;textSize=14f;isAllCaps=false;minHeight=dp(48);minimumHeight=dp(48);minWidth=dp(48);minimumWidth=dp(48);setPadding(dp(12),dp(10),dp(12),dp(10));ellipsize=null;maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
-        setTextColor(if(primary)Color.rgb(32,21,12) else ink);background=shape(if(primary)accent else raised)
-        if(icon!=null){val d=getDrawable(icon)!!.mutate();d.setTint(if(primary)Color.rgb(32,21,12)else ink);d.setBounds(0,0,dp(24),dp(24));setCompoundDrawables(d,null,null,null);compoundDrawablePadding=dp(6)}
+        setTextColor(if(primary)FilmroomPalette.onAccent else ink);background=shape(if(primary)accent else raised)
+        if(icon!=null){val d=getDrawable(icon)!!.mutate();d.setTint(if(primary)FilmroomPalette.onAccent else ink);d.setBounds(0,0,dp(24),dp(24));setCompoundDrawables(d,null,null,null);compoundDrawablePadding=dp(6)}
         setOnClickListener{action()}
     }
     private fun iconButton(label:String,icon:Int,action:()->Unit)=button("",icon,action=action).apply{
@@ -195,7 +197,7 @@ class MainActivity:ComponentActivity() {
     }
     private fun row()=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
     private fun buildScreen(){
-        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(17,20,19))}
+        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(FilmroomPalette.background)}
         dev.filmroom.ui.EditorSystemBars.attach(this,root)
         setContentView(root)
         // Keep seven semantic touch targets; use compact visual glyphs and spend spare
@@ -206,7 +208,7 @@ class MainActivity:ComponentActivity() {
             if(view.tag!=icon){
                 view.tag=icon
                 view.setCompoundDrawables(getDrawable(icon)!!.mutate().apply{
-                    setTint(if(view===exportButton)Color.rgb(32,21,12)else ink)
+                    setTint(if(view===exportButton)FilmroomPalette.onAccent else ink)
                     setBounds(0,0,dp(22),dp(22))
                 },null,null,null)
             }
@@ -384,6 +386,7 @@ class MainActivity:ComponentActivity() {
         if(boundCompare!=s.compare){
             boundCompare=s.compare
             compare.contentDescription=if(s.compare)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a21efd19b7df)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36c69988127e);compare.isSelected=s.compare;compare.background=shape(if(s.compare)accent else raised)
+            compare.compoundDrawables.filterNotNull().forEach{it.setTint(if(s.compare)FilmroomPalette.onAccent else ink)}
         }
         loading.visibility=if(!s.exporting&&(s.busy!=null||s.updating))View.VISIBLE else View.GONE;loadingText.text=s.busyDisplay ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c3c12cabaae9)
         compare.visibility=if(s.photo==null || loading.visibility==View.VISIBLE)View.GONE else View.VISIBLE

@@ -1,10 +1,8 @@
 {
-  "status": "private-beta3-candidate-not-publicly-released",
-  "version_name": "0.1.19-beta.3",
-  "version_code": 22,
-  "codec_source_commit": "479d2d117a9720bbc6fdb96a129ec5fe1e1ed14f",
-  "codec_reused_from_beta2": true,
-  "codec_tree_unchanged_through": "fb997f184060763ab8291729bc949bec9eee2c5a",
+  "status": "beta5-candidate-validation-in-progress-not-released",
+  "version_name": "0.1.19-beta.5",
+  "version_code": 24,
+  "codec_reused_from_beta2": false,
   "engine_validated_source_commit": "fb997f184060763ab8291729bc949bec9eee2c5a",
   "engine_production_commit": "dbe3561f",
   "rust": "1.88.0",
@@ -87,7 +85,7 @@
     },
     {
       "path": "app/src/main/jniLibs/arm64-v8a/libfilm_codecs.so",
-      "sha256": "14985548f245004d4a57f0eaf0b20cc979d3e7dc95289175be08219255f44226",
+      "sha256": "457597c6c828bcf561eb09b48f01be504b2e490a7c6fc9eec49c0851edfb5b2b",
       "load_alignments": [
         "0x4000",
         "0x4000",
@@ -111,7 +109,7 @@
     },
     {
       "path": "app/src/main/jniLibs/x86_64/libfilm_codecs.so",
-      "sha256": "77cab145bfdde2853494ee4d4c25592c698459182695118ec01637b09bc04db2",
+      "sha256": "eaed32523caa6e69c14787188f1efb84db4f82315e5281b8fdb3c4fc174dec9e",
       "load_alignments": [
         "0x4000",
         "0x4000",
@@ -133,5 +131,12 @@
       ],
       "api29_missing_symbols": []
     }
-  ]
+  ],
+  "codec_source_base_commit": "47ef9f80d70e15cc7ca0fd664d2dc8eac1ce64dc",
+  "codec_source_commits": {
+    "samsung": "ea418019ca6cda560c9f39121107557b7257db24",
+    "rw2": "32d78746d6de2737844e7d6b8326478c36098494"
+  },
+  "codec_source_tree_sha256": "a6f10326d2dde1d9900ba1b159af1ec07c4f1c167a1b0f4114d9f06382b0c702",
+  "codec_build": "Combined source rebuilt offline with Rust1.88.0 and NDK27.2.12479018 API26; no isolated owner codec binary reused."
 }

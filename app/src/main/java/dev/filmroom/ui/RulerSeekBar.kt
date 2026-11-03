@@ -16,7 +16,7 @@ import kotlin.math.roundToInt
 class RulerSeekBar(context: Context) : SeekBar(context) {
     private val density = resources.displayMetrics.density
     private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(220, 221, 216)
+        color = FilmroomPalette.ruler
         strokeWidth = 1.5f * density
         strokeCap = Paint.Cap.ROUND
     }
@@ -29,7 +29,7 @@ class RulerSeekBar(context: Context) : SeekBar(context) {
         // Removing only the stock track leaves our drawn ticks unobstructed.
         progressDrawable = ColorDrawable(Color.TRANSPARENT)
         tickMark = null
-        thumbTintList = ColorStateList.valueOf(Color.rgb(229, 163, 93))
+        thumbTintList = ColorStateList.valueOf(FilmroomPalette.accent)
     }
 
     override fun onDraw(canvas: Canvas) {

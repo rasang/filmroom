@@ -11,7 +11,7 @@ import kotlin.math.sin
 
 /** A local preview, not a simulation of the final result or a completion percentage. */
 class ProcessingAnimationView(context: Context) : View(context) {
-    private val amber = Color.rgb(229, 163, 93)
+    private val amber = FilmroomPalette.accent
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val card = RectF(76f, 12f, 204f, 140f)
     private val imageBounds = RectF()
@@ -100,7 +100,7 @@ class ProcessingAnimationView(context: Context) : View(context) {
         val pulse = (sin(phase * Math.PI * 2.0).toFloat() + 1f) * .5f
         // A quiet paper edge under the photo gives depth without a decorative film cartoon.
         paint.shader = null; paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(52, 49, 43); paint.alpha = 255
+        paint.color = FilmroomPalette.raised; paint.alpha = 255
         canvas.drawRoundRect(80f, 17f, 200f, 145f, 14f, 14f, paint)
         val imageSave = canvas.save()
         if (stage == ProcessingVisualStage.SAVING) canvas.translate(0f, pulse * 2f)
@@ -116,7 +116,7 @@ class ProcessingAnimationView(context: Context) : View(context) {
         } else {
             // No fabricated landscape: a restrained photographic color field while preview is absent.
             paint.shader = LinearGradient(76f, 12f, 204f, 140f,
-                intArrayOf(Color.rgb(128, 88, 58), Color.rgb(58, 64, 56), Color.rgb(30, 37, 35)), null, Shader.TileMode.CLAMP)
+                intArrayOf(Color.rgb(128, 88, 58), FilmroomPalette.track, FilmroomPalette.surface), null, Shader.TileMode.CLAMP)
             canvas.drawRect(card, paint); paint.shader = null
         }
         when (stage) {
@@ -151,7 +151,7 @@ class ProcessingAnimationView(context: Context) : View(context) {
         paint.strokeCap = Paint.Cap.ROUND; paint.color = amber; paint.alpha = 210
         if (stage == ProcessingVisualStage.SAVING) {
             val y = 92f + pulse * 3f
-            paint.style = Paint.Style.FILL; paint.color = Color.rgb(29, 32, 29); paint.alpha = 245
+            paint.style = Paint.Style.FILL; paint.color = FilmroomPalette.surface; paint.alpha = 245
             canvas.drawCircle(198f, 126f, 17f, paint)
             paint.style = Paint.Style.STROKE; paint.color = amber; paint.alpha = 255
             canvas.drawLine(198f, y + 25f, 198f, y + 38f, paint)

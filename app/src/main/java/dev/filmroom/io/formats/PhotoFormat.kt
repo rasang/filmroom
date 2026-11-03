@@ -72,6 +72,8 @@ object PhotoHeaders {
         if (ascii(prefix, 0, "GIF87a", n) || ascii(prefix, 0, "GIF89a", n))
             return result(PhotoFormat.GIF) // A signature cannot distinguish one frame from many.
         if (n >= 14 && ascii(prefix, 0, "BM", n)) return result(PhotoFormat.BMP)
+        if (n >= 4 && ascii(prefix, 0, "II", n) && u8(prefix, 2) == 0x55 && u8(prefix, 3) == 0)
+            return result(PhotoFormat.CAMERA_RAW, identification = Identification.CONTAINER_ONLY)
         if (n >= 4 && ((ascii(prefix, 0, "II", n) && u8(prefix, 3) == 0 && u8(prefix, 2) in setOf(42, 43)) ||
                 (ascii(prefix, 0, "MM", n) && u8(prefix, 2) == 0 && u8(prefix, 3) in setOf(42, 43))))
             // TIFF-based DNG and camera RAW must be identified by the real native parser later.

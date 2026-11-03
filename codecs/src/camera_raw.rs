@@ -39,6 +39,7 @@ mod sony_bayer;
 mod integer_spool;
 mod sony_tiles;
 mod canon_stream;
+mod panasonic;
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_CAMERA_RAW_VARIANT", "probe")
 }
@@ -303,6 +304,8 @@ impl CameraRaw {
             "CR2"
         } else if make.starts_with(b"NIKON") {
             "NEF"
+        } else if make == b"Panasonic" && &header[..4] == b"II\x55\0" {
+            "RW2"
         } else if make == b"SONY" {
             "ARW"
         } else {
@@ -340,6 +343,14 @@ impl CameraRaw {
             }
             arw1_offset = Some(offsets[0] as u64);
             expected_dimensions = Some((3880, 2608));
+        } else if format == "RW2" {
+            selected = panasonic::sensor(&t)?;
+            if uint(selected,45,None)?==8 {
+                // CF2: one line pair, 65536-entry Huffman cache and bounded metadata.
+                // Conservative 1MiB charge exceeds all capped plan/cache capacities.
+                decoder_extra_bytes=1024*1024;
+            }
+            expected_dimensions = Some((uint(selected, 2, None)? as usize, uint(selected, 3, None)? as usize));
         } else if format == "CR2" {
             let mut candidates = t.ifds.iter().filter(|i| i.contains_key(&50752));
             let sensor = candidates.next().ok_or_else(unsupported)?;
@@ -500,7 +511,7 @@ impl CameraRaw {
         if expected_dimensions.is_some_and(|dim| dim != (raw.width, raw.height)) {
             return Err(unsupported());
         }
-        if format != "CR2" && !legacy_a100 {
+        if !matches!(format,"CR2"|"RW2") && !legacy_a100 {
             let compression = uint(selected, 259, None)?;
             let ranges = if compression == 7 {
                 vec![]
@@ -906,7 +917,10 @@ pub fn decode(
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "probe"));
     }
-    let camera = CameraRaw::read(input)?;
+    // Bind metadata and generic integer decode to one descriptor, not a reopened path.
+    let input_file=File::open(input).map_err(|e|io_error(e,"probe"))?;
+    let input_identity=crate::nikon_he::Identity::read(&input_file)?;
+    let camera = CameraRaw::read_file(input,input_file.try_clone().map_err(|e|io_error(e,"probe"))?)?;
     let admission = camera.admit(b)?;
     if camera.he.is_some(){return crate::nikon_he::decode(output,camera,admission,cancel);}
     if cancel.load(Ordering::Relaxed) {
@@ -958,7 +972,8 @@ pub fn decode(
         return Ok((camera.probe(), admission));
     }
     let raw = pool.install(|| {
-        let source = RawSource::new(input).map_err(|e| io_error(e, "decode"))?;
+        if input_identity!=crate::nikon_he::Identity::read(&input_file)? {return Err(err("INVALID_INPUT","decode"));}
+        let source = RawSource::new_from_file(&input_file,input).map_err(|e| io_error(e, "decode"))?;
         if let Some(offset) = camera.arw1_offset {
             let bytes = source
                 .subview_until_eof(offset)
@@ -981,11 +996,19 @@ pub fn decode(
             };
             crate::lossless::validate_camera(bytes, j.width, j.height, cancel)?;
         }
-        bounded("decode", || rawler::decode(&source, &Default::default()))
+        let decoded=bounded("decode", || {
+            if camera.format=="RW2" {
+                let decoder=rawler::get_decoder(&source)?;
+                decoder.raw_image_cancel(&source,&Default::default(),&||cancel.load(Ordering::Relaxed))
+            } else {rawler::decode(&source,&Default::default())}
+        });
+        if cancel.load(Ordering::Relaxed) {return Err(err("CANCELLED","decode"));}
+        decoded
     })?; // source mapping, TIFF decoder and padded buffers are dropped before development.
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "decode"));
     }
+    if input_identity!=crate::nikon_he::Identity::read(&input_file)? {return Err(err("INVALID_INPUT","decode"));}
     if raw.source_ifd_offset != Some(camera.source_ifd_offset) {
         return Err(err("INVALID_INPUT", "decode"));
     }

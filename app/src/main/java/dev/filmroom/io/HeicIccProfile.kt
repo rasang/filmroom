@@ -5,7 +5,8 @@ import kotlin.math.abs
 
 /**
  * Narrow ICC v4 RGB matrix/TRC admission, not a general ICC engine. Only independently
- * specified sRGB/Display P3 SDR transforms are accepted. Descriptions, manufacturer names,
+ * specified sRGB/Display P3 primaries and explicitly validated SDR transfers are accepted.
+ * Descriptions, manufacturer names,
  * profile IDs and hashes never establish identity. The platform must separately prove it
  * recognized this color space BEFORE a target-sRGB request, otherwise importing is unsafe.
  *
@@ -27,6 +28,33 @@ internal object HeicIccProfile {
         Failure.LIMIT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9cd4df0f9933)
     })
     data class Transfer(val g:Double, val a:Double, val b:Double, val c:Double, val d:Double, val e:Double=0.0, val f:Double=0.0)
+    /** Value equality and defensive copies matter when comparing independently parsed grid tiles. */
+    class Matrix(values:DoubleArray) {
+        private val values=values.copyOf().also { require(it.size==9 && it.all(Double::isFinite)) }
+        fun values():DoubleArray=values.copyOf()
+        override fun equals(other:Any?)=other is Matrix && values.contentEquals(other.values)
+        override fun hashCode()=values.contentHashCode()
+    }
+    /** Identity describes primaries, NOT a license to replace this profile's transfer curve. */
+    data class Profile(val identity:ColorIdentity,val transfer:Transfer,val toXyzD50:Matrix) {
+        companion object {
+            fun standard(identity:ColorIdentity)=Profile(identity,identity.expectedTransfer,Matrix(identity.expectedToXyzD50))
+        }
+    }
+    // One independently checked SDR type-3 curve, represented exactly as ICC s15Fixed16.
+    // Numeric capability allowlist, never a manufacturer/description/profile-ID exception.
+    private val roundedSdrTransfer=Transfer(157286/65536.0,62128/65536.0,3408/65536.0,5046/65536.0,2556/65536.0)
+    private fun transferValues(t:Transfer)=doubleArrayOf(t.g,t.a,t.b,t.c,t.d,t.e,t.f)
+    private fun standardTransfer(t:Transfer)=near(transferValues(t),transferValues(ColorIdentity.SRGB.expectedTransfer),TRANSFER_TOLERANCE)
+    /** Preserve legacy equivalence of standard ICC quantization and exact NCLX declarations.
+     * Custom curves NEVER become equivalent to a standard curve through this comparison. */
+    fun equivalent(a:Profile,b:Profile):Boolean {
+        if(a==b)return true
+        if(a.identity!=b.identity || !standardTransfer(a.transfer) || !standardTransfer(b.transfer))return false
+        val matrix=a.identity.expectedToXyzD50
+        return near(a.toXyzD50.values(),matrix,PROFILE_MATRIX_TOLERANCE) &&
+            near(b.toXyzD50.values(),matrix,PROFILE_MATRIX_TOLERANCE)
+    }
     enum class ColorIdentity {
         SRGB, DISPLAY_P3;
         /** Column-major RGB -> D50 XYZ, compatible with Android ColorSpace.Rgb.transform. */
@@ -53,7 +81,25 @@ internal object HeicIccProfile {
         actual.size==expected.size && actual.indices.all { actual[it].isFinite() && abs(actual[it]-expected[it])<=tolerance }
     private data class Tag(val name:String,val offset:Int,val size:Int)
 
+    /** Legacy enum-only callers must never accept a nonstandard transfer as standard P3/sRGB. */
     fun inspect(bytes:ByteArray):ColorIdentity {
+        val profile=inspectProfile(bytes)
+        if(!standardTransfer(profile.transfer))unsupported()
+        return profile.identity
+    }
+
+    fun inspectProfile(payload:ByteArray):Profile {
+        if(payload.size>MAX_PROFILE_BYTES)limit()
+        if(payload.size<132)invalid()
+        val declared=Reader(payload).u32(0)
+        val bytes=if(declared==payload.size.toLong())payload else {
+            // A known colr wrapper trailer, not arbitrary ICC padding. ICC's own tag bounds
+            // are checked against its declared length; the original decoder input is unmodified.
+            val suffix=byteArrayOf(0x46,0x50,0x58,0x52,0,0,0,0)
+            if(declared<132 || declared+suffix.size!=payload.size.toLong() ||
+                !payload.copyOfRange(declared.toInt(),payload.size).contentEquals(suffix))invalid()
+            payload.copyOf(declared.toInt())
+        }
         if(bytes.size>MAX_PROFILE_BYTES)limit()
         if(bytes.size<132)invalid()
         val r=Reader(bytes)
@@ -94,12 +140,15 @@ internal object HeicIccProfile {
         fun xyz(name:String):DoubleArray { val t=tag(name);typed(t,"XYZ ",20);return r.fixedArray(t.offset+8,3) }
         val matrix=xyz("rXYZ")+xyz("gXYZ")+xyz("bXYZ")
         val identity=ColorIdentity.entries.singleOrNull{near(matrix,it.expectedToXyzD50,PROFILE_MATRIX_TOLERANCE)} ?: unsupported()
-        val expected=identity.expectedTransfer
-        val expectedTrc=doubleArrayOf(expected.g,expected.a,expected.b,expected.c,expected.d)
+        var actualTransfer:Transfer?=null
         for(name in listOf("rTRC","gTRC","bTRC")) {
             val t=tag(name);typed(t,"para",32)
             if(r.u16(t.offset+8)!=3 || r.u16(t.offset+10)!=0)unsupported()
-            if(!near(r.fixedArray(t.offset+12,5),expectedTrc,TRANSFER_TOLERANCE))unsupported()
+            val p=r.fixedArray(t.offset+12,5)
+            val transfer=Transfer(p[0],p[1],p[2],p[3],p[4])
+            if(!standardTransfer(transfer) && transfer!=roundedSdrTransfer)unsupported()
+            if(actualTransfer!=null && actualTransfer!=transfer)unsupported()
+            actualTransfer=transfer
         }
         val chad=tag("chad");typed(chad,"sf32",44)
         val adaptation=r.fixedArray(chad.offset+8,9)
@@ -140,7 +189,7 @@ internal object HeicIccProfile {
                 else -> unsupported()
             }
         }
-        return identity
+        return Profile(identity,checkNotNull(actualTransfer),Matrix(matrix))
     }
     private class Reader(private val b:ByteArray) {
         fun u8(at:Int):Int { if(at !in b.indices)invalid();return b[at].toInt() and 255 }

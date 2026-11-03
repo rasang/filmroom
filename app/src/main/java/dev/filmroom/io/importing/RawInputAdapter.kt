@@ -8,7 +8,7 @@ import org.json.JSONObject
 
 /** TIFF is only a routing hint. The native content parser must validate the RAW format. */
 internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInputAdapter {
-    override fun accepts(header: PhotoInputHeader) = header.isClassicTiff
+    override fun accepts(header: PhotoInputHeader) = (header.isClassicTiff || header.isPanasonicRw2)
     override suspend fun load(request: PhotoImportRequest, header: PhotoInputHeader): LoadedPhoto = with(request) {
         val metadata:JSONObject
         val raw:File

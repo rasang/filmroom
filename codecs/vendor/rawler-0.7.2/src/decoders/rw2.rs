@@ -106,94 +106,8 @@ impl<'a> Rw2Decoder<'a> {
 }
 
 impl<'a> Decoder for Rw2Decoder<'a> {
-  fn raw_image(&self, file: &RawSource, _params: &RawDecodeParams, dummy: bool) -> Result<RawImage> {
-    let width;
-    let height;
-
-    let (raw, split) = {
-      let data = self.tiff.find_ifds_with_tag(TiffCommonTag::PanaOffsets);
-      if !data.is_empty() {
-        (data[0], true)
-      } else {
-        (
-          self
-            .tiff
-            .find_first_ifd_with_tag(TiffCommonTag::StripOffsets)
-            .ok_or_else(|| RawlerError::DecoderFailed(format!("Failed to find a IFD with StripOffsets tag")))?,
-          false,
-        )
-      }
-    };
-
-    let compression = raw.get_entry(PanasonicTag::Compression).map(|entry| entry.force_u16(0)).unwrap_or_default(); // TODO BUG
-    //let compression = fetch_tiff_tag!(raw, PanasonicTag::Compression).force_u16(0);
-
-    let raw_format = raw.get_entry(PanasonicTag::RawFormat).map(|entry| entry.force_u16(0)).unwrap_or_default(); // TODO BUG
-
-    let bps = fetch_tiff_tag!(raw, PanasonicTag::BitsPerSample).force_u32(0);
-    let multishot = raw.get_entry(PanasonicTag::Multishot).map(|entry| entry.force_u32(0) == 65536).unwrap_or(false);
-
-    let image = {
-      let data = self.tiff.find_ifds_with_tag(TiffCommonTag::PanaOffsets);
-      if !data.is_empty() {
-        let raw = data[0];
-        width = fetch_tiff_tag!(raw, TiffCommonTag::PanaWidth).force_usize(0);
-        height = fetch_tiff_tag!(raw, TiffCommonTag::PanaLength).force_usize(0);
-        let offset = fetch_tiff_tag!(raw, TiffCommonTag::PanaOffsets).force_usize(0);
-        //let size = fetch_tiff_tag!(raw, TiffCommonTag::StripByteCounts).force_usize(0);
-        log::debug!("PanaOffset: {}", offset);
-        let src = file.subview_until_eof_padded(offset as u64)?; // TODO add size and check all samples
-        Rw2Decoder::decode_panasonic(file, &src, width, height, split, raw_format, bps, self.tiff.root_ifd(), dummy)?
-      } else {
-        let raw = self
-          .tiff
-          .find_first_ifd_with_tag(TiffCommonTag::StripOffsets)
-          .ok_or_else(|| RawlerError::DecoderFailed(format!("Failed to find a IFD with StripOffsets tag")))?;
-        width = fetch_tiff_tag!(raw, TiffCommonTag::PanaWidth).force_usize(0);
-        height = fetch_tiff_tag!(raw, TiffCommonTag::PanaLength).force_usize(0);
-        let offset = fetch_tiff_tag!(raw, TiffCommonTag::StripOffsets).force_usize(0);
-        //let size = fetch_tiff_tag!(raw, TiffCommonTag::StripByteCounts).force_usize(0);
-        log::debug!("StripOffset: {}", offset);
-        let src = file.subview_until_eof_padded(offset as u64)?; // TODO add size and check all samples
-
-        if src.len() >= width * height * 2 {
-          decode_12le_unpacked_left_aligned(&src, width, height, dummy)
-        } else if src.len() >= width * height * 3 / 2 {
-          decode_12le_wcontrol(&src, width, height, dummy)
-        } else {
-          Rw2Decoder::decode_panasonic(file, &src, width, height, split, raw_format, bps, self.tiff.root_ifd(), dummy)?
-        }
-      }
-    };
-
-    log::debug!(
-      "RW2 raw: {}, compression: {}, bps: {}, width: {}, height: {}, multishot: {}",
-      raw_format,
-      compression,
-      bps,
-      width,
-      height,
-      multishot
-    );
-
-    let cpp = 1;
-    let blacklevel = self.get_blacklevel()?;
-    let mut camera = self.camera.clone();
-    if let Some(cfa) = self.get_cfa()? {
-      camera.cfa = cfa;
-    }
-    let photometric = RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&camera));
-    let mut img = RawImage::new(camera, image, cpp, normalize_wb(self.get_wb()?), photometric, blacklevel, None, dummy);
-
-    if let Some(area) = self.get_active_area()? {
-      img.active_area = Some(area);
-      img.crop_area = Some(area);
-    } else if let Some(area) = self.get_crop()? {
-      img.crop_area = Some(area);
-    }
-
-    Ok(img)
-  }
+  fn raw_image(&self,file:&RawSource,_params:&RawDecodeParams,dummy:bool)->Result<RawImage>{self.raw_image_checked(file,dummy,&||false)}
+  fn raw_image_cancel(&self,file:&RawSource,_params:&RawDecodeParams,cancel:&dyn Fn()->bool)->Result<RawImage>{self.raw_image_checked(file,false,cancel)}
 
   fn full_image(&self, _file: &RawSource, params: &RawDecodeParams) -> Result<Option<DynamicImage>> {
     if params.image_index != 0 {
@@ -444,4 +358,140 @@ pub enum PanasonicTag {
 pub enum CameraIfdTag {
   LensTypeMake = 0x1201,
   LensTypeModel = 0x1202,
+}
+
+/// Filmroom checked storage geometry for bounded ordinary RW2 decoding.
+/// v8 has separate strip entropy/metadata requirements and is not admitted here.
+pub fn bounded_payload_bytes(width:usize,height:usize,version:u16,bps:u32)->Result<usize> {
+  let bad=||RawlerError::DecoderFailed("Unsupported or invalid RW2 storage geometry".into());
+  let pixels=width.checked_mul(height).filter(|v|*v>0 && *v<=52_000_000).ok_or_else(bad)?;
+  if !matches!(bps,12|14) {return Err(bad());}
+  let bytes=match version {
+    3|4 if bps==12 && width%14==0 => {
+      // Panasonic pump addresses 16KiB shuffled blocks, with a two-byte lookup.
+      (pixels/14).checked_mul(16).ok_or_else(bad)?.div_ceil(0x4000)*0x4000
+    },
+    5 => {let n=if bps==12 {10}else{9}; if pixels%n!=0{return Err(bad());} pixels.div_ceil(1024*n)*0x4000},
+    6 => {let n=if bps==12 {14}else{11}; if width%n!=0{return Err(bad());} pixels/n*16},
+    // Vendor v7 currently reads 14 bits even for 12-bit metadata; fail closed.
+    7 if bps==14 && width%9==0 => pixels/9*16,
+    _=>return Err(bad()),
+  };
+  Ok(bytes)
+}
+
+impl<'a> Rw2Decoder<'a> {
+  fn raw_image_checked(&self, file: &RawSource, dummy: bool,cancel:&dyn Fn()->bool) -> Result<RawImage> {
+    let width;
+    let height;
+
+    let (raw, split) = {
+      let data = self.tiff.find_ifds_with_tag(TiffCommonTag::PanaOffsets);
+      if !data.is_empty() {
+        (data[0], true)
+      } else {
+        (
+          self
+            .tiff
+            .find_first_ifd_with_tag(TiffCommonTag::StripOffsets)
+            .ok_or_else(|| RawlerError::DecoderFailed(format!("Failed to find a IFD with StripOffsets tag")))?,
+          false,
+        )
+      }
+    };
+
+    let compression = raw.get_entry(PanasonicTag::Compression).map(|entry| entry.force_u16(0)).unwrap_or_default(); // TODO BUG
+    //let compression = fetch_tiff_tag!(raw, PanasonicTag::Compression).force_u16(0);
+
+    let raw_format = raw.get_entry(PanasonicTag::RawFormat).map(|entry| entry.force_u16(0)).unwrap_or_default(); // TODO BUG
+
+    let bps = fetch_tiff_tag!(raw, PanasonicTag::BitsPerSample).force_u32(0);
+    let multishot = raw.get_entry(PanasonicTag::Multishot).map(|entry| entry.force_u32(0) == 65536).unwrap_or(false);
+
+    let image = {
+      let data = self.tiff.find_ifds_with_tag(TiffCommonTag::PanaOffsets);
+      if !data.is_empty() {
+        let raw = data[0];
+        width = fetch_tiff_tag!(raw, TiffCommonTag::PanaWidth).force_usize(0);
+        height = fetch_tiff_tag!(raw, TiffCommonTag::PanaLength).force_usize(0);
+        let offset = fetch_tiff_tag!(raw, TiffCommonTag::PanaOffsets).force_usize(0);
+        //let size = fetch_tiff_tag!(raw, TiffCommonTag::StripByteCounts).force_usize(0);
+        log::debug!("PanaOffset: {}", offset);
+        // Filmroom: validate fixed storage before decoding and borrow it. No full-file
+        // padding clone, including during the metadata-only probe.
+        if raw_format!=8 {let needed = bounded_payload_bytes(width, height, raw_format, bps)?;
+        file.subview(offset as u64, needed as u64)?;}
+        let src = file.subview_until_eof(offset as u64)?;
+        if raw_format==8 {v8decompressor::decode_panasonic_v8_cancel(file,width,height,bps,raw,dummy,cancel)?}
+        else {Rw2Decoder::decode_panasonic(file, &src, width, height, split, raw_format, bps, raw, dummy)?}
+      } else {
+        let raw = self
+          .tiff
+          .find_first_ifd_with_tag(TiffCommonTag::StripOffsets)
+          .ok_or_else(|| RawlerError::DecoderFailed(format!("Failed to find a IFD with StripOffsets tag")))?;
+        width = fetch_tiff_tag!(raw, TiffCommonTag::PanaWidth).force_usize(0);
+        height = fetch_tiff_tag!(raw, TiffCommonTag::PanaLength).force_usize(0);
+        let offset = fetch_tiff_tag!(raw, TiffCommonTag::StripOffsets).force_usize(0);
+        //let size = fetch_tiff_tag!(raw, TiffCommonTag::StripByteCounts).force_usize(0);
+        log::debug!("StripOffset: {}", offset);
+        let src = file.subview_until_eof_padded(offset as u64)?; // TODO add size and check all samples
+
+        if src.len() >= width * height * 2 {
+          decode_12le_unpacked_left_aligned(&src, width, height, dummy)
+        } else if src.len() >= width * height * 3 / 2 {
+          decode_12le_wcontrol(&src, width, height, dummy)
+        } else {
+          if raw_format==8 {v8decompressor::decode_panasonic_v8_cancel(file,width,height,bps,raw,dummy,cancel)?}
+        else {Rw2Decoder::decode_panasonic(file, &src, width, height, split, raw_format, bps, raw, dummy)?}
+        }
+      }
+    };
+
+    log::debug!(
+      "RW2 raw: {}, compression: {}, bps: {}, width: {}, height: {}, multishot: {}",
+      raw_format,
+      compression,
+      bps,
+      width,
+      height,
+      multishot
+    );
+
+    let cpp = 1;
+    let mut blacklevel = self.get_blacklevel()?;
+    let mut camera = self.camera.clone();
+    if let Some(cfa) = self.get_cfa()? {
+      camera.cfa = cfa;
+    }
+    let whitelevel = if raw_format==8 {
+      // CF2 modes on the same camera can be 12/14/16-bit. Static profile white
+      // points are not sufficient: preserve the encoded channel calibration.
+      let mut whites=[0u32;3];let mut blacks=[0u16;3];
+      for c in 0..3 {
+        let white=raw.get_entry(0x000eu16+c as u16).ok_or("Missing CF2 white level")?;
+        let black=raw.get_entry(0x001cu16+c as u16).ok_or("Missing CF2 black level")?;
+        if white.value_type()!=3 || white.count()!=1 || black.value_type()!=3 || black.count()!=1 {return Err("Invalid CF2 level types".into());}
+        whites[c]=v8decompressor::calibrated_white(white.force_u16(0));blacks[c]=black.force_u16(0);
+        if whites[c]<=blacks[c] as u32 {return Err("Invalid CF2 black/white levels".into());}
+      }
+      let mut wbayer=vec![0u32;4];let mut bbayer=[0u16;4];
+      for row in 0..2 {for col in 0..2 {let c=camera.cfa.color_at(row,col);if c>2{return Err("Invalid CF2 CFA".into());}wbayer[row*2+col]=whites[c];bbayer[row*2+col]=blacks[c];}}
+      blacklevel=Some(BlackLevel::new(&bbayer,2,2,1));
+      camera.whitelevel=None;camera.blacklevel=None;
+      Some(crate::rawimage::WhiteLevel::new(wbayer))
+    } else {None};
+    let photometric = RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&camera));
+    let mut img = RawImage::new(camera, image, cpp, normalize_wb(self.get_wb()?), photometric, blacklevel, whitelevel, dummy);
+
+    if let Some(area) = self.get_active_area()? {
+      img.active_area = Some(area);
+      img.crop_area = Some(area);
+    } else if let Some(area) = self.get_crop()? {
+      img.crop_area = Some(area);
+    }
+
+    img.source_ifd_offset = Some(raw.offset);
+    Ok(img)
+  }
+
 }

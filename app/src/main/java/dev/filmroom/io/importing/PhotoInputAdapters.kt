@@ -14,6 +14,7 @@ internal class PhotoInputHeader(val bytes: ByteArray, val count: Int) {
     val rasterMime = PhotoLimits.supportedMime(bytes, count)
     val identified = PhotoHeaders.sniff(bytes, count)
     // Classic TIFF only: recognizing a BigTIFF container does not imply DNG decoder support.
+    val isPanasonicRw2 = count >= 4 && bytes[0] == 0x49.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x55.toByte() && bytes[3] == 0.toByte()
     val isClassicTiff = count >= 4 && ((bytes[0] == 0x49.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 42.toByte() && bytes[3] == 0.toByte()) ||
         (bytes[0] == 0x4d.toByte() && bytes[1] == 0x4d.toByte() && bytes[2] == 0.toByte() && bytes[3] == 42.toByte()))
 }

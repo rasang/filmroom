@@ -35,6 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger
 @Config(sdk=[29],application=Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ExportPreviewLoadingHostTest {
+    @org.junit.Before fun adequateContourMemory() {
+        val app=org.robolectric.RuntimeEnvironment.getApplication()
+        org.robolectric.Shadows.shadowOf(app.getSystemService(android.app.ActivityManager::class.java)).setMemoryInfo(
+            android.app.ActivityManager.MemoryInfo().apply {availMem=512L*1024*1024;threshold=32L*1024*1024;lowMemory=false})
+    }
     private fun views(v:View):List<View> = listOf(v)+(if(v is ViewGroup)(0 until v.childCount).flatMap{views(v.getChildAt(it))}else emptyList())
     private fun render(a:ExportQueueActivity,jobs:List<ExportJob>) {ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,jobs)}
     private fun layout(a:ExportQueueActivity) {
@@ -49,9 +54,14 @@ class ExportPreviewLoadingHostTest {
     private fun queue(a:ExportQueueActivity)=ExportQueueActivity::class.java.getDeclaredField("queue").apply{isAccessible=true}.get(a) as? ExportQueue
     private fun job(stage:Int=2,created:Long=100)=ExportJob(UUID.randomUUID().toString(),created,EditorState(),320,200,ExportFormat.JPEG,95,ExportJobState.RUNNING,ExportDisplayProgress(stage,1,10))
     private fun solid(color:Int)=Bitmap.createBitmap(320,200,Bitmap.Config.ARGB_8888).apply{eraseColor(color)}
-    private fun TestScope.until(label:String,condition:()->Boolean) {
-        repeat(500){runCurrent();if(condition())return;Thread.sleep(10)}
-        error("Timed out (5 seconds): $label")
+    private fun TestScope.until(label:String,diagnostic:()->String={""},condition:()->Boolean) {
+        repeat(500){
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            runCurrent()
+            if(condition())return
+            Thread.sleep(10)
+        }
+        error("Timed out (5 seconds): $label ${runCatching{diagnostic()}.getOrElse{it.toString()}}")
     }
     private fun fixture(q:ExportQueue,j:ExportJob):File=q.store.directory(j.id).apply {
         mkdirs();File(this,"original-preview.jpg").writeText("decode hook source")
@@ -139,7 +149,15 @@ class ExportPreviewLoadingHostTest {
                 val fillers=(0..9).map{job(created=it.toLong()).copy(state=ExportJobState.PENDING)}
                 render(a,listOf(target)+fillers);layout(a)
                 val view=image(a,target.id)
-                until("initial contour"){current(view)!=null}
+                until("initial contour",diagnostic={
+                    val scroll=views(a.window.decorView).filterIsInstance<ScrollView>().single()
+                    val card=ExportQueueActivity::class.java.getDeclaredField("cards").apply{isAccessible=true}.get(a).let{(it as Map<*,*>)[target.id]}
+                    fun field(name:String)=card?.javaClass?.getDeclaredField(name)?.apply{isAccessible=true}?.get(card)
+                    val container=field("container") as? View
+                    val memory=dev.filmroom.engine.NativeWorkReservations.snapshot(a)
+                    val runtime=Runtime.getRuntime()
+                    "decodes=${decodes.get()} computations=${ExportContourCache.computations} cachedBytes=${ExportContourCache.cachedBytes} lifecycle=${a.lifecycle.currentState} scroll=${scroll.scrollY}/${scroll.height} card=${container?.top}..${container?.bottom} key=${field("previewKey")} generation=${field("previewGeneration")} version=${field("previewVersion")} task=${field("previewTask")} memory=$memory workerIdle=${dev.filmroom.engine.NativeWorkReservations.detailRetryIdle()} heapHeadroom=${runtime.maxMemory()-runtime.totalMemory()+runtime.freeMemory()}"
+                }){current(view)!=null}
                 val contour=current(view)
                 assertEquals(before+1,ExportContourCache.computations)
                 val scroll=views(a.window.decorView).filterIsInstance<ScrollView>().single()
@@ -149,11 +167,41 @@ class ExportPreviewLoadingHostTest {
                 until("contour restored"){current(view)!=null}
                 assertSame(view,image(a,target.id));assertSame(contour,current(view))
                 assertEquals("Contour processing reused memory cache",before+1,ExportContourCache.computations)
-                assertTrue(decodes.get()>=2)
+                assertEquals("Cached contour returns without decoding JPEG again",1,decodes.get())
                 assertEquals("Returning tile never replays black intro",1f,value(view,"blend"))
                 assertNull(value(view,"previous"))
                 controller.pause();assertFalse(view.animating)
             }
         } finally {runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
     }
+    @Test fun deletingUnrelatedJobDoesNotStrandVisibleQueuedContour()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val lock=ExportContourCache::class.java.getDeclaredField("computeLock").apply{isAccessible=true}.get(ExportContourCache)!!
+        val held=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        val decoderThread=java.util.concurrent.atomic.AtomicReference<Thread>()
+        val holder=Thread {synchronized(lock){held.countDown();check(release.await(5,java.util.concurrent.TimeUnit.SECONDS))}}
+        val dirs=mutableListOf<File>()
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();until("queue initialized"){queue(a)!=null};runCurrent()
+                val q=queue(a)!!;val target=job();val unrelated=job(created=1).copy(state=ExportJobState.PENDING)
+                dirs+=fixture(q,target);File(dirs.single(),"negative-preview.png").delete()
+                a.thumbnailDecoder={decoderThread.set(Thread.currentThread());solid(Color.BLACK)}
+                ExportContourCache.clear();holder.start();assertTrue(held.await(2,java.util.concurrent.TimeUnit.SECONDS))
+                render(a,listOf(target,unrelated));layout(a)
+                until("contour waits for compute lock"){decoderThread.get()?.state==Thread.State.BLOCKED}
+                val view=image(a,target.id)
+                render(a,listOf(target)) // No scroll/layout after deletion: the visible card must not need a gesture.
+                release.countDown();holder.join(2000)
+                val cards=ExportQueueActivity::class.java.getDeclaredField("cards").apply{isAccessible=true}.get(a) as Map<*,*>
+                val card=cards[target.id]!!
+                until("visible contour task terminal") {
+                    (card.javaClass.getDeclaredField("previewTask").apply{isAccessible=true}.get(card) as? Job)?.isCompleted==true
+                }
+                assertNotNull("Deleting another job must not permanently leave the visible card blank",current(view))
+                assertSame(view,image(a,target.id));assertEquals(1,ExportContourCache.cachedBytes/(320*200*4))
+            }
+        } finally {release.countDown();if(holder.isAlive)holder.join(2000);runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
+    }
+
 }

@@ -35,6 +35,11 @@
       "path": "fixed135/bw-double_x_5222-positive-sampled.webp",
       "bytes": 165244,
       "sha256": "608779f0b0c65d838d966e4f1a57da86ddd30dee58c0a2a265ca77b20432528f"
+    },
+    {
+      "path": "fixed135/bw-double_x_5222-positive-asymmetric.webp",
+      "bytes": 165220,
+      "sha256": "cb8d7b36f73b45ed5ea2443b7f4bee2ca54c854944d623ec5d757763851ab935"
     }
   ],
   "positive_5222_colors": {
@@ -61,5 +66,9 @@
     "letter_adjustment": "Intentionally brighter for legibility with user-requested restrained vertical gradient centered near100; not measured film density",
     "source": "Original procedural material and existing original geometry; no reference/photo pixels",
     "supersedes": "unreleased translucent display candidate; direct negative unchanged"
+  },
+  "positive_5222_asymmetry": {
+    "shift_x": 320,
+    "description": "User-requested original ink mask translation; right tail clipped by canvas. Published v6 retained for frozen queues."
   }
 }

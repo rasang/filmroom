@@ -1,5 +1,11 @@
 package dev.filmroom
 
+import dev.filmroom.ui.FilmroomPalette
+import dev.filmroom.ui.HistoryText
+import dev.filmroom.model.ExportHistoryPreferences
+import dev.filmroom.model.ExportHistoryAction
+import dev.filmroom.model.ExportHistoryMode
+
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -22,9 +28,9 @@ class SettingsActivity : ComponentActivity() {
     private var renderedLanguage="zh"
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
-    private val ink=Color.rgb(244,241,233)
-    private val muted=Color.rgb(184,187,178)
-    private val accent=Color.rgb(229,163,93)
+    private val ink=FilmroomPalette.ink
+    private val muted=FilmroomPalette.muted
+    private val accent=FilmroomPalette.accent
     private lateinit var radios:RadioGroup
     private lateinit var custom:RadioButton
     private lateinit var field:EditText
@@ -42,7 +48,7 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         logNotesExpanded=savedInstanceState?.getBoolean("logNotesExpanded") ?: false
-        val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(17,20,19))}
+        val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(FilmroomPalette.background)}
         root.setOnApplyWindowInsetsListener{v,i->v.setPadding(i.systemWindowInsetLeft,i.systemWindowInsetTop,i.systemWindowInsetRight,i.systemWindowInsetBottom);i}
         val header=LinearLayout(this).apply {orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(8),dp(16),dp(8))}
         header.addView(ImageButton(this).apply {
@@ -59,12 +65,12 @@ class SettingsActivity : ComponentActivity() {
             },LinearLayout.LayoutParams(-1,-2).apply{topMargin=if(content.childCount==0)dp(4) else dp(24)})
             return LinearLayout(this).apply{
                 orientation=LinearLayout.VERTICAL;tag="settings-section:$key";setPadding(dp(16),dp(8),dp(16),dp(8))
-                background=GradientDrawable().apply{setColor(Color.rgb(25,30,27));cornerRadius=dp(16).toFloat()}
+                background=GradientDrawable().apply{setColor(FilmroomPalette.surface);cornerRadius=dp(16).toFloat()}
                 content.addView(this,LinearLayout.LayoutParams(-1,-2))
             }
         }
         fun divider(parent:LinearLayout){parent.addView(View(this).apply{
-            tag="settings-divider";setBackgroundColor(Color.rgb(53,59,54));importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            tag="settings-divider";setBackgroundColor(FilmroomPalette.divider);importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO
         },LinearLayout.LayoutParams(-1,dp(1).coerceAtLeast(1)).apply{topMargin=dp(10);bottomMargin=dp(10)})}
         val languageSection=section(R.string.settings_group_language,"language")
         val languageRow=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(0,dp(6),0,dp(12));tag="language-setting"
@@ -86,7 +92,7 @@ class SettingsActivity : ComponentActivity() {
             row.addView(labels,LinearLayout.LayoutParams(0,-2,1f))
             val toggle=Switch(this).apply{contentDescription=title;isChecked=checked;minimumHeight=dp(48);minimumWidth=dp(48);showText=false;tag="settings-preference-switch"
                 thumbTintList=ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked),intArrayOf()),intArrayOf(accent,muted))
-                trackTintList=ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked),intArrayOf()),intArrayOf(Color.rgb(104,76,46),Color.rgb(63,70,64)))
+                trackTintList=ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked),intArrayOf()),intArrayOf(Color.rgb(104,76,46),FilmroomPalette.track))
                 setOnCheckedChangeListener{_,value->onChange(value)}
             }
             labels.setOnClickListener{toggle.toggle()};row.addView(toggle,LinearLayout.LayoutParams(-2,dp(48)))
@@ -132,6 +138,31 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         photoSection.addView(rawRow)
+        content.addView(label(HistoryText.SETTINGS.text(this),13f,muted).apply{isAccessibilityHeading=true;tag="settings-heading:history"},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+        val historySection=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="settings-section:history";setPadding(dp(16),dp(8),dp(16),dp(8));background=GradientDrawable().apply{setColor(FilmroomPalette.surface);cornerRadius=dp(16).toFloat()}}
+        content.addView(historySection,LinearLayout.LayoutParams(-1,-2))
+        val historyPreferences=ExportHistoryPreferences(this)
+        fun historyModeLabel(mode:ExportHistoryMode)=when(mode){ExportHistoryMode.ASK->HistoryText.ASK;ExportHistoryMode.RECORDS_ONLY->HistoryText.RECORDS;ExportHistoryMode.RECORDS_AND_PHOTOS->HistoryText.PHOTOS}.text(this)
+        ExportHistoryAction.entries.forEachIndexed{index,action->
+            if(index>0)divider(historySection)
+            val title=(if(action==ExportHistoryAction.SINGLE)HistoryText.SINGLE_SETTING else HistoryText.CLEAR_SETTING).text(this)
+            val value=label(historyModeLabel(historyPreferences.get(action)),14f,accent).apply{tag="history-value:${action.key}"}
+            val row=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="history-setting:${action.key}";minimumHeight=dp(48);isClickable=true;isFocusable=true;addView(label(title,16f));addView(value)}
+            fun updateValue(){value.text=historyModeLabel(historyPreferences.get(action));row.contentDescription=title+" · "+value.text};updateValue()
+            row.setOnClickListener{
+                if(pending?.isShowing!=true){
+                    val modes=ExportHistoryMode.entries;var selected=modes.indexOf(historyPreferences.get(action))
+                    val dialog=AlertDialog.Builder(this).setTitle(title)
+                        .setSingleChoiceItems(modes.map{historyModeLabel(it)}.toTypedArray(),selected){_,which->selected=which}
+                        .setNegativeButton(HistoryText.CANCEL.text(this),null)
+                        .setPositiveButton(HistoryText.SAVE.text(this)){_,_->try{historyPreferences.set(action,modes[selected]);updateValue()}catch(_:Exception){Toast.makeText(this,HistoryText.SAVE_FAILED.text(this),Toast.LENGTH_LONG).show()}}
+                        .create()
+                    dialog.setOnDismissListener{if(pending===dialog)pending=null};pending=dialog;dialog.show()
+                    dialog.window?.setBackgroundDrawable(GradientDrawable().apply{setColor(FilmroomPalette.surface);cornerRadius=dp(12).toFloat()})
+                }
+            };historySection.addView(row)
+        }
+        historySection.addView(label(HistoryText.SETTING_NOTE.text(this),12f,muted))
         val diagnosticSection=section(R.string.settings_group_diagnostics,"diagnostics")
         diagnosticSection.addView(label(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84a61a56ecc6),16f).apply{setTypeface(null,Typeface.BOLD)})
         radios=RadioGroup(this)
@@ -169,7 +200,7 @@ class SettingsActivity : ComponentActivity() {
         notesToggle.setOnClickListener{logNotesExpanded=!logNotesExpanded;updateNotes()};updateNotes()
         diagnosticSection.addView(notesToggle,LinearLayout.LayoutParams(-1,-2));diagnosticSection.addView(notes)
         share=Button(this).apply {
-            text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d09e99fe27d8);isAllCaps=false;textSize=16f;minHeight=dp(48);setTextColor(Color.rgb(32,21,12))
+            text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d09e99fe27d8);isAllCaps=false;textSize=16f;minHeight=dp(48);setTextColor(FilmroomPalette.onAccent)
             background=GradientDrawable().apply{setColor(accent);cornerRadius=dp(12).toFloat()}
             setOnClickListener {
                 val index=ids.indexOf(radios.checkedRadioButtonId)

@@ -19,7 +19,7 @@ impl ColorError {
     pub fn code(self) -> &'static str {
         match self {
             Self::InvalidMetadata => "INVALID_COLOR_METADATA",
-            Self::UnsupportedCalibration | Self::NonConvergent => "UNSUPPORTED_COLOR_CALIBRATION",
+            Self::UnsupportedCalibration | Self::NonConvergent => "UNSUPPORTED_DNG_CALIBRATION",
         }
     }
 }

@@ -103,7 +103,7 @@ class ExportQueueActivityHostTest {
     }
     @Test fun rotationRestoresVisibleJobAnchorRatherThanAnUnrelatedPixelOffset(){
         val jobs=(0..9).map{job(ExportJobState.PAUSED).copy(createdAt=it.toLong())}
-        val saved=android.os.Bundle();var expected:String?=null
+        val saved=android.os.Bundle();var expected:String?=null;var portraitEvidence=""
         fun layout(a:ExportQueueActivity,w:Int,h:Int):ViewGroup {
             val root=a.findViewById<ViewGroup>(android.R.id.content)
             root.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));root.layout(0,0,w,h)
@@ -116,13 +116,15 @@ class ExportQueueActivityHostTest {
                 val scroll=views(root).filterIsInstance<android.widget.ScrollView>().single();scroll.scrollTo(0,1300)
                 expected=views(root).first{it.tag?.toString()?.startsWith("export-job:")==true && it.bottom>scroll.scrollY}.tag.toString()
                 c.saveInstanceState(saved)
+                portraitEvidence="portraitY=${scroll.scrollY}; rows="+cards(c.get()).joinToString{ "${it.tag}[${it.top},${it.bottom}]" }
             }
             org.robolectric.RuntimeEnvironment.setQualifiers("w740dp-h360dp-land-mdpi")
             Robolectric.buildActivity(ExportQueueActivity::class.java).create(saved).start().resume().visible().use{c->
                 render(c.get(),jobs);val root=layout(c.get(),740,360)
                 val scroll=views(root).filterIsInstance<android.widget.ScrollView>().single()
                 val actual=views(root).first{it.tag?.toString()?.startsWith("export-job:")==true && it.bottom>scroll.scrollY}.tag.toString()
-                assertEquals(expected,actual)
+                val evidence="$portraitEvidence; savedY=${saved.getInt("scrollY")}; savedAnchor=${saved.getString("scrollAnchor")}; savedOffset=${saved.getInt("scrollOffset")}; landscapeY=${scroll.scrollY}; rows="+cards(c.get()).joinToString{ "${it.tag}[${it.top},${it.bottom}]" }
+                assertEquals(evidence,expected,actual)
             }
         }finally{org.robolectric.RuntimeEnvironment.setQualifiers("w360dp-h780dp-port-mdpi")}
     }

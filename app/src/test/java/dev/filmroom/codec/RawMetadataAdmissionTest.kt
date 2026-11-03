@@ -44,6 +44,16 @@ class RawMetadataAdmissionTest {
             assertEquals(0L,RawMetadataAdmission.estimatedBytes(File(root,"jpeg").apply {writeBytes(byteArrayOf(-1,-40,-1))}))
         } finally {root.deleteRecursively()}
     }
+    @Test fun rw2ContentUsesTheCameraLeaseRegardlessOfExtension() {
+        val root=kotlin.io.path.createTempDirectory("rw2-probe-hint").toFile()
+        try {
+            val input=file(root,false,name="misleading.jpeg")
+            val bytes=input.readBytes();bytes[2]=85;input.writeBytes(bytes)
+            assertEquals(32*mib,RawMetadataAdmission.estimatedBytes(input))
+            bytes[4]=0;input.writeBytes(bytes)
+            assertEquals(0L,RawMetadataAdmission.estimatedBytes(input))
+        }finally{root.deleteRecursively()}
+    }
     @Test fun malformedRootCannotSelectUnchargedCameraProfilePath() {
         val root=kotlin.io.path.createTempDirectory("raw-probe-malformed").toFile()
         try {

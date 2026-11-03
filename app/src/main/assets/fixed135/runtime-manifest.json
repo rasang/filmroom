@@ -7757,5 +7757,37 @@
       "geometry_version": 4,
       "presentation": "positive display near-black4 gray-letter112-to-88; independently selectable hole matte"
     }
+  ],
+  "bw_positive_asymmetric_assets": [
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v7-double_x_5222-positive-asymmetric-black-cb8d7b36f7",
+      "sha256": "cb8d7b36f73b45ed5ea2443b7f4bee2ca54c854944d623ec5d757763851ab935",
+      "bytes": 165220,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 0,
+      "asset_path": "fixed135/bw-double_x_5222-positive-asymmetric.webp",
+      "geometry_version": 4,
+      "presentation": "positive display near-black4 gray-letter112-to-88; independently selectable hole matte",
+      "text_shift_x": 320
+    },
+    {
+      "physical_stock": "kodak_doublex",
+      "asset_version": "bw-v7-double_x_5222-positive-asymmetric-white-cb8d7b36f7",
+      "sha256": "cb8d7b36f73b45ed5ea2443b7f4bee2ca54c854944d623ec5d757763851ab935",
+      "bytes": 165220,
+      "canvas_px": [
+        1520,
+        1400
+      ],
+      "hole_matte_srgb": 16777215,
+      "asset_path": "fixed135/bw-double_x_5222-positive-asymmetric.webp",
+      "geometry_version": 4,
+      "presentation": "positive display near-black4 gray-letter112-to-88; independently selectable hole matte",
+      "text_shift_x": 320
+    }
   ]
 }

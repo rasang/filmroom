@@ -24,7 +24,8 @@ internal object RawMetadataAdmission {
             fun u32(bytes:ByteArray,at:Int):Long = if(little)
                 u16(bytes,at).toLong() or (u16(bytes,at+2).toLong() shl 16)
                 else (u16(bytes,at).toLong() shl 16) or u16(bytes,at+2).toLong()
-            if(u16(header,2)!=42) return@use 0L
+            // RW2 uses Panasonic TIFF magic85; the same root bounds and shared camera lease apply.
+            if(u16(header,2)!=42 && !(little && u16(header,2)==85)) return@use 0L
             val offset=u32(header,4)
             if(offset<8 || offset>file.length()-2) return@use 0L
             file.seek(offset);val countBytes=ByteArray(2);file.readFully(countBytes)

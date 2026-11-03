@@ -25,7 +25,7 @@ import org.robolectric.shadows.ShadowAlertDialog
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[29,31,35],application=FilmroomApplication::class,qualifiers="en-rUS-w360dp-h780dp-mdpi")
 class StartupThemeHostTest {
-    private val dark=Color.rgb(17,20,19)
+    private val dark=Color.rgb(24,24,24)
     private val app get()=RuntimeEnvironment.getApplication() as FilmroomApplication
     @Before fun isolate(){
         resetAndroidViewModelFactoryForHostTest()
@@ -62,7 +62,7 @@ class StartupThemeHostTest {
             assertEquals(0,dialog.listView.checkedItemPosition);assertFalse(L10n.hasChosen(app))
             assertEquals(listOf("中文","English","日本語","한국어"),(0 until dialog.listView.adapter.count).map{dialog.listView.adapter.getItem(it).toString()})
             val floating=value(dialog.context,android.R.attr.colorBackgroundFloating)
-            assertTrue("Language chooser must remain dark",Color.red(floating)<80 && Color.green(floating)<80 && Color.blue(floating)<80)
+            assertEquals("Language chooser must match the neutral panel",Color.rgb(34,34,34),floating)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();idle()
             assertEquals("zh",L10n.language(app));assertTrue(L10n.hasChosen(app))
             val vm=ViewModelProvider(first)[EditorViewModel::class.java]

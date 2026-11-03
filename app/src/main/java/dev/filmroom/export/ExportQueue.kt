@@ -62,7 +62,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
         val sourceFile=source.linearFile ?: source.localFile
         // 先持有文件描述符；即使后续导入删除源缓存，回退复制仍有自己的读端。
         val opened=sourceFile.inputStream()
-        val preview=runCatching{thumbnail?.copy(Bitmap.Config.ARGB_8888,false)}.getOrNull()
+        val preview=runCatching{thumbnail?.let { borrowed ->
+            val scale=minOf(1.0,480.0/maxOf(borrowed.width,borrowed.height))
+            val small=Bitmap.createScaledBitmap(borrowed,maxOf(1,(borrowed.width*scale).toInt()),maxOf(1,(borrowed.height*scale).toInt()),true)
+            try {small.copy(Bitmap.Config.ARGB_8888,false)} finally {if(small!==borrowed)small.recycle()}
+        }}.getOrNull()
         val generation=currentCoroutineContext()[ExportIntakeGeneration]?.generation ?: pauseGeneration.get()
         intakes.incrementAndGet()
         val task=captureScope.async(start=CoroutineStart.LAZY) {storageLock.withLock {
@@ -79,7 +83,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 currentCoroutineContext().ensureActive();check(snapshot.length()==bytes);if(kind!="ENCODED")check(bytes==source.originalWidth.toLong()*source.originalHeight*12)
                 FileOutputStream(snapshot,true).use{it.fd.sync()}
                 preview?.let { bitmap ->
-                    val scale=minOf(1.0,240.0/maxOf(bitmap.width,bitmap.height));val small=Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
+                    val scale=minOf(1.0,480.0/maxOf(bitmap.width,bitmap.height));val small=Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
                     try {FileOutputStream(File(dir,"original-preview.jpg")).use{check(small.compress(Bitmap.CompressFormat.JPEG,85,it));it.fd.sync()}}finally{if(small!==bitmap)small.recycle()}
                 }
                 val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
@@ -98,6 +102,17 @@ class ExportQueue internal constructor(private val context:Context,private val p
         task.start()
         task.await()
     }
+    /** Snapshot IDs are captured when the dialog opens. New completions are not swept into Clear. */
+    fun historySnapshot(ids:Set<String>)=store.historySnapshot(ids)
+    suspend fun beginHistoryRemoval(targets:List<ExportHistorySnapshot>,deletePhotos:Boolean):ExportHistoryOperation=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
+        store.beginHistory(targets.filter{it.id!=activeId && !captures.containsKey(it.id)},deletePhotos)
+    }}}
+    suspend fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
+        if(snapshot.id==activeId || captures.containsKey(snapshot.id))false else store.removeHistoryRecord(op,snapshot)
+    }}}
+    suspend fun restoreHistoryReservation(op:ExportHistoryOperation):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
+        if(op.remaining.any{it.id==activeId || captures.containsKey(it.id)})false else store.restoreHistoryReservation(op)
+    }}}
     fun start(context:Context) {context.startForegroundService(Intent(context,ExportService::class.java))}
     fun retry(id:String,generation:Long=pauseGeneration.get()) {
         val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
@@ -106,6 +121,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
             message=if(startupBlocked)STARTUP_BLOCKED_MESSAGE else if(generation==pauseGeneration.get())null else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bb72ee12ba8b),messageUi=if(startupBlocked)UiMessage.of(R.string.text_31912f0eff0f)else if(generation==pauseGeneration.get())null else UiMessage.of(R.string.text_bb72ee12ba8b),requestGeneration=generation)else it}
     }
     suspend fun cancel(id:String) {
+        if(store.historyReserved(id))return
         captures[id]?.cancelAndJoin()
         storageLock.withLock {
         val task=synchronized(activeLock) {
@@ -257,8 +273,8 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     }
                 } ?: checkNotNull(output)
                 repository.exportLinear(encodingInput,initial.outputWidth,initial.outputHeight,initial.format,initial.quality,
-                    onPrepared={result->update{it.copy(mediaUri=result.uri.toString())}},
-                    onCommitted={result->update{it.copy(mediaUri=result.uri.toString(),message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}},
+                    onPrepared={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}},
+                    onCommitted={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}},
                     outputColorSpace=initial.parameters.outputColorSpace,
                     photoMetadata=captureMetadata,
                     exportMillis=checkNotNull(exportRecord.exportMillis),

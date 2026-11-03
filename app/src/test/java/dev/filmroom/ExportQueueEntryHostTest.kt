@@ -131,7 +131,7 @@ class ExportQueueEntryHostTest {
             return Bitmap.createBitmap(144,144,Bitmap.Config.ARGB_8888).also{entry.draw(Canvas(it))}
         }
         val frames=listOf(0f,.25f,.5f,.75f,1f).map(::frame)
-        val white=android.graphics.Color.rgb(244,241,233)
+        val white=dev.filmroom.ui.FilmroomPalette.ink
         val railSamples=(48..99).map{it to 36}+(45..87).map{108 to it}
         val signatures=frames.take(4).map { bitmap -> railSamples.map{(x,y)->bitmap.getPixel(x,y)} }
         assertEquals("All four phases move the gradient",4,signatures.toSet().size)

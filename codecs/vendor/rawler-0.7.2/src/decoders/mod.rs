@@ -332,6 +332,10 @@ pub trait Decoder: Send {
   }
 
   fn raw_image(&self, file: &RawSource, params: &RawDecodeParams, dummy: bool) -> Result<RawImage>;
+  /// Cooperative decode; implementations without row hooks preserve their existing path.
+  fn raw_image_cancel(&self,file:&RawSource,params:&RawDecodeParams,cancel:&dyn Fn()->bool)->Result<RawImage>{
+    if cancel(){return Err("Decode cancelled".into());} self.raw_image(file,params,false)
+  }
 
   /// Exact Bayer row output; unsupported by default, never a preview fallback.
   fn bayer_rows_supported(&self, _file: &RawSource) -> Result<bool> { Ok(false) }
@@ -860,6 +864,7 @@ impl RawLoader {
 
   /// Returns a decoder for a given buffer
   pub fn get_decoder<'b>(&'b self, rawfile: &RawSource) -> Result<Box<dyn Decoder + 'b>> {
+    let _preview_scope = crate::metadata_budget::panasonic_preview_scope(rawfile.buf().get(..4)==Some(b"II\x55\0"));
     if mrw::is_mrw(rawfile) {
       let dec = Box::new(mrw::MrwDecoder::new(rawfile, self)?);
       return Ok(dec as Box<dyn Decoder>);

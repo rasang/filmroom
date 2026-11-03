@@ -11,6 +11,43 @@ import org.junit.Test
 
 /** All profiles are generated independently from public colorimetry, never copied from a photo. */
 class HeicIccProfileTest {
+    @Test fun roundedSdrCurveIsPreservedAndNeverReturnedAsStandardEnumOnly() {
+        val bytes=profile(rounded=true)
+        val actual=HeicIccProfile.inspectProfile(bytes)
+        assertEquals(HeicIccProfile.ColorIdentity.DISPLAY_P3,actual.identity)
+        assertEquals(2556/65536.0,actual.transfer.d,0.0)
+        assertEquals(5046/65536.0,actual.transfer.c,0.0)
+        reject(bytes) // Legacy enum-only interface may not relabel custom TRC as standard P3.
+        assertEquals(actual,HeicIccProfile.inspectProfile(bytes.copyOf()))
+        assertFalse(HeicIccProfile.equivalent(actual,HeicIccProfile.Profile.standard(actual.identity)))
+        val matrix=actual.toXyzD50.values();matrix[0]=9.0
+        assertTrue(actual.toXyzD50.values()[0]<1.0)
+        val tinyChange=bytes.copyOf();val at=tagOffset(tinyChange,"rTRC")
+        putInt(tinyChange,at+12,getInt(tinyChange,at+12)+1)
+        try{HeicIccProfile.inspectProfile(tinyChange);fail("Custom curve tuple is exact, not a widened tolerance")}catch(e:HeicIccProfile.Rejected){assertEquals(HeicIccProfile.Failure.UNSUPPORTED,e.failure)}
+        val mismatch=profile(rounded=true,shareTrc=false)
+        putInt(mismatch,tagOffset(mismatch,"gTRC")+28,fixed(.04045))
+        try{HeicIccProfile.inspectProfile(mismatch);fail("RGB curves must agree")}catch(_:HeicIccProfile.Rejected){}
+    }
+    @Test fun fixedFpxrTrailerOnlyUsesDeclaredIccBounds() {
+        val bytes=profile(rounded=true)
+        val suffix=byteArrayOf(0x46,0x50,0x58,0x52,0,0,0,0)
+        assertEquals(HeicIccProfile.inspectProfile(bytes),HeicIccProfile.inspectProfile(bytes+suffix))
+        val candidates=mutableListOf(bytes+suffix+byteArrayOf(0),bytes+suffix.copyOf(7),bytes+ByteArray(8))
+        for(i in suffix.indices){val wrong=suffix.copyOf();wrong[i]=(wrong[i].toInt() xor 1).toByte();candidates+=bytes+wrong}
+        val outOfBounds=bytes+suffix;putInt(outOfBounds,136,bytes.size);candidates+=outOfBounds
+        val short=bytes+suffix;putInt(short,0,128);candidates+=short
+        val long=bytes+suffix;putInt(long,0,Int.MAX_VALUE);candidates+=long
+        for(b in candidates)try{HeicIccProfile.inspectProfile(b);fail("Malformed wrapper accepted")}catch(e:HeicIccProfile.Rejected){assertEquals(HeicIccProfile.Failure.INVALID,e.failure)}
+    }
+    @Test fun allChannelsMustShareTheActualTransferForAndroidRgbContract() {
+        val bytes=profile(shareTrc=false)
+        val at=tagOffset(bytes,"gTRC")
+        putInt(bytes,at+12,getInt(bytes,at+12)+1)
+        // Individually near-standard curves are not one actual RGB transfer descriptor.
+        try{HeicIccProfile.inspectProfile(bytes);fail("Per-channel transfer mismatch accepted")}
+        catch(e:HeicIccProfile.Rejected){assertEquals(HeicIccProfile.Failure.UNSUPPORTED,e.failure)}
+    }
     @Test fun standardP3AndSrgbMatricesNotDescriptionsEstablishIdentity() {
         assertEquals(HeicIccProfile.ColorIdentity.DISPLAY_P3,HeicIccProfile.inspect(profile()))
         assertEquals(HeicIccProfile.ColorIdentity.SRGB,HeicIccProfile.inspect(profile(p3=false)))
@@ -107,11 +144,11 @@ class HeicIccProfileTest {
         for(i in 0 until getInt(b,128)){val at=132+i*12;if(String(b,at,4,Charsets.US_ASCII)==name)return getInt(b,at+4)}
         error("Tag missing")
     }
-    private fun profile(p3:Boolean=true,nativeWhite:Boolean=false,shareTrc:Boolean=true,description:String="Independent SDR fixture",extra:Pair<String,ByteArray>?=null):ByteArray {
+    private fun profile(p3:Boolean=true,nativeWhite:Boolean=false,shareTrc:Boolean=true,description:String="Independent SDR fixture",extra:Pair<String,ByteArray>?=null,rounded:Boolean=false):ByteArray {
         // Independent rounded standard D50 colorants. Not imported from the production constants.
         val matrix=if(p3) arrayOf(doubleArrayOf(.515119,.241189,-.001050),doubleArrayOf(.291978,.692244,.041879),doubleArrayOf(.157103,.066567,.784071))
             else arrayOf(doubleArrayOf(.436041,.222485,.013920),doubleArrayOf(.385113,.716905,.097067),doubleArrayOf(.143046,.060610,.713913))
-        val trc=typed("para",data{writeShort(3);writeShort(0);for(v in listOf(2.4,1.0/1.055,.055/1.055,1.0/12.92,.04045))writeInt(fixed(v))})
+        val trc=typed("para",data{writeShort(3);writeShort(0);if(rounded)for(v in listOf(157286,62128,3408,5046,2556))writeInt(v)else for(v in listOf(2.4,1.0/1.055,.055/1.055,1.0/12.92,.04045))writeInt(fixed(v))})
         val desc=typed("desc",data{val ascii=(description+"\u0000").toByteArray(Charsets.US_ASCII);writeInt(ascii.size);write(ascii);writeInt(0);writeInt(0);writeShort(0);writeByte(0);write(ByteArray(67))})
         val tags=mutableListOf("rXYZ" to xyz(*matrix[0]),"gXYZ" to xyz(*matrix[1]),"bXYZ" to xyz(*matrix[2]),
             "rTRC" to trc,"gTRC" to trc,"bTRC" to trc,

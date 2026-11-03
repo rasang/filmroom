@@ -17,13 +17,15 @@ fn is_dng(input: &Path) -> Result<bool> {
         b"MM" => crate::tiff::Endian::Be,
         _ => return Err(err("UNSUPPORTED_FORMAT", "probe")),
     };
-    if e.u16(&h[2..]) != 42 {
+    let is_rw2 = &h[..4] == b"II\x55\0";
+    if e.u16(&h[2..]) != 42 && !is_rw2 {
         return Err(err("UNSUPPORTED_FORMAT", "probe"));
     }
     let at = e.u32(&h[4..]);
     if at < 8 {
         return Err(err("INVALID_INPUT", "probe"));
     }
+    if is_rw2 { return Ok(false); }
     f.seek(SeekFrom::Start(at as u64))
         .map_err(|e| io_error(e, "probe"))?;
     let mut count = [0; 2];

@@ -30,7 +30,7 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
 
         // These require additional processing not implemented by the pinned developer. Never silently ignore.
         for tag in [
-            50712, 50715, 50716, 50729, 50942, 52525, 52530, 52532, 52547, 50966, 50967, 50968,
+            50715, 50716, 50729, 50942, 52530, 52532, 52547, 50966, 50967, 50968,
             50969, 50970, 50971, 50972, 50973, 50974, 50975, 51107, 51108, 51109, 51112,
             51113, 51114, 51115, 51116, 51117, 52536, 52537,
         ] {

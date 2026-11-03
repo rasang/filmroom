@@ -28,6 +28,7 @@ data class ExportJob(
     val border:BorderSnapshot?=null,
     val crop:CropSnapshot?=null,
     val messageUi:UiMessage?=null,
+    val outputName:String?=null,
 ) {
     /** Render app-owned messages in the current language; legacy prose is diagnostics only. */
     val localizedMessage:String? get() {
@@ -71,6 +72,42 @@ data class ExportJob(
 class ExportJobStore(val root:File) {
     private val mutable=MutableStateFlow<List<ExportJob>>(emptyList())
     val jobs=mutable.asStateFlow()
+    private val historyReservations=mutableMapOf<String,String>()
+    private val historyJournal=ExportHistoryJournal(File(root,".history-operations"))
+    private val historyStates=setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED)
+    private fun fingerprint(job:ExportJob)=java.security.MessageDigest.getInstance("SHA-256").digest(encode(job.copy(completionViewed=false)).toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}
+    @Synchronized fun historySnapshot(ids:Set<String>):List<ExportHistorySnapshot> = mutable.value.filter{it.id in ids && it.state in historyStates}.map{ExportHistorySnapshot(it.id,fingerprint(it),it.state,it.mediaUri,it.exportMillis,it.outputName)}
+    @Synchronized fun historyReserved(id:String)=id in historyReservations
+    @Synchronized fun historyMatches(snapshot:ExportHistorySnapshot):Boolean=get(snapshot.id)?.let{it.state in historyStates && fingerprint(it)==snapshot.fingerprint}==true
+    @Synchronized fun beginHistory(targets:List<ExportHistorySnapshot>,deletePhotos:Boolean):ExportHistoryOperation {
+        val eligible=targets.distinctBy{it.id}.filter{!historyReserved(it.id) && historyMatches(it)}
+        val op=ExportHistoryOperation(UUID.randomUUID().toString(),deletePhotos,eligible)
+        historyJournal.write(op) // Never reserve/publish an intent which was not durably verified.
+        eligible.forEach{historyReservations[it.id]=op.id};return op
+    }
+    @Synchronized fun readHistoryOperation(id:String)=historyJournal.read(id)
+    @Synchronized fun updateHistoryOperation(op:ExportHistoryOperation){historyJournal.write(op)}
+    /** Only invoked for an ActivityResult belonging to the exact saved operation. No startup replay. */
+    @Synchronized fun restoreHistoryReservation(op:ExportHistoryOperation):Boolean {
+        if(op.status!="awaiting-consent")return false
+        val remaining=op.remaining
+        if(remaining.any{!historyMatches(it) || (historyReservations[it.id]!=null && historyReservations[it.id]!=op.id)})return false
+        remaining.forEach{historyReservations[it.id]=op.id};return true
+    }
+    @Synchronized fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean {
+        if(historyReservations[snapshot.id]!=op.id || !historyMatches(snapshot))return false
+        if(op.deletePhotos && (op.status!="photo-deleted:${snapshot.id}" || historyJournal.read(op.id)?.status!=op.status))return false
+        val from=directory(snapshot.id);val trash=File(root,".history-trash-${snapshot.id}-${op.id}")
+        // Same-filesystem atomic rename hides the entire record. An interrupted purge cannot resurrect FAILED.
+        java.nio.file.Files.move(from.toPath(),trash.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+        check(!from.exists() && trash.isDirectory)
+        mutable.value=mutable.value.filterNot{it.id==snapshot.id};historyReservations.remove(snapshot.id)
+        // Only the exact app-owned job directory; never mediaUri or any source/gallery path.
+        runCatching{trash.deleteRecursively()}
+        return true
+    }
+    @Synchronized fun releaseHistory(op:ExportHistoryOperation){historyReservations.entries.removeAll{it.value==op.id}}
+
     init {
         check(root.mkdirs()||root.isDirectory)
         val loaded=root.listFiles()?.filter{it.isDirectory && validId(it.name)}?.mapNotNull { dir ->
@@ -122,7 +159,7 @@ class ExportJobStore(val root:File) {
         check(current.state==ExportJobState.PAUSED && !current.inputReady){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_704cb65572bc)}
         update(ready)
     }
-    @Synchronized fun change(id:String,transform:(ExportJob)->ExportJob):ExportJob?=get(id)?.let{transform(it).also(::update)}
+    @Synchronized fun change(id:String,transform:(ExportJob)->ExportJob):ExportJob?=get(id)?.let{if(historyReserved(id))it else transform(it).also(::update)}
     @Synchronized internal fun cancelInMemory(id:String) {
         mutable.value=mutable.value.map{if(it.id==id && it.state!=ExportJobState.COMPLETED)it.copy(state=ExportJobState.CANCELLED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b58e0113da6),messageUi=UiMessage.of(R.string.text_0b58e0113da6))else it}
     }
@@ -136,7 +173,7 @@ class ExportJobStore(val root:File) {
         fun newId()=UUID.randomUUID().toString()
         private fun validId(id:String)=runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)
         private fun encode(j:ExportJob)=JSONObject().apply {
-            put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
+            put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
             put("completionViewed",j.completionViewed);put("version",if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
             put("format",j.format.name);put("quality",j.quality);put("state",j.state.name);put("stage",j.progress.stage);put("done",j.progress.done);put("total",j.progress.total)
             put("mediaUri",j.mediaUri);put("message",j.message);put("messageUi",j.messageUi?.toJson());put("inputReady",j.inputReady);put("inputKind",j.inputKind);put("sourceWidth",j.sourceWidth);put("sourceHeight",j.sourceHeight);put("maxEdge",j.maxEdge);put("requestGeneration",j.requestGeneration);put("failure",j.failure.name)
@@ -159,7 +196,7 @@ class ExportJobStore(val root:File) {
                 j.optString("photoMetadata").takeIf{it.isNotEmpty()}?.let{dev.filmroom.io.PhotoMetadata.fromJson(it).toJson()},
                 if(j.has("exportMillis"))j.getLong("exportMillis").takeIf{it>0}else null,
                 j.optString("metadataWarning").takeIf{it.isNotEmpty()}?.take(256),
-                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")))
+                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")),j.optString("outputName").takeIf{it.isNotEmpty()})
         }
     }
 }

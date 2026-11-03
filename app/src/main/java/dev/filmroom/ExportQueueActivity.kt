@@ -1,5 +1,10 @@
 package dev.filmroom
 
+import dev.filmroom.ui.FilmroomPalette
+
+import dev.filmroom.ui.ExportHistoryRemovalController
+import dev.filmroom.ui.HistoryText
+import dev.filmroom.model.ExportHistoryAction
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -32,20 +37,39 @@ class ExportQueueActivity : ComponentActivity() {
         private val seenIntro=android.util.LruCache<String,Boolean>(256)
     }
     private val exportNotifications=dev.filmroom.ui.ExportNotificationPermission(this)
-    private val ink=Color.rgb(244,241,233)
-    private val muted=Color.rgb(157,159,155)
-    private val accent=Color.rgb(220,185,132)
+    private val ink=FilmroomPalette.ink
+    private val muted=FilmroomPalette.muted
+    private val accent=FilmroomPalette.accent
     private val stockNames:Map<String,String> by lazy{runCatching{
         val profiles=org.json.JSONObject(assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         (0 until profiles.length()).associate{profiles.getJSONObject(it).let{p->p.getString("id") to p.getString("name")}}
     }.getOrDefault(emptyMap())}
     private var queue:ExportQueue?=null
+    private val historyFlow=ExportHistoryRemovalController(this){queue?.jobs?.value?.let(::render)}
     internal var thumbnailDecoder:suspend (File)->android.graphics.Bitmap? = { decodeThumbnail(it) }
     private lateinit var rows:LinearLayout
     private lateinit var empty:TextView
+    private lateinit var clearHistory:Button
     private lateinit var summary:TextView
     private lateinit var scroll:ScrollView
     private val cards=linkedMapOf<String,JobCard>()
+    private data class LeavingCard(val createdAt:Long,val view:View,val animator:android.animation.Animator)
+    private val leavingCards=linkedMapOf<String,LeavingCard>()
+    private fun finishRemovalAnimations(){leavingCards.values.toList().forEach{it.animator.end()}}
+    private fun animateRemovedCard(id:String,card:JobCard,createdAt:Long):Boolean {
+        if(id!=historyFlow.singleRemovalId || !android.animation.ValueAnimator.areAnimatorsEnabled() || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) || !card.container.isAttachedToWindow || card.container.width<=0)return false
+        historyFlow.consumedRemovalAnimation(id)
+        val view=card.container;card.pauseVisuals();view.importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        fun disable(v:View){v.isEnabled=false;if(v is android.view.ViewGroup)(0 until v.childCount).forEach{disable(v.getChildAt(it))}};disable(view)
+        val scrollAnchor=if(view.bottom<=scroll.scrollY)cards.entries.firstOrNull{it.key!=id && it.value.container.bottom>scroll.scrollY}?.let{it.key to (scroll.scrollY-it.value.container.top)}else null
+        val height=view.height;val originalMargin=(view.layoutParams as LinearLayout.LayoutParams).bottomMargin
+        val slide=android.animation.ObjectAnimator.ofFloat(view,View.TRANSLATION_X,view.translationX,-(scroll.width+dp(32)).toFloat()).apply{duration=180;interpolator=android.view.animation.AccelerateInterpolator()}
+        val collapse=android.animation.ValueAnimator.ofFloat(1f,0f).apply{duration=160;interpolator=android.view.animation.DecelerateInterpolator();addUpdateListener{a->val fraction=a.animatedValue as Float;view.layoutParams=(view.layoutParams as LinearLayout.LayoutParams).apply{this.height=(height*fraction).toInt();bottomMargin=(originalMargin*fraction).toInt()};scrollAnchor?.let{anchor->afterRowsLayout{cards[anchor.first]?.let{scroll.scrollTo(0,it.container.top+anchor.second)}}}}}
+        val sequence=android.animation.AnimatorSet().apply{playSequentially(slide,collapse)}
+        var finished=false
+        sequence.addListener(object:android.animation.AnimatorListenerAdapter(){override fun onAnimationEnd(animation:android.animation.Animator){if(finished)return;finished=true;leavingCards.remove(id);rows.removeView(view);if(!isDestroyed)render(renderedJobs)}})
+        leavingCards[id]=LeavingCard(createdAt,view,sequence);sequence.start();return true
+    }
     private var readRetryDelay=2_000L
     private val acknowledging=mutableSetOf<String>()
     private val completionDrawObserver=android.view.ViewTreeObserver.OnDrawListener {
@@ -81,7 +105,7 @@ class ExportQueueActivity : ComponentActivity() {
     private fun label(value:String,size:Float=16f)=TextView(this).apply { text=value;textSize=size;setTextColor(ink);includeFontPadding=false;setPadding(0,dp(4),0,dp(4)) }
     private fun surface(color:Int,radius:Int=14)=GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat()}
     private fun button(value:String,primary:Boolean=false,action:()->Unit)=Button(this).apply {
-        text=value;isAllCaps=false;textSize=14f;setTextColor(if(primary)Color.rgb(24,25,23)else muted)
+        text=value;isAllCaps=false;textSize=14f;setTextColor(if(primary)FilmroomPalette.onAccent else muted)
         minHeight=dp(48);minimumHeight=dp(48);minWidth=dp(64);minimumWidth=dp(64)
         setPadding(dp(14),dp(8),dp(14),dp(8));includeFontPadding=false;stateListAnimator=null;setBackgroundTintList(null)
         background=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Color.argb(35,255,255,255)),surface(if(primary)ink else Color.TRANSPARENT,8),null)
@@ -92,6 +116,7 @@ class ExportQueueActivity : ComponentActivity() {
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)ExportContourCache.clear()}
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        historyFlow.restore(savedInstanceState)
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         savedInstanceState?.getStringArrayList("previewIntros")?.forEach{seenIntro.put(it,true)}
         focusId=savedInstanceState?.getString("focus") ?: intent.getStringExtra(EXTRA_JOB_ID)
@@ -99,7 +124,7 @@ class ExportQueueActivity : ComponentActivity() {
         restoreScroll=savedInstanceState?.takeIf{it.containsKey("scrollY")}?.getInt("scrollY")
         expandedIds.addAll(savedInstanceState?.getStringArrayList("expanded") ?: emptyList())
         focusId?.let{expandedIds.add(it)}
-        val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(15,17,16));setPadding(dp(16),dp(8),dp(16),0)}
+        val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(FilmroomPalette.background);setPadding(dp(16),dp(8),dp(16),0)}
         val header=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL
             addView(ImageButton(this@ExportQueueActivity).apply{
@@ -113,6 +138,12 @@ class ExportQueueActivity : ComponentActivity() {
                 addView(summary)
             },LinearLayout.LayoutParams(0,-2,1f))
         }
+        clearHistory=button(HistoryText.CLEAR.text(this)) { historyDialog(null) }.apply {
+            tag="history-clear";contentDescription=HistoryText.CLEAR_SETTING.text(this@ExportQueueActivity);setTextColor(accent)
+            setCompoundDrawablesRelative(HistoryActionIcon(accent,true).apply{setBounds(0,0,dp(19),dp(19))},null,null,null)
+            compoundDrawablePadding=dp(6)
+        }
+        header.addView(clearHistory,LinearLayout.LayoutParams(-2,dp(48)))
         root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(dp(16)+insets.systemWindowInsetLeft,dp(8)+insets.systemWindowInsetTop,dp(16)+insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
         root.addView(header)
         scroll=ScrollView(this).apply {id=R.id.export_queue_scroll;isSaveEnabled=false;isFillViewport=true}
@@ -126,20 +157,23 @@ class ExportQueueActivity : ComponentActivity() {
         if(savedInstanceState==null)exportNotifications.offer()
         lifecycleScope.launch {
             try {
-                val loaded=withContext(Dispatchers.IO){ExportQueue.get(applicationContext)};queue=loaded
+                val loaded=withContext(Dispatchers.IO){ExportQueue.get(applicationContext)};queue=loaded;historyFlow.attach(loaded)
                 repeatOnLifecycle(Lifecycle.State.STARTED){loaded.jobs.collect{render(it)}}
             } catch(c:CancellationException){throw c}
             catch(e:Exception){empty.text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3cd263a38563);toast(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.toast_queue_read))}
         }
     }
     override fun onDestroy(){
+        finishRemovalAnimations()
+        historyFlow.close(isChangingConfigurations)
         if(::scroll.isInitialized && scroll.viewTreeObserver.isAlive)scroll.viewTreeObserver.removeOnDrawListener(completionDrawObserver)
         super.onDestroy()
     }
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus && ::scroll.isInitialized)scroll.invalidate()}
-    override fun onStop(){cards.values.forEach{it.pauseVisuals()};super.onStop()}
+    override fun onStop(){finishRemovalAnimations();cards.values.forEach{it.pauseVisuals()};super.onStop()}
     override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);focusId=intent.getStringExtra(EXTRA_JOB_ID);focusId?.let{expandedIds.add(it)};queue?.jobs?.value?.let(::render)}
     override fun onSaveInstanceState(out:Bundle){
+        historyFlow.save(out)
         out.putStringArrayList("previewIntros",ArrayList(cards.keys.filter{seenIntro.get(it)==true}))
         out.putInt("scrollY",scroll.scrollY)
         cards.entries.firstOrNull{it.value.container.bottom>scroll.scrollY}?.let{(id,card)->
@@ -150,7 +184,10 @@ class ExportQueueActivity : ComponentActivity() {
     private var renderedJobs:List<ExportJob> = emptyList()
     private fun render(jobs:List<ExportJob>) {
         val readOnlyChange=jobs!=renderedJobs && jobs.map{it.copy(completionViewed=false)}==renderedJobs.map{it.copy(completionViewed=false)}
+        val previousJobs=renderedJobs
         renderedJobs=jobs
+        clearHistory.isEnabled=!historyFlow.busy && jobs.any{historyRemovable(it)}
+        clearHistory.alpha=if(clearHistory.isEnabled)1f else .35f
         if(readOnlyChange && focusId==null && restoreScroll==null){jobs.forEach{cards[it.id]?.bind(it)};return}
 
         val anchor=cards.entries.firstOrNull{it.value.container.bottom>scroll.scrollY}?.let{it.key to (scroll.scrollY-it.value.container.top)}
@@ -159,17 +196,19 @@ class ExportQueueActivity : ComponentActivity() {
         val paused=jobs.count{it.state==ExportJobState.PAUSED}
         summary.text=listOfNotNull(if(processing>0)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5f44ac2035ae, processing)else null,if(waiting>0)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_24d163f0f56e, waiting)else null,if(paused>0)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e982159d21f2, paused)else null).joinToString(" · ")
         summary.visibility=if(summary.text.isEmpty())View.GONE else View.VISIBLE
-        empty.visibility=if(jobs.isEmpty())View.VISIBLE else View.GONE
+        empty.visibility=if(jobs.isEmpty() && leavingCards.isEmpty())View.VISIBLE else View.GONE
         empty.text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b331b1884a29)
         val ids=jobs.map{it.id}.toSet()
-        cards.keys.filter{it !in ids}.toList().forEach{id->cards.remove(id)?.let{it.pauseVisuals();rows.removeView(it.container)}}
+        cards.keys.filter{it !in ids}.toList().forEach{id->cards.remove(id)?.let{card->ExportContourCache.removeJob(id);if(!animateRemovedCard(id,card,previousJobs.firstOrNull{it.id==id}?.createdAt ?: 0L)){card.pauseVisuals();rows.removeView(card.container)}}}
+        empty.visibility=if(jobs.isEmpty() && leavingCards.isEmpty())View.VISIBLE else View.GONE
         jobs.forEachIndexed{index,job->cards.getOrPut(job.id){JobCard(job.id,index+1).also{rows.addView(it.container)}}.bind(job)}
         // Display newest additions first without changing the store's FIFO processing order.
         // Stable sort retains the store's deterministic order for equal creation timestamps.
         val displayCards=jobs.sortedByDescending{it.createdAt}.associateTo(linkedMapOf()){it.id to cards.getValue(it.id)}
-        displayCards.values.forEachIndexed{index,card->
-            val position=index+1 // The empty-state label remains the first child.
-            if(rows.indexOfChild(card.container)!=position){rows.removeView(card.container);rows.addView(card.container,position)}
+        // Include departing stable-ID rows until collapse ends, so incoming jobs/progress cannot move the wrong view.
+        val orderedViews=(jobs.map{Triple(it.id,it.createdAt,cards.getValue(it.id).container as View)}+leavingCards.map{(id,leaving)->Triple(id,leaving.createdAt,leaving.view)}).sortedByDescending{it.second}
+        orderedViews.forEachIndexed{index,entry->val position=index+1;val view=entry.third
+            if(rows.indexOfChild(view)!=position){rows.removeView(view);rows.addView(view,position)}
         }
         // Anchors must follow visual order, not the order in which cards were first created.
         cards.clear();cards.putAll(displayCards)
@@ -182,6 +221,12 @@ class ExportQueueActivity : ComponentActivity() {
         }
         if(restoreScroll==null && focusId==null && anchor!=null && scroll.scrollY>0)afterRowsLayout{cards[anchor.first]?.let{scroll.scrollTo(0,it.container.top+anchor.second.coerceIn(-dp(20),(it.container.height-1).coerceAtLeast(0)))}}
         focusId?.let{id->cards[id]?.let{card->afterRowsLayout{scroll.smoothScrollTo(0,card.container.top)};focusId=null}}
+    }
+    private fun historyRemovable(job:ExportJob)=job.state in setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED)
+    private fun historyDialog(job:ExportJob?) {
+        val q=queue ?: return
+        val ids=if(job==null)renderedJobs.filter{historyRemovable(it)}.map{it.id}.toSet()else setOf(job.id)
+        historyFlow.request(if(job==null)ExportHistoryAction.CLEAR else ExportHistoryAction.SINGLE,q.historySnapshot(ids))
     }
     private fun afterRowsLayout(action:()->Unit) {
         if(rows.isLaidOut && !rows.isLayoutRequested){action();return}
@@ -219,7 +264,7 @@ class ExportQueueActivity : ComponentActivity() {
         private var latest:ExportJob?=null
         val container=LinearLayout(this@ExportQueueActivity).apply {
             orientation=LinearLayout.VERTICAL;tag="export-job:${this@JobCard.id}";setPadding(0,0,0,dp(16))
-            background=surface(Color.rgb(22,25,23),12)
+            background=surface(FilmroomPalette.surface,12)
             layoutParams=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(20)}
         }
         private val title=label("",12f).apply{setTextColor(muted);letterSpacing=.04f}
@@ -232,7 +277,15 @@ class ExportQueueActivity : ComponentActivity() {
         private val retry=button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c9691192f1b),true){action(id,true)}
         private val cancel=button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738)){android.app.AlertDialog.Builder(this@ExportQueueActivity).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4c777c000d4a)).setMessage(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a008667aeb14)).setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_670ec25af841),null).setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_537d17f1c531)){_,_->action(id,false)}.show()}
         private val open=button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9c1ea2e60a71),true){}
-        private val detail=button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_979a332955c8)){if(!expandedIds.add(id))expandedIds.remove(id);latest?.let{bind(it)}}
+        private val detail=button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_979a332955c8)){if(!expandedIds.add(id))expandedIds.remove(id);latest?.let{bind(it)}}.apply{
+            setCompoundDrawablesRelative(HistoryDetailIcon(muted).apply{setBounds(0,0,dp(18),dp(18))},null,null,null);compoundDrawablePadding=dp(6)
+        }
+        private val delete=button(HistoryText.DELETE.text(this@ExportQueueActivity)) { latest?.takeIf{historyRemovable(it)}?.let{historyDialog(it)} }.apply {
+            tag="history-delete:${this@JobCard.id}"
+            setCompoundDrawablesRelative(HistoryActionIcon(muted,false).apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
+            compoundDrawablePadding=dp(6)
+        }
+        private lateinit var actions:WrappingActionLayout
         private var previewKey:String?=null
         private var previewVersion:String?=null
         private var previewCheckedAt=0L
@@ -247,7 +300,7 @@ class ExportQueueActivity : ComponentActivity() {
         init {
             // A fixed photographic frame: loading and real source/negative/final swaps never move text.
             previewFrame=FrameLayout(this@ExportQueueActivity).apply {
-                background=surface(Color.rgb(10,12,11),10);clipToOutline=true
+                background=surface(FilmroomPalette.inset,10);clipToOutline=true
                 addView(image,FrameLayout.LayoutParams(-1,-1))
                 addView(previewPlaceholder,FrameLayout.LayoutParams(-1,-1))
             }
@@ -256,7 +309,7 @@ class ExportQueueActivity : ComponentActivity() {
                 addView(title);addView(progress)
                 addView(bar,LinearLayout.LayoutParams(-1,dp(4)).apply{topMargin=dp(10);bottomMargin=dp(8)})
                 addView(message)
-                addView(WrappingActionLayout(this@ExportQueueActivity,dp(4)).apply{addView(retry);addView(open);addView(detail);addView(cancel)},LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
+
                 addView(details)
             }
             body=LinearLayout(this@ExportQueueActivity).apply {
@@ -266,6 +319,11 @@ class ExportQueueActivity : ComponentActivity() {
                 addView(info,if(wide)LinearLayout.LayoutParams(0,-2,1f)else LinearLayout.LayoutParams(-1,-2))
             }
             container.addView(body)
+            actions=WrappingActionLayout(this@ExportQueueActivity,dp(4)).apply{
+                setPadding(dp(12),dp(6),dp(12),0)
+                addView(retry);addView(open);addView(detail);addView(delete);addView(cancel)
+            }
+            container.addView(actions,LinearLayout.LayoutParams(-1,-2))
         }
         private fun detailLabel(){detail.text=if(id in expandedIds)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0ae7312510f4)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_979a332955c8)}
         fun bind(job:ExportJob) {
@@ -309,8 +367,11 @@ class ExportQueueActivity : ComponentActivity() {
             val compactMetadataWarning=concise && job.state==ExportJobState.COMPLETED && !job.metadataWarning.isNullOrBlank()
             message.visibility=if(!compactMetadataWarning && importantMessage && !job.localizedMessage.isNullOrBlank())View.VISIBLE else View.GONE
             retry.visibility=if(presentation.canRetry)View.VISIBLE else View.GONE;retry.text=if(job.state==ExportJobState.PAUSED)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c9691192f1b)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b8784c8dd563)
-            cancel.visibility=if(presentation.canCancel)View.VISIBLE else View.GONE
-            retry.isEnabled=!working;cancel.isEnabled=!working;retry.alpha=if(working).45f else 1f;cancel.alpha=retry.alpha
+            cancel.visibility=if(presentation.canCancel && !historyRemovable(job))View.VISIBLE else View.GONE
+            delete.isEnabled=historyRemovable(job) && !working && !historyFlow.busy
+            delete.alpha=if(delete.isEnabled)1f else .28f
+            delete.contentDescription=HistoryText.DELETE_A11Y.text(this@ExportQueueActivity,number) + if(!delete.isEnabled) " · "+HistoryText.DISABLED.text(this@ExportQueueActivity) else ""
+            retry.isEnabled=!working && queue?.store?.historyReserved(id)!=true;cancel.isEnabled=!working && queue?.store?.historyReserved(id)!=true;retry.alpha=if(working).45f else 1f;cancel.alpha=retry.alpha
             retry.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_183e988f1288, number, retry.text);cancel.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_38952e7e372e, number);open.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3f3f6c8c5093, number);detail.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a9e8a732c910, number)
             open.visibility=if(job.state==ExportJobState.COMPLETED && job.mediaUri!=null)View.VISIBLE else View.GONE
             open.setOnClickListener {try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(job.mediaUri)).apply{addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})}catch(e:Exception){toast(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.toast_open))}}
@@ -357,11 +418,20 @@ class ExportQueueActivity : ComponentActivity() {
                     val (selection,version,bitmap)=withContext(Dispatchers.IO){
                         val selected=ExportPreviewSelection.select(dir,job.state,job.progress.stage,stageFourComplete)
                         val contour=selected.file?.name=="original-preview.jpg" && job.progress.stage>=1 && job.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY,ExportJobState.COMPLETED)
-                        val version=selected.file?.let{"${it.name}:${it.lastModified()}:${it.length()}:${if(contour)"contour" else "photo"}"} ?: "absent"
-                        val bitmap=if(version!=knownVersion)selected.file?.let { file ->
+                        val version=selected.file?.let{"${it.name}:${it.lastModified()}:${it.length()}:${if(contour)"v${ExportContourCache.VERSION}:contour" else "photo"}"} ?: "absent"
+                        currentCoroutineContext().ensureActive()
+                        val cachedContour=if(contour && version!=knownVersion)ExportContourCache.find("$id:$version")else null
+                        val bitmap=if(version!=knownVersion)cachedContour ?: selected.file?.let { file ->
                             try {thumbnailDecoder(file)?.let { source ->
-                                if(contour)try{ExportContourCache.get("$id:$version",source)}finally{source.recycle()} else source.also{ownedBitmap=it}
-                            }}catch(_:OutOfMemoryError){null}catch(_:Exception){null}
+                                if(contour)try {
+                                    val cacheKey="$id:$version"
+                                    val context=currentCoroutineContext()
+                                    context.ensureActive()
+                                    ExportContourCache.find(cacheKey) ?: dev.filmroom.border.BorderMemoryAdmission.withBudget(
+                                        ExportContourCache.WORKING_BYTES,{dev.filmroom.engine.NativeWorkReservations.snapshot(this@ExportQueueActivity)}
+                                    ) {ExportContourCache.get(cacheKey,source){context.ensureActive()}}
+                                } finally {source.recycle()} else source.also{ownedBitmap=it}
+                            }}catch(c:CancellationException){throw c}catch(_:OutOfMemoryError){null}catch(_:Exception){null}
                         }else null
                         Triple(selected,version,bitmap)
                     }
@@ -422,4 +492,27 @@ internal data class ExportPreviewSelection(val file:File?,val label:String) {
             }
         }
     }
+}
+
+/** Original 24-unit vector paths, matched 1.7-unit round strokes. No borrowed glyphs. */
+private class HistoryActionIcon(private val color:Int,private val clear:Boolean):android.graphics.drawable.Drawable(){
+    private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{style=android.graphics.Paint.Style.STROKE;strokeWidth=1.7f;strokeCap=android.graphics.Paint.Cap.ROUND;strokeJoin=android.graphics.Paint.Join.ROUND;color=this@HistoryActionIcon.color}
+    override fun draw(c:android.graphics.Canvas){
+        val save=c.save();c.translate(bounds.left.toFloat(),bounds.top.toFloat());c.scale(bounds.width()/24f,bounds.height()/24f)
+        val p=android.graphics.Path()
+        if(clear){p.moveTo(4f,5f);p.lineTo(20f,5f);p.moveTo(4f,10f);p.lineTo(17f,10f);p.moveTo(4f,15f);p.lineTo(10f,15f);p.moveTo(4f,20f);p.lineTo(9f,20f);p.moveTo(15f,15f);p.lineTo(21f,21f);p.moveTo(21f,15f);p.lineTo(15f,21f)}
+        else {p.moveTo(4f,6f);p.lineTo(20f,6f);p.moveTo(9f,6f);p.lineTo(9f,3f);p.lineTo(15f,3f);p.lineTo(15f,6f);p.moveTo(6f,6f);p.lineTo(7f,21f);p.lineTo(17f,21f);p.lineTo(18f,6f);p.moveTo(10f,10f);p.lineTo(10.5f,17f);p.moveTo(14f,10f);p.lineTo(13.5f,17f)}
+        c.drawPath(p,paint);c.restoreToCount(save)
+    }
+    override fun setAlpha(alpha:Int){paint.alpha=alpha;invalidateSelf()}
+    override fun setColorFilter(filter:android.graphics.ColorFilter?){paint.colorFilter=filter;invalidateSelf()}
+    @Deprecated("Deprecated in Java") override fun getOpacity()=android.graphics.PixelFormat.TRANSLUCENT
+}
+
+private class HistoryDetailIcon(private val color:Int):android.graphics.drawable.Drawable(){
+    private val paint=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply{style=android.graphics.Paint.Style.STROKE;strokeWidth=1.7f;strokeCap=android.graphics.Paint.Cap.ROUND;strokeJoin=android.graphics.Paint.Join.ROUND;color=this@HistoryDetailIcon.color}
+    override fun draw(c:android.graphics.Canvas){val save=c.save();c.translate(bounds.left.toFloat(),bounds.top.toFloat());c.scale(bounds.width()/24f,bounds.height()/24f)
+        c.drawRoundRect(4f,3f,20f,21f,2f,2f,paint);val p=android.graphics.Path();p.moveTo(8f,8f);p.lineTo(16f,8f);p.moveTo(8f,12f);p.lineTo(16f,12f);p.moveTo(8f,16f);p.lineTo(13f,16f);c.drawPath(p,paint);c.restoreToCount(save)}
+    override fun setAlpha(alpha:Int){paint.alpha=alpha;invalidateSelf()};override fun setColorFilter(filter:android.graphics.ColorFilter?){paint.colorFilter=filter;invalidateSelf()}
+    @Deprecated("Deprecated in Java") override fun getOpacity()=android.graphics.PixelFormat.TRANSLUCENT
 }

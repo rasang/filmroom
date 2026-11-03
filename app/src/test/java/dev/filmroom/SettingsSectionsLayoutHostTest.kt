@@ -44,12 +44,21 @@ class SettingsSectionsLayoutHostTest {
                 val scroll=tagged("settings-scroll") as ScrollView
                 val content=tagged("settings-content") as ViewGroup
                 val cards=all(root).filter{(it.tag as? String)?.startsWith("settings-section:")==true}
-                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:diagnostics"),cards.map{it.tag})
+                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:history","settings-section:diagnostics"),cards.map{it.tag})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualTitle})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualDescription})
-                for((previous,nextKey) in listOf(cards[0] to "photos",cards[1] to "diagnostics")){
+                for((previous,nextKey) in listOf(cards[0] to "photos",cards[1] to "history",cards[2] to "diagnostics")){
                     val heading=tagged("settings-heading:$nextKey")
                     assertTrue("Groups retain visible breathing space",heading.top-previous.bottom>=24)
+                }
+                val history=tagged("settings-section:history") as ViewGroup
+                for(key in listOf("single-delete-mode","clear-history-mode")){
+                    val setting=tagged("history-setting:$key")
+                    val value=tagged("history-value:$key") as TextView
+                    assertSame("Both independently saved choices belong to history",history,setting.parent)
+                    assertTrue("History targets remain at least 48dp",setting.height>=48)
+                    assertTrue("Each history preference has a visible value",value.text.isNotBlank())
+                    assertTrue("History controls stay inside their card",setting.left>=0 && setting.right<=history.width)
                 }
                 val dividers=all(root).filter{it.tag=="settings-divider"}
                 assertTrue("Fine rules separate preference rows and log detail",dividers.size>=2)

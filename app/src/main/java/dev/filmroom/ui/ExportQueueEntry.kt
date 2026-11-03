@@ -24,11 +24,11 @@ internal data class ExportQueueSummary(val pending: Int, val running: Boolean, v
 /** A single accessible target; the fixed-width count never relays progress into editor layout. */
 internal class ExportQueueEntry(context: Context) : Button(context) {
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
-    private val accent = Color.rgb(229, 163, 93)
+    private val accent = FilmroomPalette.accent
     private var countLabel = "—"
     private var motionPhase = 0f
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val white=Color.rgb(244,241,233)
+    private val white=FilmroomPalette.ink
     private val countTypeface=Typeface.create("sans-serif-medium",Typeface.NORMAL)
     private val rearPath=Path().apply {
         moveTo(16f,12f);lineTo(33f,12f)
@@ -55,11 +55,11 @@ internal class ExportQueueEntry(context: Context) : Button(context) {
         text = ""
         textSize = 14f
         isAllCaps = false
-        setTextColor(Color.rgb(244, 241, 233))
+        setTextColor(FilmroomPalette.ink)
         minHeight = dp(48); minimumHeight = dp(48)
         minWidth = dp(48); minimumWidth = dp(48)
         setPadding(0, 0, 0, 0)
-        background = GradientDrawable().apply { setColor(Color.rgb(36, 42, 37)); cornerRadius = dp(12).toFloat() }
+        background = GradientDrawable().apply { setColor(FilmroomPalette.raised); cornerRadius = dp(12).toFloat() }
         tooltipText = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_88b41d5ab211)
         bind(null)
     }
@@ -120,9 +120,9 @@ internal class ExportQueueEntry(context: Context) : Button(context) {
                 if(distance<.25f) {
                     val strength=((1.0+kotlin.math.cos(distance/.25f*Math.PI))*.5).toFloat()
                     p.color=Color.rgb(
-                        (244+(229-244)*strength).toInt(),
-                        (241+(163-241)*strength).toInt(),
-                        (233+(93-233)*strength).toInt())
+                        (Color.red(white)+(Color.red(accent)-Color.red(white))*strength).toInt(),
+                        (Color.green(white)+(Color.green(accent)-Color.green(white))*strength).toInt(),
+                        (Color.blue(white)+(Color.blue(accent)-Color.blue(white))*strength).toInt())
                     canvas.drawLine(segment.x0,segment.y0,segment.x1,segment.y1,p)
                 }
             }

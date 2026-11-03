@@ -136,7 +136,8 @@ pub(crate) fn decode_panasonic_v6(buf: &[u8], width: usize, height: usize, bps: 
               epixel = nonzero[pix % 2];
             }
           }
-          let spix = (epixel as i32).wrapping_sub(0xf);
+          // Match LibRaw unsigned underflow: values below15 take the zero branch.
+          let spix = (epixel as u32).wrapping_sub(0xf);
           if spix <= spix_compare {
             out[pix] = (spix & spix_compare) as u16;
           } else {

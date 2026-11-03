@@ -83,6 +83,12 @@ impl Entry {
 
     let typ = reader.read_u16()?;
     let count = reader.read_u32()?;
+    if crate::metadata_budget::omit_panasonic_preview(tag) {
+      // Sensor import never consumes this payload. Keep a zero-sized descriptor;
+      // no JPEG parse, copy, budget relaxation, or fallback is performed.
+      reader.goto(pos + 12)?;
+      return Ok(Entry {tag,value:Value::Undefined(Vec::new()),embedded:None});
+    }
 
     // If we don't know the type assume byte data (undefined)
     let compat_typ = if typ == 0 || typ > 12 { 7 } else { typ };

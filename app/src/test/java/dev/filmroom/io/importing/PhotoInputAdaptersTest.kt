@@ -50,6 +50,16 @@ class PhotoInputAdaptersTest {
         assertFalse(header(73,73,42).isClassicTiff)
         assertEquals(PhotoFormat.TIFF,header(73,73,42,0,0,0,0,0).identified.format)
     }
+    @Test fun panasonicUsesOnlyRw2SignatureAndNotClassicTiffOrRasterFallback(){
+        val rw2=header(73,73,85,0,24,0,0,0)
+        assertTrue(rw2.isPanasonicRw2);assertFalse(rw2.isClassicTiff)
+        assertEquals(PhotoFormat.CAMERA_RAW,rw2.identified.format)
+        assertNull(rw2.rasterMime)
+        assertFalse(header(73,73,85).isPanasonicRw2)
+        assertFalse(header(77,77,0,85).isPanasonicRw2)
+        assertFalse(header(73,73,42,0).isPanasonicRw2)
+        assertFalse(header(255,216,255).isPanasonicRw2)
+    }
     @Test fun probeRejectsInvalidCountsBeforeIndexing(){
         for(count in listOf(-1,5)) {
             try { PhotoInputHeader(byteArrayOf(73,73,42,0),count);fail("Invalid prefix count") }

@@ -16,8 +16,8 @@ import kotlin.math.roundToInt
 
 /** A camera-style choice rail. Only a settled user gesture commits; layout/restoration is silent. */
 class SettledChoiceSelector(context: Context) : LinearLayout(context) {
-    private val ink = Color.rgb(239, 235, 225)
-    private val accent = Color.rgb(224, 178, 110)
+    private val ink = FilmroomPalette.ink
+    private val accent = FilmroomPalette.accent
     private val rail get() = scroll.items
     private var labels = emptyList<String>()
     private var selected = 0

@@ -55,3 +55,11 @@ mod snef_rows;
 mod nikon_snef;
 
 pub mod raw_batch;
+
+pub mod linear_jpeg;
+
+pub mod profile_gain_table;
+
+pub mod dng_color_spec;
+
+pub mod profile_develop;

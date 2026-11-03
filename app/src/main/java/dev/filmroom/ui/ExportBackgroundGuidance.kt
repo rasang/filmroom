@@ -147,12 +147,12 @@ class ExportBackgroundGuidance internal constructor(
             text=explanation()+"\n\n"+
                 text(ExportBackgroundPolicy.helpResource(Build.MANUFACTURER,Build.BRAND))
             textSize=15f
-            setTextColor(Color.rgb(232,236,229))
+            setTextColor(FilmroomPalette.ink)
             setPadding(0,0,0,dp(16))
         })
         content.addView(TextView(activity).apply {
             text=text(R.string.export_background_help)
-            textSize=12f;setTextColor(Color.rgb(184,187,178))
+            textSize=12f;setTextColor(FilmroomPalette.muted)
             setPadding(0,0,0,dp(12))
         })
         fun action(id:Int, primary:Boolean=false, run:()->Unit) {
@@ -162,10 +162,10 @@ class ExportBackgroundGuidance internal constructor(
                 setSingleLine(false);ellipsize=null
                 minHeight=dp(48)
                 setPadding(dp(12),dp(8),dp(12),dp(8))
-                setTextColor(if(primary)Color.rgb(26,30,27) else Color.rgb(232,236,229))
+                setTextColor(if(primary)FilmroomPalette.surface else FilmroomPalette.ink)
                 background=GradientDrawable().apply {
                     cornerRadius=dp(12).toFloat()
-                    setColor(if(primary)Color.rgb(229,163,93) else Color.TRANSPARENT)
+                    setColor(if(primary)FilmroomPalette.accent else Color.TRANSPARENT)
                 }
                 setOnClickListener {
                     if(phase!=Phase.WARNING)return@setOnClickListener
@@ -200,17 +200,17 @@ class ExportBackgroundGuidance internal constructor(
         }
         content.addView(TextView(activity).apply {
             text=message+"\n\n"+text(R.string.export_background_return_message)
-            textSize=15f;setTextColor(Color.rgb(232,236,229));setPadding(0,0,0,dp(16))
+            textSize=15f;setTextColor(FilmroomPalette.ink);setPadding(0,0,0,dp(16))
         })
         fun action(id:Int, primary:Boolean, run:()->Unit) {
             content.addView(Button(activity).apply {
                 tag=id;text=text(id);isAllCaps=false;textSize=14f
                 minHeight=dp(48);setSingleLine(false);ellipsize=null
                 setPadding(dp(12),dp(8),dp(12),dp(8))
-                setTextColor(if(primary)Color.rgb(26,30,27) else Color.rgb(232,236,229))
+                setTextColor(if(primary)FilmroomPalette.surface else FilmroomPalette.ink)
                 background=GradientDrawable().apply {
                     cornerRadius=dp(12).toFloat()
-                    setColor(if(primary)Color.rgb(229,163,93) else Color.TRANSPARENT)
+                    setColor(if(primary)FilmroomPalette.accent else Color.TRANSPARENT)
                 }
                 setOnClickListener {
                     if(phase!=Phase.RETURN_CONFIRM)return@setOnClickListener

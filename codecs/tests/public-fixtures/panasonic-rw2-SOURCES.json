@@ -1,0 +1,200 @@
+{
+  "note": "CC0 reference inventory; do not infer all modes of each model are supported. Full fixtures are not bundled. RGB hashes are linear-sRGB f32 little-endian, orientation applied.",
+  "fixtures": [
+    {
+      "id": 2113,
+      "model": "DMC-GX8",
+      "url": "https://raw.pixls.us/getfile.php/2113/nice/Panasonic - DMC-GX8 - 4:3.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/2113/exif/P1020812.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "ce416e6d351c7a3a0c3783d940cc04c3ff14fa2752eec2c9a30f4dba99f4cb38",
+      "bytes": 24122368,
+      "raw_format": 4,
+      "make": "Panasonic",
+      "bits_per_sample": 12,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        5264,
+        3904
+      ],
+      "output_dimensions": [
+        5184,
+        3888
+      ],
+      "sensor_u16_sha256": "cc56f6a1bf0800afdb966d2a29b9bf7251f4cb2f2dee1a5e428083334f88317a",
+      "linear_f32_sha256": "7313fe3c44c95c4271c92bf668ebaa37d432b5922fb446af95238018592b3bc3"
+    },
+    {
+      "id": 2571,
+      "model": "DMC-GH4",
+      "url": "https://raw.pixls.us/getfile.php/2571/nice/Panasonic - DMC-GH4 - 4:3.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/2571/exif/P1010610.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "5ea2591972c3757596367e9a40677f9d7ccd7ce33719baeefa1ba12b9ee273a8",
+      "bytes": 19587072,
+      "raw_format": 4,
+      "make": "Panasonic",
+      "bits_per_sample": 12,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        4816,
+        3472
+      ],
+      "output_dimensions": [
+        4608,
+        3456
+      ],
+      "sensor_u16_sha256": "39b2fae5de0b8b2ad6d47ca6f610c5540c2c48499504c18c80f9f0db16cd9c00",
+      "linear_f32_sha256": "c6b2ac6dd871b8c436466b7c70c25f1d41430f0dff7974e300d7ce5d298f6228"
+    },
+    {
+      "id": 3038,
+      "model": "DC-S1",
+      "url": "https://raw.pixls.us/getfile.php/3038/nice/Panasonic - DC-S1 - 3:2.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/3038/exif/P1033119.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "45309a096d6010281e2fa310e6ec2fe1bcc02947fa37b1a2414cfc7377ce4ac6",
+      "bytes": 35988480,
+      "raw_format": 6,
+      "make": "Panasonic",
+      "bits_per_sample": 14,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        6072,
+        4016
+      ],
+      "output_dimensions": [
+        6000,
+        4000
+      ],
+      "sensor_u16_sha256": "35479403cc54a997da32e57a857f3af303ef596a2108cf7064fbce8d0252e9e8",
+      "linear_f32_sha256": "8da671d7968c8ef0a143949894927f48d04cf6ab01e3cdb16fb568ee66314b50"
+    },
+    {
+      "id": 3652,
+      "model": "DC-S1R",
+      "url": "https://raw.pixls.us/getfile.php/3652/nice/Panasonic - DC-S1R - 3:2.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/3652/exif/P1000077.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "8b8a969617705d9997ee0461354c99905b964ae08b820cd24c6d4e440461e24c",
+      "bytes": 69873664,
+      "raw_format": 6,
+      "make": "Panasonic",
+      "bits_per_sample": 14,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        8448,
+        5632
+      ],
+      "output_dimensions": [
+        8368,
+        5584
+      ],
+      "sensor_u16_sha256": "46fae10dbe19118bcb44e9892159f3a9abdfa2113b3ef58b8bfc7e1d19908981",
+      "linear_f32_sha256": "350088cd1992699dd5f7a620fb9c4cf8ea9a5e075cf8e06330fde2de3d8d54cf"
+    },
+    {
+      "id": 2607,
+      "model": "DC-GH5S",
+      "url": "https://raw.pixls.us/getfile.php/2607/nice/Panasonic - DC-GH5S - 4:3.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/2607/exif/P1022085.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "c1d55f5f47b97ee2d8064924f3ac3f6e00dbbe47680ca1e85f3550974b24336e",
+      "bytes": 19166720,
+      "raw_format": 5,
+      "make": "Panasonic",
+      "bits_per_sample": 14,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        3744,
+        2776
+      ],
+      "output_dimensions": [
+        3680,
+        2760
+      ],
+      "sensor_u16_sha256": "9140b72797ff0ecd3e16476457cc1d9bd3b96ded8b0b39eddfe9ba07c625218c",
+      "linear_f32_sha256": "4b940651512fe3b41d905108789aa7cbb1bd50a521caa1555535473d9ec02e43"
+    },
+    {
+      "id": 5082,
+      "model": "DC-GH5M2",
+      "url": "https://raw.pixls.us/getfile.php/5082/nice/Panasonic - DC-GH5M2 - 4:3.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/5082/exif/Panasonic_-_DC-GH5M2_-_4:3.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "0ea0efd2a9442d8c68508e4196e29f1da4577407dc3df5add4cf360f70493c7b",
+      "bytes": 24210944,
+      "raw_format": 6,
+      "make": "Panasonic",
+      "bits_per_sample": 12,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        5264,
+        3904
+      ],
+      "output_dimensions": [
+        5184,
+        3888
+      ],
+      "sensor_u16_sha256": "6e5161f1cd534b3afbaccd60dac99bf653e77fca9e28ff4578216860468e41c0",
+      "linear_f32_sha256": "34d7401dbb26a6f548d348a9f70a12620c3bc046c6dde8f2283805907fcdb1f7"
+    },
+    {
+      "id": 6339,
+      "model": "DC-S5",
+      "url": "https://raw.pixls.us/getfile.php/6339/nice/Panasonic - DC-S5 - 3:2.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/6339/exif/P1047510.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "3615c85207097180b231f0c89d018eb3f1a71988780612921eb0a05246bca706",
+      "bytes": 43520512,
+      "raw_format": 7,
+      "make": "Panasonic",
+      "bits_per_sample": 14,
+      "expected_status": "admitted",
+      "sensor_dimensions": [
+        6048,
+        4016
+      ],
+      "output_dimensions": [
+        6000,
+        4000
+      ],
+      "sensor_u16_sha256": "88b28ad4e9708eda5bb2aa0df1bd9f6713593b73b1e4042d3f37d398195828d0",
+      "linear_f32_sha256": "16e578d5b205f656e978150a5c272ed325455fd274f7ce6429a06c1920381645"
+    },
+    {
+      "id": 5876,
+      "model": "DC-GH6",
+      "url": "https://raw.pixls.us/getfile.php/5876/nice/Panasonic - DC-GH6 - 4:3.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/5876/exif/4-3.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "07996bca904a178d02c5f56ee03a8dce775a0e1150c1beeaec51d72ff5e700d0",
+      "bytes": 44727296,
+      "raw_format": 8,
+      "make": "Panasonic",
+      "bits_per_sample": 16,
+      "expected_status": "UNSUPPORTED_CAMERA_RAW_VARIANT",
+      "sensor_dimensions": [
+        5792,
+        4352
+      ]
+    },
+    {
+      "id": 6810,
+      "model": "DC-S5M2X",
+      "url": "https://raw.pixls.us/getfile.php/6810/nice/Panasonic - DC-S5M2X - 3:2.RW2",
+      "exif_url": "https://raw.pixls.us/getfile.php/6810/exif/P1055415.RW2.exif.txt",
+      "license": "CC0-1.0",
+      "sha256_official": "4a52f1706a69d5d37587bfba70f9e6bf554399ac2123f0be9b30a156b513d446",
+      "bytes": 38865408,
+      "raw_format": 8,
+      "make": "Panasonic",
+      "bits_per_sample": 14,
+      "expected_status": "UNSUPPORTED_CAMERA_RAW_VARIANT",
+      "sensor_dimensions": [
+        6008,
+        4008
+      ]
+    }
+  ]
+}

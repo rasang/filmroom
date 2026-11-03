@@ -37,7 +37,19 @@ od=ImageDraw.Draw(original);od.text((left,1359),label,font=font,anchor='lt',fill
 for xx in [left-104,left+width+78]:od.line((xx,1378,xx+26,1378),fill=(41,41,41,255),width=4)
 reconstructed=np.array(original);reconstructed[:,:,:3]=255-reconstructed[:,:,:3];reconstructed[reconstructed[:,:,3]==0,:3]=0
 assert np.array_equal(reconstructed,a), 'Original glyph/font/layout reconstruction must be byte exact'
-k=np.asarray(ink)/255
+# Rebuild the published v6 material before changing its text placement.
+k0=np.asarray(ink)/255
+old_ink_tone=112-24*np.clip((y-1359)/35,0,1)
+old_rgb=np.repeat(np.round(tone*(1-k0)+old_ink_tone*k0).clip(0,255).astype('uint8')[:,:,None],3,2)
+old=np.dstack([old_rgb,a[:,:,3]]);old[a[:,:,3]==0,:3]=0
+published=ASSETS/'bw-double_x_5222-positive-sampled.webp'
+assert hashlib.sha256(published.read_bytes()).hexdigest()=='608779f0b0c65d838d966e4f1a57da86ddd30dee58c0a2a265ca77b20432528f'
+assert np.array_equal(old,np.array(Image.open(published).convert('RGBA')))
+# Shift the existing mask, never redraw/rescale characters: right tail is clipped
+# by the film canvas, not by a fake overlay. EASTMAN 5222 remains fully in frame.
+SHIFT_X=320
+shifted=np.zeros_like(np.asarray(ink));shifted[:,SHIFT_X:]=np.asarray(ink)[:,:-SHIFT_X]
+k=shifted/255
 # User-requested restrained top-to-bottom ink-density gradient; no bevel/shadow.
 ink_tone=112-24*np.clip((y-1359)/35,0,1)
 flat_tone=tone*(1-k)+100*k
@@ -45,8 +57,8 @@ tone=tone*(1-k)+ink_tone*k
 assert np.array_equal(tone[k==0],flat_tone[k==0]), "Non-ink body must remain exact"
 rgb=np.repeat(np.round(tone).clip(0,255).astype('uint8')[:,:,None],3,2)
 out=np.dstack([rgb,a[:,:,3]]);out[a[:,:,3]==0,:3]=0
-path=ASSETS/'bw-double_x_5222-positive-sampled.webp'
+path=ASSETS/'bw-double_x_5222-positive-asymmetric.webp'
 Image.fromarray(out).save(path,lossless=True,exact=True)
 assert np.array_equal(out,np.array(Image.open(path).convert('RGBA')))
 assert np.array_equal(out[:,:,3],a[:,:,3])
-print(json.dumps({'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size,'body_srgb8':[4,4,4],'text_srgb8_top_bottom':[112,88],'alpha_exact_baseline':True}))
+print(json.dumps({'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size,'body_srgb8':[4,4,4],'text_srgb8_top_bottom':[112,88],'alpha_exact_baseline':True,'text_shift_x':SHIFT_X,'glyph_mask_translation_exact':True}))

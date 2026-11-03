@@ -32,6 +32,10 @@ pub struct Dng {
     pub counts: Vec<u32>,
     pub rows_per_strip: usize,
     pub compression: u32,
+    pub profile: Option<crate::profile_develop::ProfileDevelopment>,
+    pub sample_bits: u8,
+    pub streaming_linear: bool,
+    pub linearization: Option<crate::profile_gain_table::LinearizationTable>,
     pub tile_width: usize,
     pub tile_height: usize,
     pub cfa: String,
@@ -144,7 +148,7 @@ impl Dng {
             .get(&258)
             .ok_or_else(|| err("INVALID_INPUT", "probe"))?
             .uints()?;
-        if !(bits.len() == 1 || bits.len() == cpp) || bits.iter().any(|&v| v != 16) {
+        if !(bits.len() == 1 || bits.len() == cpp) || bits.iter().any(|&v| v != bits[0] || !(v == 16 || (!cfa_mode && compression == 7 && matches!(v,12|14)))) {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
         if uint(raw, 284, Some(1))? != 1
@@ -153,6 +157,16 @@ impl Dng {
         {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
+        let linearization = inherited(root,raw,50712).map(crate::profile_gain_table::LinearizationTable::parse).transpose()?;
+        if linearization.is_some() && cfa_mode { return Err(err("UNSUPPORTED_DNG_VARIANT", "probe")); }
+        // Beta4 admitted only 16-bit DNG. This explicit new SOF3 LinearRaw
+        // route gets complete dual-illuminant calibration even without PGT;
+        // existing 16-bit non-PGT inputs retain their established developer.
+        let color_route=if !cfa_mode && compression==7 && matches!(bits[0],12|14) {
+            crate::profile_develop::ColorRoute::NewSof3LinearPrecision
+        } else {crate::profile_develop::ColorRoute::Legacy};
+        let profile=crate::profile_develop::parse(root,raw,color_route)?;
+        if profile.is_some() && cfa_mode {return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
         crate::compat::unsupported_processing(root, raw)?;
         crate::compat::camera_calibration(root, raw)?;
         let has_forward_matrix = crate::compat::forward_matrices(root, raw)?;
@@ -161,6 +175,7 @@ impl Dng {
         crate::compat::profile_metadata(root, raw, &mut warnings)?;
         let (gain_maps, cfa_gain_maps) = crate::compat::lens_opcodes(root, raw, width, height, cfa_mode, &mut warnings)?;
         crate::compat::unit_geometry(root, raw)?;
+        if profile.is_some() && (!gain_maps.is_empty() || !cfa_gain_maps.is_empty()) {return Err(err("UNSUPPORTED_DNG_OPCODE","probe"));}
         let a = arr(nums(raw, 50829)?, [0., 0., height as f64, width as f64])?;
         if a.iter().any(|x| x.fract() != 0. || *x < 0.)
             || a[0] >= a[2]
@@ -238,9 +253,10 @@ impl Dng {
                 return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
             }
         } else {
-            if br != [1., 1.] {
-                return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
-            }
+            // Repeated RGB black levels are equivalent to one RGB triplet only
+            // when every spatial entry is exactly equal; no approximate collapse.
+            let black = if br == [2.,2.] && black.len()==12 && black.chunks_exact(3).all(|p|p==&black[..3]) { black[..3].to_vec() }
+                else if br == [1.,1.] { black } else { return Err(err("UNSUPPORTED_DNG_VARIANT","probe")); };
             if black.len() == 1 {
                 vec![black[0]; 3]
             } else if black.len() == 3 {
@@ -321,7 +337,8 @@ impl Dng {
             || raw.contains_key(&323)
             || raw.contains_key(&324)
             || raw.contains_key(&325);
-        if tiled && (compression != 7 || raw.contains_key(&273) || raw.contains_key(&279)) {
+        // The bounded 12/14-bit decoder currently admits strips, not tiles.
+        if tiled && (bits[0] != 16 || compression != 7 || raw.contains_key(&273) || raw.contains_key(&279)) {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
         let (tile_width, tile_height, rows_per_strip, offset_tag, count_tag) = if tiled {
@@ -359,6 +376,8 @@ impl Dng {
         if offsets.len() != across * down || counts.len() != offsets.len() {
             return Err(err("INVALID_INPUT", "probe"));
         }
+        let streaming_linear = compression==7 && !cfa_mode && !tiled &&
+            (bits[0]!=16 || counts.iter().any(|&n|n as usize>crate::lossless::MAX_ENCODED) || tile_width.checked_mul(tile_height).and_then(|n|n.checked_mul(cpp)).is_none_or(|n|n>crate::lossless::MAX_SAMPLES));
         for (i, (&o, &n)) in offsets.iter().zip(&counts).enumerate() {
             let block_h = if tiled {
                 tile_height
@@ -375,7 +394,7 @@ impl Dng {
             if compression == 1 && n as usize != samples * 2 {
                 return Err(err("INVALID_INPUT", "probe"));
             }
-            if compression == 7
+            if compression == 7 && !streaming_linear
                 && (samples > crate::lossless::MAX_SAMPLES
                     || n as usize > crate::lossless::MAX_ENCODED)
             {
@@ -394,6 +413,10 @@ impl Dng {
             counts,
             rows_per_strip,
             compression,
+            profile,
+            sample_bits: bits[0] as u8,
+            streaming_linear,
+            linearization,
             tile_width,
             tile_height,
             cfa,
@@ -413,7 +436,9 @@ impl Dng {
         let (w, h) = self.oriented_dim();
         Probe {
             format: "DNG",
-            variant: if self.compression == 7 {
+            variant: if self.streaming_linear && self.sample_bits==12 { "DNG_LINEAR_RGB_U12_LOSSLESS_JPEG_STREAM" }
+            else if self.streaming_linear && self.sample_bits==14 { "DNG_LINEAR_RGB_U14_LOSSLESS_JPEG_STREAM" }
+            else if self.compression == 7 {
                 match (self.cpp, self.rows_per_strip == 0) {
                     (1, true) => "DNG_BAYER_U16_LOSSLESS_JPEG_TILES",
                     (1, false) => "DNG_BAYER_U16_LOSSLESS_JPEG_STRIPS",
@@ -439,7 +464,7 @@ impl Dng {
             max_pixels: crate::MAX_PIXELS,
             warnings: self.warnings.clone(),
             has_alternate_forward_matrix: self.has_forward_matrix,
-            development_policy: "rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing",
+            development_policy: if let Some(p)=&self.profile {if p.map.is_some(){"DNG dual-illuminant ForwardMatrix to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"}else{"DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"}} else {"rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"},
             baseline_exposure_applied_ev: self.baseline_exposure_ev,
         }
     }
@@ -498,6 +523,7 @@ impl Dng {
                                 + (sx - bx * self.tile_width))
                                 * self.cpp
                                 + c] as f32;
+                            let sample = self.linearization.as_ref().map_or(sample, |t|t.apply(sample as u16) as f32);
                             let ch = if self.cpp == 1 {
                                 (sy % 2) * 2 + sx % 2
                             } else {
@@ -515,6 +541,8 @@ impl Dng {
     }
     pub fn decode_scratch_bytes(&self) -> u64 {
         let map_bytes: u64 = self.gain_maps.iter().map(|m| m.storage_bytes()).sum::<u64>() + self.cfa_gain_maps.iter().map(|m| m.storage_bytes()).sum::<u64>();
+        let map_bytes=map_bytes+self.profile.as_ref().map_or(0,|p|p.map.as_ref().map_or(0,|m|m.storage_bytes())+512)+self.linearization.as_ref().map_or(0,|v|v.storage_bytes());
+        if self.streaming_linear { return map_bytes + self.width as u64 * 3 * 2 + 1024*1024; }
         if self.compression != 7 {
             return map_bytes;
         }
@@ -541,6 +569,7 @@ impl Dng {
         {
             return Err(err("INVALID_INPUT", "decode"));
         }
+        if self.streaming_linear { return Err(err("UNSUPPORTED_DNG_VARIANT", "decode")); }
         if self.compression == 7 {
             let mut out = self.read_compressed(file, y, h, cancel)?;
             crate::cfa_gainmap::apply(&self.cfa_gain_maps, &mut out, self.width, self.height, y, cancel)?;
@@ -566,7 +595,8 @@ impl Dng {
                 } else {
                     i % 3
                 };
-                let sample = self.endian.u16(b) as f32;
+                let sample = self.endian.u16(b);
+                let sample = self.linearization.as_ref().map_or(sample, |t|t.apply(sample)) as f32;
                 out[r * w * self.cpp + i] =
                     (sample - self.black[ch]).max(0.) / (self.white[ch] - self.black[ch]);
             }

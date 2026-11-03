@@ -34,7 +34,9 @@ internal object HeicContainer {
         /** Retain admitted declarations; never infer them from the requested output color space. */
         val declaredNclx: List<Nclx> = emptyList(),
         val sourceColor: HeicIccProfile.ColorIdentity = HeicIccProfile.ColorIdentity.SRGB,
+        val sourceProfile: HeicIccProfile.Profile = HeicIccProfile.Profile.standard(sourceColor),
     ) {
+        init { require(sourceColor==sourceProfile.identity) }
         val width: Int get() = encodedWidth
         val height: Int get() = encodedHeight
         val displayWidth: Int get() = if (rotationDegreesClockwise % 180 == 0) encodedWidth else encodedHeight
@@ -50,7 +52,7 @@ internal object HeicContainer {
     private fun limit(): Nothing = throw Rejected(Failure.LIMIT, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_1351a2d16cbe))
     private data class Box(val type: String, val body: Long, val end: Long)
     private data class Association(val property: Int, val essential: Boolean)
-    private data class Property(val type: String, val width: Int = 0, val height: Int = 0, val angle: Int = 0, val nclx:Nclx? = null, val icc:HeicIccProfile.ColorIdentity? = null)
+    private data class Property(val type: String, val width: Int = 0, val height: Int = 0, val angle: Int = 0, val nclx:Nclx? = null, val icc:HeicIccProfile.Profile? = null)
     private data class Item(val type: String, val hidden: Boolean)
 
     private class Reader(val input: RandomAccessFile, val check: () -> Unit) {
@@ -161,18 +163,25 @@ internal object HeicContainer {
             if (item.type == "hvc1" && refs.containsKey(primary)) unsupported()
             // An explicit validated color contract is mandatory. A grid may inherit a common
             // profile from all coded tiles; this is how ordinary ICC HEIC files are authored.
-            fun declaredColor(props:List<Property>):HeicIccProfile.ColorIdentity? {
-                val colors=props.mapNotNull { it.icc ?: if(it.nclx!=null)HeicIccProfile.ColorIdentity.SRGB else null }.distinct()
-                if(colors.size>1)unsupported() // Conflicting ICC/NCLX is not guessed.
-                return colors.singleOrNull()
+            fun declaredColor(props:List<Property>):HeicIccProfile.Profile? {
+                val colors=props.mapNotNull { it.icc ?: if(it.nclx!=null)HeicIccProfile.Profile.standard(HeicIccProfile.ColorIdentity.SRGB) else null }
+                val selected=props.mapNotNull{it.icc}.firstOrNull() ?: colors.firstOrNull() ?: return null
+                if(colors.any{!HeicIccProfile.equivalent(it,selected)})unsupported()
+                return selected
             }
             val primaryColor=declaredColor(primaryProps)
             val tileColors=if(item.type=="grid")codedIds.map { declaredColor(linked(it,links,properties)) } else emptyList()
             val sourceColor=primaryColor ?: if(item.type=="grid" && tileColors.all{it!=null}) {
-                tileColors.filterNotNull().distinct().singleOrNull() ?: unsupported()
+                tileColors.filterNotNull().firstOrNull() ?: unsupported()
             }else unsupported()
-            if(tileColors.filterNotNull().any{it!=sourceColor})unsupported()
-            return Info(shape.width, shape.height, clockwise, maxPixels, maxOf(maxPixels, codedPixels), properties.mapNotNull { it.nclx },sourceColor)
+            if(tileColors.filterNotNull().any{!HeicIccProfile.equivalent(it,sourceColor)})unsupported()
+            // Retain an actual, associated ICC descriptor even when the primary has equivalent
+            // exact NCLX and the grid tiles carry the quantized standard ICC declaration.
+            val actualIcc=primaryProps.firstNotNullOfOrNull{it.icc} ?: codedIds.asSequence()
+                .mapNotNull{linked(it,links,properties).firstNotNullOfOrNull{property->property.icc}}.firstOrNull()
+            val sourceProfile=actualIcc ?: sourceColor
+            if(!HeicIccProfile.equivalent(sourceProfile,sourceColor))unsupported()
+            return Info(shape.width, shape.height, clockwise, maxPixels, maxOf(maxPixels, codedPixels), properties.mapNotNull { it.nclx },sourceProfile.identity,sourceProfile)
         }
 
         private fun brands(box: Box) {
@@ -225,7 +234,9 @@ internal object HeicContainer {
                     if (box.end - box.body < 23) invalid()
                     if (u8(box.end) != 1) unsupported()
                     val profile = u8(box.end) and 31
-                    if (profile !in 1..2) unsupported()
+                    // H.265 Annex A: Main=1, Main 10=2, Main Still Picture=3.
+                    // Profile admission never relaxes the SDR8 4:2:0 checks below.
+                    if (profile !in 1..3) unsupported()
                     seek(box.body + 16)
                     val chroma = u8(box.end) and 3
                     val lumaDepth = u8(box.end) and 7
@@ -261,7 +272,7 @@ internal object HeicContainer {
                             if(length>HeicIccProfile.MAX_PROFILE_BYTES)limit()
                             if(length<132)invalid()
                             val profile=ByteArray(length.toInt());input.readFully(profile)
-                            val identity=try{HeicIccProfile.inspect(profile)}catch(e:HeicIccProfile.Rejected){
+                            val identity=try{HeicIccProfile.inspectProfile(profile)}catch(e:HeicIccProfile.Rejected){
                                 when(e.failure){HeicIccProfile.Failure.INVALID->invalid();HeicIccProfile.Failure.LIMIT->limit();else->unsupported()}
                             }
                             Property(box.type,icc=identity)

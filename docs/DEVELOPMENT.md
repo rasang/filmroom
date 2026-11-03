@@ -15,7 +15,7 @@
 
 ## 构建应用
 
-仓库在 `app/src/main/jniLibs/` 提供原生库；如需修改引擎，先执行下一节。
+此开发分支不提交预编译 JNI `.so`。首次构建 APK 前，必须先按下一节从对应源码构建引擎及编解码器，并复制两种 ABI 的库到 `app/src/main/jniLibs/`。仅运行 Gradle 不会自动重建原生库。
 
 ```sh
 ./gradlew assembleDebug testDebugUnitTest lintDebug

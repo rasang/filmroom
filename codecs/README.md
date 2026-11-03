@@ -2,9 +2,22 @@
 
 此组件完全离线，用于原生安卓“暗房”的 RAW 导入及 JPEG / TIFF 导出。它不联网，不使用嵌入 JPEG 代替 RAW，不重建或伪造 RAW，不自动降低照片尺寸。
 
-## 实际支持范围
+## Beta5 RAW 支持范围与限制
 
-独立开发分支增加普通 NEF / CR2 / ARW 内容识别与有界条带开发路线，实际准入/验证边界见 `../docs/CAMERA_RAW_IMPORT.md`；不代表所有机型/变体已通过，更不放宽 128 MiB 工作预算。
+DNG 保留既有 16-bit 路径，并新增经过样本验证的 12/14-bit、三通道 LinearRaw SOF3 无损 JPEG：predictor 1、无点变换、全分辨率通道、按行对齐的重启间隔及有界条带解码。新校准路径支持经验证的 LinearizationTable、ProfileGainTableMap 和双光源 ColorMatrix/ForwardMatrix 校准；增益表可缺省。4 份 S23 系列公开样本（其中 1 份明确为 Expert RAW，其余拍摄模式未知）通过整幅原始像素及线性色彩对照。这不等于所有三星/Pro/Expert RAW 模式均支持。
+
+Panasonic .RW2 已验证 v4、v5（14-bit）、v6、v7（14-bit）及受约束的 v8/CF2 路径，共 13 份样本；新增 v8 样本涵盖 GH6、S5 II X、G9 II、GH7、S1R II 的已测模式。v7/12-bit、非恒等 CF2 gamma/非零 shift、未实现的编码或校准方式仍明确拒绝，不回退到内嵌 JPEG。
+
+DNG 单次操作预算为 128 MiB；相机 RAW（含 RW2）为 256 MiB，并受共享内存准入控制。最大输入为 52 MP，超限拒绝而非暗中缩图。新 DNG 12/14-bit tiled 布局、JPEG-XL、其他未实现 SOF3 布局及必需但不支持的处理操作不在本次支持范围内。样本通过不能泛化为整个品牌或全部机型/模式的兼容保证。
+
+上述结果为主机验证，不等于 Android 真机验证；完整原始文件未随源码分发。
+
+## 既有 16-bit DNG 路径及通用输出
+
+下列 DNG 矩阵、校准与 SOF3 限制描述既有 16-bit 路径；Beta5 新 12/14-bit LinearRaw 路径按上一节单独准入。
+
+
+普通 NEF / CR2 / ARW 内容识别与有界条带开发路线的准入/验证边界见 `../docs/CAMERA_RAW_IMPORT.md`；其当前工作预算与 RW2 同为 256 MiB，不代表所有机型/变体已通过。
 
 - DNG 导入：经典 TIFF 容器、大小端、无压缩 16 位整数条带，或已验证的 16 位无损 JPEG（SOF3）平铺 / 条带；四种 2×2 拜耳排列或三通道线性 RGB；有效的黑白电平、AsShotNeutral、D65 ColorMatrix；最多 5200 万传感器像素，每边不超过 32768。
 - DNG 使用 ActiveArea、DefaultCrop 和方向一次，标准 BaselineExposure 曝光基准在线性 RGB 中只应用一次，输出最终方向的线性 sRGB float32 RGB 私有文件。相机自带 ProfileToneCurve 显示曲线与 ProfileHueSatMap 色相饱和度校正表不套入线性胶片流程，并向用户明确提示颜色可能与相机或其他软件不同；不是相机直出 JPEG 色彩复刻，也不宣称完整 Adobe DNG 开发模型。

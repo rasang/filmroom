@@ -1,5 +1,5 @@
 <resources>
     <!-- Fixed Filmroom palette: system light mode must not create a white launch window. -->
-    <color name="filmroom_background">#111413</color>
-    <color name="filmroom_surface">#1A1E1B</color>
+    <color name="filmroom_background">#181818</color>
+    <color name="filmroom_surface">#222222</color>
 </resources>

@@ -4,9 +4,9 @@
 
 新增 HEIC **导入**，没有新增 HEIC 导出。JPEG / PNG / TIFF 的输出菜单、位深和色彩契约不变。不引入 libheif、FFmpeg 或其他生产依赖；不增加权限或网络。测试素材生成所用的主机工具不打包进应用。
 
-支持候选是静态、非加密、8 位 4:2:0 HEVC 主图（`hvc1`）及由 HEVC tile 组成的 `grid`。容器旋转 `irot` 由系统 ImageDecoder 应用一次。主图之外的 tile 和缩略图不等同于动画；真实 2×2 grid 纳入测试。HEIF 容器不是任何编码都支持的承诺，AVIF 和图像序列仍未接入。
+支持候选是静态、非加密、8 位 4:2:0 HEVC（profile 1/2/3；profile 2仍须实际8位）主图（`hvc1`）及由 HEVC tile 组成的 `grid`。容器旋转 `irot` 由系统 ImageDecoder 应用一次。主图之外的 tile 和缩略图不等同于动画；真实 2×2 grid 纳入测试。HEIF 容器不是任何编码都支持的承诺，AVIF 和图像序列仍未接入。
 
-颜色仅接受可核验的 SDR 子集：关联主图的 NCLX 必须为 primaries=1、transfer=13、matrix=1（检查 range 保留位）；或关联的 ICC 是经过有界解析核验的标准 sRGB / Display P3 v4 RGB matrix/TRC profile。ICC 不按名称放行：检查 D50 色度矩阵、sRGB 参数曲线、白点/Bradford 适应、tag 边界及冲突；未知/LUT/HDR profile 拒绝。grid 主图未声明颜色时，必须全部 HEVC tile 明确声明同一身份；缺失或冲突拒绝。NCLX-only Display P3/BT.2020 仍不接入，避免系统忽略 NCLX 后的 sRGB 回退。
+颜色仅接受可核验的 SDR 子集：关联主图的 NCLX 必须为 primaries=1、transfer=13、matrix=1（检查 range 保留位）；或关联的 ICC 是经过有界解析核验的 sRGB / Display P3 primaries v4 RGB matrix/TRC profile（标准曲线，以及下文列明的单一精确量化 SDR 曲线）。ICC 不按名称放行：检查 D50 色度矩阵、已批准的实际参数曲线、白点/Bradford 适应、tag 边界及冲突；未知/LUT/HDR profile 拒绝。grid 主图未声明颜色时，必须全部 HEVC tile 明确声明同一身份；缺失或冲突拒绝。NCLX-only Display P3/BT.2020 仍不接入，避免系统忽略 NCLX 后的 sRGB 回退。
 
 系统 ImageDecoder 的**源**颜色空间必须在设置目标之前与已验证的 ICC/NCLX 身份匹配（参数曲线及适应到 D50 的矩阵，不只检查名称或目标标签）。随后由 ImageDecoder 真正转换到 sRGB，而不是重标 P3 像素。P3 超出 sRGB 的颜色不保留；界面明确显示转换提示。原文件及其 profile 不修改。
 
@@ -55,3 +55,27 @@
 厂商可能在标准 HEIF items 之外保存私有增益图。此路线只读取经过严格颜色验证的 SDR8 主图；不解析厂商公式、不恢复 HDR，也不传递原 gainmap。若 Android 返回带附层的 SDR Bitmap，在原尺寸/ARGB8888/sRGB 检查通过后 `setGainmap(null)`，随后逐行读取同一底图。UI 明确提示“只导入 SDR 底图，不应用或保留 HDR 增益图”。标准容器辅助 item 的准入范围未扩大。
 
 [AOSP ImageDecoder JNI](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/libs/hwui/jni/ImageDecoder.cpp) 先解码基础像素，再独立提取附层；[Bitmap JNI](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/libs/hwui/jni/Bitmap.cpp) 的 getPixels 读取基础 SkBitmap，setGainmap 只替换附层引用。[官方 Gainmap 契约](https://developer.android.com/reference/android/graphics/Gainmap) 区分底图与增强层，[Bitmap.setGainmap](https://developer.android.com/reference/android/graphics/Bitmap#setGainmap(android.graphics.Gainmap)) 允许 null 移除。API36 的 HDR→SDR 反向 gainmap 不属于此路线；仍使用 compileSdk35，通过运行时公开 getter 核验方向，缺失/异常安全拒绝。这些源码/API依据不是 OPPO 厂商解码器实测。
+
+
+## Beta5：Main Still Picture 与精确量化 ICC
+
+- HEVC profile 3（Main Still Picture）进入同一8位4:2:0检查；并非允许10位/HDR或全部HEIF变体。
+- ICC descriptor 保留实际 D50 matrix 和实际 type-3 TRC，不以 Display P3 描述字符串或厂商名称放行。
+- 标准曲线保持原量化容差。额外允许一个独立核验的 s15Fixed16 五元组：
+  `(157286, 62128, 3408, 5046, 2556) / 65536`，顺序是 `(g,a,b,c,d)`，`e=f=0`。
+  这是数值能力白名单，不是通用自定义 gamma 支持；三个通道必须使用相同实际曲线。
+  与旧版各通道分别近似标准的检查相比，不同通道曲线现明确拒绝，因为 Android Rgb 合同只能表示一个共享transfer。
+- colr 的 ICC 只允许声明长度完全相符，或恰好多出固定8字节 `46 50 58 52 00 00 00 00`。
+  后者仅是有界解析视图；tag必须完整落在声明的ICC内，不把任意尾部当padding，原片交给系统时不改写。
+- grid比较完整descriptor。标准ICC量化值与同义标准NCLX按原已批准容差保持兼容；自定义曲线不等同标准曲线。
+- Android源ColorSpace必须在target设置前与实际descriptor匹配。若系统忽略ICC、回退sRGB、把该曲线报告成标准P3，仍明确拒绝；不能通过输出标签冒充源颜色识别。
+
+验证层次必须区分：
+1. 纯JVM容器/ICC/合成恶意边界测试与原件准入。
+2. 主机libheif完整解码、LittleCMS对实际像素转换和独立数学数值对照。
+3. Robolectric native ColorSpace 对384个独立LittleCMS参考色阶的源合同/转换验证。
+4. 目标设备真正的 ImageDecoder HEVC解码及其源颜色报告。
+
+前三层不代替第四层。本轮host直接调用ImageDecoder时，能力查询返回true，实际nCreate报
+`DecodeException: unimplemented`；这不是成功或可忽略的测试。未取得目标设备实测之前，
+只能交付有严格失败保护的兼容实现，不能宣称所有Android/OEM已成功导入该变体。

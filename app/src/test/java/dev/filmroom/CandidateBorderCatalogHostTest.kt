@@ -87,7 +87,7 @@ class CandidateBorderCatalogHostTest {
         assertEquals(73,assets.length()+oldAssets.length()+direct.length())
         assertEquals(38,allRows.size)
         assertEquals((allRows.keys+(BwBorderDefinitions.definitions+BwBorderDefinitions.legacyDefinitions).map{it.assetPath}).map{it.removePrefix("fixed135/")}.toSet(),filenames.filter{it.endsWith(".webp")}.toSet())
-        assertEquals(43,filenames.count{it.endsWith(".webp")});assertEquals(0,filenames.count{it.endsWith(".png")})
+        assertEquals(44,filenames.count{it.endsWith(".webp")});assertEquals(0,filenames.count{it.endsWith(".png")})
         assertTrue(filenames.containsAll(listOf("runtime-manifest.json","provenance.json","PROVENANCE-AND-NOTICES.md")))
         val notices=app.assets.open("fixed135/PROVENANCE-AND-NOTICES.md").bufferedReader().use{it.readText()}
         assertTrue(notices.contains("LoMit"));assertTrue(notices.contains("creativecommons.org/licenses/by/4.0"))

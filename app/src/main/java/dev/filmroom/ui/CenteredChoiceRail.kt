@@ -28,7 +28,7 @@ class CenteredChoiceRail(context: Context) : HorizontalScrollView(context) {
     private var userScroll = false
     private var snapping: ValueAnimator? = null
     private var listener: ((Int) -> Unit)? = null
-    private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(229,163,93); style = Paint.Style.STROKE; strokeWidth = dp(1.5f) }
+    private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FilmroomPalette.accent; style = Paint.Style.STROKE; strokeWidth = dp(1.5f) }
     private val mask = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private var fade: LinearGradient? = null
     private val window = RectF()

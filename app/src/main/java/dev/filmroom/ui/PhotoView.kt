@@ -185,7 +185,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         override fun onDown(e:MotionEvent)=true
         override fun onDoubleTap(e:MotionEvent):Boolean { if(compositionEditing)return true; if(viewport.zoom>1)resetZoom() else pinch(2.0,e.x.toDouble(),e.y.toDouble());return true }
     })
-    init { contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c85ef88eb1b1);isFocusable=true;setBackgroundColor(Color.rgb(17,20,19)) }
+    init { contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c85ef88eb1b1);isFocusable=true;setBackgroundColor(FilmroomPalette.background) }
     fun configureDetail(provider: EditorDetailProvider) {
         check(!disposed)
         detail?.close(); detail=EditorDetailController(provider,viewport,{invalidate();onDetailStatusChanged?.invoke(detailStatus)},visibleRegion=::compositionVisibleRect,effectiveZoom=::compositionDetailZoom,retainContextWhileEditing={compositionEditing}).also{it.foreground(foreground)}

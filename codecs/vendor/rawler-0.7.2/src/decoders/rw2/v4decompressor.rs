@@ -1,4 +1,4 @@
-use crate::{bits::LEu16, decoders::*, pumps::BitPump};
+use crate::{decoders::*, pumps::BitPump};
 
 pub(crate) fn decode_panasonic_v4(buf: &[u8], width: usize, height: usize, split: bool, dummy: bool) -> PixU16 {
   decode_threaded_multiline(
@@ -72,11 +72,15 @@ impl<'a> BitPump for BitPumpPanasonic<'a> {
       self.nbits += 0x4000 * 8;
       self.pos += 0x4000;
     }
-    let mut byte = ((self.nbits - num) >> 3) ^ 0x3ff0;
-    if self.split {
-      byte = (byte + 0x4000 - 0x2008) % 0x4000;
-    }
-    let bits = LEu16(self.buffer, byte as usize + self.pos - 0x4000) as u32;
+    let logical = (((self.nbits - num) >> 3) ^ 0x3ff0) as usize;
+    let base = self.pos - 0x4000;
+    let physical = |byte: usize| if self.split { (byte + 0x4000 - 0x2008) % 0x4000 } else { byte };
+    // Match LibRaw pana_data(): rotate each block, then read the word.
+    // Mapping only the low byte followed by physical+1 crosses into the wrong
+    // block at the rotation seam. The logical block-end lookahead stays zero.
+    let low = self.buffer[base + physical(logical)];
+    let high = if logical + 1 == 0x4000 { 0 } else { self.buffer[base + physical(logical + 1)] };
+    let bits = u16::from_le_bytes([low, high]) as u32;
     (bits >> ((self.nbits - num) & 7)) & (0x0ffffffffu32 >> (32 - num))
   }
 

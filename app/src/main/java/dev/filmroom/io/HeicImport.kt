@@ -46,20 +46,23 @@ internal interface HeicBackend {
 /** Source metadata is checked BEFORE setting an sRGB output request; target tags are not evidence. */
 internal object HeicColorPolicy {
     fun requireSource(sourceColor:ColorSpace?,expected:HeicIccProfile.ColorIdentity=HeicIccProfile.ColorIdentity.SRGB) {
+        requireSource(sourceColor,HeicIccProfile.Profile.standard(expected))
+    }
+    fun requireSource(sourceColor:ColorSpace?,expected:HeicIccProfile.Profile) {
         fun reject():Nothing=throw PhotoException(PhotoException.Reason.UNSUPPORTED,
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_58a07dbdf8d7))
         if(sourceColor !is ColorSpace.Rgb || (0..2).any {
                 sourceColor.getMinValue(it)<0f || sourceColor.getMaxValue(it)>1f }) reject()
         val transfer=sourceColor.transferParameters ?: reject()
         val actual=doubleArrayOf(transfer.g,transfer.a,transfer.b,transfer.c,transfer.d,transfer.e,transfer.f)
-        val declared=expected.expectedTransfer
+        val declared=expected.transfer
         val wanted=doubleArrayOf(declared.g,declared.a,declared.b,declared.c,declared.d,declared.e,declared.f)
         if(actual.indices.any { !actual[it].isFinite() || kotlin.math.abs(actual[it]-wanted[it])>HeicIccProfile.TRANSFER_TOLERANCE })reject()
         // ICC XYZ tags are D50 PCS values; Android RGB transforms use their declared white.
         // Adapt for comparison ONLY. ImageDecoder performs the real source→target conversion.
         val adapted=ColorSpace.adapt(sourceColor,ColorSpace.ILLUMINANT_D50) as? ColorSpace.Rgb ?: reject()
         val transform=adapted.transform
-        val matrix=expected.expectedToXyzD50
+        val matrix=expected.toXyzD50.values()
         if(transform.indices.any { !transform[it].isFinite() || kotlin.math.abs(transform[it]-matrix[it])>HeicIccProfile.PLATFORM_MATRIX_TOLERANCE })reject()
     }
 }
@@ -103,7 +106,7 @@ internal object AndroidHeicBackend : HeicBackend {
                     throw PhotoException(PhotoException.Reason.UNSUPPORTED,
                         dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_8b96428c13f4))
                 }
-                HeicColorPolicy.requireSource(header.colorSpace,info.sourceColor)
+                HeicColorPolicy.requireSource(header.colorSpace,info.sourceProfile)
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
                 decoder.isMutableRequired = false

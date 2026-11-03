@@ -117,32 +117,100 @@ internal class ExportPreviewView(context: Context) : View(context) {
 
 /** Tiny, bounded, process-memory cache; source remains immutable. Called only off the UI thread. */
 internal object ExportContourCache {
+    const val VERSION = 2
+    const val MAX_EDGE = 480
+    const val WORKING_BYTES = 6L*1024*1024
     private val cache = object : LruCache<String, Bitmap>(4*1024*1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+        // A visible View may still hold an evicted bitmap. Never recycle shared entries here.
     }
-    internal var computations = 0; private set
-    @Synchronized fun clear() { cache.evictAll() }
-    @Synchronized fun get(key: String, source: Bitmap): Bitmap {
-        cache.get(key)?.let { return it }
-        val scale=min(1f,320f/max(source.width,source.height))
+    private val computeLock = Any()
+    private val cacheLock = Any()
+    private var epoch = 0L
+    private class Request(val key:String,var invalidated:Boolean=false)
+    private val requests=mutableSetOf<Request>()
+    @Volatile internal var computations = 0; private set
+    internal val cachedBytes: Int get() = synchronized(cacheLock) { cache.size() }
+    fun clear() = synchronized(cacheLock) { epoch++; cache.evictAll() }
+    fun removeJob(id:String) = synchronized(cacheLock) {
+        val prefix="v$VERSION:$id:"
+        requests.filter{it.key.startsWith(prefix)}.forEach{it.invalidated=true}
+        cache.snapshot().keys.filter{it.startsWith(prefix)}.forEach{cache.remove(it)}
+    }
+    fun find(key: String): Bitmap? = synchronized(cacheLock) {
+        cache.get("v$VERSION:$key")?.takeUnless { it.isRecycled }
+    }
+    fun get(key: String, source: Bitmap): Bitmap = get(key,source) {}
+    fun get(key: String, source: Bitmap, checkActive: () -> Unit): Bitmap {
+        checkActive()
+        val request=Request("v$VERSION:$key")
+        val startedEpoch = synchronized(cacheLock) {
+            cache.get("v$VERSION:$key")?.takeUnless { it.isRecycled }?.let { return it }
+            requests.add(request)
+            epoch
+        }
+        try {return synchronized(computeLock) {
+        checkActive()
+        synchronized(cacheLock) {
+            if(epoch!=startedEpoch || request.invalidated)throw java.util.concurrent.CancellationException("Queued contour invalidated")
+            cache.get("v$VERSION:$key")?.takeUnless { it.isRecycled }?.let { return it }
+        }
+        require(!source.isRecycled && source.width>0 && source.height>0)
+        val scale=min(1.0,MAX_EDGE.toDouble()/max(source.width,source.height))
         val small=Bitmap.createScaledBitmap(source,max(1,(source.width*scale).toInt()),max(1,(source.height*scale).toInt()),true)
-        val w=small.width; val h=small.height; val pixels=IntArray(w*h); small.getPixels(pixels,0,w,0,0,w,h)
-        val gray=IntArray(w*h) { i -> val p=pixels[i]; ((p shr 16 and 255)*77+(p shr 8 and 255)*150+(p and 255)*29)/256 }
-        val smooth=IntArray(w*h)
-        for(y in 1 until h-1) for(x in 1 until w-1) {
-            var sum=0; for(dy in -1..1) for(dx in -1..1) sum+=gray[(y+dy)*w+x+dx]*(if(dx==0)2 else 1)*(if(dy==0)2 else 1)
-            smooth[y*w+x]=sum/16
+        var unpublished:Bitmap?=null
+        try {
+            val w=small.width; val h=small.height; val pixels=IntArray(w*h)
+            small.getPixels(pixels,0,w,0,0,w,h)
+            val gray=IntArray(w*h) { i -> val p=pixels[i]; ((p shr 16 and 255)*77+(p shr 8 and 255)*150+(p and 255)*29)/256 }
+            val smooth=IntArray(w*h)
+            // Convex, weak denoise: no unsharp overshoot or bright halo around a step edge.
+            for(y in 1 until h-1) {
+                if((y and 15)==0)checkActive()
+                for(x in 1 until w-1) {
+                    var sum=0
+                    for(dy in -1..1)for(dx in -1..1)sum+=gray[(y+dy)*w+x+dx]*(if(dx==0)2 else 1)*(if(dy==0)2 else 1)
+                    smooth[y*w+x]=(gray[y*w+x]*3+sum/16)/4
+                }
+            }
+            val magnitude=FloatArray(w*h);val direction=ByteArray(w*h)
+            for(y in 2 until h-2) {
+                if((y and 15)==0)checkActive()
+                for(x in 2 until w-2) {
+                    val i=y*w+x
+                    val gx= -smooth[i-w-1]+smooth[i-w+1]-2*smooth[i-1]+2*smooth[i+1]-smooth[i+w-1]+smooth[i+w+1]
+                    val gy= -smooth[i-w-1]-2*smooth[i-w]-smooth[i-w+1]+smooth[i+w-1]+2*smooth[i+w]+smooth[i+w+1]
+                    magnitude[i]=Math.hypot(gx.toDouble(),gy.toDouble()).toFloat()
+                    val ax=abs(gx).toFloat();val ay=abs(gy).toFloat()
+                    direction[i]=(if(ay<ax*.4142)0 else if(ax<ay*.4142)1 else if(gx*gy>0)2 else 3).toByte()
+                }
+            }
+            pixels.fill(Color.BLACK)
+            for(y in 3 until h-3) {
+                if((y and 15)==0)checkActive()
+                for(x in 3 until w-3) {
+                    val i=y*w+x
+                    val d=when(direction[i].toInt()){0->1;1->w;2->w+1;else->w-1}
+                    val m=magnitude[i];val peak=max(magnitude[i-d],magnitude[i+d])
+                    val narrow=if(m<peak*.92f).16f else 1f
+                    val v=((m-26)*1.05f*narrow).roundToInt().coerceIn(0,240)
+                    pixels[i]=Color.rgb(v,v,v)
+                }
+            }
+            checkActive()
+            val result=Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888)
+            unpublished=result
+            checkActive()
+            synchronized(cacheLock) {
+                if(epoch!=startedEpoch || request.invalidated)throw java.util.concurrent.CancellationException("Contour cache invalidated")
+                cache.put("v$VERSION:$key",result);unpublished=null;computations++
+            }
+            return result
+        } finally {
+            unpublished?.recycle()
+            if(small!==source)small.recycle()
         }
-        pixels.fill(Color.BLACK)
-        for(y in 2 until h-2) for(x in 2 until w-2) {
-            val i=y*w+x
-            val gx= -smooth[i-w-1]+smooth[i-w+1]-2*smooth[i-1]+2*smooth[i+1]-smooth[i+w-1]+smooth[i+w+1]
-            val gy= -smooth[i-w-1]-2*smooth[i-w]-smooth[i-w+1]+smooth[i+w-1]+2*smooth[i+w]+smooth[i+w+1]
-            val v=((sqrt((gx*gx+gy*gy).toDouble())-34)*1.25).toInt().coerceIn(0,225)
-            pixels[i]=Color.rgb(v,v,v)
         }
-        val result=Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888)
-        if(small!==source)small.recycle()
-        computations++; cache.put(key,result); return result
+        } finally {synchronized(cacheLock){requests.remove(request)}}
     }
 }

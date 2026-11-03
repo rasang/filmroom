@@ -36,7 +36,7 @@ class DoubleXPositiveSampledHostTest {
     }
     @Test fun sampledNearBlackAndGrayLettersRetainGeometryWithoutPhotoLeakage() {
         val current=definition(true)
-        val legacy=BwBorderDefinitions.legacyDefinitions.single{it.spec.stock=="kodak_doublex" && it.spec.holeMatteSrgb==0xffffff}
+        val legacy=BwBorderDefinitions.legacyDefinitions.single{it.spec.stock=="kodak_doublex" && it.spec.version.startsWith("bw-v6-") && it.spec.holeMatteSrgb==0xffffff}
         val a=StraightAlphaBorderLoader.decodeStraight(current.spec,{app.assets.open(current.assetPath)})
         val b=StraightAlphaBorderLoader.decodeStraight(legacy.spec,{app.assets.open(legacy.assetPath)})
         assertEquals(a.size,b.size)
@@ -64,14 +64,14 @@ class DoubleXPositiveSampledHostTest {
             val indices=pixels.indices.filter{(pixels[it]and 255)>threshold}
             return listOf(indices.minOf{it%1520},indices.minOf{it/1520},indices.maxOf{it%1520}+1,indices.maxOf{it/1520}+1)
         }
-        // Same original47px glyph placement and strokes, only a different color target.
-        assertEquals(glyphBounds(b,120),glyphBounds(a,30))
+        // Original47px glyph mask shifted320px; right tail clipped only at canvas edge.
+        assertEquals(listOf(172,1359,1348,1395),glyphBounds(b,30))
         // Original mask reconstructed byte-exact in generator; top/bottom ink stays gray.
         val top=(1359..1365).flatMap{y->(280..1200).map{x->a[y*1520+x]and 255}}.filter{it>=88}
         val bottom=(1387..1394).flatMap{y->(280..1200).map{x->a[y*1520+x]and 255}}.filter{it>=88}
         assertTrue("Visible but restrained vertical ink gradient",top.average()-bottom.average() in 12.0..24.0)
         assertTrue("Monochrome ink",a.all{(it and 255)==((it ushr 8)and 255) && (it and 255)==((it ushr 16)and 255)})
-        assertEquals(listOf(172,1359,1348,1395),glyphBounds(a,30))
+        assertEquals(listOf(492,1359,1520,1395),glyphBounds(a,30))
         // Thin outer cut rims plus soft material-side hole rim; never an aperture contour.
         for(y in listOf(0,1399))assertTrue((a[y*1520+760]and 255)<=(a[55*1520+760]and 255)+2)
         assertTrue(kotlin.math.abs((a[700*1520+2]and 255)-(a[700*1520+20]and 255))<8)
@@ -149,7 +149,7 @@ class DoubleXPositiveSampledHostTest {
         val screenshot=requireNotNull(android.graphics.BitmapFactory.decodeFile(path))
         val photo=Bitmap.createBitmap(screenshot,25,536,881,588)
         val current=definition(true)
-        val legacy=BwBorderDefinitions.legacyDefinitions.single{it.spec.stock=="kodak_doublex" && it.spec.holeMatteSrgb==0xffffff}
+        val legacy=BwBorderDefinitions.legacyDefinitions.single{it.spec.stock=="kodak_doublex" && it.spec.version.startsWith("bw-v6-") && it.spec.holeMatteSrgb==0xffffff}
         val dir=File("build/ui-host-renders/5222-positive-sampled").apply{mkdirs()}
         val images=listOf(legacy,current).mapIndexed { index,d ->
             val s=BorderSnapshot.authored("kodak_doublex",d.spec.version,photo.width,photo.height,featherTotalAt3072=d.spec.featherTotalAt3072)
@@ -172,8 +172,8 @@ class DoubleXPositiveSampledHostTest {
                 val p=EditorState(filmStock="kodak_doublex",filmBorder=true,negativeWhiteHoles=white)
                 val current=BorderCatalog.snapshot(p.frameStock,600,400,600,400,p.composition,white,"print")
                 assertTrue(current.assetVersion.startsWith(BwBorderDefinitions.POSITIVE_SAMPLED_PREFIX))
-                val old=BwBorderDefinitions.legacyDefinitions.single{it.spec.stock=="kodak_doublex" && it.spec.holeMatteSrgb==(if(white)0xffffff else 0)}
-                for(snapshot in listOf(current,current.copy(assetVersion=old.spec.version))) {
+                val old=BwBorderDefinitions.legacyDefinitions.filter{it.spec.stock=="kodak_doublex" && it.spec.holeMatteSrgb==(if(white)0xffffff else 0)}
+                for(snapshot in listOf(current)+old.map{current.copy(assetVersion=it.spec.version)}) {
                     BorderCatalog.verifySnapshot(snapshot)
                     jobs+=ExportJob(ExportJobStore.newId(),jobs.size.toLong(),p,600,400,ExportFormat.PNG,95,state=ExportJobState.PAUSED,border=snapshot)
                 }
@@ -184,7 +184,7 @@ class DoubleXPositiveSampledHostTest {
             val store=ExportJobStore(root);jobs.forEach(store::update)
             val reopened=ExportJobStore(root)
             jobs.forEach{assertEquals(it.border,reopened.get(it.id)!!.border)}
-            assertEquals(4,reopened.jobs.value.map{it.border!!.assetVersion}.distinct().size)
+            assertEquals(6,reopened.jobs.value.map{it.border!!.assetVersion}.distinct().size)
         } finally {root.deleteRecursively()}
     }
 }
