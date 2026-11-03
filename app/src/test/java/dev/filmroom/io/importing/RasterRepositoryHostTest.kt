@@ -92,7 +92,29 @@ class RasterRepositoryHostTest {
     @Test fun corruptJpegDoesNotFallBackToRawAndRollsBackPrivateCopy()=runBlocking {
         val dir=File(app.cacheDir,"photo-sources");val before=dir.listFiles().orEmpty().map{it.name}.toSet()
         try { PhotoRepository(app).import(register(byteArrayOf(-1,-40,-1,0)),128);fail("Corrupt JPEG") }
-        catch(e:PhotoException){assertEquals(PhotoException.Reason.UNREADABLE,e.reason)}
+        catch(e:PhotoException){
+            assertEquals(PhotoException.Reason.UNREADABLE,e.reason)
+            assertEquals(dev.filmroom.diagnostics.CodecStage.INPUT_PROCESS,e.codecStage)
+            assertEquals(dev.filmroom.io.formats.PhotoFormat.JPEG,e.inputFormatHint)
+        }
         assertEquals(before,dir.listFiles().orEmpty().map{it.name}.toSet())
     }
+    @Test fun providerReadFailureIsClassifiedWithoutOriginalPhoto()=runBlocking {
+        ShadowStatFs.registerStats(app.cacheDir.path,4096,1_000_000,1_000_000)
+        val uri=Uri.parse("content://dev.filmroom.synthetic/broken")
+        val source=object : java.io.InputStream() {
+            override fun read():Int=throw java.io.IOException("do-not-log-private-path")
+            override fun read(b:ByteArray, off:Int, len:Int):Int=throw java.io.IOException("do-not-log-private-path")
+        }
+        shadowOf(app.contentResolver).registerInputStream(uri,source)
+        val stages=mutableListOf<dev.filmroom.diagnostics.CodecStage>()
+        try { PhotoRepository(app).import(uri,128) { stage, _ -> stages.add(stage) }; fail("expected I/O failure") }
+        catch(e:PhotoException) {
+            assertEquals(dev.filmroom.diagnostics.CodecErrorCode.IMPORT_IO,e.codecCode)
+            assertEquals(dev.filmroom.diagnostics.CodecStage.SOURCE_COPY,e.codecStage)
+            assertNull(e.inputFormatHint)
+            assertEquals(listOf(dev.filmroom.diagnostics.CodecStage.SOURCE_OPEN,dev.filmroom.diagnostics.CodecStage.SOURCE_COPY),stages)
+        }
+    }
+
 }

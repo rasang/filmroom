@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import dev.filmroom.ui.DiagnosticShareIntents
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -17,6 +18,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[29])
 class DiagnosticShareHostTest {
+    @Before fun attachProviderToThisTestsCacheDirectory(){attachCurrentDiagnosticProvider()}
  @Test fun sharesOnlyDedicatedLogFileWithReadGrant(){
   val context=ApplicationProvider.getApplicationContext<FilmroomApplication>()
   val file=File(context.cacheDir,"diagnostic-shares/日志.txt").apply{parentFile.mkdirs();writeText("log")}

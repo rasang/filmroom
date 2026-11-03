@@ -19,6 +19,8 @@ import android.view.View
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import dev.filmroom.diagnostics.Diagnostics
 import dev.filmroom.ui.DiagnosticShareIntents
 import kotlinx.coroutines.*
@@ -72,6 +74,18 @@ class SettingsActivity : ComponentActivity() {
         fun divider(parent:LinearLayout){parent.addView(View(this).apply{
             tag="settings-divider";setBackgroundColor(FilmroomPalette.divider);importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO
         },LinearLayout.LayoutParams(-1,dp(1).coerceAtLeast(1)).apply{topMargin=dp(10);bottomMargin=dp(10)})}
+        if(BuildConfig.PERF_BUILD){
+            val optimization=dev.filmroom.engine.OptimizationPreferences(this)
+            val rendering=section(R.string.gpu_rendering_group,"gpu-rendering")
+            rendering.addView(CheckBox(this).apply {
+                tag="gpu-rendering-toggle"
+                minimumHeight=dp(48)
+                text=dev.filmroom.i18n.L10n.text(R.string.gpu_rendering_title)
+                isChecked=optimization.snapshot().gpuRenderingEnabled
+                setOnCheckedChangeListener{_,enabled->optimization.setGpuRendering(enabled)}
+            })
+            rendering.addView(label(dev.filmroom.i18n.L10n.text(R.string.gpu_rendering_description),12f,muted))
+        }
         val languageSection=section(R.string.settings_group_language,"language")
         val languageRow=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(0,dp(6),0,dp(12));tag="language-setting"
             addView(label(dev.filmroom.i18n.L10n.multilingualTitle,16f).apply{setTypeface(null,Typeface.BOLD)})

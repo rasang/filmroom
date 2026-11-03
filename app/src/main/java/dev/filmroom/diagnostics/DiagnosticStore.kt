@@ -8,6 +8,9 @@ import java.time.Instant
 import java.util.UUID
 import java.util.zip.CRC32
 
+// One bounded record includes closed stage summaries and compact science telemetry. Total store cap is unchanged.
+internal const val MAX_DIAGNOSTIC_EVENT_BYTES = 8192
+
 internal interface DiagnosticClock { fun wallMs(): Long; fun elapsedMs(): Long }
 
 internal data class DiagnosticEvent(
@@ -24,7 +27,7 @@ internal data class DiagnosticEvent(
 
     companion object {
         fun parse(line: String): DiagnosticEvent? = runCatching {
-            if (line.length > 4096) return null
+            if (line.length > MAX_DIAGNOSTIC_EVENT_BYTES) return null
             val split = line.trimEnd('\r', '\n').split('\t')
             if (split.size != 12 || split[0] != "1") return null
             val body = split.take(11).joinToString("\t")
@@ -92,6 +95,7 @@ internal class DiagnosticStore(
     private val clock: DiagnosticClock,
     private val run: String = UUID.randomUUID().toString().replace("-", ""),
     private val maxRecordBytes: Int = 1024 * 1024,
+    private val exitTracker: ExitTracker? = null,
 ) {
     companion object { const val RETENTION_MS = 24L * 60 * 60 * 1000 }
     private val lock = Any()
@@ -125,11 +129,25 @@ internal class DiagnosticStore(
                     if (event.stage == Stage.END) open.remove(key) else open[key] = event.operation
                 }
                 val previous = open.entries.lastOrNull { it.key.first != run }?.value
+                val previousEvents = records.filter { it.run == previousRun }
+                val session = previousEvents.firstOrNull { it.operation == Operation.SESSION && it.stage == Stage.START }
+                val lastEvent = previousEvents.lastOrNull()?.wallMs
+                // Reject apparent clock changes instead of making a weak time correlation.
+                val clockConsistent = session != null && previousEvents.all {
+                    it.elapsedMs >= session.elapsedMs && it.wallMs >= session.wallMs &&
+                        kotlin.math.abs((it.wallMs - session.wallMs) - (it.elapsedMs - session.elapsedMs)) <= 5_000
+                }
+                val previousExit = if (previous != null && previousRun != null && session != null && lastEvent != null && clockConsistent) {
+                    runCatching { exitTracker?.previous(previousRun, session.wallMs, lastEvent, clock.wallMs()) }.getOrNull()
+                        ?: ProcessExitReason.UNKNOWN
+                } else ProcessExitReason.UNKNOWN
                 rewrite()
                 append(OperationId(0), Operation.SESSION, Stage.START)
+                records.lastOrNull()?.takeIf { it.run == run && it.operation == Operation.SESSION && it.stage == Stage.START }
+                    ?.let { event -> runCatching { exitTracker?.mark(run, event.wallMs) } }
                 if (previous != null) {
                     append(OperationId(0), Operation.SESSION, Stage.PREVIOUS_UNFINISHED,
-                        info = SafeInfo(previousOperation = previous), error = ErrorCode.PREVIOUS_TERMINATION_UNCERTAIN)
+                        info = SafeInfo(previousOperation = previous, previousExitReason = previousExit), error = ErrorCode.PREVIOUS_TERMINATION_UNCERTAIN)
                 }
             }.onFailure { healthy = false }
         }
@@ -178,7 +196,7 @@ internal class DiagnosticStore(
         runCatching {
             pruneAndRewriteIfNeeded()
             val bytes = event.line().toByteArray(Charsets.UTF_8)
-            check(bytes.size <= 4096 && bytes.size <= segmentBytes)
+            check(bytes.size <= MAX_DIAGNOSTIC_EVENT_BYTES && bytes.size <= segmentBytes)
             val current = File(directory, "events.0.log")
             val previous = File(directory, "events.1.log")
             if (current.length() + bytes.size > segmentBytes) {
@@ -221,7 +239,7 @@ internal class DiagnosticStore(
                         if (parsed == null) malformedDiscarded++ else found[parsed.run to parsed.sequence] = parsed
                         line.setLength(0); discard = false
                     } else if (!discard) {
-                        if (line.length >= 4096 || value !in 9..126) { discard = true; line.setLength(0) }
+                        if (line.length >= MAX_DIAGNOSTIC_EVENT_BYTES || value !in 9..126) { discard = true; line.setLength(0) }
                         else line.append(value.toChar())
                     }
                 }

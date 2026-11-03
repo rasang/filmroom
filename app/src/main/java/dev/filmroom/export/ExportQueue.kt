@@ -240,7 +240,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                             ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
                         }}catch(c:CancellationException){throw c}catch(_:Exception){}catch(_:OutOfMemoryError){}
                     }
-                    update{it.copy(progress=p.display)}
+                    store.changeProgress(id,p.display)?.let{changed->runCatching{onChanged(changed)}}
                 }
                 update{it.copy(progress=ExportDisplayProgress(7))}
                 // One persisted instant per encode attempt. A committed row is reused above;

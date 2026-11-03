@@ -121,6 +121,29 @@ impl ExportPermit {
         // This is the ORIGINAL routine, not a parallel call outside a pool.
         spektrafilm_model::grain::layer_particle_model(density,w,h,dmax,npp,uniformity,seed,0.,origin)
     }
+    pub(crate) fn map_grain_layer(&self, input:&[f64], f:&(impl Fn(f64)->Scalar+Sync+Send))->Vec<Scalar> {
+        use rayon::prelude::*;
+        let interactive=self.coordinator.state.lock().unwrap_or_else(|e|e.into_inner()).interactive>0;
+        if !interactive {if let Some(pool)=self.coordinator.pool() {
+            return pool.install(||input.par_iter().map(|&x|f(x)).collect());
+        }}
+        input.iter().copied().map(f).collect()
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn sample_prepared(
+        &self, prepared:&spektrafilm_math::numpy_rng::PreparedPoisson,
+        input:&[f64], w:u32, dmax:f64, npp:f64, uniformity:f64,
+        seed:u64, origin:[u32;2], map_layer:&(impl Fn(f64)->Scalar+Sync+Send),
+    )->Vec<f64> {
+        let interactive=self.coordinator.state.lock().unwrap_or_else(|e|e.into_inner()).interactive>0;
+        let pool=if interactive {None}else{self.coordinator.pool()};
+        if pool.is_some() {self.stats.parallel.fetch_add(1,Ordering::Relaxed);} else {
+            self.stats.serial.fetch_add(1,Ordering::Relaxed);
+            if interactive {self.stats.interactive_serial.fetch_add(1,Ordering::Relaxed);}
+        }
+        spektrafilm_model::grain::layer_particle_model_export_prepared(
+            pool,prepared,input,w,dmax,npp,uniformity,seed,origin,map_layer)
+    }
     pub(crate) fn metrics(&self)->ExportExecutionMetrics {
         let pool_workers=self.coordinator.pool.get().and_then(|p|p.as_ref()).map_or(0,|p|p.current_num_threads());
         ExportExecutionMetrics {worker_cap:self.coordinator.workers, pool_status:if pool_workers>0 {"private_bounded"}else if self.coordinator.workers<2 {"low_or_unknown_cpu_serial_sampling"}else{"pool_unavailable_serial_sampling"},
@@ -244,4 +267,36 @@ mod mobile_lifecycle_tests {
         mobile::export(&e3,0,input.to_str().unwrap(),fresh.to_str().unwrap(),w,h,&p).unwrap();assert_eq!(resumed,fs::read(fresh).unwrap());mobile::destroy(id3);
         assert!(fs::read_dir(root.join("cache")).unwrap().next().is_none());
     }
+}
+
+#[cfg(test)] mod interpolation_tests {
+ use super::*;
+ #[test] fn interpolation_uses_existing_pool_and_exact_serial_fallback() {
+  let input:Vec<f64>=(0..32771).map(|i|(i as f64-101.)/77.).collect();
+  let f=|x:f64|spektrafilm_math::precision::from_f64(x*0.23+0.17);
+  let expected:Vec<_>=input.iter().map(|&x|f(x).to_bits()).collect();
+  for workers in [1,2,4] {for fail in [false,true] {
+   let mut coordinator=Coordinator::new(workers);Arc::get_mut(&mut coordinator).unwrap().fail_pool=fail;let permit=coordinator.acquire(||false).unwrap();
+   let actual=permit.map_grain_layer(&input,&f);assert_eq!(actual.iter().map(|x|x.to_bits()).collect::<Vec<_>>(),expected);
+   let interactive=coordinator.interactive();let actual=permit.map_grain_layer(&input,&f);assert_eq!(actual.iter().map(|x|x.to_bits()).collect::<Vec<_>>(),expected);drop(interactive);
+  }}
+ }
+ #[test] fn prepared_grain_uses_existing_pool_and_exact_serial_fallback() {
+  let input:Vec<f64>=(0..32771).map(|i|(i as f64-101.)/32768.).collect();
+  let f=|x:f64|spektrafilm_math::precision::from_f64(x*2.3+0.17);
+  let mapped:Vec<_>=input.iter().copied().map(&f).collect();
+  let expected=spektrafilm_model::grain::layer_particle_model(&mapped,257,128,2.4,12.3,0.97,42,0.,Some([31,209]));
+  let prepared=spektrafilm_math::numpy_rng::PreparedPoisson::new();
+  let check=|actual:Vec<f64>| assert!(expected.iter().zip(actual).all(|(a,b)|(*a as f64).to_bits()==b.to_bits()));
+  for workers in [1,2,4] {for fail in [false,true] {
+   let mut coordinator=Coordinator::new(workers);Arc::get_mut(&mut coordinator).unwrap().fail_pool=fail;let permit=coordinator.acquire(||false).unwrap();
+   check(permit.sample_prepared(&prepared,&input,257,2.4,12.3,0.97,42,[31,209],&f));
+   let interactive=coordinator.interactive();
+   check(permit.sample_prepared(&prepared,&input,257,2.4,12.3,0.97,42,[31,209],&f));
+   let metrics=permit.metrics();
+   assert_eq!(metrics.parallel_particle_chunks,u64::from(workers>=2&&!fail));
+   assert_eq!(metrics.serial_particle_chunks,2-metrics.parallel_particle_chunks);
+   assert_eq!(metrics.interactive_serial_chunks,1);drop(interactive);
+  }}
+ }
 }

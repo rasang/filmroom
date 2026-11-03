@@ -147,6 +147,82 @@ fn rk_poisson_ptrs(rng: &mut impl rand::RngCore, lam: f64) -> u64 {
     }
 }
 
+/// Immutable, bounded export-only preparation for the exact Poisson sampler.
+/// These are the original libm calls at the original integer arguments, not
+/// an interpolated table or a different log-factorial approximation. Construct
+/// once per render; unusual/large counts still use the original direct call.
+pub struct PreparedPoisson {
+    log_factorials: Box<[f64]>,
+}
+
+impl PreparedPoisson {
+    pub fn new() -> Self {
+        Self {
+            log_factorials: (0..4096)
+                .map(|k| lgamma(k as f64 + 1.0))
+                .collect(),
+        }
+    }
+
+    #[inline]
+    /// Read-only original libm oracle for bounded GPU calibration tables.
+    /// No interpolation or approximation is introduced at this boundary.
+    pub fn log_factorial(&self, k: i64) -> f64 {
+        if k >= 0 && k < self.log_factorials.len() as i64 {
+            self.log_factorials[k as usize]
+        } else {
+            lgamma(k as f64 + 1.0)
+        }
+    }
+}
+
+impl Default for PreparedPoisson {
+    fn default() -> Self { Self::new() }
+}
+
+/// Exact alternative to `rk_poisson`, preserving both its returned sample and
+/// RNG state. The common PTRS acceptance needs neither logarithms nor lgamma;
+/// calculate those only if the original slow acceptance branch is reached.
+/// The reference routine above is deliberately retained unchanged as an oracle.
+#[inline]
+pub fn rk_poisson_prepared(
+    rng: &mut impl rand::RngCore,
+    lam: f64,
+    prepared: &PreparedPoisson,
+) -> u64 {
+    if !(lam >= 10.0) {
+        return if lam == 0.0 { 0 } else { rk_poisson_mult(rng, lam) };
+    }
+    let slam = lam.sqrt();
+    let b = 0.931 + 2.53 * slam;
+    let a = -0.059 + 0.02483 * b;
+    let vr = 0.9277 - 3.6224 / (b - 2.0);
+    let mut slow_constants = None;
+    loop {
+        let u = rk_double(rng) - 0.5;
+        let v = rk_double(rng);
+        let us = 0.5 - u.abs();
+        let k_f = ((2.0 * a / us + b) * u + lam + 0.43).floor();
+        let k = k_f as i64;
+        if us >= 0.07 && v <= vr {
+            return k as u64;
+        }
+        if k < 0 || (us < 0.013 && v > us) {
+            continue;
+        }
+        let (loglam, log_invalpha) = *slow_constants.get_or_insert_with(|| {
+            let loglam = lam.ln();
+            let invalpha = 1.1239 + 1.1328 / (b - 3.4);
+            (loglam, invalpha.ln())
+        });
+        let lhs = v.ln() + log_invalpha - (a / (us * us) + b).ln();
+        let rhs = -lam + (k as f64) * loglam - prepared.log_factorial(k);
+        if lhs <= rhs {
+            return k as u64;
+        }
+    }
+}
+
 /// Numpy's binomial sampler. Dispatches by both `p` and `n*p`. Returns
 /// the same draw as `numpy.random.RandomState.binomial`.
 #[inline]
@@ -344,6 +420,48 @@ mod tests {
         let mut g = Mt::new(0u32);
         let got: Vec<u64> = (0..10).map(|_| rk_poisson(&mut g, 5.0)).collect();
         assert_eq!(got, vec![9, 5, 6, 5, 5, 8, 4, 5, 4, 3]);
+    }
+
+    #[test]
+    fn prepared_poisson_matches_samples_and_consumed_rng_stream() {
+        let prepared = PreparedPoisson::new();
+        // Include both sampler algorithms, their boundary, table boundaries,
+        // and the direct-lgamma fallback well beyond typical grain counts.
+        let rates = [0.0, f64::MIN_POSITIVE, 1e-6, 0.1, 1.0, 5.0,
+            f64::from_bits(10.0f64.to_bits() - 1), 10.0,
+            f64::from_bits(10.0f64.to_bits() + 1), 12.3, 30.0, 100.0,
+            1000.0, 4095.0, 4096.0, 10000.0, 1e6, 1e9];
+        for seed in [0, 1, 42, 65535, u32::MAX] {
+            let mut reference = Mt::new(seed);
+            let mut candidate = Mt::new(seed);
+            for i in 0..10000 {
+                let base = rates[i % rates.len()];
+                let rate = if i % 2 == 0 { base } else {
+                    base * (0.5 + ((i * 7919 % 65521) as f64 / 65521.0))
+                };
+                let expected = rk_poisson(&mut reference, rate);
+                let actual = rk_poisson_prepared(&mut candidate, rate, &prepared);
+                assert_eq!(expected, actual, "seed={seed}, sample={i}, lambda={rate}");
+                // Grain immediately consumes the resulting RNG state for a
+                // binomial, so sample equality alone is not sufficient.
+                for p in [1e-6, 0.03, 0.5, 0.97, 1.0 - 1e-6] {
+                    assert_eq!(rk_binomial(&mut reference, expected, p),
+                        rk_binomial(&mut candidate, actual, p));
+                }
+                assert_eq!(reference.next_u64(), candidate.next_u64(),
+                    "RNG state diverged at seed={seed}, sample={i}");
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_log_factorials_are_original_f64_bits() {
+        let prepared = PreparedPoisson::new();
+        for k in 0..8192 {
+            assert_eq!(prepared.log_factorial(k).to_bits(),
+                lgamma(k as f64 + 1.0).to_bits());
+        }
+        assert_eq!(prepared.log_factorials.len() * std::mem::size_of::<f64>(), 32768);
     }
 
     /// Reference: `np.random.RandomState(0).binomial(20, 0.3, size=10)`

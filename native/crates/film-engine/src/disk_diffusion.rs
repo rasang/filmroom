@@ -37,18 +37,18 @@ fn copy_spectrum(src:&Path,dst:&Path,c:&mut impl FnMut()->bool)->io::Result<()> 
  loop {check(c)?;let n=input.read(&mut bytes)?;if n==0{break;}output.write_all(&bytes[..n])?;}
  check(c)
 }
-fn transpose(src:&Path,dst:&Path,side:usize,c:&mut impl FnMut()->bool)->io::Result<()> {
+fn transpose(src:&Path,dst:&Path,side:usize,tile_size:usize,c:&mut impl FnMut()->bool)->io::Result<()> {
  let mut input=File::open(src)?;let mut output=OpenOptions::new().read(true).write(true).open(dst)?;output.set_len((side*side*16)as u64)?;
- let mut tile=vec![0u8;TRANSPOSE_TILE*TRANSPOSE_TILE*16];let mut row=vec![0u8;TRANSPOSE_TILE*16];
- for y in(0..side).step_by(TRANSPOSE_TILE){let hh=TRANSPOSE_TILE.min(side-y);for x in(0..side).step_by(TRANSPOSE_TILE){check(c)?;let ww=TRANSPOSE_TILE.min(side-x);
+ let mut tile=vec![0u8;tile_size*tile_size*16];let mut row=vec![0u8;tile_size*16];
+ for y in(0..side).step_by(tile_size){let hh=tile_size.min(side-y);for x in(0..side).step_by(tile_size){check(c)?;let ww=tile_size.min(side-x);
    for dy in 0..hh{input.seek(SeekFrom::Start(((y+dy)*side+x)as u64*16))?;input.read_exact(&mut tile[dy*ww*16..(dy+1)*ww*16])?;}
    for dx in 0..ww{for dy in 0..hh{row[dy*16..(dy+1)*16].copy_from_slice(&tile[(dy*ww+dx)*16..(dy*ww+dx+1)*16]);}output.seek(SeekFrom::Start(((x+dx)*side+y)as u64*16))?;output.write_all(&row[..hh*16])?;}
  }}Ok(())
 }
 /// Transform and leave transposed (frequency axes exchanged). Using identical
 /// axes for both operands avoids an unnecessary transpose in forward FFTs.
-fn forward(src:&Path,tmp:&Path,side:usize,c:&mut impl FnMut()->bool)->io::Result<()> {
- transform_rows(src,side,false,c)?;transpose(src,tmp,side,c)?;transform_rows(tmp,side,false,c)?;Ok(())
+fn forward(src:&Path,tmp:&Path,side:usize,tile_size:usize,c:&mut impl FnMut()->bool)->io::Result<()> {
+ transform_rows(src,side,false,c)?;transpose(src,tmp,side,tile_size,c)?;transform_rows(tmp,side,false,c)?;Ok(())
 }
 struct DirGuard(PathBuf);impl Drop for DirGuard{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
 struct OutputGuard{path:PathBuf,keep:bool}impl Drop for OutputGuard{fn drop(&mut self){if !self.keep{let _=fs::remove_file(&self.path);}}}
@@ -59,7 +59,21 @@ pub fn apply_plane(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,
     cancelled:impl FnMut()->bool,progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
  apply_plane_with_core(input,output,work_dir,width,height,kernel,channel,CORE,cancelled,progress)
 }
+pub fn apply_plane_with_transpose(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,large_transpose:bool,cancelled:impl FnMut()->bool,progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ apply_plane_configured(input,output,work_dir,width,height,kernel,channel,CORE,if large_transpose {256}else{128},cancelled,progress)
+}
+/// Opt-in pass fusion changes storage scheduling only. The legacy entry points
+/// above remain the independent baseline and keep their existing behavior.
+pub fn apply_plane_with_options(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,large_transpose:bool,fused_fft:bool,cancelled:impl FnMut()->bool,progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ let tile_size=if large_transpose {256}else{128};
+ if fused_fft {apply_plane_fused(input,output,work_dir,width,height,kernel,channel,CORE,tile_size,cancelled,progress)}
+ else {apply_plane_configured(input,output,work_dir,width,height,kernel,channel,CORE,tile_size,cancelled,progress)}
+}
 fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,core_max:usize,
+    cancelled:impl FnMut()->bool,progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ apply_plane_configured(input,output,work_dir,width,height,kernel,channel,core_max,TRANSPOSE_TILE,cancelled,progress)
+}
+fn apply_plane_configured(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,core_max:usize,tile_size:usize,
     mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
  let (w,h)=(width as usize,height as usize);if w==0||h==0||channel>=3{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Invalid diffusion dimensions/channel"));}
  let n=(w as u64)*(h as u64);if fs::metadata(input)?.len()!=n*8{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Invalid diffusion source size"));}
@@ -69,18 +83,18 @@ fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,heigh
  // Generate the kernel into A, transform through B, retain its transposed spectrum K.
  {let mut file=OpenOptions::new().write(true).open(&a)?;let mut row=vec![Complex::new(0.,0.);side];let mut bytes=vec![0u8;side*16];
  for y in 0..side{check(&mut cancelled)?;row.fill(Complex::new(0.,0.));if y<kernel.side(){for(dst,value)in row.iter_mut().zip(kernel.row(channel,y)){dst.re=value;}}write_complex(&mut file,&row,&mut bytes)?;}}
- forward(&a,&b,side,&mut cancelled)?;copy_spectrum(&b,&k,&mut cancelled)?;
+ forward(&a,&b,side,tile_size,&mut cancelled)?;copy_spectrum(&b,&k,&mut cancelled)?;
  let mut src=File::open(input)?;let mut srcbytes=vec![0u8;w*8];let mut source_row=vec![0f64;w];let mut row=vec![Complex::new(0.,0.);side];let mut other=vec![Complex::new(0.,0.);side];let mut bytes=vec![0u8;side*16];let mut otherbytes=vec![0u8;side*16];let mut completed=0u64;let mut tiles=0u64;
  for y0 in(0..h).step_by(core){let hh=core.min(h-y0);for x0 in(0..w).step_by(core){let ww=core.min(w-x0);check(&mut cancelled)?;
   // Entire overlap-save input tile is globally reflected, never tile-reflected.
   {let mut file=OpenOptions::new().write(true).open(&a)?;
   for y in 0..side{check(&mut cancelled)?;let sy=reflect(y0 as isize+y as isize-kernel.radius as isize,h);src.seek(SeekFrom::Start((sy*w*8)as u64))?;src.read_exact(&mut srcbytes)?;for(v,bs)in source_row.iter_mut().zip(srcbytes.chunks_exact(8)){*v=f64::from_le_bytes(bs.try_into().unwrap());if !v.is_finite(){return Err(io::Error::new(io::ErrorKind::InvalidData,"Nonfinite diffusion input"));}}
    for x in 0..side{row[x]=Complex::new(source_row[reflect(x0 as isize+x as isize-kernel.radius as isize,w)],0.);}write_complex(&mut file,&row,&mut bytes)?;}}
-  forward(&a,&b,side,&mut cancelled)?;
+  forward(&a,&b,side,tile_size,&mut cancelled)?;
   {let mut image=OpenOptions::new().read(true).write(true).open(&b)?;let mut ker=File::open(&k)?;
    for y in 0..side{check(&mut cancelled)?;image.seek(SeekFrom::Start((y*side*16)as u64))?;read_complex(&mut image,&mut row,&mut bytes)?;read_complex(&mut ker,&mut other,&mut otherbytes)?;for(v,q)in row.iter_mut().zip(&other){*v*=*q;}image.seek(SeekFrom::Start((y*side*16)as u64))?;write_complex(&mut image,&row,&mut bytes)?;}}
   // Inverse starts in transposed orientation; transpose back after first axis.
-  transform_rows(&b,side,true,&mut cancelled)?;transpose(&b,&a,side,&mut cancelled)?;transform_rows(&a,side,true,&mut cancelled)?;
+  transform_rows(&b,side,true,&mut cancelled)?;transpose(&b,&a,side,tile_size,&mut cancelled)?;transform_rows(&a,side,true,&mut cancelled)?;
   let mut conv=File::open(&a)?;let norm=1./(side as f64*side as f64);let mut outbytes=vec![0u8;ww*8];
   for y in 0..hh{check(&mut cancelled)?;conv.seek(SeekFrom::Start((((y+2*kernel.radius)*side+2*kernel.radius)*16)as u64))?;read_complex(&mut conv,&mut row[..ww],&mut bytes[..ww*16])?;
    src.seek(SeekFrom::Start((((y0+y)*w+x0)*8)as u64))?;src.read_exact(&mut srcbytes[..ww*8])?;
@@ -89,7 +103,111 @@ fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,heigh
   completed+=(ww*hh)as u64;tiles+=1;progress(completed,n);
  }}
  out.flush()?;check(&mut cancelled)?;output_guard.keep=true;
- Ok(DiffusionMetrics{peak_scratch_bytes:3*fftbytes+n*8,explicit_buffer_bytes:((TRANSPOSE_TILE*TRANSPOSE_TILE*16+side*160+w*16)as u64).max(1024*1024),tiles,fft_side:side})
+ Ok(DiffusionMetrics{peak_scratch_bytes:3*fftbytes+n*8,explicit_buffer_bytes:((tile_size*tile_size*16+tile_size*16+side*160+w*16)as u64).max(1024*1024),tiles,fft_side:side})
+}
+
+/// One direction's plan is built with the same independent planner used by
+/// transform_rows. Reusing scratch cannot change the transform's arithmetic.
+struct RowFft {
+ plan: std::sync::Arc<dyn rustfft::Fft<f64>>,
+ scratch: Vec<Complex<f64>>,
+}
+impl RowFft {
+ fn new(side:usize,inverse:bool)->Self {
+  let mut planner=FftPlanner::<f64>::new();
+  let plan=if inverse {planner.plan_fft_inverse(side)}else{planner.plan_fft_forward(side)};
+  let scratch=vec![Complex::new(0.,0.);plan.get_inplace_scratch_len()];
+  Self {plan,scratch}
+ }
+ fn process(&mut self,row:&mut [Complex<f64>]) {self.plan.process_with_scratch(row,&mut self.scratch);}
+}
+
+/// Preserve the legacy row FFT arithmetic/axis order, but keep values in a
+/// bounded row buffer across adjacent operators instead of round-tripping them
+/// through disk. No cross-export cache, alternate FFT geometry or numeric type.
+#[allow(clippy::too_many_arguments)]
+fn apply_plane_fused(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,core_max:usize,tile_size:usize,
+ mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ let (w,h)=(width as usize,height as usize);
+ if w==0||h==0||w>40000||h>40000||channel>=3||core_max==0||![128,256].contains(&tile_size){return Err(io::Error::new(io::ErrorKind::InvalidInput,"Invalid fused diffusion geometry"));}
+ let n=width as u64*height as u64;
+ if fs::metadata(input)?.len()!=n*8{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Invalid diffusion source size"));}
+ check(&mut cancelled)?;
+ let extent=kernel.radius.checked_mul(2).and_then(|r|r.checked_add(core_max.min(w.max(h)))).filter(|&v|v<=65536)
+  .ok_or_else(||io::Error::new(io::ErrorKind::InvalidInput,"Fused diffusion FFT exceeds bounded geometry"))?;
+ let side=next_fast(extent);let core=side-2*kernel.radius;
+ if side>65536{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Fused diffusion FFT exceeds bounded geometry"));}
+ let mut forward_fft=RowFft::new(side,false);let mut inverse_fft=RowFft::new(side,true);
+ // Four complex/byte row buffers, two source buffers, both FFT scratches and
+ // either transpose buffers or cropped output bytes. Kernel generation can
+ // hold nine scalar rows concurrently; ten rows + 64KiB cover those and the
+ // small family coefficient vectors without relying on allocator reuse.
+ // Plan objects/internal tables are excluded, as in the legacy metric.
+ let row_buffers=side*64+w*16+(forward_fft.scratch.len()+inverse_fft.scratch.len())*16;
+ let transient=(tile_size*tile_size*16+tile_size*16).max(side*80+64*1024).max(core.min(w)*8);
+ let explicit_buffer_bytes=(row_buffers+transient)as u64;
+ if explicit_buffer_bytes>16*1024*1024{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Fused diffusion exceeds spatial buffer admission"));}
+ check(&mut cancelled)?;fs::create_dir(work_dir)?;let _dir=DirGuard(work_dir.to_path_buf());
+ let mut out=fresh(output)?;let mut output_guard=OutputGuard{path:output.to_path_buf(),keep:false};out.set_len(n*8)?;
+ let fftbytes=side as u64*side as u64*16;
+ let a=work_dir.join("a.fft");let b=work_dir.join("b.fft");let k=work_dir.join("kernel.fft");
+ for p in [&a,&b,&k]{fresh(p)?.set_len(fftbytes)?;}
+ let mut src=File::open(input)?;let mut srcbytes=vec![0u8;w*8];let mut source_row=vec![0f64;w];
+ let mut row=vec![Complex::new(0.,0.);side];let mut other=vec![Complex::new(0.,0.);side];
+ let mut bytes=vec![0u8;side*16];let mut otherbytes=vec![0u8;side*16];
+ // Kernel generation + first FFT axis, then transpose directly to retained K.
+ // The old B->K spectrum copy is unnecessary because these paths are private.
+ {let mut file=OpenOptions::new().write(true).open(&a)?;
+  for y in 0..side{check(&mut cancelled)?;row.fill(Complex::new(0.,0.));
+   if y<kernel.side(){for(dst,value)in row.iter_mut().zip(kernel.row(channel,y)){dst.re=value;}}
+   forward_fft.process(&mut row);write_complex(&mut file,&row,&mut bytes)?;
+  }
+ }
+ transpose(&a,&k,side,tile_size,&mut cancelled)?;
+ {let mut file=OpenOptions::new().read(true).write(true).open(&k)?;
+  for y in 0..side{check(&mut cancelled)?;let offset=(y*side*16)as u64;
+   file.seek(SeekFrom::Start(offset))?;read_complex(&mut file,&mut row,&mut bytes)?;
+   forward_fft.process(&mut row);file.seek(SeekFrom::Start(offset))?;write_complex(&mut file,&row,&mut bytes)?;
+  }
+ }
+ let mut completed=0u64;let mut tiles=0u64;
+ for y0 in(0..h).step_by(core){let hh=core.min(h-y0);for x0 in(0..w).step_by(core){let ww=core.min(w-x0);check(&mut cancelled)?;
+  {let mut file=OpenOptions::new().write(true).open(&a)?;
+   for y in 0..side{check(&mut cancelled)?;let sy=reflect(y0 as isize+y as isize-kernel.radius as isize,h);
+    src.seek(SeekFrom::Start((sy*w*8)as u64))?;src.read_exact(&mut srcbytes)?;
+    for(v,bs)in source_row.iter_mut().zip(srcbytes.chunks_exact(8)){*v=f64::from_le_bytes(bs.try_into().unwrap());if !v.is_finite(){return Err(io::Error::new(io::ErrorKind::InvalidData,"Nonfinite diffusion input"));}}
+    for x in 0..side{row[x]=Complex::new(source_row[reflect(x0 as isize+x as isize-kernel.radius as isize,w)],0.);}
+    forward_fft.process(&mut row);write_complex(&mut file,&row,&mut bytes)?;
+   }
+  }
+  transpose(&a,&b,side,tile_size,&mut cancelled)?;
+  // Second forward axis -> identical complex multiplication -> first inverse
+  // axis. Different rows are independent; each value uses the legacy sequence.
+  {let mut image=OpenOptions::new().read(true).write(true).open(&b)?;let mut ker=File::open(&k)?;
+   for y in 0..side{check(&mut cancelled)?;let offset=(y*side*16)as u64;
+    image.seek(SeekFrom::Start(offset))?;read_complex(&mut image,&mut row,&mut bytes)?;forward_fft.process(&mut row);
+    read_complex(&mut ker,&mut other,&mut otherbytes)?;for(v,q)in row.iter_mut().zip(&other){*v*=*q;}
+    inverse_fft.process(&mut row);image.seek(SeekFrom::Start(offset))?;write_complex(&mut image,&row,&mut bytes)?;
+   }
+  }
+  transpose(&b,&a,side,tile_size,&mut cancelled)?;
+  // Last inverse axis has no dependencies between rows. Only rows contributing
+  // to the valid output need execution, but each such FFT still uses ALL side
+  // coefficients. This is not a reduced kernel/halo or image approximation.
+  let mut conv=File::open(&a)?;let norm=1./(side as f64*side as f64);let mut outbytes=vec![0u8;ww*8];
+  for y in 0..hh{check(&mut cancelled)?;conv.seek(SeekFrom::Start(((y+2*kernel.radius)*side*16)as u64))?;
+   read_complex(&mut conv,&mut row,&mut bytes)?;inverse_fft.process(&mut row);
+   src.seek(SeekFrom::Start((((y0+y)*w+x0)*8)as u64))?;src.read_exact(&mut srcbytes[..ww*8])?;
+   for x in 0..ww{let original=f64::from_le_bytes(srcbytes[x*8..(x+1)*8].try_into().unwrap());
+    let value=(1.-kernel.scatter)*original+kernel.scatter*row[x+2*kernel.radius].re*norm;
+    if !value.is_finite(){return Err(io::Error::new(io::ErrorKind::InvalidData,"Nonfinite diffusion result"));}outbytes[x*8..(x+1)*8].copy_from_slice(&value.to_le_bytes());
+   }
+   out.seek(SeekFrom::Start((((y0+y)*w+x0)*8)as u64))?;out.write_all(&outbytes)?;
+  }
+  completed+=(ww*hh)as u64;tiles+=1;progress(completed,n);
+ }}
+ out.flush()?;check(&mut cancelled)?;output_guard.keep=true;
+ Ok(DiffusionMetrics{peak_scratch_bytes:3*fftbytes+n*8,explicit_buffer_bytes,tiles,fft_side:side})
 }
 
 #[cfg(test)] mod tests {
@@ -139,4 +257,109 @@ fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,heigh
  }
  #[test] fn kernel_normalization_cancels(){let mut calls=0;let result=ExactDiffusionKernel::new_cancellable(&config("black_pro_mist"),5.,8192,6144,||{calls+=1;calls>2});assert!(matches!(result,Err("CANCELLED")));}
 
+}
+
+#[cfg(test)] mod transpose_candidate_tests {
+ use super::*;
+ #[test] fn maximum_dimension_candidate_buffers_fit_spatial_admission() {
+  for (width,height) in [(1u32,1u32),(40000,1),(1,40000),(40000,40000),(39999,40000)] {
+   let radius=((width.min(height) as usize)/2).saturating_sub(1).max(1);
+   let side=fft_side(radius,width,height);
+   assert!(side<=65536);
+   let conservative=256*256*16+256*16+side*160+width as usize*16;
+   assert!(conservative<=16*1024*1024);
+  }
+ }
+ #[test] fn tile_sizes_copy_identical_bytes_including_partial_edges() {
+  for side in [1,127,128,129,255,256,257] {
+   let root=std::env::temp_dir().join(format!("transpose-candidate-{}-{side}",std::process::id()));fs::create_dir(&root).unwrap();let _guard=DirGuard(root.clone());
+   let src=root.join("src");let a=root.join("a");let b=root.join("b");let bytes:Vec<u8>=(0..side*side*16).map(|i|(i*37+11)as u8).collect();fs::write(&src,&bytes).unwrap();fresh(&a).unwrap();fresh(&b).unwrap();
+   transpose(&src,&a,side,128,&mut||false).unwrap();transpose(&src,&b,side,256,&mut||false).unwrap();assert_eq!(fs::read(&a).unwrap(),fs::read(&b).unwrap());
+   assert_eq!(transpose(&src,&b,side,256,&mut||true).unwrap_err().kind(),io::ErrorKind::Interrupted);assert_eq!(fs::read(&src).unwrap(),bytes);
+  }
+ }
+}
+
+#[cfg(test)] mod fused_fft_tests {
+ use super::*;
+ use spektrafilm_model::diffusion::DiffusionFilter;
+ use std::sync::atomic::{AtomicU64,Ordering};
+ static SERIAL:AtomicU64=AtomicU64::new(0);
+ fn folder()->PathBuf {let p=std::env::temp_dir().join(format!("film-fused-fft-{}-{}",std::process::id(),SERIAL.fetch_add(1,Ordering::Relaxed)));fs::create_dir(&p).unwrap();p}
+ fn config(family:&str,seed:u64)->DiffusionFilter<'_>{DiffusionFilter{family,strength:0.5+seed as f64*0.25,spatial_scale:1.,halo_warmth:seed as f64*0.17,core_intensity:1.,core_size:1.,halo_intensity:1.,halo_size:1.,bloom_intensity:1.,bloom_size:1.}}
+ fn source(path:&Path,w:u32,h:u32,seed:u64)->Vec<u8>{
+  let mut state=seed+1;let bytes=(0..w as usize*h as usize).flat_map(|i|{state^=state<<13;state^=state>>7;state^=state<<17;
+   let v=match i%101{0=>-0.,1=>1e8,2=>-17.5,_=>(state>>11)as f64/((1u64<<53)as f64)*10.};v.to_le_bytes()
+  }).collect::<Vec<_>>();fs::write(path,&bytes).unwrap();bytes
+ }
+ fn run(root:&Path,w:u32,h:u32,kernel:&ExactDiffusionKernel,ch:usize,core:usize,tile:usize,fused:bool,name:&str)->DiffusionMetrics{
+  let mut last=0;let n=w as u64*h as u64;
+  let progress=|done,total|{assert_eq!(total,n);assert!(done>last&&done<=n);last=done;};
+  let result=if fused{apply_plane_fused(&root.join("input"),&root.join(name),&root.join(format!("work-{name}")),w,h,kernel,ch,core,tile,||false,progress)}
+  else{apply_plane_configured(&root.join("input"),&root.join(name),&root.join(format!("work-{name}")),w,h,kernel,ch,core,tile,||false,progress)}.unwrap();
+  assert_eq!(last,n);assert!(!root.join(format!("work-{name}")).exists());assert!(result.explicit_buffer_bytes<=16*1024*1024);result
+ }
+ #[test] fn fused_fft_same_f64_bytes_across_families_seeds_edges_and_seams(){
+  for family in ["glimmerglass","black_pro_mist","pro_mist","cinebloom"]{for(w,h,core)in[(1,1,CORE),(1,31,CORE),(43,1,CORE),(2,5,CORE),(17,13,CORE),(47,29,16),(131,97,CORE),(257,131,CORE)]{for seed in [0,7]{
+   let root=folder();let _guard=DirGuard(root.clone());let original=source(&root.join("input"),w,h,seed);
+   let kernel=ExactDiffusionKernel::new(&config(family,seed),if seed==0{10.}else{0.7},w as usize,h as usize).unwrap();
+   for ch in 0..3 {let baseline=format!("baseline-{ch}");let a=run(&root,w,h,&kernel,ch,core,128,false,&baseline);
+    for tile in [128,256] {let candidate=format!("candidate-{ch}-{tile}");let b=run(&root,w,h,&kernel,ch,core,tile,true,&candidate);
+     assert_eq!(a.fft_side,b.fft_side);assert_eq!(a.tiles,b.tiles);assert_eq!(a.peak_scratch_bytes,b.peak_scratch_bytes);
+     assert_eq!(fs::read(root.join(&baseline)).unwrap(),fs::read(root.join(candidate)).unwrap(),"{family} {w}x{h} seed={seed} ch={ch} tile={tile}");
+    }
+   }
+   assert_eq!(fs::read(root.join("input")).unwrap(),original);
+  }}}
+ }
+ #[test] fn fused_fft_cancellation_cleans_every_phase_and_preserves_caller_files(){
+  let(w,h)=(47,29);let root=folder();let _guard=DirGuard(root.clone());let original=source(&root.join("input"),w,h,19);
+  let kernel=ExactDiffusionKernel::new(&config("black_pro_mist",0),10.,w as usize,h as usize).unwrap();
+  let mut calls=0;apply_plane_fused(&root.join("input"),&root.join("complete"),&root.join("work-complete"),w,h,&kernel,1,16,128,||{calls+=1;false},|_,_|{}).unwrap();
+  for stop in [1,2,3,10,25,calls/3,calls/2,calls*2/3,calls-1,calls] {
+   let output=root.join(format!("cancel-{stop}"));let work=root.join(format!("work-{stop}"));let mut i=0;
+   let err=apply_plane_fused(&root.join("input"),&output,&work,w,h,&kernel,1,16,128,||{i+=1;i>=stop},|_,_|{}).unwrap_err();
+   assert_eq!(err.kind(),io::ErrorKind::Interrupted,"stop={stop}");assert!(!output.exists());assert!(!work.exists());assert_eq!(fs::read(root.join("input")).unwrap(),original);
+  }
+  let output=root.join("existing-output");let work=root.join("existing-work");fs::write(&output,b"caller output").unwrap();
+  assert!(apply_plane_fused(&root.join("input"),&output,&work,w,h,&kernel,1,16,128,||false,|_,_|{}).is_err());assert_eq!(fs::read(&output).unwrap(),b"caller output");assert!(!work.exists());
+  fs::create_dir(&work).unwrap();fs::write(work.join("owned-by-caller"),b"keep").unwrap();
+  assert!(apply_plane_fused(&root.join("input"),&root.join("new-output"),&work,w,h,&kernel,1,16,128,||false,|_,_|{}).is_err());assert_eq!(fs::read(work.join("owned-by-caller")).unwrap(),b"keep");
+ }
+ #[test] fn fused_fft_invalid_input_and_nonfinite_cleanup(){
+  let root=folder();let _guard=DirGuard(root.clone());let(w,h)=(17,13);let kernel=ExactDiffusionKernel::new(&config("pro_mist",0),10.,w as usize,h as usize).unwrap();
+  for value in [f64::NAN,f64::INFINITY,f64::NEG_INFINITY] {
+   source(&root.join("input"),w,h,0);let mut file=OpenOptions::new().write(true).open(root.join("input")).unwrap();file.seek(SeekFrom::Start(57*8)).unwrap();file.write_all(&value.to_le_bytes()).unwrap();drop(file);
+   let err=apply_plane_with_options(&root.join("input"),&root.join("output"),&root.join("work"),w,h,&kernel,0,false,true,||false,|_,_|{}).unwrap_err();assert_eq!(err.kind(),io::ErrorKind::InvalidData);assert!(!root.join("output").exists());assert!(!root.join("work").exists());
+  }
+  fs::write(root.join("input"),[0u8]).unwrap();assert_eq!(apply_plane_with_options(&root.join("input"),&root.join("output"),&root.join("work"),w,h,&kernel,0,false,true,||false,|_,_|{}).unwrap_err().kind(),io::ErrorKind::InvalidInput);assert!(!root.join("output").exists());assert!(!root.join("work").exists());
+ }
+ #[test] fn fused_fft_parallel_calls_have_no_shared_mutable_state(){
+  std::thread::scope(|scope|{for seed in 0..4{scope.spawn(move||{let root=folder();let _guard=DirGuard(root.clone());let(w,h)=(47,29);source(&root.join("input"),w,h,seed);let kernel=ExactDiffusionKernel::new(&config("black_pro_mist",seed),10.,w as usize,h as usize).unwrap();
+   run(&root,w,h,&kernel,1,16,128,false,"baseline");run(&root,w,h,&kernel,1,16,256,true,"candidate");assert_eq!(fs::read(root.join("baseline")).unwrap(),fs::read(root.join("candidate")).unwrap());
+  });}});
+ }
+ #[test] fn fused_fft_maximum_geometry_stays_within_spatial_budget(){
+  for(w,h)in[(1u32,1u32),(40000,1),(1,40000),(40000,40000),(39999,40000)] {
+   let radius=((w.min(h)as usize)/2).saturating_sub(1).max(1);let side=fft_side(radius,w,h);
+   let f=RowFft::new(side,false);let i=RowFft::new(side,true);
+   let fixed=side*64+w as usize*16+(f.scratch.len()+i.scratch.len())*16;
+   let transient=(256*256*16+256*16).max(side*80+64*1024);
+   assert!(fixed+transient<=16*1024*1024,"side={side} bytes={}",fixed+transient);
+  }
+ }
+ /// Manual host benchmark; bounded <=~90MiB live scratch. Timing includes full
+ /// three-channel kernel creation, transforms, IO and blending, never cache hits.
+ #[test] #[ignore]
+ fn benchmark_fused_fft_full_rgb_stage(){
+  use sha2::{Digest,Sha256};use std::time::Instant;
+  for(w,h)in[(257,193),(768,512)]{let root=folder();let _guard=DirGuard(root.clone());source(&root.join("input"),w,h,73);let mut expected=None;
+   for round in 0..3 {for fused in if round%2==0{[false,true]}else{[true,false]} {
+    let at=Instant::now();let kernel=ExactDiffusionKernel::new(&config("black_pro_mist",0),10.,w as usize,h as usize).unwrap();let mut processing_ms=at.elapsed().as_secs_f64()*1000.;let mut digest=Sha256::new();let mut peak=0;let mut side=0;
+    for ch in 0..3 {let name=format!("r{round}-f{fused}-c{ch}");let ch_at=Instant::now();let m=run(&root,w,h,&kernel,ch,CORE,128,fused,&name);processing_ms+=ch_at.elapsed().as_secs_f64()*1000.;peak=peak.max(m.explicit_buffer_bytes);side=m.fft_side;let path=root.join(name);digest.update(fs::read(&path).unwrap());fs::remove_file(path).unwrap();}
+    let hash=format!("{:x}",digest.finalize());if let Some(want)=&expected {assert_eq!(&hash,want);}else{expected=Some(hash.clone());}
+    eprintln!(r#"FFT_FUSION_BENCH {{"width":{w},"height":{h},"round":{round},"fused":{fused},"elapsed_ms":{},"processing_ms":{processing_ms},"fft_side":{side},"peak_explicit_buffer_bytes":{peak},"rgb_sha256":"{hash}"}}"#,at.elapsed().as_secs_f64()*1000.);
+   }}
+  }
+ }
 }

@@ -41,7 +41,9 @@ for abi in "${abis[@]}"; do
   fi
   # V5 stage-separated physical engine uses these exact features/link flags; --locked enforces the supplied lockfile.
   # No global RUSTFLAGS were set in the verified V5 build.
-  cargo rustc --locked -p film-engine --features precision-f64,adreno-gpu --lib --target "$target" --release -- \
+  features=precision-f64,adreno-gpu
+  if [[ "${FILM_GPU_PROBE_RESEARCH:-0}" == 1 ]]; then features="$features,gpu-diffusion-research"; fi
+  cargo rustc --locked -p film-engine --features "$features" --lib --target "$target" --release -- \
     -C link-arg=-Wl,-z,max-page-size=16384 \
     -C link-arg=-Wl,-z,common-page-size=16384
   mkdir -p "$output/$abi"

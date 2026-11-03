@@ -152,7 +152,10 @@ class HighResolutionImportHostTest {
             }
         }
         try {
-            try { repo.import(register(input), 512); fail("Expected source IO failure") } catch (_: PhotoException) { }
+            try { repo.import(register(input), 512); fail("Expected source IO failure") } catch (e: PhotoException) {
+                assertEquals(dev.filmroom.diagnostics.CodecStage.SOURCE_COPY, e.codecStage)
+                assertEquals(dev.filmroom.diagnostics.CodecErrorCode.IMPORT_IO, e.codecCode)
+            }
             assertEquals(before, sourceFolder.listFiles().orEmpty().map { it.name }.toSet())
             assertTrue(previous.source.localFile.isFile)
         } finally { input.close(); previous.preview.recycle(); repo.discard(previous.source) }

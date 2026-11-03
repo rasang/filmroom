@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "operation": "planGpuFilmDirStage",
+  "plan": {
+    "chunkCount": 1,
+    "chunkPixels": 187,
+    "combinedPeakBytes": 159452828,
+    "curveKnots": 6,
+    "deviceBytes": 8457884,
+    "dirActive": true,
+    "diskBytes": 2106128,
+    "driverAllowanceBytes": 67108864,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "manifestSha256": "bd074e395f21adb9a805c7472d3d099cfde5e8e6d6eb55dfa03e72a825b20110",
+    "operation": "fullFilmDirDensity",
+    "passCount": 12,
+    "preCurveKnots": 6,
+    "schemaVersion": 1,
+    "token": 42,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

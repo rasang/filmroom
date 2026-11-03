@@ -925,6 +925,92 @@ impl ExactDiffusionKernelDescriptor {
     pub fn storage_bytes(&self)->usize {std::mem::size_of::<Self>()+self.family.len()}
     pub fn geometry(&self)->[usize;2] {self.geometry}
 }
+// The prepared path is execution policy only. Keep the component additions,
+// weight * exp / denominator operations, and group additions in legacy order.
+// In particular, do not fold the weight into the denominator or use mul_add.
+struct PreparedDiffusionComponent {
+    lambda_px: f64,
+    denominator: f64,
+    weight: f64,
+}
+struct PreparedDiffusionHaloComponent {
+    lambda_px: f64,
+    denominator: f64,
+    weights: [f64; 3],
+}
+struct PreparedDiffusionRadial {
+    core: Vec<PreparedDiffusionComponent>,
+    halo: Vec<PreparedDiffusionHaloComponent>,
+    bloom: Vec<PreparedDiffusionComponent>,
+}
+impl PreparedDiffusionRadial {
+    fn new(cfg: &FamilyShape, spatial_scale: f64, pixel_size_um: f64, warmth: f64) -> Self {
+        let spatial_scale = spatial_scale.max(1e-6);
+        let (core_l, core_w) = expand_group(&cfg.core, false);
+        let (halo_l, halo_w) = expand_group(&cfg.halo, false);
+        let (bloom_l, bloom_w) = expand_group(&cfg.bloom, true);
+        let halo_weights = halo_channel_weights(&halo_w, warmth);
+        // Match to_px followed by exp_sum, including both rounding boundaries.
+        let prepare_lambda = |lambda_um: f64| {
+            let lambda_px = (lambda_um * spatial_scale / pixel_size_um).max(1e-6);
+            let denominator = 2.0 * std::f64::consts::PI * lambda_px * lambda_px;
+            (lambda_px, denominator)
+        };
+        let prepare_group = |lambdas: Vec<f64>, weights: Vec<f64>| {
+            lambdas.into_iter().zip(weights).map(|(lambda_um, weight)| {
+                let (lambda_px, denominator) = prepare_lambda(lambda_um);
+                PreparedDiffusionComponent { lambda_px, denominator, weight }
+            }).collect()
+        };
+        Self {
+            core: prepare_group(core_l, core_w),
+            halo: halo_l.into_iter().enumerate().map(|(i, lambda_um)| {
+                let (lambda_px, denominator) = prepare_lambda(lambda_um);
+                PreparedDiffusionHaloComponent {
+                    lambda_px, denominator,
+                    weights: std::array::from_fn(|ch| halo_weights[ch][i]),
+                }
+            }).collect(),
+            bloom: prepare_group(bloom_l, bloom_w),
+        }
+    }
+    fn group_value(components: &[PreparedDiffusionComponent], r: f64) -> f64 {
+        let mut total = 0.0;
+        for component in components {
+            total += component.weight * (-r / component.lambda_px).exp() / component.denominator;
+        }
+        total
+    }
+    fn values(&self, r: f64, cfg: &FamilyShape) -> [f64; 3] {
+        let core = Self::group_value(&self.core, r) * cfg.w_c;
+        let bloom = Self::group_value(&self.bloom, r) * cfg.w_b;
+        let mut halo = [0.0; 3];
+        for component in &self.halo {
+            // The exponential is identical across channels. Reuse it, but keep
+            // each channel's multiply, divide and accumulation separate.
+            let exponential = (-r / component.lambda_px).exp();
+            for ch in 0..3 {
+                halo[ch] += component.weights[ch] * exponential / component.denominator;
+            }
+        }
+        std::array::from_fn(|ch| core + halo[ch] * cfg.w_h + bloom)
+    }
+    fn value(&self, r: f64, cfg: &FamilyShape, channel: usize) -> f64 {
+        let core = Self::group_value(&self.core, r) * cfg.w_c;
+        let bloom = Self::group_value(&self.bloom, r) * cfg.w_b;
+        let mut halo = 0.0;
+        for component in &self.halo {
+            halo += component.weights[channel] * (-r / component.lambda_px).exp() / component.denominator;
+        }
+        core + halo * cfg.w_h + bloom
+    }
+    #[cfg(test)]
+    fn storage_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + (self.core.capacity() + self.bloom.capacity()) * std::mem::size_of::<PreparedDiffusionComponent>()
+            + self.halo.capacity() * std::mem::size_of::<PreparedDiffusionHaloComponent>()
+    }
+}
 pub struct ExactDiffusionKernel {
     pub radius: usize,
     pub scatter: f64,
@@ -936,12 +1022,20 @@ pub struct ExactDiffusionKernel {
     identity_family: Box<str>,
     identity_parameters: [u64;9],
     identity_geometry: [usize;2],
+    prepared: Option<Box<PreparedDiffusionRadial>>,
 }
 impl ExactDiffusionKernel {
     pub fn new(df: &DiffusionFilter, pixel_size_um: f64, width: usize, height: usize) -> Option<Self> {
         Self::new_cancellable(df,pixel_size_um,width,height,||false).ok().flatten()
     }
-    pub fn new_cancellable(df: &DiffusionFilter, pixel_size_um: f64, width: usize, height: usize, mut cancelled:impl FnMut()->bool) -> Result<Option<Self>, &'static str> {
+    pub fn new_cancellable(df: &DiffusionFilter, pixel_size_um: f64, width: usize, height: usize, cancelled:impl FnMut()->bool) -> Result<Option<Self>, &'static str> {
+        Self::new_cancellable_with_prepared(df, pixel_size_um, width, height, false, cancelled)
+    }
+    /// Opt-in exact acceleration. The false path retains the legacy generator.
+    /// Prepared constants and horizontal symmetry change neither the radius,
+    /// per-pixel f64 operations nor the row-major normalization addition order.
+    /// Temporary row storage is at most three f64 rows, never a full PSF cache.
+    pub fn new_cancellable_with_prepared(df: &DiffusionFilter, pixel_size_um: f64, width: usize, height: usize, prepared: bool, mut cancelled:impl FnMut()->bool) -> Result<Option<Self>, &'static str> {
         if width == 0 || height == 0 || !pixel_size_um.is_finite() || pixel_size_um <= 0. || df.strength <= 0. || df.spatial_scale <= 0. { return Ok(None); }
         let Some(base) = family_shape(df.family) else { return Ok(None); };
         let scatter = strength_to_scatter(df.strength, base.total_gain);
@@ -952,10 +1046,15 @@ impl ExactDiffusionKernel {
         let mut result = Self { radius, scatter, cfg, spatial_scale: df.spatial_scale, pixel_size_um,
             effective_warmth: cfg.halo_warmth_base + df.halo_warmth, sums: [0.;3],
             identity_family: df.family.into(), identity_geometry:[width,height],
+            prepared: prepared.then(|| Box::new(PreparedDiffusionRadial::new(&cfg, df.spatial_scale, pixel_size_um, cfg.halo_warmth_base + df.halo_warmth))),
             identity_parameters:[df.strength,df.spatial_scale,df.halo_warmth,df.core_intensity,df.core_size,df.halo_intensity,df.halo_size,df.bloom_intensity,df.bloom_size].map(f64::to_bits) };
         for y in 0..result.side() {
             if cancelled() { return Err("CANCELLED"); }
-            let rows = result.raw_rows(y);
+            let rows = if let Some(prepared) = &result.prepared {
+                result.prepared_raw_rows(prepared, y)
+            } else {
+                result.raw_rows(y)
+            };
             for ch in 0..3 { for &value in &rows[ch] { result.sums[ch] += value; } }
         }
         Ok(Some(result))
@@ -978,9 +1077,49 @@ impl ExactDiffusionKernel {
         let (core,halo,bloom)=radial_components(&r,&self.cfg,self.spatial_scale,self.pixel_size_um,self.effective_warmth);
         std::array::from_fn(|ch| (0..self.side()).map(|x|core[x]+halo[ch][x]+bloom[x]).collect())
     }
+    fn prepared_x_count(&self) -> usize {
+        // Every x and the center must be exactly representable integers for
+        // left/right dx squares to be interchangeable. Real image sizes are
+        // far below this bound; retain the direct path even for larger inputs.
+        if self.side() as u128 <= 1_u128 << 53 { self.radius + 1 } else { self.side() }
+    }
+    fn prepared_raw_rows(&self, prepared: &PreparedDiffusionRadial, y: usize) -> [Vec<f64>; 3] {
+        let side = self.side();
+        let center = self.radius as f64;
+        let dy = y as f64 - center;
+        let mut rows = std::array::from_fn(|_| vec![0.0; side]);
+        let x_count = self.prepared_x_count();
+        for x in 0..x_count {
+            let dx = x as f64 - center;
+            let values = prepared.values((dx * dx + dy * dy).sqrt(), &self.cfg);
+            for ch in 0..3 {
+                rows[ch][x] = values[ch];
+                if x_count < side { rows[ch][side - 1 - x] = values[ch]; }
+            }
+        }
+        rows
+    }
+    fn prepared_raw_row(&self, prepared: &PreparedDiffusionRadial, channel: usize, y: usize) -> Vec<f64> {
+        let side = self.side();
+        let center = self.radius as f64;
+        let dy = y as f64 - center;
+        let mut row = vec![0.0; side];
+        let x_count = self.prepared_x_count();
+        for x in 0..x_count {
+            let dx = x as f64 - center;
+            let value = prepared.value((dx * dx + dy * dy).sqrt(), &self.cfg, channel);
+            row[x] = value;
+            if x_count < side { row[side - 1 - x] = value; }
+        }
+        row
+    }
     pub fn row(&self, channel: usize, y: usize) -> Vec<f64> {
         assert!(channel<3 && y<self.side());
-        let mut row=self.raw_rows(y)[channel].clone();
+        let mut row = if let Some(prepared) = &self.prepared {
+            self.prepared_raw_row(prepared, channel, y)
+        } else {
+            self.raw_rows(y)[channel].clone()
+        };
         if self.sums[channel]>0. { for value in &mut row { *value/=self.sums[channel]; } }
         row
     }
@@ -1003,3 +1142,7 @@ mod exact_descriptor_tests {
         assert_eq!(baseline,ExactDiffusionKernel::new(&config(),10.,47,29).unwrap().descriptor());
     }
 }
+
+#[cfg(test)]
+#[path = "exact_diffusion_prepared_tests.rs"]
+mod exact_diffusion_prepared_tests;

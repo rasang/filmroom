@@ -176,7 +176,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabil
     reply(env, "capabilities", |_| {
         let profiles:Vec<Value>=crate::profile_catalog::FILMS.iter().map(|film|json!({"filmStock":film,"printSupported":!crate::profile_catalog::is_reversal(film),"directSupported":crate::profile_catalog::is_reversal(film),"reason":"SUPPORTED_ROUTE_FINITE_GRAIN_ONLY"})).collect();
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
+            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true,"scientificPreview":{"available":cfg!(feature="gpu-diffusion-research"),"algorithm":"owned-detail-v3-guarded64-resident-fullgrid-gutter1","quality":"ExperimentalSameWorkingGrid","maxDimension":1536,"gpuPolicy":"explicitOptInPerStageAtomicCpuFallback","resizesImage":false}}),
         )
     })
 }
@@ -188,7 +188,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativePlan(
 ) -> jstring {
     reply(env, "plan", |env| {
         let c = parse(&text(env, &request)?)?;
-        let plan = DetailContext::preflight(&c).map_err(|e| bridge::BridgeError::from(e).code())?;
+        let plan = bridge::plan(&c).map_err(|e|e.code())?;
         Ok(
             json!({"ok":true,"code":"OK","outputValid":false,"plan":plan,"actualBackend":"cpu","requestedGpu":c.params.use_gpu,"cpuFallback":c.params.use_gpu}),
         )
@@ -269,7 +269,40 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeBuild(
             bridge::build(session, operation, config, Path::new(&source)).map_err(|e| e.code())?;
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"identity":result.context().identity(),"backend":result.context().backend_info(),"plan":result.context().resource_plan(),"meteredEv":result.context().metered_ev(),"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":false,"identity":result.context().identity(),"backend":result.context().backend_info(),"plan":result.context().resource_plan(),"meteredEv":result.context().metered_ev(),"metrics":result.context().metrics(),"quality":result.context().quality()}),
+        )
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeBuildWithGpuDelegate(
+    env: JNIEnv<'_>,
+    _: JObject<'_>,
+    session: jlong,
+    operation: jlong,
+    source: JString<'_>,
+    request: JString<'_>,
+    delegate: JObject<'_>,
+) -> jstring {
+    reply(env, "build", |env| {
+        let session = id(session)?;
+        let operation = id(operation)?;
+        let parsed = (|| {
+            let source = text(env, &source)?;
+            let config = parse(&text(env, &request)?)?;
+            Ok::<_, &'static str>((source, config))
+        })();
+        let (source, config) = match parsed {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = bridge::release_operation(session, operation);
+                return Err(e);
+            }
+        };
+        let result =
+            {let delegates=crate::jni_bridge::scientific_delegates(env,&delegate,&config.params);bridge::build_with_gpu(session, operation, config, Path::new(&source),delegates)}.map_err(|e| e.code())?;
+        result.check_publish().map_err(|e| e.code())?;
+        Ok(
+            json!({"ok":true,"code":"OK","outputValid":false,"identity":result.context().identity(),"backend":result.context().backend_info(),"plan":result.context().resource_plan(),"meteredEv":result.context().metered_ev(),"metrics":result.context().metrics(),"quality":result.context().quality()}),
         )
     })
 }
@@ -320,7 +353,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeTile(
         // generation guards remain necessary even after this final operation check.
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"quality":if result.tile.identity.algorithm=="owned-detail-v3-guarded64-resident-fullgrid-gutter1"{"ExperimentalSameWorkingGrid"}else{"ExactSameWorkingGrid"},"identity":result.tile.identity,"backend":result.tile.backend}),
         )
     })
 }
@@ -367,7 +400,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion(
             .map_err(|e|e.code())?;
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"quality":if result.identity.algorithm=="owned-detail-v3-guarded64-resident-fullgrid-gutter1"{"ExperimentalSameWorkingGrid"}else{"ExactSameWorkingGrid"},"identity":result.identity,"backend":result.backend}),
         )
     })
 }
@@ -385,3 +418,6 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRelease
         Ok(ok())
     })
 }
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeCleanupAfterGpuDrain(env:JNIEnv<'_>,_:JObject<'_>,session:jlong)->jstring{reply(env,"cleanupGpu",|_|{let cleaned=bridge::cleanup_gpu_after_drain(id(session)?).map_err(|e|e.code())?;Ok(json!({"ok":true,"cleaned":cleaned}))})}

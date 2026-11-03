@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "operation": "planGpuFilmOpticsStage",
+  "plan": {
+    "combinedPeakBytes": 159452828,
+    "deviceBytes": 8457884,
+    "diskBytes": 74512,
+    "driverAllowanceBytes": 67108864,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "manifestSha256": "eff1aaca1b216d696e54aeb1b21cbbe52f5395d22017ff47e8c277196be24c82",
+    "operation": "fullFilmOptics",
+    "passCount": 21,
+    "schemaVersion": 1,
+    "token": 42,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

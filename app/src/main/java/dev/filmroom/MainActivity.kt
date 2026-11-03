@@ -150,7 +150,7 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true)}
-    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;model.refreshGpuRenderingChoice();exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
     override fun onPause(){if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}

@@ -76,7 +76,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
         if (!available) throw PhotoException(PhotoException.Reason.UNSUPPORTED,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_2c28d802618b))
         ensureActive()
         val handle = api.nativeCreate(operationRoot.canonicalPath)
-        if(handle==0L) throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_41db58446aa4))
+        if(handle==0L) throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_41db58446aa4),codecCode=CodecErrorCode.NATIVE_HANDLE_CREATE_FAILED,codecStage=CodecStage.NATIVE_CREATE)
         // UNDISTPATCHED installs the cancellation hook before worker dispatch. The
         // watcher always cancels on scope cancellation, even while JNI is blocking.
         val watcher=launch(Dispatchers.Default,start=CoroutineStart.UNDISPATCHED) {

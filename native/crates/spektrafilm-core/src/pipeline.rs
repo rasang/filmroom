@@ -125,7 +125,43 @@ pub struct PreparedStreamedFinish {
     scanning: stages::scanning::PreparedScanner,
     pub filming_exposure_correction: f64,
 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum GpuFinishInput { FilmDensity, PrintRaw, PrintExposure }
+pub struct GpuPrintingDescriptor<'a> {
+    pub lut:&'a spektrafilm_math::pchip3d::PreparedPchip3d,
+    pub data_min:[f64;3], pub data_max:[f64;3],
+    pub print_exposure:f64,pub bw:f64,
+    pub log_exposure:&'a [f64],pub curves:&'a [[f64;3]],pub gamma:f64,
+    pub external_diffusion_required:bool,
+}
+pub struct GpuFinishDescriptor<'a> {
+    pub input:GpuFinishInput,pub printing:Option<GpuPrintingDescriptor<'a>>,
+    pub scanner:&'a spektrafilm_math::pchip3d::PreparedPchip3d,
+    pub scanner_min:[f64;3],pub scanner_max:[f64;3],
+}
+/// Original scanner calibration for the isolated resident tail. Matrices remain
+/// separate and the active gamut table is borrowed without rebuilding it.
+pub struct GpuScanTailDescriptor<'a> {
+    pub adapt: [[f64; 3]; 3],
+    pub xyz_to_rgb: [[f64; 3]; 3],
+    pub xyz_remap: Option<(f64, f64)>,
+    pub glare_rgb_offset: [f64; 3],
+    pub gamut: Option<spektrafilm_gpu::GamutGpuParams<'a>>,
+    pub rgb_identity: [[f64; 3]; 3],
+    pub output_cctf_encoding: bool,
+}
 impl PreparedStreamedFinish {
+    pub fn gpu_scan_tail_descriptor(&self)->GpuScanTailDescriptor<'_> { self.scanning.gpu_tail_descriptor() }
+    pub fn gpu_finish_descriptor(&self,input:GpuFinishInput)->Result<GpuFinishDescriptor<'_>,String> {
+        let printing=self.printing.as_ref().map(|p|p.gpu_descriptor());
+        if matches!(input,GpuFinishInput::PrintRaw|GpuFinishInput::PrintExposure) && printing.is_none(){return Err("GPU_FINISH_UNSUPPORTED".into());}
+        if input==GpuFinishInput::FilmDensity && printing.as_ref().is_some_and(|p|p.external_diffusion_required){return Err("GPU_FINISH_UNSUPPORTED".into());}
+        let(scanner,scanner_min,scanner_max)=self.scanning.gpu_lut();
+        Ok(GpuFinishDescriptor{input,printing,scanner,scanner_min,scanner_max})
+    }
+    pub fn finish_scan_log_xyz_chunk(&self,image:&ImageBuf,finalize:bool)->Result<ImageBuf,String>{self.scanning.finish_log_xyz(image,finalize,None)}
+    pub fn finish_scan_log_xyz_chunk_with_glare(&self,image:&ImageBuf,field:&[spektrafilm_math::precision::Scalar],finalize:bool)->Result<ImageBuf,String>{self.scanning.finish_log_xyz(image,finalize,Some(field))}
+
     pub fn process_density_chunk(&self,density:&ImageBuf,backend:&dyn ComputeBackend)->ImageBuf {
         match &self.printing {Some(printing)=>self.scanning.process(&printing.process(density,backend)),None=>self.scanning.process(density)}
     }

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "operation": "planGpuFilmExposureStage",
+  "plan": {
+    "chunkCount": 1,
+    "chunkPixels": 187,
+    "combinedPeakBytes": 136366992,
+    "deviceBytes": 14304,
+    "diskBytes": 79204,
+    "driverAllowanceBytes": 67108864,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 2134960,
+    "manifestSha256": "1895e2388c29afed9b4324d951de83977057c28ddff01cd7ca82f292324437d2",
+    "operation": "fullFilmExposure",
+    "schemaVersion": 1,
+    "tableScalars": 867,
+    "token": 17,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

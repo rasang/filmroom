@@ -60,6 +60,15 @@ class DiagnosticJsonRegressionTest {
         assertEquals("off",parsed.get("diffusionFilter"));assertEquals("print",parsed.get("outputRoute"));assertEquals("sRGB",parsed.get("outputColorSpace"))
         assertTrue(parsed.get("width") is Number);assertTrue(parsed.get("useGpu") is Boolean);assertFalse(parsed.has("contrast"))
     }
+    @Test fun nativeHeartbeatSerialIsBoundedNumericAndSurvivesRestart() {
+        val info=SafeInfo(nativeUpdateSerial=Long.MAX_VALUE)
+        val event=DiagnosticEvent(1000,10,"a".repeat(32),1,1,Operation.EXPORT_RENDER,Stage.NATIVE_PROGRESS,info=info)
+        assertEquals(Long.MAX_VALUE,DiagnosticEvent.parse(event.line())!!.info.nativeUpdateSerial)
+        val json=report(info);strictJson(json)
+        assertEquals(Long.MAX_VALUE,JSONObject(json).getJSONArray("events").getJSONObject(0).getJSONObject("info").getLong("nativeUpdateSerial"))
+        assertFalse(SafeInfo(nativeUpdateSerial=-1).fields().containsKey("nativeUpdateSerial"))
+        assertFalse(SafeInfo.parse(mapOf("nativeUpdateSerial" to "private/path")).fields().containsKey("nativeUpdateSerial"))
+    }
     @Test fun escapedStringRoundTripsWithStrictParser() {
         val input="引号\"反斜线\\\n\r\t\b\u0000\u001f 😀"
         val json="{\"value\":"+jsonString(input)+"}"

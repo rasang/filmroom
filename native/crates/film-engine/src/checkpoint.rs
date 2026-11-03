@@ -53,6 +53,17 @@ impl Identity {
         configuration: String,
         c: &mut impl FnMut() -> bool,
     ) -> io::Result<Self> {
+        Self::new_with_hash(data,input,width,height,configuration,false,c)
+    }
+    pub fn new_with_hash(
+        data: &Path,
+        input: &Path,
+        width: u32,
+        height: u32,
+        configuration: String,
+        accelerated: bool,
+        c: &mut impl FnMut() -> bool,
+    ) -> io::Result<Self> {
         if !(1..=40_000).contains(&width)
             || !(1..=40_000).contains(&height)
             || configuration.len() > 64 * 1024
@@ -60,9 +71,9 @@ impl Identity {
             return Err(invalid());
         }
         regular(input, width as u64 * height as u64 * 12)?;
-        let source = hash_file(input, c)?;
-        let mut hash = Sha256::new();
-        hash_tree(data, data, &mut hash, c)?;
+        let source = hash_file_with_hash(input, accelerated, c)?;
+        let mut hash = Sha256::with_acceleration(accelerated);
+        hash_tree(data, data, &mut hash, accelerated, c)?;
         Ok(Self {
             version: VERSION.into(),
             width,
@@ -77,6 +88,7 @@ fn hash_tree(
     root: &Path,
     dir: &Path,
     hash: &mut Sha256,
+    accelerated: bool,
     c: &mut impl FnMut() -> bool,
 ) -> io::Result<()> {
     let mut entries = fs::read_dir(dir)?.collect::<io::Result<Vec<_>>>()?;
@@ -85,7 +97,7 @@ fn hash_tree(
         cancelled(c)?;
         let kind = e.file_type()?;
         if kind.is_dir() {
-            hash_tree(root, &e.path(), hash, c)?;
+            hash_tree(root, &e.path(), hash, accelerated, c)?;
         } else if kind.is_file() {
             let name = e
                 .path()
@@ -95,7 +107,7 @@ fn hash_tree(
                 .into_owned();
             hash.update(&(name.len() as u64).to_le_bytes());
             hash.update(name.as_bytes());
-            hash.update(hash_file(&e.path(), c)?.as_bytes());
+            hash.update(hash_file_with_hash(&e.path(), accelerated, c)?.as_bytes());
         } else {
             return Err(invalid());
         }
@@ -108,22 +120,67 @@ struct Plane {
     bytes: u64,
     sha256: String,
 }
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+pub enum CameraDiffusionBackend {CpuF64,GpuF32V1}
+impl CameraDiffusionBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuF32V1=>"gpu_f32_v1"}}}
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+pub enum FilmExposureBackend {CpuF64,GpuExposureF32V1}
+impl FilmExposureBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuExposureF32V1=>"gpu_exposure_f32_v1"}}}
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+pub enum FilmDirBackend {CpuF64,GpuDirF32V1}
+impl FilmDirBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuDirF32V1=>"gpu_dir_f32_v1"}}}
+/// Actual complete camera-lens/scatter/halation backend, independent of camera FFT.
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+pub enum FilmOpticalBackend {CpuF64,GpuSpatialF32V1}
+impl FilmOpticalBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuSpatialF32V1=>"gpu_spatial_f32_v1"}}}
+/// Actual stage-6 pointwise backend. The scanner f64 tail and spatial effects
+/// stay on CPU even when the experimental PCHIP chain ran on GPU.
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+pub enum PrintingScanningBackend {CpuF64,GpuPchipF32V1}
+impl PrintingScanningBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuPchipF32V1=>"gpu_pchip_f32_v1"}}}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
+    #[serde(default,skip_serializing_if="std::collections::BTreeMap::is_empty")]
+    science_backends:std::collections::BTreeMap<crate::streamed::ScienceKind,bool>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    camera_diffusion_backend:Option<CameraDiffusionBackend>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    printing_scanning_backend:Option<PrintingScanningBackend>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    film_optical_backend:Option<FilmOpticalBackend>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    film_exposure_backend:Option<FilmExposureBackend>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    film_dir_backend:Option<FilmDirBackend>,
     identity: Identity,
     stage: u8,
     metered_ev: Option<f32>,
     planes: Vec<Plane>,
 }
 pub struct Checkpoints {
+    science_backends:std::collections::BTreeMap<crate::streamed::ScienceKind,bool>,
+    accelerated: bool,
     root: PathBuf,
     identity: Identity,
     manifest: Option<Manifest>,
     commit_failed: bool,
+    camera_diffusion_backend:Option<CameraDiffusionBackend>,
+    printing_scanning_backend:Option<PrintingScanningBackend>,
+    film_optical_backend:Option<FilmOpticalBackend>,
+    film_exposure_backend:Option<FilmExposureBackend>,
+    film_dir_backend:Option<FilmDirBackend>,
 }
 impl Checkpoints {
     pub fn open(root: &Path, identity: Identity, c: &mut impl FnMut() -> bool) -> io::Result<Self> {
+        Self::open_with_hash(root,identity,false,c)
+    }
+    pub fn open_with_hash(root: &Path, identity: Identity, accelerated:bool, c: &mut impl FnMut() -> bool) -> io::Result<Self> {
         if root.exists() {
             if !fs::symlink_metadata(root)?.is_dir() {
                 return Err(invalid());
@@ -140,7 +197,13 @@ impl Checkpoints {
             }
             let manifest: Manifest =
                 serde_json::from_slice(&fs::read(&path)?).map_err(|_| invalid())?;
-            if manifest.identity != identity
+            if (manifest.stage<3&&manifest.camera_diffusion_backend.is_some())
+                || (manifest.stage<6&&manifest.printing_scanning_backend.is_some())
+                || (manifest.stage<3&&manifest.film_optical_backend.is_some())
+                || (manifest.stage<2&&manifest.film_exposure_backend.is_some())
+                || (manifest.stage<4&&manifest.film_dir_backend.is_some())
+                || manifest.science_backends.keys().any(|kind|kind.checkpoint_stage()>manifest.stage)
+                || manifest.identity != identity
                 || !(2..=6).contains(&manifest.stage)
                 || manifest.metered_ev.is_some_and(|x| !x.is_finite())
             {
@@ -163,7 +226,7 @@ impl Checkpoints {
                     return Err(invalid());
                 }
                 regular(&file, bytes)?;
-                if hash_file(&file, c)? != p.sha256 {
+                if hash_file_with_hash(&file, accelerated, c)? != p.sha256 {
                     return Err(invalid());
                 }
             }
@@ -172,8 +235,15 @@ impl Checkpoints {
             None
         };
         let result = Self {
+            accelerated,
             root: root.into(),
             identity,
+            camera_diffusion_backend:manifest.as_ref().and_then(|m|m.camera_diffusion_backend),
+            printing_scanning_backend:manifest.as_ref().and_then(|m|m.printing_scanning_backend),
+            film_optical_backend:manifest.as_ref().and_then(|m|m.film_optical_backend),
+            film_exposure_backend:manifest.as_ref().and_then(|m|m.film_exposure_backend),
+            film_dir_backend:manifest.as_ref().and_then(|m|m.film_dir_backend),
+            science_backends:manifest.as_ref().map(|m|m.science_backends.clone()).unwrap_or_default(),
             manifest,
             commit_failed: false,
         };
@@ -185,6 +255,38 @@ impl Checkpoints {
     }
     pub fn metered_ev(&self) -> Option<f32> {
         self.manifest.as_ref().and_then(|m| m.metered_ev)
+    }
+    pub fn camera_diffusion_backend_metadata(&self)->Option<CameraDiffusionBackend> {self.camera_diffusion_backend}
+    pub fn camera_diffusion_backend(&self)->CameraDiffusionBackend {self.camera_diffusion_backend.unwrap_or(CameraDiffusionBackend::CpuF64)}
+    pub fn set_camera_diffusion_backend(&mut self,backend:CameraDiffusionBackend)->io::Result<()> {
+        if self.stage()>=3||self.commit_failed {return Err(invalid());}
+        self.camera_diffusion_backend=Some(backend);Ok(())
+    }
+    pub fn printing_scanning_backend_metadata(&self)->Option<PrintingScanningBackend> {self.printing_scanning_backend}
+    pub fn printing_scanning_backend(&self)->PrintingScanningBackend {self.printing_scanning_backend.unwrap_or(PrintingScanningBackend::CpuF64)}
+    pub fn set_printing_scanning_backend(&mut self,backend:PrintingScanningBackend)->io::Result<()> {
+        if self.stage()>=6||self.commit_failed {return Err(invalid());}
+        self.printing_scanning_backend=Some(backend);Ok(())
+    }
+    pub fn film_optical_backend_metadata(&self)->Option<FilmOpticalBackend> {self.film_optical_backend}
+    pub fn film_optical_backend(&self)->FilmOpticalBackend {self.film_optical_backend.unwrap_or(FilmOpticalBackend::CpuF64)}
+    pub fn set_film_optical_backend(&mut self,backend:FilmOpticalBackend)->io::Result<()> {
+        if self.stage()>=3||self.commit_failed {return Err(invalid());}
+        self.film_optical_backend=Some(backend);Ok(())
+    }
+    pub fn film_exposure_backend_metadata(&self)->Option<FilmExposureBackend> {self.film_exposure_backend}
+    pub fn film_exposure_backend(&self)->FilmExposureBackend {self.film_exposure_backend.unwrap_or(FilmExposureBackend::CpuF64)}
+    pub fn set_film_exposure_backend(&mut self,backend:FilmExposureBackend)->io::Result<()> {
+        if self.stage()>=2||self.commit_failed {return Err(invalid());}
+        self.film_exposure_backend=Some(backend);Ok(())
+    }
+    pub(crate) fn science_backends(&self)->&std::collections::BTreeMap<crate::streamed::ScienceKind,bool>{&self.science_backends}
+    pub(crate) fn set_science_backend(&mut self,kind:crate::streamed::ScienceKind,gpu:bool)->io::Result<()>{if self.stage()>=kind.checkpoint_stage()||self.commit_failed{return Err(invalid());}self.science_backends.insert(kind,gpu);Ok(())}
+    pub fn film_dir_backend_metadata(&self)->Option<FilmDirBackend> {self.film_dir_backend}
+    pub fn film_dir_backend(&self)->FilmDirBackend {self.film_dir_backend.unwrap_or(FilmDirBackend::CpuF64)}
+    pub fn set_film_dir_backend(&mut self,backend:FilmDirBackend)->io::Result<()> {
+        if self.stage()>=4||self.commit_failed {return Err(invalid());}
+        self.film_dir_backend=Some(backend);Ok(())
     }
     fn remove_obsolete(&self) -> io::Result<()> {
         // Only our fixed namespace; never walk arbitrary paths from the manifest.
@@ -236,8 +338,9 @@ impl Checkpoints {
         metered_ev: Option<f32>,
         c: &mut impl FnMut() -> bool,
     ) -> io::Result<()> {
+        let accelerated=self.accelerated;
         self.commit_using(stage, sources, metered_ev, c, |src, dst, cancel| {
-            copy_synced(src, dst, cancel)
+            copy_synced_with_hash(src, dst, accelerated, cancel)
         })
     }
     fn commit_using(
@@ -278,6 +381,12 @@ impl Checkpoints {
         sync_dir(&pending)?;
         cancelled(c)?;
         let manifest = Manifest {
+            science_backends:self.science_backends.iter().filter(|(k,_)|k.checkpoint_stage()<=stage).map(|(&k,&v)|(k,v)).collect(),
+            camera_diffusion_backend:if stage>=3 {self.camera_diffusion_backend}else{None},
+            printing_scanning_backend:if stage==6 {self.printing_scanning_backend}else{None},
+            film_optical_backend:if stage>=3 {self.film_optical_backend}else{None},
+            film_exposure_backend:if stage>=2 {self.film_exposure_backend}else{None},
+            film_dir_backend:if stage>=4 {self.film_dir_backend}else{None},
             identity: self.identity.clone(),
             stage,
             metered_ev,
@@ -324,9 +433,17 @@ fn copy_synced(
     dst: &Path,
     c: &mut (impl FnMut() -> bool + ?Sized),
 ) -> io::Result<String> {
+    copy_synced_with_hash(src,dst,false,c)
+}
+fn copy_synced_with_hash(
+    src: &Path,
+    dst: &Path,
+    accelerated:bool,
+    c: &mut (impl FnMut() -> bool + ?Sized),
+) -> io::Result<String> {
     let mut input = File::open(src)?;
     let mut output = OpenOptions::new().write(true).create_new(true).open(dst)?;
-    let mut hash = Sha256::new();
+    let mut hash = Sha256::with_acceleration(accelerated);
     let mut buf = vec![0; BUFFER];
     loop {
         cancelled(c)?;
@@ -340,9 +457,10 @@ fn copy_synced(
     output.sync_all()?;
     Ok(hash.finish())
 }
-pub fn hash_file(path: &Path, c: &mut impl FnMut() -> bool) -> io::Result<String> {
+pub fn hash_file(path: &Path, c: &mut impl FnMut() -> bool) -> io::Result<String> {hash_file_with_hash(path,false,c)}
+pub fn hash_file_with_hash(path: &Path, accelerated:bool, c: &mut impl FnMut() -> bool) -> io::Result<String> {
     let mut input = File::open(path)?;
-    let mut h = Sha256::new();
+    let mut h = Sha256::with_acceleration(accelerated);
     let mut buf = vec![0; BUFFER];
     loop {
         cancelled(c)?;
@@ -356,13 +474,20 @@ pub fn hash_file(path: &Path, c: &mut impl FnMut() -> bool) -> io::Result<String
 }
 // SHA-256 (FIPS 180-4), incremental and bounded. Used for corruption/configuration
 // integrity, not authenticity: app-private files remain the trust boundary.
-struct Sha256 {
+enum Sha256 { Portable(PortableSha256), Accelerated(sha2::Sha256) }
+impl Sha256 {
+ fn new() -> Self { Self::with_acceleration(false) }
+ fn with_acceleration(accelerated:bool)->Self { use sha2::Digest; if accelerated {Self::Accelerated(sha2::Sha256::new())}else{Self::Portable(PortableSha256::new())} }
+ fn update(&mut self,bytes:&[u8]) {use sha2::Digest;match self {Self::Portable(h)=>h.update(bytes),Self::Accelerated(h)=>h.update(bytes)}}
+ fn finish(self)->String {use sha2::Digest;match self {Self::Portable(h)=>h.finish(),Self::Accelerated(h)=>h.finalize().iter().map(|b|format!("{b:02x}")).collect()}}
+}
+struct PortableSha256 {
     state: [u32; 8],
     block: [u8; 64],
     used: usize,
     len: u64,
 }
-impl Sha256 {
+impl PortableSha256 {
     fn new() -> Self {
         Self {
             state: [
@@ -532,6 +657,78 @@ mod tests {
         assert!(!dir.join("pending").exists());
         fs::remove_dir_all(root).unwrap();
     }
+    #[test]
+    fn gpu_backend_provenance_is_atomic_validated_and_carried_forward() {
+        let root=std::env::temp_dir().join(format!("checkpoint-gpu-backend-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir(&root).unwrap();struct Temp(PathBuf);impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _guard=Temp(root.clone());
+        let sources:[PathBuf;3]=std::array::from_fn(|i|{let p=root.join(format!("source-{i}"));fs::write(&p,1f64.to_le_bytes()).unwrap();p});
+        let dir=root.join("checkpoint");let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();
+        c.commit(2,&sources,None,&mut||false).unwrap();assert_eq!(c.camera_diffusion_backend_metadata(),None);
+        c.set_camera_diffusion_backend(CameraDiffusionBackend::GpuF32V1).unwrap();
+        let original=fs::read(dir.join("manifest.json")).unwrap();
+        let mut copies=0;assert!(c.commit_using(3,&sources,None,&mut||false,|src,dst,cancel|{copies+=1;if copies==2{Err(io::Error::from_raw_os_error(28))}else{copy_synced(src,dst,cancel)}}).is_err());
+        assert_eq!(fs::read(dir.join("manifest.json")).unwrap(),original);
+        let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();assert_eq!(c.camera_diffusion_backend(),CameraDiffusionBackend::CpuF64);
+        c.set_camera_diffusion_backend(CameraDiffusionBackend::GpuF32V1).unwrap();
+        for stage in 3..=5 {
+            c.commit(stage,&sources,None,&mut||false).unwrap();drop(c);
+            c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();assert_eq!(c.camera_diffusion_backend(),CameraDiffusionBackend::GpuF32V1);
+            assert!(c.set_camera_diffusion_backend(CameraDiffusionBackend::CpuF64).is_err());
+        }
+        let output=root.join("final");fs::write(&output,[0u8;12]).unwrap();c.commit(6,&[output],None,&mut||false).unwrap();drop(c);
+        assert_eq!(Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap().camera_diffusion_backend(),CameraDiffusionBackend::GpuF32V1);
+        let mut value:serde_json::Value=serde_json::from_slice(&fs::read(dir.join("manifest.json")).unwrap()).unwrap();
+        value["camera_diffusion_backend"]=serde_json::json!("unknown_gpu");fs::write(dir.join("manifest.json"),serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(Checkpoints::open(&dir,fault_identity(),&mut||false).is_err());
+    }
+    #[test]
+    fn scanner_backend_is_stage6_only_atomic_and_independent_of_camera() {
+        let root=std::env::temp_dir().join(format!("checkpoint-scanner-backend-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir(&root).unwrap();struct Temp(PathBuf);impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _guard=Temp(root.clone());
+        let sources:[PathBuf;3]=std::array::from_fn(|i|{let p=root.join(format!("source-{i}"));fs::write(&p,1f64.to_le_bytes()).unwrap();p});
+        let output=root.join("output");fs::write(&output,[0u8;12]).unwrap();
+        let dir=root.join("checkpoint");let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();
+        c.set_camera_diffusion_backend(CameraDiffusionBackend::GpuF32V1).unwrap();
+        c.set_film_optical_backend(FilmOpticalBackend::GpuSpatialF32V1).unwrap();
+        c.commit(5,&sources,None,&mut||false).unwrap();
+        assert_eq!(c.printing_scanning_backend_metadata(),None);
+        let original=fs::read(dir.join("manifest.json")).unwrap();
+        c.set_printing_scanning_backend(PrintingScanningBackend::GpuPchipF32V1).unwrap();
+        assert!(c.commit_using(6,&[output.clone()],None,&mut||false,|_,_,_|Err(io::Error::from_raw_os_error(28))).is_err());
+        assert_eq!(fs::read(dir.join("manifest.json")).unwrap(),original);
+        assert!(c.set_printing_scanning_backend(PrintingScanningBackend::CpuF64).is_err());
+        let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();
+        assert_eq!(c.stage(),5);assert_eq!(c.printing_scanning_backend_metadata(),None);
+        assert_eq!(c.camera_diffusion_backend(),CameraDiffusionBackend::GpuF32V1);
+        assert_eq!(c.film_optical_backend(),FilmOpticalBackend::GpuSpatialF32V1);
+        assert!(c.set_film_optical_backend(FilmOpticalBackend::CpuF64).is_err());
+        c.set_printing_scanning_backend(PrintingScanningBackend::GpuPchipF32V1).unwrap();
+        c.commit(6,&[output],None,&mut||false).unwrap();drop(c);
+        let c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();
+        assert_eq!(c.printing_scanning_backend(),PrintingScanningBackend::GpuPchipF32V1);
+        assert_eq!(c.camera_diffusion_backend(),CameraDiffusionBackend::GpuF32V1);assert_eq!(c.film_optical_backend(),FilmOpticalBackend::GpuSpatialF32V1);drop(c);
+        let final_manifest=fs::read(dir.join("manifest.json")).unwrap();
+        let mut invalid:serde_json::Value=serde_json::from_slice(&final_manifest).unwrap();
+        invalid["printing_scanning_backend"]=serde_json::json!("unknown_gpu");
+        fs::write(dir.join("manifest.json"),serde_json::to_vec(&invalid).unwrap()).unwrap();
+        assert!(Checkpoints::open(&dir,fault_identity(),&mut||false).is_err());
+        // Provenance cannot claim stage6 executed before its atomic checkpoint.
+        let mut early:serde_json::Value=serde_json::from_slice(&original).unwrap();
+        early["printing_scanning_backend"]=serde_json::json!("gpu_pchip_f32_v1");
+        fs::write(dir.join("manifest.json"),serde_json::to_vec(&early).unwrap()).unwrap();
+        assert!(Checkpoints::open(&dir,fault_identity(),&mut||false).is_err());
+    }
+    #[test]
+    fn exposure_backend_does_not_survive_a_failed_stage2_commit() {
+        let root=std::env::temp_dir().join(format!("checkpoint-exposure-backend-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir(&root).unwrap();struct Temp(PathBuf);impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _guard=Temp(root.clone());
+        let sources:[PathBuf;3]=std::array::from_fn(|i|{let p=root.join(format!("source-{i}"));fs::write(&p,1f64.to_le_bytes()).unwrap();p});let dir=root.join("checkpoint");
+        let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();c.set_film_exposure_backend(FilmExposureBackend::GpuExposureF32V1).unwrap();
+        assert!(c.commit_using(2,&sources,Some(0.5),&mut||false,|_,_,_|Err(io::Error::from_raw_os_error(28))).is_err());drop(c);
+        let mut c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();assert_eq!(c.stage(),0);assert_eq!(c.film_exposure_backend_metadata(),None);assert_eq!(c.metered_ev(),None);
+        c.set_film_exposure_backend(FilmExposureBackend::GpuExposureF32V1).unwrap();c.commit(2,&sources,Some(0.5),&mut||false).unwrap();assert!(c.set_film_exposure_backend(FilmExposureBackend::CpuF64).is_err());drop(c);
+        let c=Checkpoints::open(&dir,fault_identity(),&mut||false).unwrap();assert_eq!(c.film_exposure_backend(),FilmExposureBackend::GpuExposureF32V1);assert_eq!(c.metered_ev(),Some(0.5));
+    }
     fn fault_identity() -> Identity {
         Identity {
             version: VERSION.into(),
@@ -632,4 +829,31 @@ mod tests {
             fs::remove_dir_all(root).unwrap();
         }
     }
+}
+
+#[cfg(test)] mod optimization_tests {
+ use super::*;
+ #[test] fn hash_backends_identical_at_padding_and_buffer_boundaries() {
+  for n in [0,1,55,56,63,64,65,127,128,129,BUFFER-1,BUFFER,BUFFER+1,3*BUFFER+7] {
+   let input:Vec<u8>=(0..n).map(|i|(i*37)as u8).collect();
+   for chunk in [1,7,63,64,1024,BUFFER] {
+    let mut a=Sha256::with_acceleration(false);let mut b=Sha256::with_acceleration(true);
+    for bytes in input.chunks(chunk) {a.update(bytes);b.update(bytes);}
+    assert_eq!(a.finish(),b.finish(),"n={n} chunk={chunk}");
+   }
+  }
+ }
+ #[test] fn switch_hash_backend_across_commit_cancel_and_recovery() {
+  let root=std::env::temp_dir().join(format!("checkpoint-optimization-{}",std::process::id()));fs::create_dir(&root).unwrap();
+  let data=root.join("data");fs::create_dir(&data).unwrap();fs::write(data.join("profile"),b"test profile").unwrap();let input=root.join("input");fs::write(&input,[0u8;12]).unwrap();
+  let baseline=Identity::new_with_hash(&data,&input,1,1,"same configuration".into(),false,&mut||false).unwrap();
+  let candidate=Identity::new_with_hash(&data,&input,1,1,"same configuration".into(),true,&mut||false).unwrap();assert_eq!(baseline,candidate);
+  let paths:[PathBuf;3]=std::array::from_fn(|i|{let p=root.join(format!("src{i}"));fs::write(&p,(i as f64).to_le_bytes()).unwrap();p});
+  let dir=root.join("checkpoint");let mut c=Checkpoints::open_with_hash(&dir,baseline.clone(),true,&mut||false).unwrap();c.commit(2,&paths,None,&mut||false).unwrap();drop(c);
+  let manifest=fs::read(dir.join("manifest.json")).unwrap();
+  let mut c=Checkpoints::open_with_hash(&dir,baseline.clone(),false,&mut||false).unwrap();assert_eq!(c.stage(),2);assert_eq!(c.commit(3,&paths,None,&mut||true).unwrap_err().kind(),io::ErrorKind::Interrupted);drop(c);
+  assert_eq!(manifest,fs::read(dir.join("manifest.json")).unwrap());let mut c=Checkpoints::open_with_hash(&dir,baseline.clone(),true,&mut||false).unwrap();assert_eq!(c.stage(),2);c.commit(3,&paths,None,&mut||false).unwrap();drop(c);
+  assert_eq!(Checkpoints::open_with_hash(&dir,baseline,false,&mut||false).unwrap().stage(),3);
+  assert_eq!(hash_file_with_hash(&input,true,&mut||true).unwrap_err().kind(),io::ErrorKind::Interrupted);fs::remove_dir_all(root).unwrap();
+ }
 }

@@ -342,6 +342,10 @@ pub struct PreparedPrinting {
     log_exposure: Vec<f64>, curves: Vec<[f64;3]>, gamma: f64,
 }
 impl PreparedPrinting {
+    pub(crate) fn gpu_descriptor(&self)->crate::pipeline::GpuPrintingDescriptor<'_> {
+        crate::pipeline::GpuPrintingDescriptor {lut:&self.lut,data_min:self.data_min,data_max:self.data_max,print_exposure:self.print_exposure,bw:self.bw,log_exposure:&self.log_exposure,curves:&self.curves,gamma:self.gamma,external_diffusion_required:self.external_diffusion_required}
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(film:&Profile,print:&Profile,params:&RuntimeParams,backend:&dyn ComputeBackend,
         illuminant:&[f64],factor:f64,preflash:[f64;3],bw:f64)->Result<Self,String> {

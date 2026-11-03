@@ -137,6 +137,7 @@ class PhotoException(
     val codecStage: dev.filmroom.diagnostics.CodecStage? = null,
     val rawTechnical: dev.filmroom.diagnostics.RawTechnicalInfo? = null,
     val uiMessage:dev.filmroom.i18n.UiMessage? = null,
+    val inputFormatHint: dev.filmroom.io.formats.PhotoFormat? = null,
 ) : IOException(message, cause) {
     constructor(reason:Reason,message:dev.filmroom.i18n.UiMessage,cause:Throwable?=null,cleanupUncertain:Boolean=false,
         codecCode:dev.filmroom.diagnostics.CodecErrorCode?=null,codecStage:dev.filmroom.diagnostics.CodecStage?=null,
@@ -220,15 +221,19 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         PendingCleanupReport(removed, finalized, unresolved)
     }
 
-    suspend fun import(uri: Uri, previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE): LoadedPhoto {
+    suspend fun import(uri: Uri, previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
+        onStage: suspend (dev.filmroom.diagnostics.CodecStage, dev.filmroom.io.formats.PhotoFormat?) -> Unit = { _, _ -> }): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
         var handedOff = false
+        var importStage = dev.filmroom.diagnostics.CodecStage.SOURCE_OPEN
+        var formatHint: dev.filmroom.io.formats.PhotoFormat? = null
         try {
             val rawBatch=codecs.snapshotRawBatch()
             val result = withContext(Dispatchers.IO+rawBatch) {
                 val job = currentCoroutineContext()
                 job.ensureActive()
+                onStage(importStage, formatHint)
                 if (uri.scheme != "content") {
                     throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_075e5b2e2761))
                 }
@@ -248,6 +253,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     var remainingCopyWindow = PhotoLimits.copyWindowBytes(sourceDirectory.usableSpace)
                     var copied = 0L
                     resolver.openInputStream(uri)?.use { input ->
+                        importStage = dev.filmroom.diagnostics.CodecStage.SOURCE_COPY
+                        onStage(importStage, formatHint)
                         privateCopy.outputStream().buffered().use { output ->
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
@@ -269,7 +276,13 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                         }
                     } ?: throw FileNotFoundException("Photo provider returned no stream")
                     job.ensureActive()
-                    val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null) { rawSpool = it }
+                    importStage = dev.filmroom.diagnostics.CodecStage.INPUT_PROBE
+                    onStage(importStage, formatHint)
+                    val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null, onHeader = {
+                        formatHint = it.identified.format
+                        importStage = dev.filmroom.diagnostics.CodecStage.INPUT_PROCESS
+                        onStage(importStage, formatHint)
+                    }) { rawSpool = it }
                     preview = loaded.preview
                     produced = loaded
                     retained = true
@@ -287,13 +300,13 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         } catch (e: CancellationException) {
             throw e
         } catch (e: PhotoException) {
-            throw e
+            throw enrichImportFailure(e, importStage, formatHint)
         } catch (e: OutOfMemoryError) {
-            throw PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c2432fd4e78), e)
+            throw enrichImportFailure(PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c2432fd4e78), e), importStage, formatHint)
         } catch (e: SecurityException) {
-            throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a064cfbab736), e)
+            throw enrichImportFailure(PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a064cfbab736), e), importStage, formatHint)
         } catch (e: Exception) {
-            throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a428b047ad8e), e)
+            throw enrichImportFailure(PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a428b047ad8e), e), importStage, formatHint)
         } finally {
             // withContext can be cancelled after the worker produced a result but
             // before the main dispatcher delivers it. Do not leak that result.
@@ -374,7 +387,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }
     }
 
-    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,onNewRaw:(File)->Unit={}):LoadedPhoto {
+    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,onHeader:suspend (PhotoInputHeader)->Unit={},onNewRaw:(File)->Unit={}):LoadedPhoto {
         val header=ByteArray(dev.filmroom.io.formats.PhotoHeaders.MAX_PREFIX_BYTES)
         val count=file.inputStream().use { input ->
             var n=0
@@ -383,9 +396,11 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }
         // Read the original encoded file before HEIC/RAW linearization loses its metadata.
         val captureMetadata=PhotoMetadata.read(file)
+        val inputHeader = PhotoInputHeader(header,count)
+        onHeader(inputHeader)
         return inputAdapters.load(
             PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata),
-            PhotoInputHeader(header,count),
+            inputHeader,
         )
     }
 

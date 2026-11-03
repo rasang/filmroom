@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "operation": "planGpuPrintDiffusionStage",
+  "plan": {
+    "combinedPeakBytes": 201399652,
+    "core": 12,
+    "deviceBytes": 8461668,
+    "diskBytes": 69160,
+    "driverAllowanceBytes": 67108864,
+    "fftSide": 16,
+    "height": 7,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 58720256,
+    "manifestSha256": "44eba95f2c2b1c92436524faadad1c06deaa5bc355ccb2516a08288cd859bb42",
+    "operation": "fullPrintDiffusion",
+    "radius": 2,
+    "schemaVersion": 1,
+    "tileCount": 3,
+    "token": 18,
+    "width": 9
+  },
+  "schemaVersion": 1
+}

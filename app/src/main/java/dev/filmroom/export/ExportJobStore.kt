@@ -160,6 +160,14 @@ class ExportJobStore(val root:File) {
         update(ready)
     }
     @Synchronized fun change(id:String,transform:(ExportJob)->ExportJob):ExportJob?=get(id)?.let{if(historyReserved(id))it else transform(it).also(::update)}
+    /** Polls may repeat the same displayed progress. Compare under the store lock so only
+     * a genuinely new progress snapshot causes a durable manifest write and notification.
+     * All other state and checkpoint changes continue through change/update unchanged. */
+    @Synchronized internal fun changeProgress(id:String,progress:ExportDisplayProgress):ExportJob? {
+        val current=get(id) ?: return null
+        if(historyReserved(id) || current.progress==progress)return null
+        return current.copy(progress=progress).also(::update)
+    }
     @Synchronized internal fun cancelInMemory(id:String) {
         mutable.value=mutable.value.map{if(it.id==id && it.state!=ExportJobState.COMPLETED)it.copy(state=ExportJobState.CANCELLED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b58e0113da6),messageUi=UiMessage.of(R.string.text_0b58e0113da6))else it}
     }

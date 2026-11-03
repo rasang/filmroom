@@ -156,3 +156,35 @@ impl GlareSamples {
     }
     pub fn sample(&mut self)->f64{self.distribution.as_ref().map_or(0.,|d|d.sample(&mut self.rng))}
 }
+
+/// Bounded read-only oracle for validating an isolated GPU implementation of the
+/// existing StdRng stream. Not used by production image generation.
+#[doc(hidden)]
+pub fn research_glare_rng_words(seed:u64,count:usize)->Result<Vec<u64>,&'static str> {
+    use rand::RngCore;
+    if count>2_000_000{return Err("Glare oracle sample limit");}
+    let mut rng=StdRng::seed_from_u64(seed);
+    Ok((0..count).map(|_|rng.next_u64()).collect())
+}
+/// Original StandardNormal outputs and cumulative u64 consumption, for complete
+/// sequence comparisons (including rejected draws and tail branches).
+#[doc(hidden)]
+pub fn research_glare_normal_sequence(seed:u64,count:usize)->Result<Vec<(f64,u64)>,&'static str> {
+    if count>2_000_000{return Err("Glare oracle sample limit");}
+    Ok(research_glare_normal_stream(seed).take(count).collect())
+}
+/// Streaming version of the same read-only oracle. Callers bound iteration;
+/// no image-sized allocation is required for a complete maximum-frame census.
+#[doc(hidden)]
+pub fn research_glare_normal_stream(seed:u64)->impl Iterator<Item=(f64,u64)> {
+    use rand::RngCore;
+    use rand_distr::StandardNormal;
+    struct Counted { rng:StdRng, halves:u64 }
+    impl RngCore for Counted {
+        fn next_u32(&mut self)->u32 {self.halves+=1;self.rng.next_u32()}
+        fn next_u64(&mut self)->u64 {self.halves+=2;self.rng.next_u64()}
+        fn fill_bytes(&mut self,dest:&mut[u8]) {self.halves+=(dest.len()as u64).div_ceil(4);self.rng.fill_bytes(dest)}
+    }
+    let mut rng=Counted{rng:StdRng::seed_from_u64(seed),halves:0};
+    std::iter::from_fn(move||{let x:f64=StandardNormal.sample(&mut rng);assert_eq!(rng.halves%2,0,"Unexpected glare u32 sampling");Some((x,rng.halves/2))})
+}

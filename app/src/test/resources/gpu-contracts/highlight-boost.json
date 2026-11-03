@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "operation": "planGpuHighlightBoostStage",
+  "plan": {
+    "combinedPeakBytes": 159452828,
+    "deviceBytes": 8457884,
+    "diskBytes": 74512,
+    "driverAllowanceBytes": 67108864,
+    "gridVersion": 0,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "manifestSha256": "414e8238b1af1b2f1ce611bf2e43c200d5cca38e4018321c1edb892faa63bdcb",
+    "operation": "fullHighlightBoost",
+    "sampleHeight": 0,
+    "sampleWidth": 0,
+    "schemaVersion": 1,
+    "token": 302,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

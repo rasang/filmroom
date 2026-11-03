@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "operation": "planGpuPrintExposureStage",
+  "plan": {
+    "chunkCount": 1,
+    "chunkPixels": 10,
+    "combinedPeakBytes": 136358216,
+    "deviceBytes": 11976,
+    "diskBytes": 81056,
+    "driverAllowanceBytes": 67108864,
+    "height": 2,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 2128512,
+    "manifestSha256": "b2b8ce2372d23e0df9b7c0fda2d71b878146a21a29c124114168bcf111f03a79",
+    "mode": "printExposureOnly",
+    "operation": "fullPrintExposure",
+    "schemaVersion": 1,
+    "tableScalars": 1880,
+    "token": 12,
+    "width": 5
+  },
+  "schemaVersion": 1
+}

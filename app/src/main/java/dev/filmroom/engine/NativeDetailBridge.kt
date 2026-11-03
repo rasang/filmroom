@@ -9,10 +9,12 @@ interface DetailNativeApi {
     fun nativeCreate(canonicalPrivateAppRoot:String):String
     fun nativeBeginOperation(sessionId:Long):String
     fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String):String
+    fun nativeBuildWithGpuDelegate(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String,delegate:Any):String = throw UnsupportedOperationException("Scientific detail ABI unavailable")
     fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String
     fun nativeRegion(sessionId:Long,operationId:Long,x:Int,y:Int,width:Int,height:Int,output:ByteBuffer):String = throw UnsupportedOperationException("Region ABI unavailable")
     fun nativeCancel(sessionId:Long,operationId:Long):String
     fun nativeReleaseOperation(sessionId:Long,operationId:Long):String
+    fun nativeCleanupAfterGpuDrain(sessionId:Long):String = throw UnsupportedOperationException("Scientific cleanup ABI unavailable")
     fun nativeDestroy(sessionId:Long):String
 }
 object NativeDetailBridge:DetailNativeApi {
@@ -22,9 +24,11 @@ object NativeDetailBridge:DetailNativeApi {
     external override fun nativeCreate(canonicalPrivateAppRoot:String):String
     external override fun nativeBeginOperation(sessionId:Long):String
     external override fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String):String
+    external override fun nativeBuildWithGpuDelegate(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String,delegate:Any):String
     external override fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String
     external override fun nativeRegion(sessionId:Long,operationId:Long,x:Int,y:Int,width:Int,height:Int,output:ByteBuffer):String
     external override fun nativeCancel(sessionId:Long,operationId:Long):String
     external override fun nativeReleaseOperation(sessionId:Long,operationId:Long):String
+    external override fun nativeCleanupAfterGpuDrain(sessionId:Long):String
     external override fun nativeDestroy(sessionId:Long):String
 }

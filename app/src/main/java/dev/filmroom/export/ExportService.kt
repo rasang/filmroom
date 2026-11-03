@@ -96,7 +96,7 @@ class ExportService:Service() {
     companion object {
         const val CHANNEL="photo-export"
         const val NOTIFICATION=4101
-        const val ACTION_PAUSE="dev.filmroom.export.PAUSE"
+        const val ACTION_PAUSE=dev.filmroom.BuildConfig.APPLICATION_ID+".export.PAUSE"
         /** Metadata-only refresh; never starts/stops the service or touches queue jobs. */
         fun refreshExistingChannel(context:android.content.Context){
             val manager=context.getSystemService(NotificationManager::class.java)

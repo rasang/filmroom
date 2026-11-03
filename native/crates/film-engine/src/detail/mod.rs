@@ -2,6 +2,7 @@
 //! One active worker per context; callers retain Arc ownership through worker exit.
 mod fft;
 mod global;
+mod scientific;
 use crate::mobile::MobileParams;
 pub use fft::CacheStats as DetailPrintCacheStats;
 pub use global::PregrainMetrics;

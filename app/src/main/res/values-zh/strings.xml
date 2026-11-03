@@ -768,4 +768,7 @@
     <string name="bw_print_development">印相显影时间</string>
     <string name="bw_development_help">使用上游实测显影时间族；默认取中间档，非通用化学配方。</string>
     <string name="bw_development_default">上游默认</string>
+    <string name="gpu_rendering_group" formatted="false">渲染</string>
+    <string name="gpu_rendering_title" formatted="false">GPU 渲染</string>
+    <string name="gpu_rendering_description" formatted="false">统一用于预览、缩放细节和导出，保留原有分辨率、效果与种子。不支持或安全校验失败的阶段使用 CPU，结果可能与 CPU 有细微差异。关闭后全部使用 CPU。</string>
 </resources>

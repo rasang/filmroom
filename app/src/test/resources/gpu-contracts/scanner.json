@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "operation": "planGpuPrintScan",
+  "plan": {
+    "chunkCount": 1,
+    "chunkPixels": 51,
+    "combinedPeakBytes": 136345940,
+    "deviceBytes": 9652,
+    "diskBytes": 75424,
+    "driverAllowanceBytes": 67108864,
+    "height": 3,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 2118560,
+    "manifestSha256": "f5bb5d0c49662b1ddd7854751712b0933b8f8e3876be941902135f5072e0c5d6",
+    "mode": "directFilm",
+    "operation": "fullPrintScanLogXyz",
+    "schemaVersion": 1,
+    "tableScalars": 930,
+    "token": 7,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

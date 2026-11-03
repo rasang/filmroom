@@ -1,0 +1,19 @@
+# Resident finish-tail contract
+
+`fullFinishTail` is one isolated helper operation. Its immutable prefix packet contains original three f64 planes and original PCHIP/curve tables. The root manifest binds that packet hash and the complete tail plan. Candidate publication binds the root hash, token, dimensions, complete f32 RGB length, SHA-256 and every output scalar's finiteness. The parent must confirm helper exit before adoption or whole combined-stage CPU fallback.
+
+A single Vulkan device owns five full-image f32 planes, bounded transfer/readback buffers, a sticky u32 error flag, and immutable f32 prefix tables with a 256-byte header. Full original glare generation and global full-line glare blur occur first. Each uploaded original density/raw chunk runs PCHIP, original print curves, scanner lookup and scanner color in one op40 invocation. LogXYZ stays in invocation registers; only eight bounded logXYZ witnesses per chunk cross to the host. The three output color planes remain resident for all original lens FIR/IIR and sharpening passes. Final conversion/brightness is followed by a second sticky error read before publication. No complete intermediate logXYZ image is written or transferred.
+
+Supported ingress modes are directFilm, printFromDensity, printFromRaw. PrintRaw is after enlarger diffusion, which is not silently skipped. PrintExposureOnly is explicitly unsupported here. The tail retains every option its standalone implementation admits, including original sequential glare RNG and gamut branches. Domain/adapter/memory/timeout/cancellation failure rejects the whole fused operation.
+
+## Bounded memory and work
+
+For N pixels and T prefix table scalars, device bytes are tail device bytes + 4T + 256. Host bytes are tail host bytes + 16T + 8 MiB. Driver and helper allowances remain 64 MiB each. Admission rejects combined peak over 768 MiB and preserves the inherited finish packet's stricter table admission. Disk reservation is 36N + 8T + 3 MiB. Input and output IO use chunks of at most 32768 RGB pixels; table loading and the additional packed copy fit the 16T host allowance.
+
+Spatial dependencies remain complete image lines. Glare is generated in original sequential stream order. No tiling restarts recursive IIR state and no reduced-resolution processing is introduced. The existing external process watchdog and cancellation lifecycle apply to the new operation; device wait retains its bounded five-second checks.
+
+## Finite arithmetic induction
+
+Host loading validates every table scalar, original input, LUT range and curve axis. Table entries, LUT min/max and print scales have absolute value <= 1e10; LUT ranges and adjacent f32 curve-axis gaps are >= 1e-10. All input values are finite with absolute value <= 1e15. LUT sizes are 2..129. Therefore the largest unchecked coordinate calculation before clamping is bounded by approximately 1.3e27, far below f32 overflow. After clamping, Hermite coordinates lie in [0,1]. Hermite accumulation, scalar interpolation, print exponentiation/scaling and logarithms use the shared pre-domain arithmetic guards. Each rejected operation sets the same atomic integer flag and returns inert zeros, never an indeterminate/NaN sentinel. Guarded arithmetic preserves original left-associative Hermite and original reciprocal-then-multiply curve interpolation.
+
+Each bounded prefix witness independently compares against original f64 PCHIP/curves at 2e-5 * max(1, abs(reference)). The color witness then starts from the actual accepted GPU logXYZ witness, isolating prefix error from tail error. Full-line tail witnesses retain their existing tolerance. Summary sampleCount combines both; sample RMS includes both sums. These sampled checks do not establish whole-image f64 equality or device speed. Actual-device quality, timing and memory observations remain required before claims of benefit.

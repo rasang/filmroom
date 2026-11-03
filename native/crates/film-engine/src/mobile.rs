@@ -4,6 +4,9 @@ use spektrafilm_core::{params::RuntimeParams, pipeline::Pipeline, profile::{Prof
 use spektrafilm_math::{image::ImageBuf, precision::from_f64};
 use std::{collections::HashMap, path::{Path,PathBuf}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering}}, time::Instant};
 
+#[path="preview_reuse.rs"]
+mod preview_reuse;
+
 pub const MAX_PIXELS: usize = 768 * 768;
 pub const MEMORY_FIXED_ESTIMATE_BYTES:u64=96*1024*1024;
 pub const MEMORY_ESTIMATE_BYTES_PER_PIXEL:u64=512;
@@ -21,6 +24,28 @@ pub type Result<T> = std::result::Result<T, EngineError>;
 pub struct MobileParams {
     #[serde(skip_serializing)]
     pub checkpoint_directory:Option<String>,
+    /// Diagnostic opt-in only; never part of science, persistence, or public diagnostics.
+    #[serde(skip_serializing, deserialize_with="deserialize_gpu_probe_capture_token")]
+    pub gpu_probe_capture_token:Option<u64>,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_diffusion_experimental:bool,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_scanner_experimental:bool,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_optical_experimental:bool,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_exposure_experimental:bool,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_dir_experimental:bool,
+    #[serde(skip_serializing_if="is_false")]
+    pub gpu_science_experimental:bool,
+    /// Test-only execution choices, excluded from photographic/checkpoint identity.
+    #[serde(skip_serializing)]
+    pub export_optimization_mask:u32,
+    #[serde(skip_serializing)]
+    pub gpu_resource_reuse:bool,
+    #[serde(skip_serializing)]
+    pub preview_brightness_reuse:bool,
     pub schema_version: u32, pub film_stock: String, pub paper_stock: String, pub output_route:String,
     pub film_exposure_ev: f64, pub brightness_ev: f64, pub contrast: f64,
     pub warmth: f64, pub saturation: f64, pub grain_amount: f64, pub grain_size: f64,
@@ -77,7 +102,14 @@ pub struct MobileParams {
 
 }
 impl Default for MobileParams {
-    fn default() -> Self { Self { checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
+    fn default() -> Self { Self { preview_brightness_reuse:false,gpu_resource_reuse:false,export_optimization_mask:0,checkpoint_directory:None,gpu_probe_capture_token:None,gpu_diffusion_experimental:false,gpu_scanner_experimental:false,gpu_optical_experimental:false,gpu_exposure_experimental:false,gpu_dir_experimental:false,gpu_science_experimental:false,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
+}
+fn is_false(value:&bool)->bool {!*value}
+// Malformed diagnostic tokens cannot invalidate an otherwise valid export.
+// Zero is an internal invalid-request sentinel, never an admitted capture token.
+fn deserialize_gpu_probe_capture_token<'de,D:serde::Deserializer<'de>>(deserializer:D)->std::result::Result<Option<u64>,D::Error> {
+    let value=Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.map(|v|v.as_u64().filter(|v|*v>0&&*v<=i64::MAX as u64).unwrap_or(0)))
 }
 impl MobileParams {
     pub fn parse(json: &str) -> Result<Self> {
@@ -89,6 +121,7 @@ impl MobileParams {
         p.validate()?; Ok(p)
     }
     pub fn validate(&self)->Result<()> {
+        if crate::export_optimizations::ExportOptimizations::from_bits(self.export_optimization_mask).is_none() {return Err(EngineError::new("INVALID_PARAMS","Unknown export optimization bits"));}
         if !(128..=512).contains(&self.memory_budget_mi_b) {return Err(EngineError::new("INVALID_BUDGET","memoryBudgetMiB must be an integer in 128..512"));}
         if self.schema_version!=1 {return Err(EngineError::new("UNSUPPORTED_SCHEMA","Only schemaVersion 1 is supported"));}
         if !crate::profile_catalog::valid_route(&self.film_stock,&self.paper_stock,&self.output_route) {return Err(EngineError::new("UNSUPPORTED_PROFILE","Profile/route not in the bundled supported catalog"));}
@@ -199,25 +232,25 @@ impl MobileParams {
 /// Per-handle, privacy-safe progress. Counters are local to the named stage.
 pub struct ProgressState {
     job_id:u64,operation:&'static str,stage:&'static str,status:&'static str,
-    done:u64,total:u64,pass_id:u64,display_stage:u8,stage_done:u64,stage_total:u64,started:Option<Instant>,finished_ms:Option<f64>,
+    done:u64,total:u64,pass_id:u64,update_serial:u64,display_stage:u8,stage_done:u64,stage_total:u64,started:Option<Instant>,finished_ms:Option<f64>,
 }
-impl Default for ProgressState {fn default()->Self{Self{job_id:0,operation:"none",stage:"idle",status:"idle",done:0,total:0,pass_id:0,display_stage:1,stage_done:0,stage_total:0,started:None,finished_ms:None}}}
+impl Default for ProgressState {fn default()->Self{Self{job_id:0,operation:"none",stage:"idle",status:"idle",done:0,total:0,pass_id:0,update_serial:0,display_stage:1,stage_done:0,stage_total:0,started:None,finished_ms:None}}}
 fn safe_stage(stage:&'static str)->&'static str {match stage {
     "print_diffusion"|"auto_exposure"|"highlight_boost"|"scan_glare"|"camera_blur"|"scan_blur"|"camera_diffusion"|"scan_sharpen"|"idle"|"validate"|"setup"|"projection"|"halation"|"scatter"|"film_log"|"film_density"|"dir"|"grain"|"printing_scanning"|"output"|"flush"|"cleanup"|"complete"|"preview"|"film_exposure"|"film_scatter"|"film_halation"|"film_scatter_halation"|"film_density_dir"|"dir_diffusion"|"dir_develop"|"grain_blur"|"grain_cloud"|"grain_sampling"|"grain_microstructure"=>stage,
     _=>"processing",
 }}
 pub fn progress_begin(engine:&Engine,operation:&'static str)->u64 {
-    if let Ok(mut p)=engine.progress.lock(){p.job_id=p.job_id.wrapping_add(1);p.operation=operation;p.stage="setup";p.status="running";p.done=0;p.total=0;p.pass_id=1;p.display_stage=1;p.stage_done=0;p.stage_total=0;p.started=Some(Instant::now());p.finished_ms=None;p.job_id}else{0}
+    if let Ok(mut p)=engine.progress.lock(){p.job_id=p.job_id.wrapping_add(1);p.operation=operation;p.stage="setup";p.status="running";p.done=0;p.total=0;p.pass_id=1;p.update_serial=1;p.display_stage=1;p.stage_done=0;p.stage_total=0;p.started=Some(Instant::now());p.finished_ms=None;p.job_id}else{0}
 }
 pub fn progress_update(engine:&Engine,stage:&'static str,done:u64,total:u64) {
-    if let Ok(mut p)=engine.progress.lock(){let stage=safe_stage(stage);let done=done.min(total);if p.stage!=stage||done<p.done {p.pass_id=p.pass_id.saturating_add(1);}p.stage=stage;p.done=done;p.total=total;}
+    if let Ok(mut p)=engine.progress.lock(){let stage=safe_stage(stage);let done=done.min(total);if p.stage!=stage||done<p.done {p.pass_id=p.pass_id.saturating_add(1);}p.stage=stage;p.done=done;p.total=total;p.update_serial=p.update_serial.saturating_add(1);}
 }
 /// The raw pass and aggregate stage are one snapshot, even under concurrent JNI polling.
 pub fn progress_update_export(engine:&Engine,event:crate::streamed_progress::ExportProgress) {
     if let Ok(mut p)=engine.progress.lock(){
         let stage=safe_stage(event.phase);let done=event.done.min(event.total);
         if p.stage!=stage||done<p.done {p.pass_id=p.pass_id.saturating_add(1);}
-        p.stage=stage;p.done=done;p.total=event.total;
+        p.stage=stage;p.done=done;p.total=event.total;p.update_serial=p.update_serial.saturating_add(1);
         p.display_stage=event.display_stage;p.stage_done=event.stage_done;p.stage_total=event.stage_total;
     }
 }
@@ -226,7 +259,7 @@ pub fn progress_finish(engine:&Engine,job_id:u64,code:Option<&str>)->Option<&'st
 }
 pub fn progress_json(engine:&Engine)->Result<String> {
     let p=engine.progress.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Progress unavailable"))?;
-    Ok(serde_json::json!({"ok":true,"schemaVersion":1,"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running"}).to_string())
+    Ok(serde_json::json!({"ok":true,"schemaVersion":1,"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"updateSerial":p.update_serial,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running"}).to_string())
 }
 #[derive(Debug,Serialize)]
 #[serde(rename_all="camelCase")]
@@ -247,6 +280,7 @@ pub struct Engine {
     pub destroyed: AtomicBool,
     pub render_lock: Mutex<()>,
     pub progress:Mutex<ProgressState>,
+    preview_cache:Mutex<preview_reuse::Cache>,
 }
 static ENGINES: OnceLock<Mutex<HashMap<i64, Arc<Engine>>>>=OnceLock::new();
 static NEXT_HANDLE: AtomicI64=AtomicI64::new(1);
@@ -260,7 +294,7 @@ pub fn create(data_dir: &str)->Result<i64> {
     let id=NEXT_HANDLE.fetch_add(1,Ordering::Relaxed);
     if id<=0 {return Err(EngineError::new("INTERNAL_ERROR","Handle space exhausted"));}
     let mut registry=engines().lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Handle registry unavailable"))?;
-    registry.insert(id,Arc::new(Engine {data_dir:path,cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())}));
+    registry.insert(id,Arc::new(Engine {data_dir:path,cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),preview_cache:Mutex::new(preview_reuse::Cache::default())}));
     Ok(id)
 }
 pub fn get(id:i64)->Result<Arc<Engine>> {
@@ -279,7 +313,7 @@ pub fn required_bytes(width:i32,height:i32)->Result<usize> {
 pub fn check_cancellation(engine:&Engine,generation:u64)->Result<()> {
     if engine.destroyed.load(Ordering::Acquire) || engine.cancel_generation.load(Ordering::Acquire)!=generation {Err(EngineError::new("CANCELLED","Result cancelled; output is not valid"))} else {Ok(())}
 }
-pub struct RenderOutput {pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub pixels:Vec<f32>,pub elapsed_ms:f64,pub warnings:Vec<&'static str>}
+pub struct RenderOutput {pub preview_reuse_hit:bool,pub preview_cache_bytes:usize,pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub pixels:Vec<f32>,pub elapsed_ms:f64,pub warnings:Vec<&'static str>}
 pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,params:&MobileParams)->Result<RenderOutput> {
     let bytes=required_bytes(width as i32,height as i32)?;
     params.validate()?;
@@ -289,19 +323,32 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     check_cancellation(engine,generation)?;
     let _interactive=crate::export_execution::interactive_work();
     let start=Instant::now();
-    let film=load_profile_by_name(&engine.data_dir,&params.film_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
-    let print=load_profile_by_name(&engine.data_dir,&params.paper_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
-    let runtime=params.runtime_for_film(&film);
-    let pipe=Pipeline::new_with_spectral(film,print,runtime,&engine.data_dir).map_err(|e|EngineError::new("PIPELINE_ERROR",e))?;
-    check_cancellation(engine,generation)?;
-    let image=ImageBuf::from_data(width,height,input.iter().map(|&x|from_f64(x as f64)).collect());
-    let backend=crate::adreno::AdrenoDensityBackend::with_enabled(params.use_gpu);
-    check_cancellation(engine,generation)?;
-    let metered_ev=if pipe.params.camera.auto_exposure {
-        let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);
-        Some(spektrafilm_core::stages::filming::measure_autoexposure_ev(&image,&matrix,&pipe.params.camera.auto_exposure_method))
-    }else{None};
-    let output=pipe.process(image,&backend);
+    let reuse=params.preview_brightness_reuse && !params.use_gpu;
+    let dependency=if reuse {Some(preview_reuse::dependencies(engine,generation)?)}else{None};
+    let identity=if let Some(dependency)=&dependency {
+        let mut science=params.clone();science.brightness_ev=0.;
+        format!("{}:{}:{}:{}",crate::RUST_REFERENCE,crate::PYTHON_REFERENCE,dependency,serde_json::to_string(&science).map_err(|_|EngineError::new("INVALID_PARAMS","Cannot identify scientific parameters"))?)
+    }else{String::new()};
+    let mut cache=engine.preview_cache.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Preview cache unavailable"))?;
+    if !reuse {cache.clear();}
+    let cached=if reuse {cache.find(&identity,input,width,height)}else{None};
+    let preview_reuse_hit=cached.is_some();
+    let backend=crate::adreno::AdrenoDensityBackend::with_options(params.use_gpu,params.gpu_resource_reuse);
+    let (output,metered_ev)=if let Some(cached)=cached {cached}else {
+        let film=load_profile_by_name(&engine.data_dir,&params.film_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
+        let print=load_profile_by_name(&engine.data_dir,&params.paper_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
+        let runtime=params.runtime_for_film(&film);
+        let pipe=Pipeline::new_with_spectral(film,print,runtime,&engine.data_dir).map_err(|e|EngineError::new("PIPELINE_ERROR",e))?;
+        check_cancellation(engine,generation)?;
+        let image=ImageBuf::from_data(width,height,input.iter().map(|&x|from_f64(x as f64)).collect());
+        let metered_ev=if pipe.params.camera.auto_exposure {
+            let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);
+            Some(spektrafilm_core::stages::filming::measure_autoexposure_ev(&image,&matrix,&pipe.params.camera.auto_exposure_method))
+        }else{None};
+        let output=pipe.process(image,&backend);
+        check_cancellation(engine,generation)?;
+        (output,metered_ev)
+    };
     check_cancellation(engine,generation)?;
     if output.width != width || output.height != height || output.data.len() != bytes/4 {
         return Err(EngineError::new("INVALID_OUTPUT_SHAPE", "Physical pipeline returned dimensions or buffer length different from the requested image"));
@@ -312,7 +359,14 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
         rgb.into_iter().map(|x|(x*exposure)as f32)
     }).collect();
     if pixels.iter().any(|x|!x.is_finite()) {return Err(EngineError::new("NONFINITE_OUTPUT","Rendering produced a nonfinite sample"));}
-    Ok(RenderOutput {metered_ev,gpu:backend.diagnostics(),pixels,elapsed_ms:start.elapsed().as_secs_f64()*1000.,warnings:vec!["Direct-buffer preview: maximum 589824 pixels. Use nativeExportFile for original-size export; never silently reduce the original.","Float32 input/output ABI is not a bit-exact float64 Python reference; see precision for internal arithmetic.","The same seed is deterministic within each path, but preview and full-size export use different grain sampling layouts and need not match pixel-for-pixel.","Cancellation is cooperative before/after the pipeline, not immediate."]})
+    if reuse && !preview_reuse_hit {
+        if dependency.as_ref()==Some(&preview_reuse::dependencies(engine,generation)?) {
+            check_cancellation(engine,generation)?;
+            cache.insert(identity,input,output,metered_ev);
+        } else {cache.clear();}
+    }
+    let preview_cache_bytes=cache.bytes();
+    Ok(RenderOutput {preview_reuse_hit,preview_cache_bytes,metered_ev,gpu:backend.diagnostics(),pixels,elapsed_ms:start.elapsed().as_secs_f64()*1000.,warnings:vec!["Direct-buffer preview: maximum 589824 pixels. Use nativeExportFile for original-size export; never silently reduce the original.","Float32 input/output ABI is not a bit-exact float64 Python reference; see precision for internal arithmetic.","The same seed is deterministic within each path, but preview and full-size export use different grain sampling layouts and need not match pixel-for-pixel.","Cancellation is cooperative before/after the pipeline, not immediate."]})
 }
 /// Never expose arbitrary upstream errors: they can contain paths or input text.
 pub fn public_error_message(code:&str)->&'static str {match code {
@@ -389,7 +443,51 @@ fn private_checkpoint_path(engine:&Engine,input:&Path,output:&Path,requested:&st
     Ok(checkpoint)
 }
 
+/// The caller may request only a token. Derive its fresh destination from the
+/// trusted app root, and reject links/missing roots without failing the export.
+fn private_gpu_probe_request(app:&Path,token:u64)->crate::streamed::GpuProbeCaptureRequest {
+    use crate::streamed::GpuProbeCaptureRequest;
+    if token==0||token>i64::MAX as u64 {return GpuProbeCaptureRequest::Invalid;}
+    let cache=app.join("cache");let root=cache.join("gpu-probes");
+    for dir in [&cache,&root] {
+        if !std::fs::symlink_metadata(dir).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())
+            || dir.canonicalize().ok().as_ref()!=Some(dir) {return GpuProbeCaptureRequest::Invalid;}
+    }
+    let snapshot_dir=root.join(format!("probe-{token}"));
+    if !matches!(std::fs::symlink_metadata(&snapshot_dir),Err(e) if e.kind()==std::io::ErrorKind::NotFound) {return GpuProbeCaptureRequest::Invalid;}
+    GpuProbeCaptureRequest::Capture{token,snapshot_dir}
+}
+
+/// One shared process-wide monotonic token allocator for preview and export.
+/// Exhaustion fails closed (token 0), never wraps into a previously owned job.
+pub(crate) fn gpu_stage_requests(cache:&Path,parent_handle:i64,params:&MobileParams,delegates:crate::streamed::GpuStageDelegates)->crate::streamed::GpuStageRequests {
+    let request=|enabled:bool,delegate:Option<Box<dyn crate::streamed::GpuDiffusionDelegate>>| {
+        if !enabled{return None;}
+        static NEXT_GPU_TOKEN:AtomicU64=AtomicU64::new(0);
+        let clock=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|t|t.as_nanos().min((i64::MAX-1)as u128)as u64).unwrap_or(1);
+        let previous=NEXT_GPU_TOKEN.fetch_update(Ordering::Relaxed,Ordering::Relaxed,|last|last.checked_add(1).filter(|v|*v<=i64::MAX as u64).map(|v|v.max(clock)));
+        let token=previous.map(|last|(last+1).max(clock)).unwrap_or(0);let root=cache.join("gpu-render");
+        let stage_dir=if token>0&&std::fs::symlink_metadata(&root).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())&&root.canonicalize().ok().as_ref()==Some(&root){Some(root.join(format!("gpu-stage-{token}")))}else{None};
+        Some(crate::streamed::GpuDiffusionRequest{parent_handle,token,stage_dir,delegate})
+    };
+    let mut science_delegates=delegates.science;
+    crate::streamed::GpuStageRequests {
+        route:crate::streamed::ScienceRoute::Export,
+        diffusion:request(params.gpu_diffusion_experimental,delegates.diffusion),scanner:request(params.gpu_scanner_experimental,delegates.scanner),optical:request(params.gpu_optical_experimental,delegates.optical),exposure:request(params.gpu_exposure_experimental,delegates.exposure),dir:request(params.gpu_dir_experimental,delegates.dir),
+        science:crate::streamed::ScienceKind::ALL.into_iter().filter_map(|kind|{let delegate=science_delegates.remove(&kind);request(params.gpu_science_experimental,delegate).map(|r|(kind,r))}).collect(),
+    }
+}
+pub(crate) fn clear_preview_cache(engine:&Engine)->Result<()> {
+    engine.preview_cache.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Preview cache unavailable"))?.clear();Ok(())
+}
+
 pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,height:i32,params:&MobileParams)->Result<crate::streamed::StreamedMetrics> {
+    export_with_gpu_delegate(engine,generation,0,input,output,width,height,params,None)
+}
+pub(crate) fn export_with_gpu_delegate(engine:&Engine,generation:u64,parent_handle:i64,input:&str,output:&str,width:i32,height:i32,params:&MobileParams,delegate:Option<Box<dyn crate::streamed::GpuDiffusionDelegate>>)->Result<crate::streamed::StreamedMetrics> {
+    export_with_gpu_delegates(engine,generation,parent_handle,input,output,width,height,params,crate::streamed::GpuStageDelegates{diffusion:delegate,..crate::streamed::GpuStageDelegates::default()})
+}
+pub(crate) fn export_with_gpu_delegates(engine:&Engine,generation:u64,parent_handle:i64,input:&str,output:&str,width:i32,height:i32,params:&MobileParams,delegates:crate::streamed::GpuStageDelegates)->Result<crate::streamed::StreamedMetrics> {
     let _plan=plan_export(width,height,params)?;
     let (input,output)=private_spool_paths(engine,input,output)?;
     check_cancellation(engine,generation)?;
@@ -406,14 +504,94 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
     let scratch=cache.join(format!("film-native-v5-{generation}-{epoch}-{nonce}"));
     let checkpoint=params.checkpoint_directory.as_deref()
         .map(|requested|private_checkpoint_path(engine,&input,&output,requested)).transpose()?;
+    let gpu_probe_capture=if params.gpu_diffusion_experimental {None}else{params.gpu_probe_capture_token.map(|token|private_gpu_probe_request(app,token))};
+    let gpu_stages=gpu_stage_requests(&cache,parent_handle,params,delegates);
     // Working scratch remains disposable; only committed stage snapshots persist.
-    let mut result=execution.run(||crate::streamed::export_file_checkpointed_managed(&execution,&engine.data_dir,&params.film_stock,&params.paper_stock,runtime,&input,&output,&scratch,checkpoint.as_deref(),width as u32,height as u32,params.memory_budget_mi_b,params.brightness_ev,params.use_gpu,||execution.checkpoint(||check_cancellation(engine,generation).is_err()),|event|progress_update_export(engine,event)))?;
+    let mut result=execution.run(||crate::streamed::export_file_checkpointed_managed_with_gpu_delegates(&execution,&engine.data_dir,&params.film_stock,&params.paper_stock,runtime,&input,&output,&scratch,checkpoint.as_deref(),width as u32,height as u32,params.memory_budget_mi_b,params.brightness_ev,params.use_gpu,crate::export_optimizations::ExportOptimizations {gpu_resource_reuse:params.gpu_resource_reuse,..crate::export_optimizations::ExportOptimizations::from_bits(params.export_optimization_mask).expect("validated mask")},gpu_probe_capture,gpu_stages,||execution.checkpoint(||check_cancellation(engine,generation).is_err()),|event|progress_update_export(engine,event)))?;
     result.export_execution=Some(execution.metrics());
     Ok(result)
 }
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn gpu_experimental_policy_is_false_by_default_and_only_serializes_true() {
+        let baseline=MobileParams::default();assert!(!baseline.gpu_diffusion_experimental);
+        let normal=serde_json::to_value(&baseline).unwrap();assert!(normal.get("gpuDiffusionExperimental").is_none());
+        let enabled=MobileParams::parse(r#"{"gpuDiffusionExperimental":true}"#).unwrap();assert!(enabled.gpu_diffusion_experimental);
+        assert_eq!(serde_json::to_value(&enabled).unwrap()["gpuDiffusionExperimental"],true);
+        // Numeric photographic parameters are unchanged; the stage's requested
+        // execution policy is added independently to checkpoint identity.
+        assert_eq!(serde_json::to_value(baseline.runtime()).unwrap(),serde_json::to_value(enabled.runtime()).unwrap());
+    }
+    #[test] fn gpu_scanner_policy_is_independent_explicit_and_false_by_default() {
+        let baseline=MobileParams::default();assert!(!baseline.gpu_scanner_experimental);
+        assert!(serde_json::to_value(&baseline).unwrap().get("gpuScannerExperimental").is_none());
+        for diffusion in [false,true] {
+            let p=MobileParams::parse(&format!(r#"{{"gpuScannerExperimental":true,"gpuDiffusionExperimental":{diffusion}}}"#)).unwrap();
+            assert!(p.gpu_scanner_experimental);assert_eq!(p.gpu_diffusion_experimental,diffusion);
+            assert_eq!(serde_json::to_value(&p).unwrap()["gpuScannerExperimental"],true);
+            assert_eq!(serde_json::to_value(p.runtime()).unwrap(),serde_json::to_value(baseline.runtime()).unwrap());
+        }
+        assert!(MobileParams::parse(r#"{"gpuScannerExperimental":"true"}"#).is_err());
+        assert!(MobileParams::parse(r#"{"gpuScannerExperimental":1}"#).is_err());
+    }
+    #[test] fn gpu_optical_policy_is_independent_explicit_and_false_by_default() {
+        let baseline=MobileParams::default();assert!(!baseline.gpu_optical_experimental);
+        assert!(serde_json::to_value(&baseline).unwrap().get("gpuOpticalExperimental").is_none());
+        let p=MobileParams::parse(r#"{"gpuOpticalExperimental":true}"#).unwrap();
+        assert!(p.gpu_optical_experimental&&!p.gpu_scanner_experimental&&!p.gpu_diffusion_experimental);
+        assert_eq!(serde_json::to_value(&p).unwrap()["gpuOpticalExperimental"],true);
+        assert_eq!(serde_json::to_value(p.runtime()).unwrap(),serde_json::to_value(baseline.runtime()).unwrap());
+        assert!(MobileParams::parse(r#"{"gpuOpticalExperimental":"true"}"#).is_err());
+    }
+    #[test] fn gpu_exposure_policy_is_independent_explicit_and_false_by_default() {
+        let baseline=MobileParams::default();assert!(!baseline.gpu_exposure_experimental);
+        assert!(serde_json::to_value(&baseline).unwrap().get("gpuExposureExperimental").is_none());
+        let p=MobileParams::parse(r#"{"gpuExposureExperimental":true}"#).unwrap();
+        assert!(p.gpu_exposure_experimental&&!p.gpu_scanner_experimental&&!p.gpu_diffusion_experimental&&!p.gpu_optical_experimental);
+        assert_eq!(serde_json::to_value(&p).unwrap()["gpuExposureExperimental"],true);
+        assert_eq!(serde_json::to_value(p.runtime()).unwrap(),serde_json::to_value(baseline.runtime()).unwrap());
+        assert!(MobileParams::parse(r#"{"gpuExposureExperimental":"true"}"#).is_err());
+    }
+    #[test] fn gpu_dir_policy_is_independent_explicit_and_false_by_default() {
+        let baseline=MobileParams::default();assert!(!baseline.gpu_dir_experimental);
+        assert!(serde_json::to_value(&baseline).unwrap().get("gpuDirExperimental").is_none());
+        let p=MobileParams::parse(r#"{"gpuDirExperimental":true}"#).unwrap();assert!(p.gpu_dir_experimental);
+        assert!(!p.gpu_exposure_experimental&&!p.gpu_scanner_experimental&&!p.gpu_diffusion_experimental&&!p.gpu_optical_experimental);
+        assert_eq!(serde_json::to_value(&p).unwrap()["gpuDirExperimental"],true);
+        assert_eq!(serde_json::to_value(p.runtime()).unwrap(),serde_json::to_value(baseline.runtime()).unwrap());
+        assert!(MobileParams::parse(r#"{"gpuDirExperimental":"true"}"#).is_err());
+    }
+    #[test] fn gpu_probe_capture_token_never_changes_science_or_serialized_parameters() {
+        let baseline=MobileParams::default();let serialized=serde_json::to_string(&baseline).unwrap();let runtime=serde_json::to_string(&baseline.runtime()).unwrap();
+        for token in [1,i64::MAX as u64] {
+            let p=MobileParams::parse(&format!(r#"{{"gpuProbeCaptureToken":{token}}}"#)).unwrap();assert_eq!(p.gpu_probe_capture_token,Some(token));
+            assert_eq!(serde_json::to_string(&p).unwrap(),serialized);assert_eq!(serde_json::to_string(&p.runtime()).unwrap(),runtime);
+        }
+        for value in ["0","-1","9223372036854775808","1.5",r#""123""#,"true","{}","[]"] {
+            let p=MobileParams::parse(&format!(r#"{{"gpuProbeCaptureToken":{value}}}"#)).unwrap();assert_eq!(p.gpu_probe_capture_token,Some(0));
+            assert_eq!(serde_json::to_string(&p).unwrap(),serialized);
+        }
+        assert_eq!(MobileParams::parse(r#"{"gpuProbeCaptureToken":null}"#).unwrap().gpu_probe_capture_token,None);
+    }
+    #[test] fn gpu_probe_capture_requires_existing_real_private_root_and_fresh_token() {
+        use crate::streamed::GpuProbeCaptureRequest;
+        let root=std::env::temp_dir().join(format!("gpu-probe-paths-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&root).unwrap();let root=root.canonicalize().unwrap();
+        struct Temp(PathBuf);impl Drop for Temp{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}let _guard=Temp(root.clone());
+        assert!(matches!(private_gpu_probe_request(&root,7),GpuProbeCaptureRequest::Invalid));
+        let probes=root.join("cache/gpu-probes");std::fs::create_dir_all(&probes).unwrap();
+        match private_gpu_probe_request(&root,7) {GpuProbeCaptureRequest::Capture{token,snapshot_dir}=>{assert_eq!(token,7);assert_eq!(snapshot_dir,probes.join("probe-7"));},_=>panic!("valid root rejected")}
+        for token in [0,i64::MAX as u64+1] {assert!(matches!(private_gpu_probe_request(&root,token),GpuProbeCaptureRequest::Invalid));}
+        std::fs::create_dir(probes.join("probe-7")).unwrap();assert!(matches!(private_gpu_probe_request(&root,7),GpuProbeCaptureRequest::Invalid));
+        #[cfg(unix)] {
+            std::fs::rename(&probes,root.join("cache/real-probes")).unwrap();std::os::unix::fs::symlink(root.join("cache/real-probes"),&probes).unwrap();
+            assert!(matches!(private_gpu_probe_request(&root,8),GpuProbeCaptureRequest::Invalid));
+            std::fs::remove_file(&probes).unwrap();std::fs::rename(root.join("cache/real-probes"),&probes).unwrap();
+            std::fs::rename(root.join("cache"),root.join("real-cache")).unwrap();std::os::unix::fs::symlink(root.join("real-cache"),root.join("cache")).unwrap();
+            assert!(matches!(private_gpu_probe_request(&root,8),GpuProbeCaptureRequest::Invalid));
+        }
+    }
     #[test] fn checkpoint_path_is_not_in_serialized_diagnostics() {let mut p=MobileParams::default();p.checkpoint_directory=Some("/private/job/checkpoint".into());let serialized=serde_json::to_string(&p).unwrap();assert!(!serialized.contains("checkpoint"));assert!(!serialized.contains("/private"));assert_eq!(plan_export(4000,3000,&p).unwrap().checkpoint_reserve_bytes,576_000_000+1024*1024);}
 
     #[test] fn advanced_controls_map_and_defaults_preserve_baseline() {
@@ -424,7 +602,7 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
     #[test] fn checked_dimensions() {assert_eq!(required_bytes(16,16).unwrap(),3072);assert!(required_bytes(0,1).is_err());assert!(required_bytes(i32::MAX,i32::MAX).is_err());assert_eq!(required_bytes(768,768).unwrap(),768*768*12);assert!(required_bytes(769,768).is_err());}
     #[test] fn rejects_invalid_parameters() {for j in [r#"{"unknown":1}"#,r#"{"filmStock":"../../secret"}"#,r#"{"grainAmount":-1}"#,r#"{"schemaVersion":2}"#,r#"{"contrast":2}"#] {assert!(MobileParams::parse(j).is_err(),"{j}");}}
     #[test] fn accepts_documented_defaults() {let p=MobileParams::parse("{}").unwrap();assert_eq!(p.seed,42);assert_eq!(p.film_stock,"kodak_portra_400");}
-    #[test] fn cancelled_generation_does_not_poison_next_job() {let e=Engine {data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())};let old=e.cancel_generation.load(Ordering::Acquire);e.cancel_generation.fetch_add(1,Ordering::AcqRel);assert!(check_cancellation(&e,old).is_err());let new=e.cancel_generation.load(Ordering::Acquire);assert!(check_cancellation(&e,new).is_ok());}
+    #[test] fn cancelled_generation_does_not_poison_next_job() {let e=Engine {data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),preview_cache:Mutex::new(preview_reuse::Cache::default())};let old=e.cancel_generation.load(Ordering::Acquire);e.cancel_generation.fetch_add(1,Ordering::AcqRel);assert!(check_cancellation(&e,old).is_err());let new=e.cancel_generation.load(Ordering::Acquire);assert!(check_cancellation(&e,new).is_ok());}
     #[test] fn missing_data_cannot_create_engine() {assert!(create("/does/not/exist/film-engine-data").is_err());assert!(get(-1).is_err());destroy(-1);cancel(-1);}
     #[test] fn public_errors_do_not_leak_upstream_text() {
         let result=error_json(EngineError::new("INVALID_PARAMS","private-GPS-path-photo-sample"),"preview","validate_request",1.5);
@@ -447,7 +625,7 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         assert!(plan_export(i32::MAX,2,&p).is_err());assert!(plan_export(0,3000,&p).is_err());
     }
     #[test] fn export_progress_snapshot_is_coherent_under_concurrent_polling() {
-        let e=Arc::new(Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())});
+        let e=Arc::new(Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),preview_cache:Mutex::new(preview_reuse::Cache::default())});
         progress_begin(&e,"exportFile");let writer=e.clone();
         let thread=std::thread::spawn(move||for i in 1..=5000 {
             let cloud=i%2==0;
@@ -458,8 +636,22 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         }
         thread.join().unwrap();progress_begin(&e,"preview");let value:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(value["displayStage"],1);assert_eq!(value["stageDone"],0);assert_eq!(value["stageTotal"],0);
     }
+    #[test] fn progress_serial_changes_only_on_native_updates_even_if_counts_are_equal() {
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),preview_cache:Mutex::new(preview_reuse::Cache::default())};
+        progress_begin(&e,"exportFile");
+        let event=crate::streamed_progress::ExportProgress{pass_updated:true,phase:"camera_diffusion",done:0,total:72_000_000,display_stage:3,stage_done:0,stage_total:2_000_000};
+        progress_update_export(&e,event);
+        let first:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        let polled:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        assert_eq!(polled["updateSerial"],first["updateSerial"]);
+        progress_update_export(&e,event);
+        let heartbeat:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        assert_eq!(heartbeat["updateSerial"].as_u64().unwrap(),first["updateSerial"].as_u64().unwrap()+1);
+        assert_eq!(heartbeat["done"],first["done"]);assert_eq!(heartbeat["stageDone"],first["stageDone"]);
+        assert_eq!(heartbeat["passId"],first["passId"]);
+    }
     #[test] fn progress_is_safe_and_resets_only_when_next_job_begins() {
-        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())};
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),preview_cache:Mutex::new(preview_reuse::Cache::default())};
         let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["jobId"],0);assert_eq!(json["status"],"idle");
         let job=progress_begin(&e,"exportFile");progress_update(&e,"private-path-secret",9,10);let j=progress_json(&e).unwrap();assert!(!j.contains("private-path-secret"));
         let before:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();progress_update(&e,"private-path-secret",1,10);let reset:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(reset["passId"].as_u64().unwrap()>before["passId"].as_u64().unwrap());let _=progress_finish(&e,job,Some("CANCELLED"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["status"],"cancelled");assert_eq!(json["active"],false);assert_eq!(json["jobId"],1);
@@ -574,5 +766,41 @@ mod bw_mobile_tests {
             if film=="kodak_doublex" {p.film_development_time=12.;p.paper_development_time=9.;let changed=render(&engine,0,&input,17,13,&p).unwrap();assert!(first.pixels.iter().zip(&changed.pixels).any(|(a,b)|(a-b).abs()>1e-5));}
         }
         destroy(id);
+    }
+}
+
+#[cfg(test)] mod optimization_parameter_tests {
+ use super::*;
+ #[test] fn execution_choices_do_not_change_photographic_identity() {
+  let base=MobileParams::default();let before=serde_json::to_string(&base).unwrap();
+  for bits in 0..128 {let p=MobileParams::parse(&format!(r#"{{"exportOptimizationMask":{bits},"gpuResourceReuse":true}}"#)).unwrap();assert_eq!(p.export_optimization_mask,bits);assert!(p.gpu_resource_reuse);assert_eq!(before,serde_json::to_string(&p).unwrap());}
+  for value in ["128","4294967295","-1","1.5","true"] {assert!(MobileParams::parse(&format!(r#"{{"exportOptimizationMask":{value}}}"#)).is_err());}
+ }
+}
+
+#[cfg(test)]
+mod preview_brightness_reuse_tests {
+    use super::*;
+    #[test]
+    fn brightness_cache_matches_fresh_bits_and_invalidates_science_source_cancel() {
+        let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let id=create(data.to_str().unwrap()).unwrap();let engine=get(id).unwrap();
+        let mut p=MobileParams::default();p.use_gpu=false;p.preview_brightness_reuse=true;
+        let mut input:Vec<f32>=(0..9*7*3).map(|i|((i*37)%251)as f32/300.).collect();
+        let cold=render(&engine,0,&input,9,7,&p).unwrap();assert!(!cold.preview_reuse_hit);
+        for ev in [-1.5,0.,1.25] {
+            p.brightness_ev=ev;let warm=render(&engine,0,&input,9,7,&p).unwrap();assert!(warm.preview_reuse_hit);
+            let baseline_id=create(data.to_str().unwrap()).unwrap();let baseline_engine=get(baseline_id).unwrap();
+            let mut baseline=p.clone();baseline.preview_brightness_reuse=false;
+            let fresh=render(&baseline_engine,0,&input,9,7,&baseline).unwrap();destroy(baseline_id);
+            assert!(warm.pixels.iter().zip(fresh.pixels).all(|(a,b)|a.to_bits()==b.to_bits()));
+            eprintln!("PREVIEW_REUSE ev={ev} cold_ms={} warm_ms={} baseline_ms={} bytes={}",cold.elapsed_ms,warm.elapsed_ms,fresh.elapsed_ms,warm.preview_cache_bytes);
+        }
+        p.seed+=1;assert!(!render(&engine,0,&input,9,7,&p).unwrap().preview_reuse_hit);
+        input[0]=0.8;assert!(!render(&engine,0,&input,9,7,&p).unwrap().preview_reuse_hit);
+        p.film_stock="kodak_doublex".into();assert!(!render(&engine,0,&input,9,7,&p).unwrap().preview_reuse_hit);
+        cancel(id);assert_eq!(render(&engine,0,&input,9,7,&p).err().unwrap().code,"CANCELLED");
+        p.preview_brightness_reuse=false;let baseline=render(&engine,1,&input,9,7,&p).unwrap();assert_eq!(baseline.preview_cache_bytes,0);
+        destroy(id);assert!(get(id).is_err());
     }
 }

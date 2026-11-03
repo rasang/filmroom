@@ -31,3 +31,37 @@ pub mod export_execution;
 // Exact pre-preview source snapshot, compiled only in the host unit-test oracle.
 #[cfg(test)]
 mod test_baseline_streamed16;
+
+pub mod export_optimizations;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_diffusion;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_spatial;
+
+pub mod gpu_stage_staging;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_finish;
+#[cfg(feature = "diffusion-research")]
+pub mod research_finish_tail;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_exposure;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_dir;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_grain;
+
+#[cfg(any(test, feature = "diffusion-research"))]
+pub mod research_global;
+
+#[cfg(feature="gpu-diffusion-research")]
+mod science_jni;
+
+pub(crate) mod preview_gpu;
+
+pub(crate) mod gpu_retained;

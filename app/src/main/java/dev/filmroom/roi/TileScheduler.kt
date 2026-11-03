@@ -100,7 +100,7 @@ class TileScheduler(
                         !completed.bitmap.isRecycled && completed.bitmap.width == sample.width && completed.bitmap.height == sample.height &&
                         completed.bitmap.config == Bitmap.Config.ARGB_8888 &&
                         completed.bitmap.allocationByteCount.toLong() == sample.width.toLong()*sample.height*4 &&
-                        (completed.quality == TileQuality.Exact || allowApproximateTestOnly)
+                        (completed.quality.accepts(k) || (allowApproximateTestOnly && completed.quality==TileQuality.ApproximateTestOnly))
                     if (valid && accepted) {
                         val tile = completed!!
                         val bytes = tile.bitmap.allocationByteCount.toLong()

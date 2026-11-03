@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "operation": "planGpuScanTailStage",
+  "plan": {
+    "combinedPeakBytes": 167842116,
+    "deviceBytes": 8458564,
+    "diskBytes": 2106876,
+    "driverAllowanceBytes": 67108864,
+    "height": 13,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 25165824,
+    "manifestSha256": "06705dc0cd92a6dbb6cf613a980b17bcfc26f7caa3a6c3955eaf308361adda4c",
+    "operation": "fullScanTail",
+    "passCount": 7,
+    "sampleCount": 234,
+    "schemaVersion": 1,
+    "token": 42,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

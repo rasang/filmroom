@@ -1,3 +1,5 @@
+> Experimental performance review branch. Contains the packaged opt7.1 source plus a frozen work-in-progress grain/preview patch. Read [scope and review guide](PERFORMANCE_REVIEW.md). Not a validated release; native libraries must be built from source.
+
 > **Filmroom 0.1.19**：正式版源码。原生 JNI 库不随源码提交，构建 APK 前须按[开发指南](docs/DEVELOPMENT.md)从源码重建。功能范围与验证边界见[更新说明](docs/RELEASE_0_1_19.md)。
 
 <div align="center">

@@ -9,11 +9,14 @@ name = "film_engine"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+diffusion-research = []
+gpu-diffusion-research = ["diffusion-research", "adreno-gpu"]
 default = []
 adreno-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 precision-f64 = ["spektrafilm-core/precision-f64", "spektrafilm-math/precision-f64", "spektrafilm-gpu/precision-f64"]
 
 [dependencies]
+sha2 = "=0.10.9"
 spektrafilm-core.workspace = true
 spektrafilm-model.workspace = true
 spektrafilm-math.workspace = true
@@ -31,3 +34,15 @@ bytemuck = { version = "1.25", optional = true }
 
 [dev-dependencies]
 naga = { version = "24", features = ["wgsl-in"] }
+
+# Research: sha2 0.10.x requires this feature for ARM64 runtime SHA2 dispatch.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "=0.10.9", features = ["asm"] }
+
+[[example]]
+name = "research_diffusion_compare"
+required-features = ["diffusion-research"]
+
+# Use target ABI constants; Linux/Android open flags differ across architectures.
+[target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
+libc = "=0.2.186"

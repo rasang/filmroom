@@ -9,8 +9,8 @@ enum class DetailPhase { ZoomRequired, WaitingForPreview, Settling, Preparing, R
 enum class DetailFailure {
     Unsupported, MemoryBudget, MemoryAdmission, MemoryPressure, StorageBudget, AllocationFailed, SourceValidation, SourceRead, EngineUnavailable, DataNotReady, InvalidResult, RenderFailed
 }
-data class DetailStatus(val phase:DetailPhase,val width:Int=0,val height:Int=0,val readyCells:Int=0,val failure:DetailFailure?=null) {
-    fun label():String=when(phase){
+data class DetailStatus(val phase:DetailPhase,val width:Int=0,val height:Int=0,val readyCells:Int=0,val failure:DetailFailure?=null,val scientificBackend:dev.filmroom.engine.DetailActualBackend?=null) {
+    fun label():String=(when(phase){
         DetailPhase.ZoomRequired->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b04a7122dd82)
         DetailPhase.WaitingForPreview->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_084663d93fc9)
         DetailPhase.Settling->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_fe1ca7194034)
@@ -33,7 +33,12 @@ data class DetailStatus(val phase:DetailPhase,val width:Int=0,val height:Int=0,v
             DetailFailure.InvalidResult->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c6851c16d664)
             else->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_744e3354f3e5)
         }
-    }
+    }) + if(phase in setOf(DetailPhase.Ready,DetailPhase.Refining))when(scientificBackend){
+        dev.filmroom.engine.DetailActualBackend.GPU->" · Experimental GPU f32"
+        dev.filmroom.engine.DetailActualBackend.MIXED->" · Experimental mixed GPU/CPU"
+        dev.filmroom.engine.DetailActualBackend.CPU->" · Experimental CPU fallback"
+        null->""
+    } else ""
 }
 internal fun detailFailure(error:Throwable?):DetailFailure=when(error){
     is DetailUnavailable->when(error.code){

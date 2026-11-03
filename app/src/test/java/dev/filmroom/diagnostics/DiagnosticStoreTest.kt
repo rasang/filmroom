@@ -132,11 +132,13 @@ class DiagnosticStoreTest {
         val directory = folder(); val clock = Clock()
         val store = DiagnosticStore(directory, clock, runA)
         store.begin(Operation.IMPORT, SafeInfo())
-        File(directory, "events.0.log").appendText("not_a_valid_record\n" + "x".repeat(5000) + "\nunfinished_secret")
+        val validAfterOversize=DiagnosticEvent(clock.wall,clock.elapsed,runA,999,999,Operation.EXPORT_RENDER,Stage.NATIVE_EXIT,info=SafeInfo(width=321)).line()
+        File(directory, "events.0.log").appendText("not_a_valid_record\n" + "x".repeat(MAX_DIAGNOSTIC_EVENT_BYTES + 1) + "\n" + validAfterOversize + "unfinished_secret")
         val reopened = DiagnosticStore(directory, clock, runB).snapshot(1)
         assertTrue(reopened.malformedDiscarded >= 3)
         assertFalse(reopened.text("fixed").contains("unfinished_secret"))
         assertTrue(reopened.events.any { it.operation == Operation.IMPORT })
+        assertTrue(reopened.events.any { it.sequence == 999L && it.info.width == 321 })
     }
 
     @Test fun invalidMinutesAreRejected() {

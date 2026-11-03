@@ -13,7 +13,34 @@ data class NativeMemorySnapshot(val availableBytes:Long,val thresholdBytes:Long,
 class NativeWorkUnavailable:Exception("Native working-memory admission unavailable")
 /** Full peak + safety are prepaid; a run borrows only one worker slot. */
 interface RetainedNativeWork:AutoCloseable {
+    /** Keep prepaid bytes, but remove eviction callbacks that can never complete yet. */
+    fun quarantine() {}
     suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T
+}
+
+/** Transfers an existing charge to passive ownership; never acquires additional capacity. */
+class NativeWorkRetention {
+    private val lock = Any()
+    private var pending = 0
+    private var completed = false
+    private var release: (() -> Unit)? = null
+    fun retainUntil(register: ((() -> Unit) -> Unit)) {
+        synchronized(lock) { check(!completed); pending++ }
+        val once = java.util.concurrent.atomic.AtomicBoolean()
+        register {
+            if (once.compareAndSet(false, true)) {
+                val action = synchronized(lock) { pending--; if (pending == 0) release.also { release = null } else null }
+                action?.invoke()
+            }
+        }
+    }
+    internal fun finish(releaseBytes: () -> Unit) {
+        val now = synchronized(lock) {
+            check(!completed); completed = true
+            if (pending == 0) true else { release = releaseBytes; false }
+        }
+        if (now) releaseBytes()
+    }
 }
 
 /** Shared by engine and codec callers. Only heavyweight JNI work holds a lease; planning never does. */
@@ -28,6 +55,7 @@ object NativeWorkReservations {
         return NativeMemorySnapshot(info.availMem,info.threshold,info.lowMemory)
     }
     suspend fun <T> run(estimatedBytes:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T = limiter.run(estimatedBytes,memory,work)
+    suspend fun <T> runQuarantinable(estimatedBytes:Long,memory:()->NativeMemorySnapshot,retention:NativeWorkRetention,work:suspend ()->T):T = limiter.runQuarantinable(estimatedBytes,memory,retention,work)
     /** Passive contexts consume bytes, never worker slots. Admission fails instead of waiting on itself. */
     fun retainForDetail(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPressure:(()->Unit)?=null):RetainedNativeWork = limiter.retainForWork(estimatedBytes,memory(),onPressure)
     fun retain(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPressure:(()->Unit)?=null):AutoCloseable = limiter.retain(estimatedBytes,memory(),onPressure)
@@ -56,7 +84,7 @@ internal class NativeWorkLimiter {
         object Reject:Attempt()
         class Evict(val callbacks:List<()->Unit>):Attempt()
     }
-    private class Lease(private val release:()->Unit):AutoCloseable {
+    private class Lease(private val release:()->Unit, val quarantine:()->Unit = {}, val releaseWorker:()->Unit = {}):AutoCloseable {
         private var closed=false
         override fun close() {synchronized(this){if(!closed){closed=true;release()}}}
     }
@@ -68,7 +96,7 @@ internal class NativeWorkLimiter {
         if(memory.lowMemory || estimate>capacity || reserved>capacity-estimate)throw NativeWorkUnavailable()
         reserved+=estimate
         val id=++passiveSerial;if(onPressure!=null)passive[id]=onPressure
-        Lease { synchronized(lock){reserved-=estimate;passive.remove(id);evicting.remove(id);check(reserved>=0)} }
+        Lease(release = { synchronized(lock){reserved-=estimate;passive.remove(id);evicting.remove(id);check(reserved>=0)} }, quarantine = { synchronized(lock){passive.remove(id);evicting.remove(id)} })
     }
     /** Detail-only ownership. Normal export/codec admission and eviction stay unchanged. */
     fun retainForWork(estimate:Long,memory:NativeMemorySnapshot,onPressure:(()->Unit)?=null):RetainedNativeWork {
@@ -76,6 +104,7 @@ internal class NativeWorkLimiter {
         return object:RetainedNativeWork {
             private var closed=false
             private var workers=0
+            override fun quarantine() { (reservation as Lease).quarantine() }
             override fun close(){synchronized(lock){if(!closed){closed=true;if(workers==0)reservation.close()}}}
             override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
                 var acquired=false
@@ -113,9 +142,12 @@ internal class NativeWorkLimiter {
             return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait else Attempt.Reject
         }
         count++;reserved+=charge
-        Attempt.Ready(Lease {synchronized(lock){count--;reserved-=charge;check(count>=0&&reserved>=0)}})
+        var workerReleased=false
+        val releaseWorker = { synchronized(lock){if(!workerReleased){workerReleased=true;count--;check(count>=0)}}; Unit }
+        Attempt.Ready(Lease(release={synchronized(lock){releaseWorker();reserved-=charge;check(reserved>=0)}},releaseWorker=releaseWorker))
     }
-    suspend fun <T> run(estimate:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
+    suspend fun <T> run(estimate:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T = runQuarantinable(estimate,memory,NativeWorkRetention(),work)
+    suspend fun <T> runQuarantinable(estimate:Long,memory:()->NativeMemorySnapshot,retention:NativeWorkRetention,work:suspend ()->T):T=withContext(Dispatchers.IO) {
         var lease:Lease?=null
         while(lease==null) {
             currentCoroutineContext().ensureActive()
@@ -126,6 +158,7 @@ internal class NativeWorkLimiter {
                 is Attempt.Evict->{result.callbacks.forEach{it()};delay(25)}
             }
         }
-        try {currentCoroutineContext().ensureActive();work()} finally {lease.close()}
+        val owned=checkNotNull(lease)
+        try {currentCoroutineContext().ensureActive();work()} finally {owned.releaseWorker();retention.finish { owned.close() }}
     }
 }

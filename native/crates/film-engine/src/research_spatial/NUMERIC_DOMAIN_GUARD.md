@@ -1,0 +1,13 @@
+# Actual exposure, optics and DIR numeric admission
+
+The production exposure shader uses pre-operation scalar bounds, not post-overflow finite checks or NaN sentinels. Each ordered auto-exposure multiplication, exposure multiplication, RGB matrix, adaptation matrix, brightness sum, chromaticity operation, LUT accumulation and final brightness scaling retains its original order. The Mitchell weights, reflection and original clamping remain unchanged.
+
+The production optics/DIR Runner now constructs `guarded::shader()` from the unchanged raw spatial shader. The previously reviewed tail helper guards the FIR and both complete-line IIR recurrences. Fifteen further exact-count replacements guard DIR curve interpolation and correction, positive-density inversion, matrix products, scatter weights, accumulation, bounce and normalization. A missing or duplicated replacement marker rejects construction. Raw spatial text remains compatible with tail, grain and fused-suffix composition.
+
+Each arithmetic operand/result is conservatively admitted within magnitude 1e15 before the next arithmetic operation; division additionally requires divisor magnitude at least 1e-15. Therefore primitive intermediate products/divisions stay at or below approximately 1e30, far below f32 overflow. This domain is intentionally narrower than finite f32 and may select CPU fallback for extreme, otherwise valid CPU inputs. It does not clamp accepted arithmetic, skip an operator, change filter coefficients, restart an IIR line or replace an algorithm.
+
+A violation sets a separate sticky integer atomic and returns an inert zero. The zero is never accepted as an image: exposure maps the flag with each chunk before returning any data to the atomic candidate writer; optics and DIR read their flags before output creation and before retaining outputs. Existing output ownership drops remove all partially produced channel files on failure. Existing callers retain responsibility for whole-request CPU fallback.
+
+Exposure uses binding 4 and four storage buffers. Its budget explicitly includes the four-byte flag plus four extra readback bytes; reported upload/readback counts include the flag. Optics/DIR use the existing binding-7 error Runner, with its storage-count adapter check and metadata allowance. Flags are initialized once per Runner and never reset between chunks/channels.
+
+Tests include actual composed Naga validation, checked-marker drift, arithmetic-domain bounds, and ignored Vulkan tests for unsampled exposure, curve interpolation and optics failures with no retained outputs. These tests are source coverage until executed; an ignored test is not device evidence. Mobile driver behavior and full end-to-end output parity still require real-device validation.

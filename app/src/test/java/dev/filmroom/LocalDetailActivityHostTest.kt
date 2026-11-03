@@ -150,4 +150,46 @@ class LocalDetailActivityHostTest {
         }finally{controller.pause().stop().destroy()}
     }
 
+    @Test fun returningFromSingleGpuSettingRebuildsPreviewAndZoomForTheNewChoice(){
+        if(!BuildConfig.PERF_BUILD)return
+        val app=RuntimeEnvironment.getApplication()
+        app.getSharedPreferences("local-session",0).edit().clear().commit()
+        app.getSharedPreferences("exact-optimization-test",0).edit().clear().commit()
+        val preferences=dev.filmroom.engine.OptimizationPreferences(app)
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            val vm=model(controller.get());val state=state(vm);val view=photo(controller.get())
+            val operation=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}
+            await{(operation.get(vm) as? Job)?.isCompleted==true}
+            val fake=FakeProvider();val detailChoices=mutableListOf<Boolean>();val previewChoices=mutableListOf<Boolean>()
+            view.configureDetail(dev.filmroom.roi.EditorDetailProvider{s,p->detailChoices+=preferences.snapshot().gpuRenderingEnabled;fake.open(s,p)})
+            view.layout(0,0,400,300);vm.detailPreviewEdge={96}
+            vm.renderPreview={_,_,_,_->previewChoices+=preferences.snapshot().gpuRenderingEnabled;Bitmap.createBitmap(96,64,Bitmap.Config.ARGB_8888)}
+            val parameters=EditorState(grain=.7f,brightness=.25f)
+            val original=Bitmap.createBitmap(96,64,Bitmap.Config.ARGB_8888)
+            state.value=EditorUiState(photo=source("settings-return.heic"),original=original,parameters=parameters)
+            vm.retry();await{vm.state.value.canExport && !vm.state.value.previewRefining}
+            view.pinch(3.0,200.0,150.0);await{view.detailCacheBytes>0}
+            assertEquals(listOf(false),previewChoices);assertEquals(listOf(false),detailChoices)
+            val first=fake.sessions.single();val oldFrame=vm.state.value.rendered
+            controller.pause().stop();await{first.closed}
+            Robolectric.buildActivity(SettingsActivity::class.java).setup().use{settings->
+                val root=settings.get().findViewById<android.view.ViewGroup>(android.R.id.content)
+                fun find(v:android.view.View):android.widget.CheckBox? {
+                    if(v.tag=="gpu-rendering-toggle")return v as android.widget.CheckBox
+                    if(v is android.view.ViewGroup)for(i in 0 until v.childCount)find(v.getChildAt(i))?.let{return it}
+                    return null
+                }
+                val toggle=checkNotNull(find(root));assertFalse(toggle.isChecked);toggle.performClick();assertTrue(toggle.isChecked)
+            }
+            controller.start().resume().visible()
+            await{vm.state.value.canExport && !vm.state.value.previewRefining && previewChoices.size==2 && view.detailCacheBytes>0}
+            assertEquals(listOf(false,true),previewChoices);assertTrue(detailChoices.drop(1).isNotEmpty());assertTrue(detailChoices.drop(1).all{it})
+            assertNotSame(oldFrame,vm.state.value.rendered);assertEquals(parameters,vm.state.value.parameters)
+            assertFalse(vm.state.value.canUndo);assertEquals(42,org.json.JSONObject(parameters.json()).getInt("seed"))
+            controller.pause().stop();controller.start().resume().visible();shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            assertEquals("An unchanged choice does not rerender the preview",2,previewChoices.size)
+        }finally{controller.pause().stop().destroy();app.getSharedPreferences("exact-optimization-test",0).edit().clear().commit()}
+    }
+
 }

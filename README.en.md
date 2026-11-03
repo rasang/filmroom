@@ -1,3 +1,5 @@
+> Experimental performance review branch. Contains the packaged opt7.1 source plus a frozen work-in-progress grain/preview patch. Read [scope and review guide](PERFORMANCE_REVIEW.md). Not a validated release; native libraries must be built from source.
+
 > **Filmroom 0.1.19**: Stable-release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_19.md) for functionality and validation limits.
 
 <div align="center">

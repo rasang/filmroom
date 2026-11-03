@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "operation": "planGpuAutoExposureStage",
+  "plan": {
+    "combinedPeakBytes": 160759808,
+    "deviceBytes": 9764864,
+    "diskBytes": 70772,
+    "driverAllowanceBytes": 67108864,
+    "gridVersion": 1,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "manifestSha256": "88e607ab895e44229be8679fdc73090800c2af52da1f3dd22c8e03f85e108941",
+    "operation": "fullAutoExposure",
+    "sampleHeight": 11,
+    "sampleWidth": 17,
+    "schemaVersion": 1,
+    "token": 301,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

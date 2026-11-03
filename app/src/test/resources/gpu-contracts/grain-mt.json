@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "operation": "planGpuFilmGrainStage",
+  "plan": {
+    "amountBlendActive": true,
+    "chunkCount": 11,
+    "chunkPixels": 256,
+    "combinedPeakBytes": 159501628,
+    "deviceBytes": 8506684,
+    "diskBytes": 2223248,
+    "distributionArithmetic": "guardedSoftwareBinary64",
+    "driverAllowanceBytes": 67108864,
+    "finalBlurActive": true,
+    "grainActive": true,
+    "height": 37,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "layerCount": 3,
+    "manifestSha256": "6762638213267037058a5fc49e8e30ee4aa5409ab6ebba96223a370e81acb1f1",
+    "microActive": true,
+    "operation": "fullFilmGrain",
+    "passCount": 15,
+    "rngMode": "sequentialMt19937",
+    "schemaVersion": 1,
+    "sublayers": true,
+    "token": 43,
+    "width": 71
+  },
+  "schemaVersion": 1
+}

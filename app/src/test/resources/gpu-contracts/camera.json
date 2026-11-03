@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "operation": "planGpuOpticalStage",
+  "plan": {
+    "combinedPeakBytes": 201399652,
+    "core": 12,
+    "deviceBytes": 8461668,
+    "diskBytes": 69160,
+    "driverAllowanceBytes": 67108864,
+    "fftSide": 16,
+    "height": 7,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 58720256,
+    "manifestSha256": "b34daef74a2147c3244e5346972554f8b81e3ec7ff8758b5e4841faddcf033bf",
+    "operation": "fullCameraDiffusion",
+    "radius": 2,
+    "schemaVersion": 1,
+    "tileCount": 3,
+    "token": 17,
+    "width": 9
+  },
+  "schemaVersion": 1
+}

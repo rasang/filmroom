@@ -4,11 +4,19 @@ import java.nio.ByteOrder
 import java.util.zip.Deflater
 import java.util.zip.DeflaterOutputStream
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+// Explicit private APK identity. Normal builds retain the original package and label.
+val filmroomPerf = providers.gradleProperty("filmroomPerf").map { it.toBooleanStrict() }.orElse(false).get()
 android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 28; versionName = "0.1.19"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = if (filmroomPerf) 37 else 28; versionName = if (filmroomPerf) "0.1.19-opt.7.1" else "0.1.19"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig {
+        buildConfigField("boolean", "PERF_BUILD", filmroomPerf.toString())
+        manifestPlaceholders["gpuProbeEnabled"] = filmroomPerf.toString()
+        manifestPlaceholders["filmroomApplicationLabel"] = if (filmroomPerf) "Filmroom Perf · 优化测试版" else "@string/app_name"
+    }
+    if (filmroomPerf) buildTypes.configureEach { applicationIdSuffix = ".perf" }
     // Optional distribution ABI filter; default source build retains both tested ABIs.
     providers.gradleProperty("filmroomAbi").orNull?.let { abi ->
         require(abi in setOf("arm64-v8a", "x86_64")) { "Unsupported filmroomAbi" }

@@ -130,6 +130,12 @@ fn apply_prepared_scan(density_cmy:&ImageBuf,prepared:&PreparedPchip3d,data_min:
             let g = (src[1] as f64 - data_min[1]) * inv[1];
             let b = (src[2] as f64 - data_min[2]) * inv[2];
             let log_xyz = pchip_interp(prepared, r, g, b);
+            finish_log_xyz_pixel(dst, log_xyz, cat, xyz_to_rgb, color_ref);
+        });
+    out
+}
+
+fn finish_log_xyz_pixel(dst:&mut [Scalar],log_xyz:[f64;3],cat:&[[f64;3];3],xyz_to_rgb:&[[f64;3];3],color_ref:&crate::color_reference::ColorReference) {
             // Post-LUT: 10^log_xyz → CAT → xyz_to_rgb, mirroring Python's
             // `_density_to_rgb` AFTER the LUT call. bw_correction and
             // glare run after this returns (RGB space).
@@ -156,8 +162,6 @@ fn apply_prepared_scan(density_cmy:&ImageBuf,prepared:&PreparedPchip3d,data_min:
                 from_f64(xyz_to_rgb[1][0] * xa + xyz_to_rgb[1][1] * ya + xyz_to_rgb[1][2] * za);
             dst[2] =
                 from_f64(xyz_to_rgb[2][0] * xa + xyz_to_rgb[2][1] * ya + xyz_to_rgb[2][2] * za);
-        });
-    out
 }
 
 /// Cached scanner spectral integration plus exact pointwise output transforms.
@@ -271,8 +275,29 @@ impl PreparedScanner {
         if field.len()!=density.pixel_count() || field.iter().any(|v|!v.is_finite() || *v<from_f64(0.)) {return Err("Invalid global glare field chunk".into());}
         Ok(self.process_internal(density,false,Some(field)))
     }
+    pub(crate) fn gpu_tail_descriptor(&self)->crate::pipeline::GpuScanTailDescriptor<'_> {
+        crate::pipeline::GpuScanTailDescriptor {
+            adapt: self.adapt, xyz_to_rgb: self.xyz_to_rgb,
+            xyz_remap: self.color_ref.xyz_remap(),
+            glare_rgb_offset: self.glare_rgb_offset.map(|x|x as f64),
+            gamut: self.gamut.gpu_params(),
+            rgb_identity: rgb_to_rgb_identity_matrix(&self.params.io.output_color_space),
+            output_cctf_encoding: self.params.io.output_cctf_encoding,
+        }
+    }
+    pub(crate) fn gpu_lut(&self)->(&PreparedPchip3d,[f64;3],[f64;3]) {(&self.lut,self.data_min,self.data_max)}
+    pub(crate) fn finish_log_xyz(&self,log_xyz:&ImageBuf,finalize:bool,glare:Option<&[Scalar]>)->Result<ImageBuf,String> {
+        if log_xyz.data.len()!=log_xyz.pixel_count()*3 || log_xyz.data.iter().any(|v|!v.is_finite()) {return Err("Invalid scanner logXYZ chunk".into());}
+        if let Some(field)=glare {if field.len()!=log_xyz.pixel_count() || field.iter().any(|v|!v.is_finite() || *v<from_f64(0.)){return Err("Invalid global glare field chunk".into());}}
+        let mut rgb=log_xyz.clone();
+        rgb.data.par_chunks_exact_mut(3).zip(log_xyz.data.par_chunks_exact(3)).for_each(|(dst,src)|finish_log_xyz_pixel(dst,[src[0]as f64,src[1]as f64,src[2]as f64],&self.adapt,&self.xyz_to_rgb,&self.color_ref));
+        Ok(self.finish_rgb(rgb,finalize,glare))
+    }
     fn process_internal(&self,density:&ImageBuf,finalize:bool,glare:Option<&[Scalar]>)->ImageBuf {
-        let mut rgb=apply_prepared_scan(density,&self.lut,self.data_min,self.data_max,&self.adapt,&self.xyz_to_rgb,&self.color_ref);
+        let rgb=apply_prepared_scan(density,&self.lut,self.data_min,self.data_max,&self.adapt,&self.xyz_to_rgb,&self.color_ref);
+        self.finish_rgb(rgb,finalize,glare)
+    }
+    fn finish_rgb(&self,mut rgb:ImageBuf,finalize:bool,glare:Option<&[Scalar]>)->ImageBuf {
         if let Some(field)=glare {spektrafilm_model::glare::add_glare_with_amount(&mut rgb,field,self.glare_rgb_offset);}
         let gamut=&self.gamut;let params=&self.params;
     // Output gamut compression — mirrors Python's `compress_rgb` after
@@ -628,5 +653,35 @@ fn output_colorspace_from_xyz_f64(name: &str) -> [[f64; 3]; 3] {
         "Rec. 2020" | "Rec2020" | "ITU-R BT.2020" => colorspace::XYZ_TO_REC2020_F64,
         "ACES2065-1" => colorspace::XYZ_TO_ACES_F64,
         _ => colorspace::XYZ_TO_SRGB_F64,
+    }
+}
+
+#[cfg(all(test,feature="precision-f64"))]
+mod gpu_finish_tail_tests {
+    use super::*;
+    #[test]
+    fn original_f64_logxyz_finish_is_bit_identical_with_glare_and_finalization() {
+        let n=3usize;
+        let mut values=Vec::new();
+        for i in 0..n {for j in 0..n {for k in 0..n {values.extend([i as f64*0.41-1.4,j as f64*0.37-1.1,k as f64*0.53-1.5]);}}}
+        let lut=prepare_pchip_3d(values,n);
+        let mut params=RuntimeParams::default();
+        params.io.output_cctf_encoding=true;
+        let gamut=crate::gamut_compression::OutputGamutCompress::build(&params.io.output_gamut_compress,&params.io.output_color_space);
+        let scanner=PreparedScanner{lut,data_min:[-0.3;3],data_max:[1.7;3],adapt:[[1.01,-0.02,0.005],[0.01,0.98,0.003],[0.002,-0.01,1.03]],xyz_to_rgb:[[3.24,-1.53,-0.49],[-0.96,1.88,0.04],[0.06,-0.2,1.06]],color_ref:crate::color_reference::ColorReference::identity(),glare_rgb_offset:[from_f64(0.9),from_f64(1.1),from_f64(0.8)],gamut,params};
+        let image=ImageBuf::from_data(5,1,[-2.,-1.,0.,0.1,0.4,0.9,1.4,1.7,2.,100.,0.5,-100.,0.333,0.777,1.333].into_iter().map(from_f64).collect());
+        let mut log=image.clone();
+        for (dst,src) in log.data.chunks_exact_mut(3).zip(image.data.chunks_exact(3)) {
+            let q=std::array::from_fn::<_,3,_>(|c|(src[c]as f64-scanner.data_min[c])*((n-1)as f64/(scanner.data_max[c]-scanner.data_min[c])));
+            let v=pchip_interp(&scanner.lut,q[0],q[1],q[2]);for c in 0..3{dst[c]=from_f64(v[c]);}
+        }
+        let field=[from_f64(0.0),from_f64(0.03),from_f64(0.5),from_f64(0.01),from_f64(0.2)];
+        for finalize in [false,true] {for glare in [None,Some(field.as_slice())] {
+            let original=scanner.process_internal(&image,finalize,glare);
+            let finish=scanner.finish_log_xyz(&log,finalize,glare).unwrap();
+            assert_eq!(original.data.iter().map(|x|x.to_bits()).collect::<Vec<_>>(),finish.data.iter().map(|x|x.to_bits()).collect::<Vec<_>>());
+        }}
+        assert!(scanner.finish_log_xyz(&log,false,Some(&field[..4])).is_err());
+        log.data[0]=from_f64(f64::NAN);assert!(scanner.finish_log_xyz(&log,false,None).is_err());
     }
 }

@@ -108,7 +108,7 @@ struct Session {
     active: AtomicBool,
     data: PathBuf,
     sources: PathBuf,
-    context: Mutex<Option<Arc<DetailContext>>>,
+    context: Mutex<Option<Arc<ContextChoice>>>,
     operations: Mutex<HashMap<u64, Arc<Operation>>>,
     _directory: SessionDirectory,
 }
@@ -146,14 +146,25 @@ impl Drop for OperationLease {
         self.session.active.store(false, Ordering::Release);
     }
 }
+pub enum ContextChoice { Original(Arc<DetailContext>), Scientific(Arc<super::scientific::ScientificContext>) }
+impl ContextChoice {
+ pub fn identity(&self)->&DetailIdentity{match self{Self::Original(c)=>c.identity(),Self::Scientific(c)=>c.identity()}}
+ pub fn resource_plan(&self)->&ResourcePlan{match self{Self::Original(c)=>c.resource_plan(),Self::Scientific(c)=>c.resource_plan()}}
+ pub fn backend_info(&self)->super::DetailBackendInfo{match self{Self::Original(c)=>c.backend_info(),Self::Scientific(c)=>c.backend_info()}}
+ pub fn metered_ev(&self)->Option<f32>{match self{Self::Original(c)=>c.metered_ev(),Self::Scientific(c)=>c.metered_ev()}}
+ pub fn metrics(&self)->Option<&crate::streamed::StreamedMetrics>{match self{Self::Original(_)=>None,Self::Scientific(c)=>c.metrics()}}
+ pub fn quality(&self)->&'static str{match self{Self::Original(_)=>"ExactSameWorkingGrid",Self::Scientific(_)=>"ExperimentalSameWorkingGrid"}}
+ fn render_cell(&self,x:usize,y:usize,t:&CancellationToken)->std::result::Result<OwnedDetailTile,DetailError>{match self{Self::Original(c)=>c.render_cell(x,y,t),Self::Scientific(c)=>c.render_cell(x,y,t)}}
+ fn render_region_into(&self,core:super::Rect,out:&mut[f32],t:&CancellationToken)->std::result::Result<(),DetailError>{match self{Self::Original(c)=>c.render_region_into(core,out,t),Self::Scientific(c)=>c.render_region_into(core,out,t)}}
+}
 pub struct BuildResult {
-    context: Arc<DetailContext>,
+    context: Arc<ContextChoice>,
     pub identity: DetailIdentity,
     pub plan: ResourcePlan,
     pub lease: OperationLease,
 }
 impl BuildResult {
-    pub fn context(&self) -> &DetailContext {
+    pub fn context(&self) -> &ContextChoice {
         &self.context
     }
     pub fn check_publish(&self) -> Result<()> {
@@ -241,7 +252,7 @@ fn lease(path: &Path, create: bool) -> Result<File> {
     options
         .read(true)
         .write(true)
-        .custom_flags(0x20000)
+        .custom_flags(libc::O_NOFOLLOW)
         .mode(0o600);
     if create {
         options.create_new(true);
@@ -470,8 +481,9 @@ fn acquire(session: u64, operation: u64) -> Result<OperationLease> {
     lease.check_publish()?;
     Ok(lease)
 }
+pub fn cleanup_gpu_after_drain(session:u64)->Result<bool>{let s=get(session)?;if s.active.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).is_err(){return Err(BridgeError::Busy);}struct Reset<'a>(&'a AtomicBool);impl Drop for Reset<'_>{fn drop(&mut self){self.0.store(false,Ordering::Release);}}let _reset=Reset(&s.active);crate::gpu_retained::cleanup_after_drain(((1u64<<62)|session)as i64).map_err(|_|BridgeError::Processing)}
 pub fn plan(config: &DetailConfig) -> Result<ResourcePlan> {
-    DetailContext::preflight(config).map_err(Into::into)
+    if super::scientific::requested(&config.params){super::scientific::plan(config).map_err(Into::into)}else{DetailContext::preflight(config).map_err(Into::into)}
 }
 pub fn build(
     session: u64,
@@ -479,6 +491,12 @@ pub fn build(
     config: DetailConfig,
     source: &Path,
 ) -> Result<BuildResult> {
+    build_impl(session,operation,config,source,None)
+}
+pub fn build_with_gpu(session:u64,operation:u64,config:DetailConfig,source:&Path,delegates:crate::streamed::GpuStageDelegates)->Result<BuildResult>{
+    build_impl(session,operation,config,source,Some(delegates))
+}
+fn build_impl(session:u64,operation:u64,config:DetailConfig,source:&Path,delegates:Option<crate::streamed::GpuStageDelegates>)->Result<BuildResult>{
     let lease = acquire(session, operation)?;
     plan(&config)?;
     if lease
@@ -522,14 +540,12 @@ pub fn build(
             return Err(BridgeError::InvalidScope);
         }
     }
-    let context = DetailContext::build(
-        config,
-        &lease.session.data,
-        &source,
-        &lease.session._directory.path,
-        &lease.operation.token,
-    )
-    .map_err(BridgeError::from)?;
+    let context=if super::scientific::requested(&config.params){
+        let delegates=delegates.ok_or(BridgeError::InvalidRequest)?;
+        Arc::new(ContextChoice::Scientific(super::scientific::ScientificContext::build(config,&lease.session.data,&source,&lease.session._directory.path,((1u64<<62)|session) as i64,delegates,&lease.operation.token).map_err(BridgeError::from)?))
+    }else{
+        Arc::new(ContextChoice::Original(DetailContext::build(config,&lease.session.data,&source,&lease.session._directory.path,&lease.operation.token).map_err(BridgeError::from)?))
+    };
     lease.check_publish()?;
     let identity = context.identity().clone();
     let plan = context.resource_plan().clone();

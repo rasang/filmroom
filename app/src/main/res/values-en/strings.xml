@@ -768,4 +768,7 @@
     <string name="bw_print_development">Print development time</string>
     <string name="bw_development_help">Uses the upstream measured development-time family; default selects its middle entry, not a universal chemistry recipe.</string>
     <string name="bw_development_default">Upstream default</string>
+    <string name="gpu_rendering_group" formatted="false">Rendering</string>
+    <string name="gpu_rendering_title" formatted="false">GPU rendering</string>
+    <string name="gpu_rendering_description" formatted="false">Use GPU rendering for previews, zoomed detail and exports while preserving resolution, effects and seed. Unsupported stages or failed safety checks use the CPU. Results may differ slightly from CPU rendering. Turn off to use only the CPU.</string>
 </resources>

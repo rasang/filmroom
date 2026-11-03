@@ -22,11 +22,18 @@ internal object ChineseDiagnostics {
         Operation.SESSION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5c1712cb2d38); Operation.RESTORE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b1336f82fea4); Operation.IMPORT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7fc4b2dbd50)
         Operation.PREVIEW_RENDER, Operation.PREVIEW_PRESENTATION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5a9df9227ec6); Operation.ORIGINAL_SPOOL -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9ced68312ac6)
         Operation.EXPORT_PLAN -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_71cab785c5d9); Operation.EXPORT_RENDER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0a3bbae44150); Operation.EXPORT_ENCODE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2fa4917d052e)
+        Operation.GPU_PROBE -> "GPU 单块诊断 / GPU block diagnostic"
         Operation.SHARE_DIAGNOSTICS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_73fff6a5d6e6); Operation.CLEANUP -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f8281de2df36)
     }
     private fun stage(value: Stage): String = when (value) {
+        Stage.PREVIEW_PREPARE -> "预览准备"
+        Stage.PREVIEW_ADMISSION_WAIT -> "预览等待内存准入"
+        Stage.PREVIEW_ADMITTED -> "预览已获内存准入"
+        Stage.NATIVE_RETURN -> "原生调用已返回"
+        Stage.GPU_DRAIN_START -> "等待 GPU 清理"
+        Stage.GPU_DRAIN_END -> "GPU 清理完成"
         Stage.START -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d2bb025a2e51); Stage.DECODE_HEADER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4077a1f6397d); Stage.DECODE_STRIPE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_56e09dd8e1fc)
-        Stage.NATIVE_ENTER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_77f67305d365); Stage.NATIVE_PROGRESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2bd9ae163aa5); Stage.NATIVE_EXIT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_98407f5c987e); Stage.ENCODE_START -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_222b0d3c08c4)
+        Stage.NATIVE_ENTER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_77f67305d365); Stage.IMPORT_PROGRESS, Stage.NATIVE_PROGRESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2bd9ae163aa5); Stage.NATIVE_EXIT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_98407f5c987e); Stage.ENCODE_START -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_222b0d3c08c4)
         Stage.ENCODE_PROGRESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9e388ac3f491); Stage.MEDIA_INSERTED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2560088669b6); Stage.MEDIA_COMMITTED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6ef11d1e8c02)
         Stage.CANCEL_REQUESTED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2625bda74112); Stage.CLEANUP -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d43461bfe6fc); Stage.ERROR -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ae173945fb80)
         Stage.PREVIOUS_UNFINISHED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2c4c4e5e32fa); Stage.END -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c7b24e7997e9)

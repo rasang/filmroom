@@ -768,4 +768,7 @@
     <string name="bw_print_development">プリント現像時間</string>
     <string name="bw_development_help">上流の測定済み現像時間系列を使用。既定は中央の値で、一般的な薬品処方ではありません。</string>
     <string name="bw_development_default">上流の既定値</string>
+    <string name="gpu_rendering_group" formatted="false">レンダリング</string>
+    <string name="gpu_rendering_title" formatted="false">GPU レンダリング</string>
+    <string name="gpu_rendering_description" formatted="false">プレビュー、拡大表示、書き出しに共通して適用し、解像度、効果、シードを保持します。非対応の処理や安全性の検証に失敗した処理には CPU を使用します。CPU の結果とわずかに異なる場合があります。オフにすると CPU のみを使用します。</string>
 </resources>

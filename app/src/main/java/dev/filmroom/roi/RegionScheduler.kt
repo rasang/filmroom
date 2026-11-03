@@ -75,7 +75,7 @@ class RegionScheduler(
             main.post {
                 running=false
                 val valid=!closed && key==k && demand==rect && !cancellation.get()
-                val accepted=completed!=null && completed.key==k && completed.coreRect==rect && completed.sampleRect==sample && completed.quality==TileQuality.Exact &&
+                val accepted=completed!=null && completed.key==k && completed.coreRect==rect && completed.sampleRect==sample && completed.quality.accepts(k) &&
                     !completed.bitmap.isRecycled && completed.bitmap.width==sample.width && completed.bitmap.height==sample.height && completed.bitmap.config==Bitmap.Config.ARGB_8888 && completed.bitmap.allocationByteCount.toLong()==sample.width.toLong()*sample.height*4
                 if(valid && accepted){
                     val bytes=completed!!.bitmap.allocationByteCount.toLong()

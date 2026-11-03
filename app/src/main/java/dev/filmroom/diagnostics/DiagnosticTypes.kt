@@ -1,8 +1,8 @@
 package dev.filmroom.diagnostics
 
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
-enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
-enum class Stage { START, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
+enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP, GPU_PROBE }
+enum class Stage { START, IMPORT_PROGRESS, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END, PREVIEW_PREPARE, PREVIEW_ADMISSION_WAIT, PREVIEW_ADMITTED, NATIVE_RETURN, GPU_DRAIN_START, GPU_DRAIN_END }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
 enum class ErrorCode { ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
 enum class FilmProfile(val id: String) {
@@ -65,6 +65,8 @@ class OperationId internal constructor(val value: Long)
 
 /** Invalid numeric values are omitted, not logged or converted into arbitrary text. */
 data class SafeInfo(
+    val performance: PerformanceInfo? = null,
+    val gpuProbe: GpuProbeTelemetry? = null,
     val width: Int? = null, val height: Int? = null,
     val durationMs: Long? = null,
     val javaUsedBytes: Long? = null, val javaMaxBytes: Long? = null, val nativeAllocatedBytes: Long? = null,
@@ -163,12 +165,15 @@ data class SafeInfo(
     val gpuSelfTest: Boolean? = null,
     val seed: Long? = null,
     val previousOperation: Operation? = null,
+    val previousExitReason: ProcessExitReason? = null,
     val nativePhase: NativePhase? = null,
     val nativePass: Long? = null,
+    val nativeUpdateSerial: Long? = null,
     val nativeEngineCode: NativeEngineCode? = null,
     val nativeEngineStage: NativeEngineStage? = null,
     val codecCode: CodecErrorCode? = null,
     val codecStage: CodecStage? = null,
+    val inputFormatHint: dev.filmroom.io.formats.PhotoFormat? = null,
     val rawTechnical: RawTechnicalInfo? = null,
     val metadataIssues: List<MetadataIssue> = emptyList(),
     val metadataPhase: MetadataIssuePhase? = null,
@@ -188,6 +193,8 @@ data class SafeInfo(
 
     /** Keep primitive types until JSON output; adding an enum cannot create bare JSON tokens. */
     internal fun typedFields(): Map<String, Any> = linkedMapOf<String, Any>().apply {
+        performance?.let{putAll(it.typedFields())}
+        gpuProbe?.let{putAll(it.typedFields())}
         fun integer(key: String, value: Long?, max: Long, min: Long = 0) { if (value != null && value in min..max) put(key, value) }
         fun decimal(key: String, value: Double?, min: Double, max: Double) {
             if (value != null && value.isFinite() && value in min..max) put(key, value)
@@ -303,12 +310,15 @@ data class SafeInfo(
         gpuSelfTest?.let{put("gpuSelfTest",it)}
         integer("seed", seed, 0xffffffffL)
         previousOperation?.let { put("previousOperation", it.name) }
+        previousExitReason?.let { put("previousExitReason", it.name) }
         nativePhase?.let { put("nativePhase", it.id) }
         integer("nativePass", nativePass, 1_000_000, 1)
+        integer("nativeUpdateSerial",nativeUpdateSerial,Long.MAX_VALUE)
         nativeEngineCode?.let { put("nativeEngineCode", it.name) }
         nativeEngineStage?.let { put("nativeEngineStage", it.id) }
         codecCode?.let { put("codecCode", it.name) }
         codecStage?.let { put("codecStage", it.id) }
+        inputFormatHint?.let { put("inputFormatHint", it.name) }
         rawTechnical?.let { putAll(it.fields()) }
         captureTimeBasis?.let{put("captureTimeBasis",it.name)}
         MetadataIssues.encode(metadataIssues).takeIf{it.isNotEmpty()}?.let{put("metadataIssues",it);metadataPhase?.let{phase->put("metadataPhase",phase.name)}}
@@ -317,10 +327,13 @@ data class SafeInfo(
     internal companion object {
         /** Disk input is untrusted too: revalidate every key/value against the same typed schema. */
         fun parse(fields: Map<String, String>): SafeInfo = SafeInfo(
+            performance = PerformanceInfo.fromFields(fields),
+            gpuProbe = GpuProbeTelemetry.fromFields(fields),
             nativeEngineCode = fields["nativeEngineCode"]?.let(NativeEngineCode::fromId),
             nativeEngineStage = fields["nativeEngineStage"]?.let(NativeEngineStage::fromId),
             codecCode = fields["codecCode"]?.let(CodecErrorCode::fromId),
             codecStage = fields["codecStage"]?.let(CodecStage::fromId),
+            inputFormatHint = dev.filmroom.io.formats.PhotoFormat.entries.firstOrNull { it.name == fields["inputFormatHint"] },
             rawTechnical = RawTechnicalInfo.fromFields(fields),
             metadataIssues = MetadataIssues.parse(fields["metadataIssues"].orEmpty()),
             metadataPhase = MetadataIssuePhase.entries.firstOrNull{it.name==fields["metadataPhase"]},
@@ -352,6 +365,7 @@ data class SafeInfo(
             printYellow=fields["printYellow"]?.toDoubleOrNull(), printMagenta=fields["printMagenta"]?.toDoubleOrNull(), preflash=fields["preflash"]?.toDoubleOrNull(),
             scanSharpenAmount=fields["scanSharpenAmount"]?.toDoubleOrNull(), scanSharpenRadius=fields["scanSharpenRadius"]?.toDoubleOrNull(),
             nativePhase = fields["nativePhase"]?.let(NativePhase::fromId), nativePass = fields["nativePass"]?.toLongOrNull(),
+            nativeUpdateSerial=fields["nativeUpdateSerial"]?.toLongOrNull(),
             filmFormatMm=fields["filmFormatMm"]?.toDoubleOrNull(),
             lensBlurUm=fields["lensBlurUm"]?.toDoubleOrNull(),
             scanBlur=fields["scanBlur"]?.toDoubleOrNull(),
@@ -433,6 +447,7 @@ data class SafeInfo(
             gpuReason=fields["gpuReason"]?.let{id->GpuReason.entries.firstOrNull{it.id==id}},
             gpuSelfTest=fields["gpuSelfTest"]?.toBooleanStrictOrNull(),
             seed = fields["seed"]?.toLongOrNull(), previousOperation = fields["previousOperation"]?.let { runCatching { Operation.valueOf(it) }.getOrNull() },
+            previousExitReason = fields["previousExitReason"]?.let { runCatching { ProcessExitReason.valueOf(it) }.getOrNull() },
         )
     }
 }

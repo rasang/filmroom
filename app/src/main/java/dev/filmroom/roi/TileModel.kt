@@ -27,7 +27,17 @@ data class TileId(val x: Int, val y: Int) {
         min((y.toLong() + 1) * EDGE, k.virtualFullHeight.toLong()).toInt())
     companion object { const val EDGE = 256 }
 }
-enum class TileQuality { Exact, ApproximateTestOnly }
+enum class TileQuality { Exact, ExperimentalSameWorkingGrid, ApproximateTestOnly }
+internal const val SCIENCE_GRID_ALGORITHM="owned-roi-science-v2-guarded64-resident-fullgrid-grid256-cap1536"
+internal const val SCIENCE_REGION_ALGORITHM="owned-roi-science-v2-guarded64-resident-fullgrid-visible-region-cap1536"
+internal fun TileQuality.accepts(key:RenderKey,perfBuild:Boolean=dev.filmroom.BuildConfig.PERF_BUILD):Boolean {
+    val science=key.algorithmRevision in setOf(SCIENCE_GRID_ALGORITHM,SCIENCE_REGION_ALGORITHM)
+    return when(this){
+        TileQuality.Exact->!science
+        TileQuality.ExperimentalSameWorkingGrid->perfBuild && science
+        TileQuality.ApproximateTestOnly->false
+    }
+}
 /** Provider transfers exclusive ownership; it must not recycle or mutate after returning. */
 data class TileResult(val key: RenderKey, val coreRect: PixelRect, val sampleRect: PixelRect, val bitmap: Bitmap, val quality: TileQuality) {
     val outputRect get() = coreRect // Global logical coverage, excluding display-filter samples.

@@ -31,7 +31,8 @@ object Diagnostics {
         val app = context.applicationContext
         sharesDirectory = File(app.cacheDir, "diagnostic-shares")
         metadata = captureMetadata(app)
-        store = runCatching { DiagnosticStore(File(app.filesDir, "diagnostics"), clock) }.getOrNull()
+        val directory = File(app.filesDir, "diagnostics")
+        store = runCatching { DiagnosticStore(directory, clock, exitTracker = ProcessExitTracker(app, directory)) }.getOrNull()
         // Only old exact diagnostic-share files; never package or sweep app cache.
         runCatching { DiagnosticArchive.cleanup(checkNotNull(sharesDirectory), clock.wallMs()) }
     }

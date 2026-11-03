@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 interface EditorDetailSession : AutoCloseable {
     val key: RenderKey
     val regionOutput:Boolean get()=false
+    val scientificBackend:DetailActualBackend? get()=null
     fun onRetired(listener: () -> Unit) {}
     suspend fun awaitRetired() {}
     suspend fun tile(x: Int, y: Int): TileResult
@@ -28,27 +29,30 @@ class RealEditorDetailProvider(private val provider: OwnedDetailProvider) : Edit
         val session = provider.open(source, parameters, 1536,preferRegion=preferRegion)
         try { return object : EditorDetailSession {
             override val regionOutput=session.regionOutput
+            override val scientificBackend=if(session.key.scienceExperimental)session.actualBackend else null
             override val key = session.key.toRenderKey(regionOutput)
             override suspend fun tile(x: Int, y: Int): TileResult {
                 val tile = session.tile(x,y)
-                try { return TileResult(tile.key.toRenderKey(regionOutput), tile.core.toPixels(), tile.sample.toPixels(), tile.bitmap, TileQuality.Exact) }
+                try { return TileResult(tile.key.toRenderKey(regionOutput), tile.core.toPixels(), tile.sample.toPixels(), tile.bitmap, if(tile.key.scienceExperimental)TileQuality.ExperimentalSameWorkingGrid else TileQuality.Exact) }
                 catch(t:Throwable) { if(!tile.bitmap.isRecycled)tile.bitmap.recycle();throw t }
             }
             override suspend fun region(rect:PixelRect,cancelled:()->Boolean):TileResult {
                 val tile=session.region(DetailRect(rect.left,rect.top,rect.width,rect.height),cancelled)
-                try{return TileResult(tile.key.toRenderKey(regionOutput),tile.core.toPixels(),tile.sample.toPixels(),tile.bitmap,TileQuality.Exact)}
+                try{return TileResult(tile.key.toRenderKey(regionOutput),tile.core.toPixels(),tile.sample.toPixels(),tile.bitmap,if(tile.key.scienceExperimental)TileQuality.ExperimentalSameWorkingGrid else TileQuality.Exact)}
                 catch(t:Throwable){if(!tile.bitmap.isRecycled)tile.bitmap.recycle();throw t}
             }
             override fun onRetired(listener: () -> Unit) = session.setRetirementListener(listener)
             override suspend fun awaitRetired() = session.awaitRetired()
             override fun close() = session.close()
         } } catch(t:Throwable) {
-            withContext(NonCancellable+Dispatchers.IO){session.close();session.awaitRetired()}
+            withContext(NonCancellable+Dispatchers.IO){session.close();if(!session.key.scienceExperimental)session.awaitRetired()}
             throw t
         }
     }
 }
-private fun DetailKey.toRenderKey(region:Boolean) = RenderKey(source,parameters,if(region)"owned-roi-api-v2-visible-region-cap1536" else "owned-roi-api-v1-grid256-cap1536",data,mapping,width,height)
+private fun DetailKey.toRenderKey(region:Boolean) = RenderKey(source,parameters,
+    if(scienceExperimental){if(region)SCIENCE_REGION_ALGORITHM else SCIENCE_GRID_ALGORITHM}
+    else if(region)"owned-roi-api-v2-visible-region-cap1536" else "owned-roi-api-v1-grid256-cap1536",data,mapping,width,height)
 private fun DetailRect.toPixels() = PixelRect(x,y,x+width,y+height)
 
 /** Main-confined editor owner. Native context creation and retirement never run on main.
@@ -95,7 +99,7 @@ class EditorDetailController(
         if(active!=null){
             val ready=scheduler?.drawableTiles()?.size ?: 0
             val phase=if(scheduler?.hasDemand==false || (scheduler?.ready==true && scheduler?.runningCount==0))DetailPhase.Ready else DetailPhase.Refining
-            return DetailStatus(phase,active.key.virtualFullWidth,active.key.virtualFullHeight,ready)
+            return DetailStatus(phase,active.key.virtualFullWidth,active.key.virtualFullHeight,ready,scientificBackend=active.scientificBackend)
         }
         return DetailStatus(if(openingStarted)DetailPhase.Preparing else DetailPhase.Settling)
     }

@@ -29,7 +29,7 @@ object ExportStoragePolicy {
 /** Per-pass progress only: never presented as a percentage of the whole export. */
 data class EngineProgress(val jobId:Long,val passId:Long,val phase:dev.filmroom.diagnostics.NativePhase,val done:Long,val total:Long,
     val display:ExportDisplayProgress=ExportDisplayProgress.forNativePhase(phase.id),
-    val scanPreview:java.io.File?=null) {
+    val scanPreview:java.io.File?=null, val updateSerial:Long=0) {
     init {require(jobId>0 && passId>0 && done in 0..1_800_000_000L && total in 0..1_800_000_000L && done<=total)}
     val chinese:String get() = phase.chinese + if(total>0)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_30fe814c4574, done*100/total) else ""
 }

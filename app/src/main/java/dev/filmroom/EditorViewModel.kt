@@ -54,6 +54,9 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     }
     val availableExportFormats get()=repository.availableExportFormats
     private val engine=FilmEngine(application)
+    private val renderingPreferences=dev.filmroom.engine.OptimizationPreferences(application)
+    private var gpuRenderingChoice=BuildConfig.PERF_BUILD && renderingPreferences.snapshot().gpuRenderingEnabled
+    private var renderingChoiceRefresh:Job?=null
     private val preferences=application.getSharedPreferences("local-session",0)
     private var history=EditHistory()
     private val recoveryGate=(application as? FilmroomApplication)?.recoveryGate
@@ -117,9 +120,11 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             var adopted=false
             try {
                 OperationTrace.run(Operation.IMPORT) { trace ->
-                val newPhoto=repository.import(uri,ENGINE_EDGE);loaded=newPhoto
+                val newPhoto=repository.import(uri,ENGINE_EDGE) { stage, format ->
+                    trace.mark(Stage.IMPORT_PROGRESS, SafeInfo(codecStage=stage,inputFormatHint=format))
+                };loaded=newPhoto
                 trace.mark(Stage.DECODE_HEADER,SafeInfo(width=newPhoto.source.originalWidth,height=newPhoto.source.originalHeight,metadataIssues=newPhoto.source.photoMetadata.issues,metadataPhase=dev.filmroom.diagnostics.MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=newPhoto.source.photoMetadata.diagnosticDateBasis))
-                engine.cancel();renderJob?.cancelAndJoin()
+                engine.cancel();renderJob?.cancelAndJoin();engine.clearPreviewReuse()
                 val old=mutable.value.photo
                 generation++;compositionBaseline=null;history=EditHistory(importParameters)
                 mutable.value=EditorUiState(photo=newPhoto.source,original=newPhoto.preview,parameters=history.current,engineUnavailable=engine.unavailable,busyUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_6dfdd1fe6561),busy=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6dfdd1fe6561),messageUi=null,messageIsDiagnostic=false,message=null,messageAttempt=mutable.value.messageAttempt)
@@ -191,7 +196,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         if(!compositionGestureActive){
             compositionGestureActive=true
             if(processedPhoto===photo && processedBitmap===s.compositionSource &&
-                processedScience==s.parameters.json(includePresentation=false) && !sameScienceAwaitingResult()){
+                processedScience==previewScience(s.parameters) && !sameScienceAwaitingResult()){
                 renderJob?.cancel();activePresentationRequest=null;generation++;cancelledPresentationWork=true
             }
         }
@@ -203,7 +208,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     fun parameters(next: EditorState, commit: Boolean=true) {
         if(!mutable.value.editable) return
         compositionGestureActive=false
-        val scienceChanged=mutable.value.parameters.json(includePresentation=false)!=next.json(includePresentation=false)
+        val scienceChanged=previewScience(mutable.value.parameters)!=previewScience(next)
         if(scienceChanged)detailInvalidator?.invoke()
         if(commit && !mutable.value.compositionEditing) history.update(next)
         mutable.value=mutable.value.copy(parameters=next,compositionEditing=mutable.value.compositionEditing,compare=false,canUndo=history.canUndo,canRedo=history.canRedo,messageUi=null,messageIsDiagnostic=false,message=null)
@@ -219,11 +224,11 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         }
         // Exact final presentation is scheduled only for committed crop edits.
         if(scienceChanged || commit) scheduleRender(settled=commit)
-        else if(processedPhoto===mutable.value.photo && processedScience==next.json(includePresentation=false))scheduleRender(settled=false,presentationOnly=true)
+        else if(processedPhoto===mutable.value.photo && processedScience==previewScience(next))scheduleRender(settled=false,presentationOnly=true)
     }
     fun undo() { if(!mutable.value.editable)return;if(mutable.value.compositionEditing){cancelComposition();return};history.undo();applyHistory() }
     fun redo() { if(!mutable.value.editable)return;if(mutable.value.compositionEditing){cancelComposition();return};history.redo();applyHistory() }
-    private fun applyHistory() { compositionGestureActive=false;if(mutable.value.parameters.json(includePresentation=false)!=history.current.json(includePresentation=false))detailInvalidator?.invoke();mutable.value=mutable.value.copy(parameters=history.current,compositionEditing=false,canUndo=history.canUndo,canRedo=history.canRedo,compare=false);saveSession();scheduleRender() }
+    private fun applyHistory() { compositionGestureActive=false;if(previewScience(mutable.value.parameters)!=previewScience(history.current))detailInvalidator?.invoke();mutable.value=mutable.value.copy(parameters=history.current,compositionEditing=false,canUndo=history.canUndo,canRedo=history.canRedo,compare=false);saveSession();scheduleRender() }
     /** Confirmation is bound to the exact photo and parameter state that the user reviewed. */
     fun restorePreset(expectedPhotoKey:String,expectedParameters:EditorState):Boolean {
         val current=mutable.value
@@ -258,6 +263,34 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         val s=mutable.value;val p=s.photo ?: return
         preferences.edit().putString("source",p.cacheKey).putString("rawSource",p.rawCacheKey).putString("name",p.name).putString("parameters",(compositionBaseline ?: s.parameters).json()).apply()
     }
+    /** Execution identity is private cache metadata, never a change to photo parameters. */
+    private fun previewScience(parameters:EditorState):String = parameters.json(includePresentation=false)+
+        if(BuildConfig.PERF_BUILD) "|gpu-rendering:$gpuRenderingChoice:guarded64-resident-finish-v2" else ""
+    /** Settings may return to an otherwise unchanged photo. Old CPU/GPU frames must not be reused. */
+    internal fun refreshGpuRenderingChoice():Boolean {
+        if(!BuildConfig.PERF_BUILD)return false
+        val nextChoice=renderingPreferences.snapshot().gpuRenderingEnabled
+        if(nextChoice==gpuRenderingChoice)return false
+        val current=mutable.value
+        if(!current.startupReady || current.busy!=null || current.exporting){
+            if(renderingChoiceRefresh?.isActive!=true)renderingChoiceRefresh=viewModelScope.launch {
+                state.first{it.startupReady && it.busy==null && !it.exporting}
+                renderingChoiceRefresh=null
+                refreshGpuRenderingChoice()
+            }
+            return false
+        }
+        gpuRenderingChoice=nextChoice
+        generation++
+        renderJob?.cancel();engine.cancel();engine.clearPreviewReuse()
+        processedScience=null;renderingScience=null;processedDetailed=false
+        activePresentationRequest=null;pendingPresentationSettled=false
+        detailInvalidator?.invoke()
+        // The old bitmap stays owned by the view until replacement. It is not an eligible result.
+        mutable.value=current.copy(renderedParameters=null,renderedDiagnosticContext=null,updating=false,previewRefining=false)
+        scheduleRender()
+        return true
+    }
     internal var renderPreview:suspend (Bitmap,EditorState,PhotoSource?,Boolean)->Bitmap = { source,params,photo,settled -> engine.render(source,params,"preview",photo,settled) }
     internal var borderProvider:dev.filmroom.border.BorderProvider=dev.filmroom.border.BorderCatalog
     internal var detailPreviewEdge:()->Int = { engine.previewEdge(true) }
@@ -275,7 +308,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     private fun sameScienceAwaitingResult():Boolean {
         val s=mutable.value
         return renderJob?.isActive==true && renderingPhoto===s.photo &&
-            renderingScience==s.parameters.json(includePresentation=false) &&
+            renderingScience==previewScience(s.parameters) &&
             (scientificRequest==generation || processedPhoto!==s.photo || processedScience!=renderingScience)
     }
     private fun schedulePresentationRender(){
@@ -289,7 +322,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         val s=mutable.value;val source=s.original ?: return
         if(s.engineUnavailable!=null)return
         var params=s.parameters
-        val cachedPresentation=processedBitmap?.isRecycled==false && processedPhoto===s.photo && processedScience==params.json(includePresentation=false)
+        val cachedPresentation=processedBitmap?.isRecycled==false && processedPhoto===s.photo && processedScience==previewScience(params)
         // A bounded compositor must not be cancelled by every pointer event: on slower devices
         // that would starve all live frames. Keep one in-flight frame and coalesce to latest state.
         if(cachedPresentation && activePresentationRequest==generation && renderJob?.isActive==true){
@@ -301,7 +334,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         if(diagnosticSourceToken==0L || diagnosticPhoto?.get()!==s.photo){diagnosticPhoto=s.photo?.let{java.lang.ref.WeakReference(it)};diagnosticSourceToken=PreviewDiagnosticContext.nextSourceToken()}
         val diagnosticToken=diagnosticSourceToken
         val diagnosticFingerprint=PreviewDiagnosticContext.fingerprint(params)
-        renderingScience=params.json(includePresentation=false);renderingPhoto=s.photo
+        renderingScience=previewScience(params);renderingPhoto=s.photo
         activePresentationRequest=if(cachedPresentation)request else null
         pendingPresentationSettled=false
         // A new operation attempt is a new message event, even if it fails with the same text.
@@ -310,7 +343,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             try {
                 delay(if(presentationOnly)16 else 120)
                 var responsivePhotoEdge=0
-                val science=params.json(includePresentation=false)
+                val science=previewScience(params)
                 val cached=processedBitmap?.takeIf { !it.isRecycled && processedPhoto===s.photo && processedScience==science }
                 if(presentationOnly && cached==null)return@launch
                 val cachedDetailed=cached!=null && processedDetailed
@@ -338,7 +371,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                     try {
                         ensureActive()
                         val newest=mutable.value.parameters
-                        if(mutable.value.photo===s.photo && newest.json(includePresentation=false)==science)params=newest
+                        if(mutable.value.photo===s.photo && previewScience(newest)==science)params=newest
                         val photo=checkNotNull(s.photo)
                         val border=if(params.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(params.filmStock,params.paperStock,params.outputRoute),filmResult.width,filmResult.height,
                             photo.originalWidth,photo.originalHeight,params.composition,params.negativeWhiteHoles,params.outputRoute) else null
@@ -399,7 +432,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                     while(true){
                         ensureActive()
                         val latest=mutable.value.parameters
-                        if(mutable.value.photo!==s.photo || latest.json(includePresentation=false)!=science)return@launch
+                        if(mutable.value.photo!==s.photo || previewScience(latest)!=science)return@launch
                         params=latest
                         publish(false,cached)
                         refineRequested=refineRequested || pendingPresentationSettled
@@ -410,7 +443,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                     publish(false)
                     while(!compositionGestureActive && mutable.value.parameters!=params){
                         ensureActive();val latest=mutable.value.parameters
-                        if(mutable.value.photo!==s.photo || latest.json(includePresentation=false)!=science)break
+                        if(mutable.value.photo!==s.photo || previewScience(latest)!=science)break
                         params=latest;publish(false,checkNotNull(processedBitmap))
                     }
                 }
@@ -432,7 +465,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                 // Catch up from that completed cache, not by re-entering the scientific engine.
                 while(!compositionGestureActive && mutable.value.parameters!=params){
                     ensureActive();val latest=mutable.value.parameters
-                    if(mutable.value.photo!==s.photo || latest.json(includePresentation=false)!=science)break
+                    if(mutable.value.photo!==s.photo || previewScience(latest)!=science)break
                     params=latest;publish(false,checkNotNull(processedBitmap))
                 }
             } catch(c: CancellationException) { throw c }
@@ -493,7 +526,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             finally {intake?.close();if(intakeCancellation===cancellation)intakeCancellation=null;mutable.value=mutable.value.copy(busyUi=null,busy=null,messageUi=resultUi,messageIsDiagnostic=resultDiagnostic,message=result,exporting=false,cancelling=false,exportProgress=null)}
         }
     }
-    override fun onCleared() { engine.cancel();mutable.value.photo?.clearLinearPreview();super.onCleared() }
+    override fun onCleared() { engine.close();mutable.value.photo?.clearLinearPreview();super.onCleared() }
 }
 
 /** Count only actual cleanup targets; absence is successful, failed deletion never advances done. */

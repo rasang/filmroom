@@ -30,6 +30,40 @@ impl rand::RngCore for CoordinateRng {
     fn fill_bytes(&mut self,dst:&mut [u8]) {for chunk in dst.chunks_mut(8) {let bytes=self.next_u64().to_le_bytes();chunk.copy_from_slice(&bytes[..chunk.len()]);}}
 }
 
+/// Read-only production RNG oracle for GPU integer-port validation.
+/// Returns the actual coordinate stream, including its original initialization.
+/// This helper does not alter any render path or distribution sampling.
+pub fn coordinate_random_words(seed: u64, x: u32, y: u32, draws: usize) -> Vec<u64> {
+    use rand::RngCore;
+    let mut rng = CoordinateRng::new(seed, x, y);
+    (0..draws).map(|_| rng.next_u64()).collect()
+}
+
+/// Read-only stochastic census oracle. Uses the original production samplers,
+/// coordinate initialization and f64 arithmetic; does not run in CPU rendering.
+/// Tuple: Poisson particles, binomial developed count, consumed u64 words, value.
+pub fn coordinate_particle_sample(seed:u64,x:u32,y:u32,density:f64,dmax:f64,npp:f64,uniformity:f64)->(u64,u64,u64,f64) {
+    struct Count { rng:CoordinateRng, words:u64 }
+    impl rand::RngCore for Count {
+        fn next_u64(&mut self)->u64 {self.words+=1;self.rng.next_u64()}
+        fn next_u32(&mut self)->u32 {(self.next_u64()>>32) as u32}
+        fn fill_bytes(&mut self,dst:&mut [u8]){for chunk in dst.chunks_mut(8){let v=self.next_u64().to_le_bytes();chunk.copy_from_slice(&v[..chunk.len()]);}}
+    }
+    let mut rng=Count {rng:CoordinateRng::new(seed,x,y),words:0};
+    let p=(density/dmax).clamp(1e-6,1.-1e-6);let saturation=1.-p*uniformity*(1.-1e-6);
+    let particles=spektrafilm_math::numpy_rng::rk_poisson(&mut rng,npp/saturation);
+    let developed=spektrafilm_math::numpy_rng::rk_binomial(&mut rng,particles,p);
+    (particles,developed,rng.words,from_f64(developed as f64*(dmax/npp)*saturation) as f64)
+}
+
+/// Read-only original preview MT19937 word oracle. The production legacy path
+/// still initializes seed as u32 and retains Poisson-all then binomial-all order.
+pub fn legacy_random_words(seed:u64,draws:usize)->Vec<u32>{
+    use rand::RngCore;
+    let mut rng=rand_mt::Mt::new(seed as u32);
+    (0..draws).map(|_|rng.next_u32()).collect()
+}
+
 /// Three sensitometric sublayers, ported from the pinned Python reference.
 /// Each channel/layer is processed separately; no HxWx9 intermediate is kept.
 #[allow(clippy::too_many_arguments)]
@@ -344,6 +378,61 @@ pub fn layer_particle_model_export(
     grain
 }
 
+/// Export-only fused interpolation and exact coordinate sampling. The map is
+/// evaluated once for each input and must retain the reference Scalar rounding
+/// boundary. Each sample still owns its original coordinate RNG; chunks only
+/// schedule independent samples and never change a random stream or reduction.
+///
+/// Returning f64 directly also removes the intermediate Scalar output copy in
+/// the streamed exporter, while explicitly retaining its original narrowing.
+#[allow(clippy::too_many_arguments)]
+pub fn layer_particle_model_export_prepared(
+    pool: Option<&rayon::ThreadPool>,
+    prepared: &spektrafilm_math::numpy_rng::PreparedPoisson,
+    density: &[f64], width: u32, density_max: f64,
+    n_particles_per_pixel: f64, grain_uniformity: f64,
+    seed: u64, origin: [u32; 2],
+    map_layer: &(impl Fn(f64) -> Scalar + Sync + Send),
+) -> Vec<f64> {
+    assert!(width > 0);
+    let dmax = density_max;
+    let od_particle = dmax / n_particles_per_pixel;
+    let gu = grain_uniformity;
+    let npp = n_particles_per_pixel;
+    let [ox, oy] = origin;
+    // Fixed-size scheduling chunks work for very wide or narrow images. Only
+    // the first coordinate in each chunk requires integer division/modulo.
+    const CHUNK: usize = 256;
+    let sample_chunk = |index: usize, output: &mut [f64], input: &[f64]| {
+        let start = index * CHUNK;
+        let mut column = (start % width as usize) as u32;
+        let mut y = oy.wrapping_add((start / width as usize) as u32);
+        for (slot, &original) in output.iter_mut().zip(input) {
+            let x = ox.wrapping_add(column);
+            let mut local = CoordinateRng::new(seed, x, y);
+            let value = map_layer(original);
+            let p = ((value as f64) / dmax).clamp(1e-6, 1.0 - 1e-6);
+            let saturation = 1.0 - p * gu * (1.0 - 1e-6);
+            let particles = spektrafilm_math::numpy_rng::rk_poisson_prepared(
+                &mut local, npp / saturation, prepared);
+            let developed = spektrafilm_math::numpy_rng::rk_binomial(&mut local, particles, p);
+            *slot = from_f64(developed as f64 * od_particle * saturation) as f64;
+            column += 1;
+            if column == width { column = 0; y = y.wrapping_add(1); }
+        }
+    };
+    let mut grain = vec![0.0; density.len()];
+    if let Some(pool) = pool {
+        pool.install(|| grain.par_chunks_mut(CHUNK).zip(density.par_chunks(CHUNK))
+            .enumerate().for_each(|(i, (out, input))| sample_chunk(i, out, input)));
+    } else {
+        for (i, (out, input)) in grain.chunks_mut(CHUNK).zip(density.chunks(CHUNK)).enumerate() {
+            sample_chunk(i, out, input);
+        }
+    }
+    grain
+}
+
 #[cfg(test)]
 mod export_sampling_tests {
     use super::*;
@@ -364,5 +453,76 @@ mod export_sampling_tests {
         let a=layer_particle_model(&d,17,13,2.4,12.3,0.97,42,0.65,None);
         let b=layer_particle_model(&d,17,13,2.4,12.3,0.97,42,0.65,None);
         assert_eq!(a,b);
+    }
+
+    #[test]
+    fn prepared_fused_sampling_preserves_bits_across_images_seeds_and_chunks() {
+        let prepared = spektrafilm_math::numpy_rng::PreparedPoisson::new();
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+        for (w,h) in [(1,1),(17,13),(255,3),(256,3),(257,131),(4096,8),(40000,1)] {
+            // Multiple intensity patterns include clipping, flat areas, ramps,
+            // discontinuities, and values around a sublayer interpolation knot.
+            for pattern in 0..3 {
+                let input:Vec<f64>=(0..w*h).map(|i| match pattern {
+                    0 => match i % 7 { 0 => -1.0, 1 => 0.0, 2 => 0.5,
+                        3 => f64::from_bits(0.5f64.to_bits()-1),
+                        4 => f64::from_bits(0.5f64.to_bits()+1), 5 => 1.0, _ => 100.0 },
+                    1 => ((i as u64*7919%65521) as f64/32760.5)-0.1,
+                    _ => 0.37,
+                }).collect();
+                let map=|q:f64| from_f64(if q<=0.0 {0.03} else if q>=1.0 {2.43}
+                    else if q<=0.5 {0.03+(q-0.0)/0.5*(0.8-0.03)}
+                    else {0.8+(q-0.5)/0.5*(2.43-0.8)});
+                let mapped:Vec<_>=input.iter().copied().map(&map).collect();
+                for (seed,origin,npp,gu) in [
+                    (0,[0,0],0.02,0.5),
+                    (42,[31,209],12.3,0.97),
+                    (u64::MAX,[u32::MAX-10,u32::MAX-10],7000.0,0.999),
+                ] {
+                    let expected=layer_particle_model(&mapped,w,h,2.43,npp,gu,seed,0.0,Some(origin));
+                    for pool in [None,Some(&pool)] {
+                        let actual=layer_particle_model_export_prepared(pool,&prepared,&input,w,2.43,npp,gu,seed,origin,&map);
+                        assert!(expected.iter().zip(&actual).all(|(a,b)|(*a as f64).to_bits()==b.to_bits()),
+                            "{w}x{h}, pattern={pattern}, seed={seed}, origin={origin:?}, parallel={}",pool.is_some());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Host compute microbenchmark, not an Android/end-to-end speed claim.
+    /// Run explicitly in release mode after the deterministic tests pass.
+    #[test]
+    #[ignore]
+    fn benchmark_prepared_grain_sampling() {
+        let (w,h)=(1024,1024);
+        let input:Vec<f64>=(0..w*h).map(|i|(i as u64*7919%65521) as f64/65521.0).collect();
+        let axis:Vec<f64>=(0..256).map(|i|i as f64/255.0).collect();
+        let layers:Vec<f64>=axis.iter().map(|&v|v*2.4).collect();
+        let map=|q:f64| {let last=axis.len()-1;
+            let value=if q<=axis[0] {layers[0]} else if q>=axis[last] {layers[last]}
+            else {let hi=axis.partition_point(|&v|v<=q).min(last);let lo=hi-1;
+                let dx=axis[hi]-axis[lo];let t=if dx!=0.0 {(q-axis[lo])/dx} else {0.0};
+                layers[lo]+t*(layers[hi]-layers[lo])};from_f64(value+0.03)};
+        let pool=rayon::ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+        let setup=Instant::now();
+        let prepared=spektrafilm_math::numpy_rng::PreparedPoisson::new();
+        eprintln!("exact grain immutable setup_ms={:.3}",setup.elapsed().as_secs_f64()*1000.0);
+        for npp in [12.3,120.0,1200.0] {
+            for iteration in 0..5 {
+                let reference=|| {let mapped:Vec<Scalar>=pool.install(||input.par_iter().map(|&x|map(x)).collect());
+                    layer_particle_model_export(&pool,&mapped,w,2.43,npp,0.97,42,[0,0])
+                        .iter().map(|&x|x as f64).collect::<Vec<_>>()};
+                let candidate=||layer_particle_model_export_prepared(Some(&pool),&prepared,&input,w,2.43,npp,0.97,42,[0,0],&map);
+                // Alternate timing order to reduce systematic warm-up bias.
+                let timed=|f:&dyn Fn()->Vec<f64>| {let t=Instant::now();let result=f();(t.elapsed(),result)};
+                let (baseline,optimized)=if iteration%2==0 {(timed(&reference),timed(&candidate))}
+                    else {let optimized=timed(&candidate);(timed(&reference),optimized)};
+                assert!(baseline.1.iter().zip(&optimized.1).all(|(a,b)|a.to_bits()==b.to_bits()));
+                eprintln!("exact_grain {w}x{h} npp={npp} run={iteration} baseline_ms={:.3} candidate_ms={:.3} ratio={:.3}",
+                    baseline.0.as_secs_f64()*1000.0,optimized.0.as_secs_f64()*1000.0,
+                    optimized.0.as_secs_f64()/baseline.0.as_secs_f64());
+            }
+        }
     }
 }

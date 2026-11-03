@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "operation": "planGpuExposureLogStage",
+  "plan": {
+    "combinedPeakBytes": 159452828,
+    "deviceBytes": 8457884,
+    "diskBytes": 74512,
+    "driverAllowanceBytes": 67108864,
+    "gridVersion": 0,
+    "height": 11,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 16777216,
+    "manifestSha256": "d957f82858ad0add88caadf31519f436ba8b7166c28798c9c9f57563be117e6f",
+    "operation": "fullExposureLog",
+    "sampleHeight": 0,
+    "sampleWidth": 0,
+    "schemaVersion": 1,
+    "token": 303,
+    "width": 17
+  },
+  "schemaVersion": 1
+}

@@ -12,9 +12,64 @@ use std::sync::{
 
 pub const MAX_BATCH_PIXELS: usize = 32768;
 pub const MAX_KNOTS: usize = 4096;
+/// The app holds this process-lifetime passive admission reservation BEFORE
+/// enabling reuse. Covers fixed buffer payload, key metadata and bookkeeping;
+/// driver-private overhead remains in the existing GPU operation allowance.
+pub const GPU_RESOURCE_REUSE_RESERVE_BYTES: usize = 2 * 1024 * 1024;
+pub const GPU_RESOURCE_REUSE_BUFFER_BYTES: usize =
+    MAX_BATCH_PIXELS * 3 * 4 * 3 + MAX_KNOTS * 4 * 4 + 16;
 pub const ABS_TOLERANCE: f64 = 2e-5;
 pub const REL_TOLERANCE: f64 = 2e-5;
 pub const SHADER: &str = include_str!("shaders/adreno_density.wgsl");
+/// Safe scalar evidence for this density-only startup experiment. None means
+/// not measured, not failure. This is never a whole-render GPU benchmark.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DensityCalibration {
+    pub fixture_pixels: u32,
+    pub curve_knots: u32,
+    pub samples: u32,
+    pub required_time_ratio: f64,
+    pub cpu_median_ms: Option<f64>,
+    pub original_gpu_median_ms: Option<f64>,
+    pub original_gate_passed: Option<bool>,
+    pub candidate_gpu_median_ms: Option<f64>,
+    pub candidate_samples: u32,
+    pub candidate_validation_ms: Option<f64>,
+    pub candidate_gate_passed: Option<bool>,
+    pub candidate_exact_vs_original_gpu: Option<bool>,
+    pub candidate_cpu_max_abs: Option<f64>,
+    pub candidate_cpu_rms: Option<f64>,
+    pub candidate_cpu_bit_equal: Option<bool>,
+    pub numeric_self_check_passed: Option<bool>,
+    /// Adapter advertisement only. We do NOT request/use f64 shaders.
+    pub shader_f64_advertised: Option<bool>,
+    pub candidate_status: &'static str,
+}
+impl Default for DensityCalibration {
+    fn default() -> Self {
+        Self {
+            fixture_pixels: MAX_BATCH_PIXELS as u32,
+            curve_knots: 256,
+            samples: 0,
+            required_time_ratio: 0.85,
+            cpu_median_ms: None,
+            original_gpu_median_ms: None,
+            original_gate_passed: None,
+            candidate_gpu_median_ms: None,
+            candidate_samples: 0,
+            candidate_validation_ms: None,
+            candidate_gate_passed: None,
+            candidate_exact_vs_original_gpu: None,
+            candidate_cpu_max_abs: None,
+            candidate_cpu_rms: None,
+            candidate_cpu_bit_equal: None,
+            numeric_self_check_passed: None,
+            shader_f64_advertised: None,
+            candidate_status: "not_requested_at_initialization",
+        }
+    }
+}
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuDiagnostics {
@@ -28,6 +83,12 @@ pub struct GpuDiagnostics {
     pub cpu_fallbacks: u64,
     pub reason: String,
     pub startup_self_test_passed: bool,
+    pub density_calibration: Option<DensityCalibration>,
+    /// Experimental allocation reuse, independent of the shipped GPU math policy.
+    pub resource_reuse_requested: bool,
+    pub resource_reuse_batches: u64,
+    pub resource_reuse_exact_checks: u64,
+    pub resource_reuse_reason: String,
 }
 pub struct AdrenoDensityBackend {
     #[cfg(feature = "adreno-gpu")]
@@ -46,6 +107,11 @@ impl AdrenoDensityBackend {
         Self::with_enabled(true)
     }
     pub fn with_enabled(enabled: bool) -> Self {
+        Self::with_options(enabled, false)
+    }
+    /// `resource_reuse` requires the caller to hold the process-lifetime
+    /// GPU_RESOURCE_REUSE_RESERVE_BYTES admission lease. It is off by default.
+    pub fn with_options(enabled: bool, resource_reuse: bool) -> Self {
         let status = GpuDiagnostics {
             requested: enabled,
             active: false,
@@ -62,6 +128,16 @@ impl AdrenoDensityBackend {
             }
             .into(),
             startup_self_test_passed: false,
+            density_calibration: None,
+            resource_reuse_requested: resource_reuse,
+            resource_reuse_batches: 0,
+            resource_reuse_exact_checks: 0,
+            resource_reuse_reason: if resource_reuse {
+                "Requested; no reused GPU batches committed"
+            } else {
+                "Disabled by configuration"
+            }
+            .into(),
         };
         #[allow(unused_mut)]
         let mut backend = Self {
@@ -73,7 +149,7 @@ impl AdrenoDensityBackend {
         };
         #[cfg(all(feature = "adreno-gpu", target_os = "android"))]
         if enabled {
-            match gpu::cached() {
+            match gpu::cached(resource_reuse) {
                 Ok(shared) => {
                     // Metadata must not wait behind another preview/export's work.
                     let adapter = match shared.try_lock() {
@@ -105,14 +181,19 @@ impl AdrenoDensityBackend {
     }
     pub fn diagnostics(&self) -> GpuDiagnostics {
         let mut s = self.status.lock().unwrap().clone();
+        #[cfg(all(feature = "adreno-gpu", target_os = "android"))]
+        if s.requested {
+            s.density_calibration = gpu::calibration_snapshot();
+        }
         #[cfg(feature = "adreno-gpu")]
         if s.active {
             match self.gpu.try_lock() {
-                Ok(g) if g.is_some() => {},
+                Ok(g) if g.is_some() => {}
                 Ok(_) => {
                     s.active = false;
-                    s.reason = "GPU disabled after device or numerical failure; CPU fallback".into();
-                },
+                    s.reason =
+                        "GPU disabled after device or numerical failure; CPU fallback".into();
+                }
                 Err(_) => {
                     s.active = false;
                     s.reason = "GPU busy; availability snapshot unavailable".into();
@@ -296,21 +377,41 @@ impl ComputeBackend for AdrenoDensityBackend {
                 };
                 lock.as_mut().map(|g| {
                     let mut out = Vec::with_capacity(i.data.len());
+                    let reuse = self.status.lock().unwrap().resource_reuse_requested;
+                    let (mut reused, mut checked) = (0u64, 0u64);
+                    let mut reuse_reason = None;
                     for chunk in i.data.chunks(MAX_BATCH_PIXELS * 3) {
                         let pixels: Vec<f32> = chunk.iter().map(|v| *v as f32).collect();
-                        let values = g.run(&pixels, x, y, gamma)?;
+                        let batch = g.run(&pixels, x, y, gamma, reuse)?;
+                        reused += u64::from(batch.reused);
+                        checked += u64::from(batch.exact_checked);
+                        if batch.reuse_reason.is_some() {
+                            reuse_reason = batch.reuse_reason;
+                        }
+                        let values = batch.values;
                         // Sample pixel locations, and all three channels at each location.
                         if !validate_sampled(chunk, &values, x, y, gamma) {
                             return Err("GPU numerical check failed; CPU fallback".into());
                         }
                         out.extend(values.into_iter().map(|v| from_f64(v as f64)));
                     }
-                    Ok(out)
+                    Ok((out, reused, checked, reuse_reason))
                 })
             };
             if let Some(r) = result {
                 match r {
-                    Ok(v) => {
+                    Ok((v, reused, checked, reuse_reason)) => {
+                        let mut status = self.status.lock().unwrap();
+                        status.resource_reuse_batches += reused;
+                        status.resource_reuse_exact_checks += checked;
+                        if let Some(reason) = reuse_reason {
+                            status.resource_reuse_reason = reason;
+                        } else if reused > 0 {
+                            status.resource_reuse_reason =
+                                "Allocation reuse used; exact baseline GPU comparison passed"
+                                    .into();
+                        }
+                        drop(status);
                         self.batches.fetch_add(
                             i.data.len().div_ceil(MAX_BATCH_PIXELS * 3) as u64,
                             Ordering::Relaxed,
@@ -333,27 +434,183 @@ impl ComputeBackend for AdrenoDensityBackend {
     }
 }
 
+// These pure contracts compile without wgpu so the same production guards
+// can be validated in a bounded CPU-only host build.
+#[cfg(any(test, feature = "adreno-gpu"))]
+mod reuse_contract {
+    #[derive(Debug, PartialEq, Eq)]
+    pub(super) struct ReuseKey {
+        pub(super) scalar_count: usize,
+        pub(super) axis_bits: Vec<u32>,
+        pub(super) curve_bits: Vec<u32>,
+    }
+    impl ReuseKey {
+        pub(super) fn new(scalar_count: usize, x: &[f64], y: &[[f64; 3]], gamma: f64) -> Self {
+            Self {
+                scalar_count,
+                axis_bits: x.iter().map(|v| ((*v / gamma) as f32).to_bits()).collect(),
+                curve_bits: y.iter().flatten().map(|v| (*v as f32).to_bits()).collect(),
+            }
+        }
+    }
+    pub(super) fn cost_gate(cpu_ms: f64, gpu_ms: f64) -> bool {
+        cpu_ms.is_finite()
+            && gpu_ms.is_finite()
+            && cpu_ms > 0.0
+            && gpu_ms >= 0.0
+            && gpu_ms < cpu_ms * 0.85
+    }
+    pub(super) fn cpu_error(reference: &[f64], candidate: &[f32]) -> Option<(f64, f64, bool)> {
+        if reference.is_empty() || reference.len() != candidate.len() {
+            return None;
+        }
+        let (mut max_abs, mut squared, mut exact) = (0.0f64, 0.0f64, true);
+        for (&a, &b) in reference.iter().zip(candidate) {
+            let b = b as f64;
+            if !a.is_finite() || !b.is_finite() {
+                return None;
+            }
+            let difference = (a - b).abs();
+            max_abs = max_abs.max(difference);
+            squared += difference * difference;
+            exact &= a.to_bits() == b.to_bits();
+        }
+        let rms = (squared / reference.len() as f64).sqrt();
+        if !max_abs.is_finite() || !rms.is_finite() {
+            return None;
+        }
+        Some((max_abs, rms, exact))
+    }
+    pub(super) fn exact_output(a: &[f32], b: &[f32]) -> bool {
+        a.len() == b.len()
+            && a.iter()
+                .zip(b)
+                .all(|(a, b)| a.is_finite() && b.is_finite() && a.to_bits() == b.to_bits())
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::adreno::{
+            GPU_RESOURCE_REUSE_BUFFER_BYTES, GPU_RESOURCE_REUSE_RESERVE_BYTES, MAX_BATCH_PIXELS,
+            MAX_KNOTS,
+        };
+        #[test]
+        fn cost_gate_requires_more_than_fifteen_percent_saving() {
+            assert!(!cost_gate(10.0, 9.0));
+            assert!(!cost_gate(10.0, 8.5));
+            assert!(cost_gate(10.0, 8.49));
+            assert!(!cost_gate(0.0, 0.0));
+            assert!(!cost_gate(f64::NAN, 1.0));
+            assert!(!cost_gate(10.0, f64::INFINITY));
+        }
+        #[test]
+        fn cpu_error_metrics_do_not_confuse_tolerance_with_bit_equality() {
+            assert_eq!(cpu_error(&[1.0, 2.0], &[1.0, 2.0]), Some((0.0, 0.0, true)));
+            let (max, rms, exact) = cpu_error(&[1.0, 2.0], &[1.0, 2.25]).unwrap();
+            assert_eq!(max, 0.25);
+            assert!((rms - (0.0625f64 / 2.0).sqrt()).abs() < 1e-15);
+            assert!(!exact);
+            assert_eq!(cpu_error(&[0.0], &[-0.0]), Some((0.0, 0.0, false)));
+            assert!(cpu_error(&[], &[]).is_none());
+            assert!(cpu_error(&[f64::NAN], &[0.0]).is_none());
+            assert!(cpu_error(&[1.0], &[]).is_none());
+        }
+        #[test]
+        fn exact_guard_rejects_any_bit_difference_or_nonfinite() {
+            assert!(exact_output(&[0.0, 1.0], &[0.0, 1.0]));
+            assert!(!exact_output(&[0.0], &[-0.0]));
+            assert!(!exact_output(
+                &[1.0],
+                &[f32::from_bits(1.0f32.to_bits() + 1)]
+            ));
+            assert!(!exact_output(&[f32::NAN], &[f32::NAN]));
+            assert!(!exact_output(&[f32::INFINITY], &[f32::INFINITY]));
+            assert!(!exact_output(&[0.0], &[]));
+            let a = vec![1.0; MAX_BATCH_PIXELS * 3];
+            let mut b = a.clone();
+            b[MAX_BATCH_PIXELS * 3 - 2] = 1.001;
+            assert!(!exact_output(&a, &b));
+        }
+        #[test]
+        fn key_tracks_exact_shader_inputs_and_size_without_hash_collisions() {
+            let x = [-2.0, 0.0, 3.0];
+            let y = [[0.0; 3], [1.0; 3], [2.0; 3]];
+            let key = ReuseKey::new(3000, &x, &y, 1.0);
+            assert_eq!(key, ReuseKey::new(3000, &x, &y, 1.0));
+            assert_ne!(key, ReuseKey::new(3003, &x, &y, 1.0));
+            assert_ne!(key, ReuseKey::new(3000, &x, &y, 1.1));
+            assert_ne!(key, ReuseKey::new(3000, &[-2.0, 0.1, 3.0], &y, 1.0));
+            let mut changed = y;
+            changed[1][1] = 1.25;
+            assert_ne!(key, ReuseKey::new(3000, &x, &changed, 1.0));
+        }
+        #[test]
+        fn retained_payload_and_max_key_fit_reserved_budget() {
+            assert_eq!(GPU_RESOURCE_REUSE_BUFFER_BYTES, 1_245_200);
+            let key_bytes = MAX_KNOTS * 4 * 4;
+            assert!(
+                GPU_RESOURCE_REUSE_BUFFER_BYTES + key_bytes + 64 * 1024
+                    < GPU_RESOURCE_REUSE_RESERVE_BYTES
+            );
+        }
+    }
+}
+
 #[cfg(feature = "adreno-gpu")]
 mod gpu {
+    use super::reuse_contract::{ReuseKey, cost_gate, cpu_error, exact_output};
     use super::*;
     use std::{
         sync::{Arc, atomic::AtomicBool, mpsc},
         time::{Duration, Instant},
     };
     use wgpu::util::DeviceExt;
+    fn calibration_store() -> &'static Mutex<DensityCalibration> {
+        static CALIBRATION: std::sync::OnceLock<Mutex<DensityCalibration>> =
+            std::sync::OnceLock::new();
+        CALIBRATION.get_or_init(|| Mutex::new(DensityCalibration::default()))
+    }
+    pub fn calibration_snapshot() -> Option<DensityCalibration> {
+        calibration_store().try_lock().ok().map(|v| v.clone())
+    }
+    fn record_calibration(value: &DensityCalibration) {
+        // Worker-only short critical section; readers use try_lock.
+        if let Ok(mut slot) = calibration_store().lock() {
+            *slot = value.clone();
+        }
+    }
     pub struct Gpu {
         device: wgpu::Device,
         queue: wgpu::Queue,
         pipeline: wgpu::ComputePipeline,
         error: Arc<AtomicBool>,
         pub adapter: String,
+        reuse: Option<ReusableBuffers>,
+        reuse_key: Option<ReuseKey>,
+        reuse_disabled: Option<String>,
+    }
+    struct ReusableBuffers {
+        input: wgpu::Buffer,
+        axis: wgpu::Buffer,
+        curves: wgpu::Buffer,
+        output: wgpu::Buffer,
+        readback: wgpu::Buffer,
+        uniform: wgpu::Buffer,
+        bind: wgpu::BindGroup,
+    }
+    pub struct BatchOutput {
+        pub values: Vec<f32>,
+        pub reused: bool,
+        pub exact_checked: bool,
+        pub reuse_reason: Option<String>,
     }
     struct Request {
         input: Vec<f32>,
         axis: Vec<f64>,
         curves: Vec<[f64; 3]>,
         gamma: f64,
-        response: mpsc::Sender<Result<Vec<f32>, String>>,
+        reuse: bool,
+        response: mpsc::Sender<Result<BatchOutput, String>>,
     }
     pub struct Handle {
         tx: mpsc::SyncSender<Request>,
@@ -366,7 +623,8 @@ mod gpu {
             axis: &[f64],
             curves: &[[f64; 3]],
             gamma: f64,
-        ) -> Result<Vec<f32>, String> {
+            reuse: bool,
+        ) -> Result<BatchOutput, String> {
             if input.len() > MAX_BATCH_PIXELS * 3 || axis.len() > MAX_KNOTS {
                 return Err("GPU command exceeds batch limits".into());
             }
@@ -377,6 +635,7 @@ mod gpu {
                     axis: axis.to_vec(),
                     curves: curves.to_vec(),
                     gamma,
+                    reuse,
                     response: tx,
                 })
                 .map_err(|_| "GPU worker unavailable; CPU fallback".to_string())?;
@@ -386,12 +645,12 @@ mod gpu {
         }
     }
     #[cfg(target_os = "android")]
-    pub fn cached() -> Result<Arc<Mutex<Option<Handle>>>, String> {
+    pub fn cached(calibrate_reuse: bool) -> Result<Arc<Mutex<Option<Handle>>>, String> {
         static GPU: std::sync::OnceLock<Result<Arc<Mutex<Option<Handle>>>, String>> =
             std::sync::OnceLock::new();
         GPU.get_or_init(|| {
-            initialize_serving(Duration::from_secs(2), || {
-                let mut g = Gpu::new(false)?;
+            initialize_serving(Duration::from_secs(2), move || {
+                let mut g = Gpu::new_with_calibration(false, calibrate_reuse)?;
                 let (tx, rx) = mpsc::sync_channel::<Request>(1);
                 let handle = Arc::new(Mutex::new(Some(Handle {
                     tx,
@@ -399,7 +658,7 @@ mod gpu {
                 })));
                 let serve = Box::new(move || {
                     while let Ok(q) = rx.recv() {
-                        let result = g.run(&q.input, &q.axis, &q.curves, q.gamma);
+                        let result = g.run_request(&q.input, &q.axis, &q.curves, q.gamma, q.reuse);
                         let _ = q.response.send(result);
                     }
                 });
@@ -410,6 +669,17 @@ mod gpu {
     }
     impl Gpu {
         pub fn new(allow_test_adapter: bool) -> Result<Self, String> {
+            Self::new_with_calibration(allow_test_adapter, false)
+        }
+        fn new_with_calibration(
+            allow_test_adapter: bool,
+            calibrate_reuse: bool,
+        ) -> Result<Self, String> {
+            let mut evidence = DensityCalibration::default();
+            if calibrate_reuse {
+                evidence.candidate_status = "requested_not_measured";
+            }
+            record_calibration(&evidence);
             let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::VULKAN,
                 ..Default::default()
@@ -422,6 +692,9 @@ mod gpu {
                 }))
                 .ok_or("No Vulkan adapter")?;
             let info = adapter.get_info();
+            evidence.shader_f64_advertised =
+                Some(adapter.features().contains(wgpu::Features::SHADER_F64));
+            record_calibration(&evidence);
             if !allow_test_adapter
                 && !eligible_adapter(
                     info.vendor,
@@ -477,6 +750,9 @@ mod gpu {
                 pipeline,
                 error,
                 adapter: info.name,
+                reuse: None,
+                reuse_key: None,
+                reuse_disabled: None,
             };
             let axis = [-8., -2., 0., 1., 4.];
             let curves = [
@@ -494,8 +770,12 @@ mod gpu {
                     reference_scalar(input[k] as f64, k % 3, &axis, &curves, 1.17),
                 )
             }) {
+                evidence.numeric_self_check_passed = Some(false);
+                record_calibration(&evidence);
                 return Err("Adreno density startup self-check failed".into());
             }
+            evidence.numeric_self_check_passed = Some(true);
+            record_calibration(&evidence);
             if !allow_test_adapter {
                 // Warm shader/cache separately; benchmark transfer + dispatch + readback
                 // and conversion, not just GPU execution. Median of three full chunks.
@@ -529,17 +809,46 @@ mod gpu {
                     let at = Instant::now();
                     let upload: Vec<f32> = image.data.iter().map(|v| *v as f32).collect();
                     let values = g.run(&upload, &axis, &curves, 1.)?;
-                    if !validate_sampled(&image.data,&values,&axis,&curves,1.){return Err("GPU calibration numerical check failed".into());}
+                    if !validate_sampled(&image.data, &values, &axis, &curves, 1.) {
+                        return Err("GPU calibration numerical check failed".into());
+                    }
                     let returned: Vec<_> = values.into_iter().map(|v| from_f64(v as f64)).collect();
                     std::hint::black_box(returned);
                     gpu_times.push(at.elapsed().as_secs_f64());
+                    evidence.samples = gpu_times.len() as u32;
+                    record_calibration(&evidence);
                     if benchmark_start.elapsed() > Duration::from_secs(1) {
                         return Err("No measured acceleration benefit; CPU fallback (calibration time budget exceeded)".into());
                     }
                 }
                 cpu_times.sort_by(f64::total_cmp);
                 gpu_times.sort_by(f64::total_cmp);
-                if gpu_times[1] >= cpu_times[1] * 0.85 {
+                evidence.cpu_median_ms = Some(cpu_times[1] * 1000.0);
+                evidence.original_gpu_median_ms = Some(gpu_times[1] * 1000.0);
+                let original_passed = cost_gate(cpu_times[1], gpu_times[1]);
+                evidence.original_gate_passed = Some(original_passed);
+                record_calibration(&evidence);
+                if calibrate_reuse {
+                    // Diagnostic only: NEVER let this result override the original
+                    // CPU/GPU selection. Candidate arithmetic is the same shader,
+                    // but GPU tolerance does not imply bit-identical f64 CPU pixels.
+                    let diagnostic = g.calibrate_reuse(
+                        &image,
+                        &input,
+                        &axis,
+                        &curves,
+                        &mut evidence,
+                        benchmark_start,
+                    );
+                    if diagnostic.is_err() {
+                        evidence.candidate_status = "device_or_validation_failure";
+                        record_calibration(&evidence);
+                        // A device/map error cannot safely continue using this GPU.
+                        return Err(diagnostic.unwrap_err());
+                    }
+                    record_calibration(&evidence);
+                }
+                if !original_passed {
                     return Err(format!(
                         "No measured acceleration benefit; CPU fallback (CPU {:.3} ms, GPU {:.3} ms including transfers)",
                         cpu_times[1] * 1000.,
@@ -547,7 +856,85 @@ mod gpu {
                     ));
                 }
             }
+
             Ok(g)
+        }
+        fn calibrate_reuse(
+            &mut self,
+            image: &ImageBuf,
+            input: &[f32],
+            axis: &[f64],
+            curves: &[[f64; 3]],
+            evidence: &mut DensityCalibration,
+            budget_start: Instant,
+        ) -> Result<(), String> {
+            // Keep this optional experiment within the existing calibration budget.
+            if budget_start.elapsed() >= Duration::from_secs(1) {
+                evidence.candidate_status = "budget_exhausted";
+                return Ok(());
+            }
+            let validation_start = Instant::now();
+            let baseline = self.run(input, axis, curves, 1.0)?;
+            let cpu = CpuBackend.density_curve_interp(image, axis, curves, 1.0);
+            let reference: Vec<f64> = cpu.data.iter().map(|v| *v as f64).collect();
+            let key = ReuseKey::new(input.len(), axis, curves, 1.0);
+            let warm = self.run_reused(input, &key)?;
+            let exact = exact_output(&baseline, &warm);
+            evidence.candidate_exact_vs_original_gpu = Some(exact);
+            if let Some((max_abs, rms, exact_cpu)) = cpu_error(&reference, &warm) {
+                evidence.candidate_cpu_max_abs = Some(max_abs);
+                evidence.candidate_cpu_rms = Some(rms);
+                evidence.candidate_cpu_bit_equal = Some(exact_cpu);
+            }
+            evidence.candidate_validation_ms =
+                Some(validation_start.elapsed().as_secs_f64() * 1000.0);
+            if !exact {
+                self.reuse_disabled = Some("Allocation reuse exact comparison failed; original GPU allocation path retained".into());
+                self.reuse = None;
+                evidence.candidate_status = "exact_comparison_failed";
+                evidence.candidate_gate_passed = Some(false);
+                return Ok(());
+            }
+            let mut times = Vec::with_capacity(3);
+            for _ in 0..3 {
+                if budget_start.elapsed() >= Duration::from_secs(1) {
+                    evidence.candidate_status = "budget_exhausted";
+                    return Ok(());
+                }
+                let start = Instant::now();
+                let upload: Vec<f32> = image.data.iter().map(|v| *v as f32).collect();
+                // Match the production candidate's table conversion/key work.
+                let timed_key = ReuseKey::new(upload.len(), axis, curves, 1.0);
+                let values = self.run_reused(&upload, &timed_key)?;
+                if !validate_sampled(&image.data, &values, axis, curves, 1.0) {
+                    return Err("GPU calibration numerical check failed".into());
+                }
+                let returned: Vec<_> = values.iter().map(|v| from_f64(*v as f64)).collect();
+                std::hint::black_box(returned);
+                times.push(start.elapsed().as_secs_f64());
+                evidence.candidate_samples = times.len() as u32;
+                // Every measured batch must equal the original allocation route.
+                // Comparison is outside the warm-path timer: production performs
+                // this full check on first/key change. Validation/setup overhead is
+                // separately reported, never represented as warm GPU execution.
+                if !exact_output(&baseline, &values) {
+                    self.reuse_disabled = Some("Allocation reuse exact comparison failed; original GPU allocation path retained".into());
+                    self.reuse = None;
+                    evidence.candidate_exact_vs_original_gpu = Some(false);
+                    evidence.candidate_status = "exact_comparison_failed";
+                    evidence.candidate_gate_passed = Some(false);
+                    return Ok(());
+                }
+            }
+            times.sort_by(f64::total_cmp);
+            evidence.candidate_gpu_median_ms = Some(times[1] * 1000.0);
+            evidence.candidate_gate_passed = evidence
+                .cpu_median_ms
+                .map(|cpu| cost_gate(cpu, times[1] * 1000.0));
+            evidence.candidate_status = "measured_diagnostic_only";
+            // Do not reuse this synthetic key as a real image's first-use check.
+            self.reuse_key = None;
+            Ok(())
         }
         pub fn run(
             &mut self,
@@ -614,6 +1001,16 @@ mod gpu {
                 layout: &self.pipeline.get_bind_group_layout(0),
                 entries: &entries,
             });
+            self.dispatch_readback(&bind, &output, &readback, input.len())
+        }
+        fn dispatch_readback(
+            &self,
+            bind: &wgpu::BindGroup,
+            output: &wgpu::Buffer,
+            readback: &wgpu::Buffer,
+            scalar_count: usize,
+        ) -> Result<Vec<f32>, String> {
+            let size = (scalar_count * 4) as u64;
             let mut encoder = self.device.create_command_encoder(&Default::default());
             {
                 let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -621,15 +1018,17 @@ mod gpu {
                     timestamp_writes: None,
                 });
                 pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &bind, &[]);
-                pass.dispatch_workgroups((input.len() as u32).div_ceil(64), 1, 1);
+                pass.set_bind_group(0, bind, &[]);
+                pass.dispatch_workgroups((scalar_count as u32).div_ceil(64), 1, 1);
             }
-            encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, size);
+            encoder.copy_buffer_to_buffer(output, 0, readback, 0, size);
             self.queue.submit([encoder.finish()]);
             let (tx, rx) = mpsc::channel();
-            readback.slice(..).map_async(wgpu::MapMode::Read, move |r| {
-                let _ = tx.send(r);
-            });
+            readback
+                .slice(0..size)
+                .map_async(wgpu::MapMode::Read, move |r| {
+                    let _ = tx.send(r);
+                });
             let start = Instant::now();
             loop {
                 let _ = self.device.poll(wgpu::Maintain::Poll);
@@ -646,11 +1045,184 @@ mod gpu {
                 }
                 std::thread::sleep(Duration::from_millis(1));
             }
-            let mapped = readback.slice(..).get_mapped_range();
+            let mapped = readback.slice(0..size).get_mapped_range();
             let result = bytemuck::cast_slice::<u8, f32>(&mapped).to_vec();
             drop(mapped);
             readback.unmap();
             Ok(result)
+        }
+        fn create_reusable(&self) -> ReusableBuffers {
+            let buffer = |label, size, usage| {
+                self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                })
+            };
+            let upload = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
+            let size = (MAX_BATCH_PIXELS * 3 * 4) as u64;
+            let input = buffer("reused density input", size, upload);
+            let axis = buffer("reused density axis", (MAX_KNOTS * 4) as u64, upload);
+            let curves = buffer("reused density curves", (MAX_KNOTS * 3 * 4) as u64, upload);
+            let output = buffer(
+                "reused density output",
+                size,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            );
+            let readback = buffer(
+                "reused density readback",
+                size,
+                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            );
+            let uniform = buffer(
+                "reused density params",
+                16,
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            );
+            let buffers = [&input, &axis, &curves, &output, &uniform];
+            let entries: Vec<_> = buffers
+                .iter()
+                .enumerate()
+                .map(|(i, b)| wgpu::BindGroupEntry {
+                    binding: i as u32,
+                    resource: b.as_entire_binding(),
+                })
+                .collect();
+            let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("reused density binding"),
+                layout: &self.pipeline.get_bind_group_layout(0),
+                entries: &entries,
+            });
+            ReusableBuffers {
+                input,
+                axis,
+                curves,
+                output,
+                readback,
+                uniform,
+                bind,
+            }
+        }
+        fn run_reused(&mut self, input: &[f32], key: &ReuseKey) -> Result<Vec<f32>, String> {
+            if self.reuse.is_none() {
+                self.reuse = Some(self.create_reusable());
+            }
+            let b = self.reuse.as_ref().unwrap();
+            // Queue writes precede this dispatch. One worker owns these buffers and
+            // fully completes readback/unmap before receiving the next request.
+            self.queue
+                .write_buffer(&b.input, 0, bytemuck::cast_slice(input));
+            self.queue
+                .write_buffer(&b.axis, 0, bytemuck::cast_slice(&key.axis_bits));
+            self.queue
+                .write_buffer(&b.curves, 0, bytemuck::cast_slice(&key.curve_bits));
+            let params = [input.len() as u32, key.axis_bits.len() as u32, 0, 0];
+            self.queue
+                .write_buffer(&b.uniform, 0, bytemuck::cast_slice(&params));
+            self.dispatch_readback(&b.bind, &b.output, &b.readback, input.len())
+        }
+        fn run_request(
+            &mut self,
+            input: &[f32],
+            x: &[f64],
+            y: &[[f64; 3]],
+            gamma: f64,
+            reuse: bool,
+        ) -> Result<BatchOutput, String> {
+            if !reuse || self.reuse_disabled.is_some() {
+                return Ok(BatchOutput {
+                    values: self.run(input, x, y, gamma)?,
+                    reused: false,
+                    exact_checked: false,
+                    reuse_reason: if reuse {
+                        self.reuse_disabled.clone()
+                    } else {
+                        None
+                    },
+                });
+            }
+            if input.is_empty()
+                || input.len() > MAX_BATCH_PIXELS * 3
+                || input.len() % 3 != 0
+                || !valid_curves(x, y, gamma)
+                || self.error.load(Ordering::Relaxed)
+            {
+                return Err("GPU reuse batch validation/device error".into());
+            }
+            let key = ReuseKey::new(input.len(), x, y, gamma);
+            let check = self.reuse_key.as_ref() != Some(&key);
+            // Validate the complete actual batch against the original allocation
+            // route before accepting reuse for each size/table configuration.
+            let baseline = if check {
+                Some(self.run(input, x, y, gamma)?)
+            } else {
+                None
+            };
+            let values = self.run_reused(input, &key)?;
+            if let Some(baseline) = baseline {
+                if !exact_output(&baseline, &values) {
+                    let reason = "Allocation reuse exact comparison failed; original GPU allocation path retained".to_string();
+                    self.reuse_disabled = Some(reason.clone());
+                    self.reuse = None;
+                    self.reuse_key = None;
+                    return Ok(BatchOutput {
+                        values: baseline,
+                        reused: false,
+                        exact_checked: true,
+                        reuse_reason: Some(reason),
+                    });
+                }
+            }
+            self.reuse_key = Some(key);
+            Ok(BatchOutput {
+                values,
+                reused: true,
+                exact_checked: check,
+                reuse_reason: None,
+            })
+        }
+    }
+    #[cfg(test)]
+    mod reuse_tests {
+        use super::*;
+        #[test]
+        #[ignore = "Requires a real Vulkan device; no cloud/Adreno execution claim"]
+        fn reused_buffers_match_original_across_sizes_tables_and_stale_data() {
+            let mut gpu = test_adapter().expect("Vulkan adapter required");
+            let x = [-3.0, -1.0, 0.2, 2.0];
+            let y = [
+                [0.1, 0.2, 0.3],
+                [0.5, 0.8, 0.7],
+                [1.3, 1.1, 1.2],
+                [2.0, 2.8, 2.4],
+            ];
+            // Repeated equal keys change every pixel; shrinking/growing changes
+            // the map range, including non-workgroup-aligned tail invocations.
+            for (iteration, n) in [
+                MAX_BATCH_PIXELS * 3,
+                MAX_BATCH_PIXELS * 3,
+                3075,
+                3075,
+                3,
+                MAX_BATCH_PIXELS * 3,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let input: Vec<f32> = (0..n)
+                    .map(|i| ((i * 17 + iteration * 31) % 1000) as f32 / 100.0 - 4.0)
+                    .collect();
+                let mut curves = y;
+                if iteration >= 3 {
+                    curves[1][1] = 0.9;
+                }
+                let baseline = gpu.run_request(&input, &x, &curves, 1.2, false).unwrap();
+                let candidate = gpu.run_request(&input, &x, &curves, 1.2, true).unwrap();
+                assert!(candidate.reused, "{:?}", candidate.reuse_reason);
+                assert_eq!(candidate.exact_checked, iteration != 1);
+                assert!(exact_output(&baseline.values, &candidate.values));
+            }
         }
     }
     #[cfg(test)]
@@ -662,6 +1234,36 @@ mod gpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn calibration_unknowns_are_null_and_no_gpu_route_is_implied() {
+        let evidence = DensityCalibration::default();
+        let json = serde_json::to_value(&evidence).unwrap();
+        assert_eq!(json["fixturePixels"], 32768);
+        assert_eq!(json["curveKnots"], 256);
+        assert!(json["cpuMedianMs"].is_null());
+        assert!(json["originalGatePassed"].is_null());
+        assert!(json["candidateGatePassed"].is_null());
+        assert!(json["numericSelfCheckPassed"].is_null());
+        assert!(json["shaderF64Advertised"].is_null());
+        assert_eq!(json["candidateSamples"], 0);
+        assert_eq!(json["candidateStatus"], "not_requested_at_initialization");
+        assert!(
+            AdrenoDensityBackend::with_enabled(false)
+                .diagnostics()
+                .density_calibration
+                .is_none()
+        );
+    }
+    #[test]
+    fn allocation_reuse_is_default_off_and_never_claimed_on_cpu() {
+        let baseline = AdrenoDensityBackend::with_enabled(false).diagnostics();
+        assert!(!baseline.resource_reuse_requested);
+        assert_eq!(baseline.resource_reuse_batches, 0);
+        let requested = AdrenoDensityBackend::with_options(false, true).diagnostics();
+        assert!(requested.resource_reuse_requested);
+        assert_eq!(requested.resource_reuse_batches, 0);
+        assert_eq!(requested.resource_reuse_exact_checks, 0);
+    }
     #[test]
     fn strict_adreno_vendor_gate() {
         assert!(eligible_adapter(0x5143, "Adreno (TM) 830", true, true));
