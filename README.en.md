@@ -1,4 +1,4 @@
-> **Development branch · 0.1.19-beta.6**: This is integrated application source, not a patch-only recovery snapshot. Prebuilt JNI libraries are omitted; rebuild them from source using the [development guide](docs/DEVELOPMENT.md) before building an APK. Host tests are not physical Android device validation. See the release page for final acceptance and package availability.
+> **Filmroom 0.1.19**: Stable-release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_19.md) for functionality and validation limits.
 
 <div align="center">
 
@@ -80,13 +80,13 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current development source version: 0.1.19-beta.6.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current source version: 0.1.19.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
 - Versions through 0.1.16 used the old debug certificate. Version 0.1.17 starts a new fixed release certificate; see the migration notice below. Keep your own signing key; source release builds are unsigned by default.
 
-See [0.1.18 notes](docs/RELEASE_0_1_18.md) for inset compact export thumbnails, approximately 2.5 visible film choices at normal font size, and successful-export metadata warnings moved into Details.
+See [0.1.19 notes](docs/RELEASE_0_1_19.md) for RAW, HEIC, monochrome film, detail-preview and export-history changes. [0.1.18 notes](docs/RELEASE_0_1_18.md) retain the earlier interface changes.
 
 ## Your first photo
 
@@ -104,9 +104,9 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | --- | --- |
 | JPEG / PNG | System decoding; transparent PNG areas are composited over white. |
 | HEIC | A limited subset of ordinary, static 8-bit HEVC primary/grid images; requires a device decoder and sufficient memory. Supported P3 input is converted to sRGB SDR, not edited as HDR. |
-| NEF / CR2 / ARW (development candidate) | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Final joint validation and release approval remain required. |
+| NEF / CR2 / ARW | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Encoding and resource limits are described below. |
 | DNG | Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
-| Panasonic RW2 (development candidate) | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
+| Panasonic RW2 | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
 
 | Output | Best for |
 | --- | --- |
@@ -116,7 +116,7 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 
 **Know the limits:** A `.dng` extension does not guarantee compatibility. HEIC export, other unlisted camera RAW formats, AVIF, EXR and HDR enhancement/preservation are not implemented. RAW/HEIC import is limited to 52 megapixels; final encoding is limited to 84 megapixels, subject to format, memory and storage constraints. Zoomed previews have a maximum long edge of 1536 pixels—**not source-resolution detail**. Unsupported variants or insufficient memory/temporary storage produce an explicit failure, rather than silently downsizing a full-resolution export.
 
-**Camera RAW scope:** The list describes tested formats and pixel layouts, not a camera-model allowlist. Identification uses file contents and offline color profiles, not the suffix alone. It does not guarantee every unknown camera, future compression variant or damaged file. Basic matrix development does not reproduce camera styles; small NEF uses an independently verified already-balanced linear-sRGB path without applying white balance twice. Host validation is not physical Android-device validation. No installation package is delivered before release approval.
+**Camera RAW scope:** The list describes tested formats and pixel layouts, not a camera-model allowlist. Identification uses file contents and offline color profiles, not the suffix alone. It does not guarantee every unknown camera, future compression variant or damaged file. Basic matrix development does not reproduce camera styles; small NEF uses an independently verified already-balanced linear-sRGB path without applying white balance twice. Host validation is not physical Android-device validation.
 
 Detailed contracts: [HEIC](docs/HEIC_IMPORT.md) · [DNG/codecs](codecs/README.md) · [Xiaomi DNG scope](docs/XIAOMI_DNG_COMPAT.md) · [Previews](docs/LOCAL_DETAIL_UI.md). These technical documents are primarily in Chinese.
 
