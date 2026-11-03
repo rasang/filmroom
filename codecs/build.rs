@@ -5,6 +5,24 @@ fn main(){
  // Cross compilation requires an explicit target compiler, never silently host-compile.
  let cxx=env::var("HE_CXX").unwrap_or_else(|_|{assert_eq!(target,host,"set HE_CXX and HE_AR for target C++ toolchain");"g++".into()});
  let ar=env::var("HE_AR").unwrap_or_else(|_|{assert_eq!(target,host,"set HE_AR for target archive tool");"ar".into()});
+ // Official pinned libjxl is built separately by third-party/libjxl/build.sh.
+ // A missing target prefix fails closed; never link a host library into Android.
+ let prefix=PathBuf::from(env::var_os("FILM_JXL_PREFIX").expect("set FILM_JXL_PREFIX to the target-specific official libjxl prefix"));
+ assert!(prefix.join("include/jxl/decode.h").is_file(),"missing libjxl target headers");
+ println!("cargo:rerun-if-env-changed=FILM_JXL_PREFIX");
+ println!("cargo:rerun-if-changed=cpp/jxl/bridge.cpp");
+ let jxl_object=out.join("film_jxl_bridge.o");
+ let mut jxl=Command::new(&cxx);
+ jxl.args(["-std=c++17","-O2","-fPIC","-fexceptions","-fvisibility=hidden","-fvisibility-inlines-hidden","-Wall","-Wextra","-Werror","-c","cpp/jxl/bridge.cpp","-o"]).arg(&jxl_object).arg("-I").arg(prefix.join("include"));run(jxl);
+ let mut archive=Command::new(&ar);archive.arg("crs").arg(out.join("libfilm_jxl_bridge.a")).arg(jxl_object);run(archive);
+ println!("cargo:rustc-link-search=native={}",prefix.join("lib").display());
+ println!("cargo:rustc-link-search=native={}",out.display());
+ println!("cargo:rustc-link-lib=static=film_jxl_bridge");
+ for library in ["jxl_dec","jxl_cms","hwy","brotlidec","brotlicommon"] {
+  assert!(prefix.join("lib").join(format!("lib{library}.a")).is_file(),"missing libjxl target library: {library}");
+  println!("cargo:rustc-link-lib=static={library}");
+ }
+ if target.contains("android"){println!("cargo:rustc-link-lib=log");}
  let dir=PathBuf::from("cpp/nikon_he");let mut objects=vec![];
  println!("cargo:rerun-if-changed={}",dir.display());
  let mut sources:Vec<_>=fs::read_dir(&dir).unwrap().map(|e|e.unwrap().path()).collect();sources.sort();

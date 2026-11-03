@@ -36,23 +36,25 @@ object NativeCodecBridge:CodecNativeApi {
 /** One fresh handle per operation: cancellation is sticky and cannot be lost/reset. */
 class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeCodecBridge, private val memorySnapshot:()->NativeMemorySnapshot={NativeWorkReservations.unavailableMemory}, private val exportJobsRoot:File?=null, private val rawBatchPreference:()->dev.filmroom.model.RawBatchMode={dev.filmroom.model.RawBatchMode.AUTO}, private val memoryBudgetMiB:()->Int={256}) {
     val available get() = api.available
-    private suspend fun cameraMetadataBytes(input:File):Long=withContext(Dispatchers.IO) {
+    private data class InputAdmission(val metadataBytes:Long=0, val jxlDng:Boolean=false)
+    private suspend fun inputAdmission(input:File):InputAdmission=withContext(Dispatchers.IO) {
         // A resource hint, not a format allowlist. Never read outside the native root.
         if(input.canonicalFile.toPath().startsWith(root.canonicalFile.toPath()))
-            RawMetadataAdmission.estimatedBytes(input) else 0L
+            InputAdmission(RawMetadataAdmission.estimatedBytes(input),JxlDngAdmission.matches(input)) else InputAdmission()
     }
     fun snapshotRawBatch():RawBatchSnapshot=RawBatchSnapshot(rawBatchPreference())
     suspend fun decode(input: File, output: File): JSONObject {
         // Freeze before metadata IO or ledger wait. Repository carries the selection from import start.
         val batch=currentCoroutineContext()[RawBatchSnapshot] ?: snapshotRawBatch()
-        val request=budget(cameraRaw=cameraMetadataBytes(input)>0).put("rawBatch",batch.mode.id)
+        val admission=inputAdmission(input)
+        val request=budget(cameraRaw=admission.metadataBytes>0,jxlDng=admission.jxlDng).put("rawBatch",batch.mode.id)
         val reservedBytes=request.getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
         return execute(heavyBytes=reservedBytes) { handle ->
             api.nativeDecode(handle,input.canonicalPath,output.canonicalPath,request.toString())
         }
     }
     suspend fun probe(input: File): JSONObject {
-        val metadataBytes=cameraMetadataBytes(input)
+        val metadataBytes=inputAdmission(input).metadataBytes
         val request=budget(metadataOnly=true,cameraRaw=metadataBytes>0).put("metadataOnly",true)
         return execute(metadataBytes=metadataBytes) { handle ->
             api.nativeProbe(handle,input.canonicalPath,request.toString())
@@ -66,8 +68,8 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
             api.nativeEncode(handle,input.canonicalPath,output.canonicalPath,request.toString())
         }
     }
-    private fun budget(metadataOnly:Boolean=false,cameraRaw:Boolean=false):JSONObject {
-        val cap=if(cameraRaw)256 else 128
+    private fun budget(metadataOnly:Boolean=false,cameraRaw:Boolean=false,jxlDng:Boolean=false):JSONObject {
+        val cap=if(jxlDng)384 else if(cameraRaw)256 else 128
         val requested=if(metadataOnly)cap else memoryBudgetMiB()
         if(requested<128)throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_df30ae362f2b))
         return JSONObject().put("memoryBudgetMiB",minOf(cap,requested)).put("diskBudgetBytes",(root.usableSpace-16L*1024*1024).coerceAtLeast(0))
@@ -87,7 +89,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                 ensureActive()
                 val text=if(heavyBytes>0 || metadataBytes>0) {
                     // The native JSON and ledger share one frozen per-operation budget.
-                    // Camera RAW caps at 256 MiB; DNG/export stay at 128 MiB.
+                    // Content-confirmed JXL DNG caps at 384 MiB; camera RAW at 256; others at 128.
                     val bytes=if(heavyBytes>0)heavyBytes else metadataBytes
                     try {NativeWorkReservations.run(bytes,memorySnapshot){work(handle)}}
                     catch(_:NativeWorkUnavailable){throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_93313da164ac))}

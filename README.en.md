@@ -1,4 +1,4 @@
-> **Filmroom 0.1.19**: Stable-release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_19.md) for functionality and validation limits.
+> **Filmroom 0.1.20-beta.1**: Development pre-release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_19.md) for functionality and validation limits.
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.19.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current source version: 0.1.20-beta.1; latest stable remains 0.1.19.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
@@ -105,7 +105,7 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | JPEG / PNG | System decoding; transparent PNG areas are composited over white. |
 | HEIC | A limited subset of ordinary, static 8-bit HEVC primary/grid images; requires a device decoder and sufficient memory. Supported P3 input is converted to sRGB SDR, not edited as HDR. |
 | NEF / CR2 / ARW | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Encoding and resource limits are described below. |
-| DNG | Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
+| DNG | Adds constrained 16-bit three-channel LinearRaw JPEG XL strips; see [JXL scope](docs/JPEG_XL_DNG.md).  Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
 | Panasonic RW2 | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
 
 | Output | Best for |

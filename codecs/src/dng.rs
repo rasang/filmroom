@@ -119,13 +119,14 @@ impl Dng {
         }
         let raw = candidates[0];
         let compression = uint(raw, 259, Some(1))?;
-        if compression != 1 && compression != 7 {
+        if compression != 1 && compression != 7 && compression != 52546 {
             return Err(err("UNSUPPORTED_COMPRESSION", "probe"));
         }
         // Legacy 1.0 lossless-JPEG category-16 compatibility is not verified.
         if compression == 7 && ver.as_slice() < [1, 1, 0, 0].as_slice() {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
+        if compression == 52546 && ver.as_slice() < [1,7,0,0].as_slice() { return Err(err("UNSUPPORTED_DNG_VARIANT","probe")); }
         let width = uint(raw, 256, None)? as usize;
         let height = uint(raw, 257, None)? as usize;
         if width < 8
@@ -138,6 +139,7 @@ impl Dng {
         }
         let cpp = uint(raw, 277, Some(1))? as usize;
         let cfa_mode = uint(raw, 262, None)? == 32803;
+        if compression == 52546 && cfa_mode { return Err(err("UNSUPPORTED_DNG_VARIANT","probe")); }
         if cfa_mode && (width % 2 != 0 || height % 2 != 0) {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
@@ -162,7 +164,7 @@ impl Dng {
         // Beta4 admitted only 16-bit DNG. This explicit new SOF3 LinearRaw
         // route gets complete dual-illuminant calibration even without PGT;
         // existing 16-bit non-PGT inputs retain their established developer.
-        let color_route=if !cfa_mode && compression==7 && matches!(bits[0],12|14) {
+        let color_route=if !cfa_mode && (compression==52546 || (compression==7 && matches!(bits[0],12|14))) {
             crate::profile_develop::ColorRoute::NewSof3LinearPrecision
         } else {crate::profile_develop::ColorRoute::Legacy};
         let profile=crate::profile_develop::parse(root,raw,color_route)?;
@@ -401,7 +403,7 @@ impl Dng {
                 return Err(err("MEMORY_BUDGET", "probe"));
             }
         }
-        Ok(Self {
+        let decoded = Self {
             width,
             height,
             cpp,
@@ -430,13 +432,16 @@ impl Dng {
             baseline_exposure_ev,
             gain_maps,
             cfa_gain_maps,
-        })
+        };
+        if compression==52546 { crate::jxl::validate_headers(&decoded,f)?; }
+        Ok(decoded)
     }
     pub fn probe(&self) -> Probe {
         let (w, h) = self.oriented_dim();
         Probe {
             format: "DNG",
-            variant: if self.streaming_linear && self.sample_bits==12 { "DNG_LINEAR_RGB_U12_LOSSLESS_JPEG_STREAM" }
+            variant: if self.compression==52546 { "DNG_LINEAR_RGB_U16_JPEG_XL" }
+            else if self.streaming_linear && self.sample_bits==12 { "DNG_LINEAR_RGB_U12_LOSSLESS_JPEG_STREAM" }
             else if self.streaming_linear && self.sample_bits==14 { "DNG_LINEAR_RGB_U14_LOSSLESS_JPEG_STREAM" }
             else if self.compression == 7 {
                 match (self.cpp, self.rows_per_strip == 0) {
@@ -542,6 +547,7 @@ impl Dng {
     pub fn decode_scratch_bytes(&self) -> u64 {
         let map_bytes: u64 = self.gain_maps.iter().map(|m| m.storage_bytes()).sum::<u64>() + self.cfa_gain_maps.iter().map(|m| m.storage_bytes()).sum::<u64>();
         let map_bytes=map_bytes+self.profile.as_ref().map_or(0,|p|p.map.as_ref().map_or(0,|m|m.storage_bytes())+512)+self.linearization.as_ref().map_or(0,|v|v.storage_bytes());
+        if self.compression==52546 {return map_bytes + crate::jxl::scratch_bytes(self);}
         if self.streaming_linear { return map_bytes + self.width as u64 * 3 * 2 + 1024*1024; }
         if self.compression != 7 {
             return map_bytes;

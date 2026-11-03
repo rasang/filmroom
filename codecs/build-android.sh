@@ -10,6 +10,7 @@ bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$root/target"}
 for spec in 'aarch64-linux-android arm64-v8a' 'x86_64-linux-android x86_64'; do
  read -r target abi <<< "$spec"
+ export FILM_JXL_PREFIX=$("$root/../third-party/libjxl/build.sh" "$abi")
  export HE_CXX="$bin/${target}26-clang++" HE_AR="$bin/llvm-ar"
  export "CARGO_TARGET_$(echo "$target"|tr '[:lower:]-' '[:upper:]_')_LINKER=$bin/${target}26-clang"
  python3 "$root/tools/ensure-vendor-fresh.py" --target "$target" --profile release --target-dir "$CARGO_TARGET_DIR"

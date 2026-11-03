@@ -1,4 +1,4 @@
-> **Filmroom 0.1.19**：正式版源码。原生 JNI 库不随源码提交，构建 APK 前须按[开发指南](docs/DEVELOPMENT.md)从源码重建。功能范围与验证边界见[更新说明](docs/RELEASE_0_1_19.md)。
+> **Filmroom 0.1.20-beta.1**：开发测试版源码。原生 JNI 库不随源码提交，构建 APK 前须按[开发指南](docs/DEVELOPMENT.md)从源码重建。功能范围与验证边界见[更新说明](docs/RELEASE_0_1_19.md)。
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 ## 安装与版本
 
-**当前源码版本：0.1.19。** 从 [GitHub Releases](https://github.com/rasang/filmroom/releases) 下载 APK，也可按[开发指南](docs/DEVELOPMENT.md)自行构建。
+**当前源码版本：0.1.20-beta.1；最新正式版仍为 0.1.19。** 从 [GitHub Releases](https://github.com/rasang/filmroom/releases) 下载 APK，也可按[开发指南](docs/DEVELOPMENT.md)自行构建。
 
 - 面向 **Android 10（API 29）及以上的 64 位设备**；源码默认构建 ARM64 和 x86_64，可单独构建 ARM64 手机包。
 - 项目仍处于早期体验阶段。已有主机构建、算法及 JNI/UI 测试，**尚未完成 Android 真机全流程验证**，不作手机速度或耗电保证。
@@ -105,7 +105,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 | JPEG / PNG | 系统解码；PNG 透明区域合成到白色背景。 |
 | HEIC | 受限的普通静态 8 位 HEVC 主图/网格图；依赖设备解码器及足够内存。支持范围内的 P3 转为 sRGB SDR，不是 HDR 编辑。 |
 | NEF / CR2 / ARW | 已实现普通 Bayer、Canon mRAW/sRAW、Nikon HE/HE* 与 small NEF、Sony 小尺寸/ARW6 等已验证分支；读取真实像素，不用嵌入预览替代。具体编码与资源限制见下文。 |
-| DNG | 既有 16 位路径，以及新增已验证的 12/14 位三通道 LinearRaw SOF3 条带路径；S23 系列 4 份公开样本通过主机整幅像素/线性色彩对照，其中仅 1 份明确为 Expert RAW。不是全品牌/全模式保证。 |
+| DNG | 新增受限 16 位三通道 LinearRaw JPEG XL 条带导入，见[JXL 范围](docs/JPEG_XL_DNG.md)； 既有 16 位路径，以及新增已验证的 12/14 位三通道 LinearRaw SOF3 条带路径；S23 系列 4 份公开样本通过主机整幅像素/线性色彩对照，其中仅 1 份明确为 Expert RAW。不是全品牌/全模式保证。 |
 | Panasonic RW2 | 13 份样本验证 v4、v5（14 位）、v6、v7（14 位）及受约束的 v8/CF2；包括 GH6、S5 II X、G9 II、GH7、S1R II 的已测模式。特殊编码与超限文件仍可能被拒绝，详见[边界](codecs/README.md)。 |
 
 | 输出 | 适合用途 |

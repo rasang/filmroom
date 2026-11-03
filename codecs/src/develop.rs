@@ -54,7 +54,7 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         .memory_budget_mi_b
         .checked_mul(MIB)
         .ok_or_else(|| err("MEMORY_BUDGET", "admission"))?;
-    if memory > 4096 * MIB || memory < BASE {
+    if memory > 4096 * MIB || memory < BASE || (d.compression==52546 && memory>crate::jxl::MAX_BUDGET) {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let base = BASE
@@ -73,7 +73,7 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
     if rows < 8 {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
-    let disk = d.probe().output_bytes;
+    let disk = d.probe().output_bytes + if d.compression==52546 {crate::jxl::spool_bytes(d)} else {0};
     if b.disk_budget_bytes < disk {
         return Err(err("DISK_BUDGET", "admission"));
     }
@@ -360,12 +360,24 @@ fn decode_with_reserve(
         keep: false,
     };
     // Reserve real blocks, not just a sparse file. Errors occur before demosaic.
-    reserve(&out, admission.required_disk_bytes).map_err(|e| io_error(e, "spool"))?;
+    reserve(&out, d.probe().output_bytes).map_err(|e| io_error(e, "spool"))?;
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(2)
         .stack_size(1024 * 1024)
         .build()
         .map_err(|_| err("MEMORY_BUDGET", "develop"))?;
+    // JPEG XL output arrives in group order, not necessarily scanline order.
+    // Decode exact samples to anonymous disk, release all decoder allocations,
+    // then use the existing strip-based DNG normalization/development pipeline.
+    let jxl_storage = if d.compression==52546 {Some(crate::jxl::decode_to_spool(&d,&file,output,cancel)?)} else {None};
+    let storage_dng = if let Some(raw)=jxl_storage {
+        file=raw;let mut storage=d.clone();
+        storage.compression=1;storage.endian=crate::tiff::Endian::Le;
+        storage.offsets=vec![0];storage.counts=vec![crate::jxl::spool_bytes(&d) as u32];
+        storage.rows_per_strip=d.height;storage.tile_height=d.height;
+        Some(storage)
+    } else {None};
+    let storage_reader=storage_dng.as_ref().unwrap_or(&d);
     let development = Development::from(&d);
     if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
@@ -412,7 +424,7 @@ fn decode_with_reserve(
         let last = (first + admission.strip_rows as usize).min(d.crop.y + d.crop.h);
         let tile_y = first.saturating_sub(HALO).max(d.active.y);
         let tile_end = (last + HALO).min(d.active.y + d.active.h);
-        let data = d.read_tile_cancellable(&mut file, tile_y, tile_end - tile_y, cancel)?;
+        let data = storage_reader.read_tile_cancellable(&mut file, tile_y, tile_end - tile_y, cancel)?;
         let p = pool.install(|| {
             develop_dng_tile_cancel(&d,&development, tile_y, tile_end - tile_y, data, cancel)
         })?;

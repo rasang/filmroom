@@ -63,3 +63,5 @@ pub mod profile_gain_table;
 pub mod dng_color_spec;
 
 pub mod profile_develop;
+
+mod jxl;

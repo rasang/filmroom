@@ -1,0 +1,73 @@
+{
+  "status": "0.1.20-beta.1 source build record; Android device validation remains pending",
+  "rust": "1.88.0",
+  "ndk": "27.2.12479018",
+  "libjxl": "0.12.0",
+  "libjxl_commit": "a7a9c787341cf703dede03c2009fa460cae5e5df",
+  "profile": "release, thin LTO, target API26, static target C++ runtime",
+  "linker_page_sizes": {
+    "max": 16384,
+    "common": 16384
+  },
+  "source_sha256": {
+    "codecs/Cargo.toml": "5ad9dc68b6c20df928ebafedbdcbad7a7be56448184dacc4b085317e01cce71b",
+    "codecs/Cargo.lock": "e5d3d075bde0d974eab6042ec9f2b672c33d70c83747c5e1310e8abe219959b7",
+    "codecs/build.rs": "67301d26fad8397dfccd7b67a3f65a7c07dafd13e41fde651c0acb2bc5d07a2b",
+    "codecs/src/jxl.rs": "cb1ad709151693abe9cde499e7f545f9018bd5215c25af99f327d8e3667a7435",
+    "codecs/src/dng.rs": "2c744210787f4e8f7e1d9902fa2d1028d435e0386008d653c8237ecb3c7aa9d0",
+    "codecs/src/develop.rs": "f7d2e13e2d011d9cd85622b92f1b217d495e62bfe2b5be254bf577b06f9327b5",
+    "codecs/src/lib.rs": "3d2ed00c285e0a33f5e477979e8a1ee214e8e025d3863422ca496cd8fa5bdacf",
+    "codecs/cpp/jxl/bridge.cpp": "7ac6b6eb78a1d882c35d116b1a705cf8e6b05339e969bbbf1d9fef0422e2661d",
+    "third-party/libjxl/SHA256SUMS": "e7274ca1ff3176741f153612c7d0618a2385ae9956f95f19b10651da7b365703"
+  },
+  "abi": [
+    {
+      "abi": "arm64-v8a",
+      "bytes": 10418344,
+      "sha256": "530478670fe502ba9c3d5f6c218a1b4525c125e24b6af6a4919203d9832575de",
+      "load_alignment": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "needed": [
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCancel",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCreate",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDecode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDestroy",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeEncode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeProbe"
+      ]
+    },
+    {
+      "abi": "x86_64",
+      "bytes": 10447512,
+      "sha256": "5c7112294568a5882d741fb1114cb4d567817b7f0ec7e0e937c9a573579b0f6e",
+      "load_alignment": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "needed": [
+        "libdl.so",
+        "libm.so",
+        "libc.so"
+      ],
+      "jni_exports": [
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCancel",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeCreate",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDecode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeDestroy",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeEncode",
+        "Java_dev_filmroom_codec_NativeCodecBridge_nativeProbe"
+      ]
+    }
+  ]
+}
