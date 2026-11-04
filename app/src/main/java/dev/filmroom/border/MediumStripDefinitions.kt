@@ -45,6 +45,7 @@ internal object MediumStripDefinitions {
         Definition("kodak_portra_160","medium120/v5/portra160-rails.png","mf120-v5-portra160-a970a81fe0dc",4920,30,6,7231,"a970a81fe0dc3449164f0f831a73dc5cb0045d82064f33b0c1b359e68f844c2a",410.0,0.0,820.0),
         Definition("kodak_portra_400","medium120/v5/portra400-rails.png","mf120-v5-portra400-b6bc018bda16",8200,50,10,28606,"b6bc018bda16c372a8f162553514ab74dd4f435a1bacea7bd67b233627d90618",410.0,285.211538,500.865385),
         Definition("kodak_portra_800","medium120/v5/portra800-rails.png","mf120-v5-portra800-64b689c66093",8200,50,10,13946,"64b689c66093f1417fa25cefcb35472d4e2ab802d51b0eef420101e8017fb2cd",410.0,0.0,820.0),
+        Definition("kodak_portra_400","medium120/v6/portra400-rails.png","mf120-v6-portra400-3c329d78f008",8200,50,10,29139,"3c329d78f008485437704285ae4441d974b82addc4787cb406c5178578883fd5",410.0,285.211538,500.865385),
     )
     internal class Registry(all:List<Definition>) {
         private val byVersion=all.associateBy{it.stock to it.version}

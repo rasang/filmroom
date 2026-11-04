@@ -1,0 +1,1287 @@
+{
+  "schema": 1,
+  "generator": "tools/medium120/v6/align_portra400_text.py",
+  "assets": [
+    {
+      "name": "portra400",
+      "stock": "kodak_portra_400",
+      "file": "portra400-rails.png",
+      "path": "medium120/v6/portra400-rails.png",
+      "version": "mf120-v6-portra400-3c329d78f008",
+      "sha256": "3c329d78f008485437704285ae4441d974b82addc4787cb406c5178578883fd5",
+      "byteCount": 29139,
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "defaultCenterMm": 410.0,
+      "coverage_mm": [
+        285.211538,
+        500.865385
+      ],
+      "before_version": "mf120-v5-portra400-b6bc018bda16",
+      "before_sha256": "b6bc018bda16c372a8f162553514ab74dd4f435a1bacea7bd67b233627d90618",
+      "before_path": "v5/portra400-rails.png",
+      "changed_pixels": 9080,
+      "bottom_rail_unchanged": true,
+      "unchanged_outside_glyph_boxes": true,
+      "font_sha256": {
+        "DejaVuSans.ttf": "57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e",
+        "DejaVuSans-Bold.ttf": "a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890"
+      },
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "ink_rgba": [
+        211,
+        150,
+        112,
+        255
+      ],
+      "marks": [
+        {
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 109,
+          "x_mm": 296.78846153846155,
+          "width_mm": 18.307692307692307,
+          "clipped": false,
+          "height_mm": 1.08,
+          "tracking_ss": 17.6233173076923
+        },
+        {
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 485,
+          "x_mm": 347.40384615384613,
+          "width_mm": 18.307692307692307,
+          "clipped": false,
+          "height_mm": 1.08,
+          "tracking_ss": 17.6233173076923
+        },
+        {
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 854,
+          "x_mm": 397.0769230769231,
+          "width_mm": 18.307692307692307,
+          "clipped": false,
+          "height_mm": 1.08,
+          "tracking_ss": 17.6233173076923
+        },
+        {
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 1221,
+          "x_mm": 446.4807692307692,
+          "width_mm": 18.307692307692307,
+          "clipped": false,
+          "height_mm": 1.08,
+          "tracking_ss": 17.6233173076923
+        },
+        {
+          "text": "KODAK",
+          "source_start_px": 1594,
+          "x_mm": 496.6923076923077,
+          "width_mm": 4.173076923076923,
+          "clipped": true,
+          "height_mm": 1.08,
+          "tracking_ss": 29.814603365384613
+        }
+      ],
+      "glyphs": [
+        {
+          "character": "K",
+          "anchor_ss": [
+            23743,
+            57
+          ],
+          "ink_rectangle_ss": [
+            23743,
+            57,
+            23823,
+            143
+          ],
+          "allowed_change_box_px": [
+            2964,
+            4,
+            2981,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            23838,
+            57
+          ],
+          "ink_rectangle_ss": [
+            23838,
+            57,
+            23931,
+            147
+          ],
+          "allowed_change_box_px": [
+            2976,
+            4,
+            2995,
+            22
+          ]
+        },
+        {
+          "character": "D",
+          "anchor_ss": [
+            23949,
+            57
+          ],
+          "ink_rectangle_ss": [
+            23949,
+            57,
+            24040,
+            143
+          ],
+          "allowed_change_box_px": [
+            2990,
+            4,
+            3008,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            24057,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24057,
+            57,
+            24138,
+            143
+          ],
+          "allowed_change_box_px": [
+            3004,
+            4,
+            3021,
+            21
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            24155,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24155,
+            57,
+            24235,
+            143
+          ],
+          "allowed_change_box_px": [
+            3016,
+            4,
+            3033,
+            21
+          ]
+        },
+        {
+          "character": "P",
+          "anchor_ss": [
+            24306,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24306,
+            57,
+            24377,
+            143
+          ],
+          "allowed_change_box_px": [
+            3035,
+            4,
+            3051,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            24394,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24394,
+            57,
+            24487,
+            147
+          ],
+          "allowed_change_box_px": [
+            3046,
+            4,
+            3064,
+            22
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            24505,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24505,
+            57,
+            24587,
+            143
+          ],
+          "allowed_change_box_px": [
+            3060,
+            4,
+            3077,
+            21
+          ]
+        },
+        {
+          "character": "T",
+          "anchor_ss": [
+            24604,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24603,
+            57,
+            24677,
+            143
+          ],
+          "allowed_change_box_px": [
+            3072,
+            4,
+            3088,
+            21
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            24694,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24694,
+            57,
+            24776,
+            143
+          ],
+          "allowed_change_box_px": [
+            3083,
+            4,
+            3100,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            24794,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24794,
+            57,
+            24875,
+            143
+          ],
+          "allowed_change_box_px": [
+            3096,
+            4,
+            3113,
+            21
+          ]
+        },
+        {
+          "character": "4",
+          "anchor_ss": [
+            24947,
+            57
+          ],
+          "ink_rectangle_ss": [
+            24947,
+            57,
+            25022,
+            143
+          ],
+          "allowed_change_box_px": [
+            3115,
+            4,
+            3131,
+            21
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            25040,
+            57
+          ],
+          "ink_rectangle_ss": [
+            25040,
+            57,
+            25115,
+            147
+          ],
+          "allowed_change_box_px": [
+            3127,
+            4,
+            3143,
+            22
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            25133,
+            57
+          ],
+          "ink_rectangle_ss": [
+            25133,
+            57,
+            25208,
+            147
+          ],
+          "allowed_change_box_px": [
+            3138,
+            4,
+            3154,
+            22
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            27792,
+            57
+          ],
+          "ink_rectangle_ss": [
+            27792,
+            57,
+            27872,
+            143
+          ],
+          "allowed_change_box_px": [
+            3471,
+            4,
+            3487,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            27887,
+            57
+          ],
+          "ink_rectangle_ss": [
+            27887,
+            57,
+            27980,
+            147
+          ],
+          "allowed_change_box_px": [
+            3482,
+            4,
+            3501,
+            22
+          ]
+        },
+        {
+          "character": "D",
+          "anchor_ss": [
+            27998,
+            57
+          ],
+          "ink_rectangle_ss": [
+            27998,
+            57,
+            28089,
+            143
+          ],
+          "allowed_change_box_px": [
+            3496,
+            4,
+            3515,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            28106,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28106,
+            57,
+            28187,
+            143
+          ],
+          "allowed_change_box_px": [
+            3510,
+            4,
+            3527,
+            21
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            28205,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28205,
+            57,
+            28285,
+            143
+          ],
+          "allowed_change_box_px": [
+            3522,
+            4,
+            3539,
+            21
+          ]
+        },
+        {
+          "character": "P",
+          "anchor_ss": [
+            28355,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28355,
+            57,
+            28426,
+            143
+          ],
+          "allowed_change_box_px": [
+            3541,
+            4,
+            3557,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            28444,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28444,
+            57,
+            28537,
+            147
+          ],
+          "allowed_change_box_px": [
+            3552,
+            4,
+            3571,
+            22
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            28554,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28554,
+            57,
+            28636,
+            143
+          ],
+          "allowed_change_box_px": [
+            3566,
+            4,
+            3583,
+            21
+          ]
+        },
+        {
+          "character": "T",
+          "anchor_ss": [
+            28654,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28653,
+            57,
+            28727,
+            143
+          ],
+          "allowed_change_box_px": [
+            3578,
+            4,
+            3594,
+            21
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            28743,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28743,
+            57,
+            28825,
+            143
+          ],
+          "allowed_change_box_px": [
+            3589,
+            4,
+            3607,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            28843,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28843,
+            57,
+            28924,
+            143
+          ],
+          "allowed_change_box_px": [
+            3602,
+            4,
+            3619,
+            21
+          ]
+        },
+        {
+          "character": "4",
+          "anchor_ss": [
+            28996,
+            57
+          ],
+          "ink_rectangle_ss": [
+            28996,
+            57,
+            29071,
+            143
+          ],
+          "allowed_change_box_px": [
+            3621,
+            4,
+            3637,
+            21
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            29089,
+            57
+          ],
+          "ink_rectangle_ss": [
+            29089,
+            57,
+            29164,
+            147
+          ],
+          "allowed_change_box_px": [
+            3633,
+            4,
+            3649,
+            22
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            29182,
+            57
+          ],
+          "ink_rectangle_ss": [
+            29182,
+            57,
+            29257,
+            147
+          ],
+          "allowed_change_box_px": [
+            3644,
+            4,
+            3661,
+            22
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            31766,
+            57
+          ],
+          "ink_rectangle_ss": [
+            31766,
+            57,
+            31846,
+            143
+          ],
+          "allowed_change_box_px": [
+            3967,
+            4,
+            3984,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            31861,
+            57
+          ],
+          "ink_rectangle_ss": [
+            31861,
+            57,
+            31954,
+            147
+          ],
+          "allowed_change_box_px": [
+            3979,
+            4,
+            3998,
+            22
+          ]
+        },
+        {
+          "character": "D",
+          "anchor_ss": [
+            31972,
+            57
+          ],
+          "ink_rectangle_ss": [
+            31972,
+            57,
+            32063,
+            143
+          ],
+          "allowed_change_box_px": [
+            3993,
+            4,
+            4011,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            32080,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32080,
+            57,
+            32161,
+            143
+          ],
+          "allowed_change_box_px": [
+            4007,
+            4,
+            4024,
+            21
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            32178,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32178,
+            57,
+            32258,
+            143
+          ],
+          "allowed_change_box_px": [
+            4019,
+            4,
+            4036,
+            21
+          ]
+        },
+        {
+          "character": "P",
+          "anchor_ss": [
+            32329,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32329,
+            57,
+            32400,
+            143
+          ],
+          "allowed_change_box_px": [
+            4038,
+            4,
+            4053,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            32417,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32417,
+            57,
+            32510,
+            147
+          ],
+          "allowed_change_box_px": [
+            4049,
+            4,
+            4067,
+            22
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            32528,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32528,
+            57,
+            32610,
+            143
+          ],
+          "allowed_change_box_px": [
+            4063,
+            4,
+            4080,
+            21
+          ]
+        },
+        {
+          "character": "T",
+          "anchor_ss": [
+            32627,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32626,
+            57,
+            32700,
+            143
+          ],
+          "allowed_change_box_px": [
+            4075,
+            4,
+            4091,
+            21
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            32717,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32717,
+            57,
+            32799,
+            143
+          ],
+          "allowed_change_box_px": [
+            4086,
+            4,
+            4103,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            32817,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32817,
+            57,
+            32898,
+            143
+          ],
+          "allowed_change_box_px": [
+            4099,
+            4,
+            4116,
+            21
+          ]
+        },
+        {
+          "character": "4",
+          "anchor_ss": [
+            32970,
+            57
+          ],
+          "ink_rectangle_ss": [
+            32970,
+            57,
+            33045,
+            143
+          ],
+          "allowed_change_box_px": [
+            4118,
+            4,
+            4134,
+            21
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            33063,
+            57
+          ],
+          "ink_rectangle_ss": [
+            33063,
+            57,
+            33138,
+            147
+          ],
+          "allowed_change_box_px": [
+            4129,
+            4,
+            4146,
+            22
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            33156,
+            57
+          ],
+          "ink_rectangle_ss": [
+            33156,
+            57,
+            33231,
+            147
+          ],
+          "allowed_change_box_px": [
+            4141,
+            4,
+            4157,
+            22
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            35718,
+            57
+          ],
+          "ink_rectangle_ss": [
+            35718,
+            57,
+            35798,
+            143
+          ],
+          "allowed_change_box_px": [
+            4461,
+            4,
+            4478,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            35813,
+            57
+          ],
+          "ink_rectangle_ss": [
+            35813,
+            57,
+            35906,
+            147
+          ],
+          "allowed_change_box_px": [
+            4473,
+            4,
+            4492,
+            22
+          ]
+        },
+        {
+          "character": "D",
+          "anchor_ss": [
+            35924,
+            57
+          ],
+          "ink_rectangle_ss": [
+            35924,
+            57,
+            36015,
+            143
+          ],
+          "allowed_change_box_px": [
+            4487,
+            4,
+            4505,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            36032,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36032,
+            57,
+            36113,
+            143
+          ],
+          "allowed_change_box_px": [
+            4501,
+            4,
+            4518,
+            21
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            36131,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36131,
+            57,
+            36211,
+            143
+          ],
+          "allowed_change_box_px": [
+            4513,
+            4,
+            4530,
+            21
+          ]
+        },
+        {
+          "character": "P",
+          "anchor_ss": [
+            36281,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36281,
+            57,
+            36352,
+            143
+          ],
+          "allowed_change_box_px": [
+            4532,
+            4,
+            4547,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            36370,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36370,
+            57,
+            36463,
+            147
+          ],
+          "allowed_change_box_px": [
+            4543,
+            4,
+            4561,
+            22
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            36480,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36480,
+            57,
+            36562,
+            143
+          ],
+          "allowed_change_box_px": [
+            4557,
+            4,
+            4574,
+            21
+          ]
+        },
+        {
+          "character": "T",
+          "anchor_ss": [
+            36580,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36579,
+            57,
+            36653,
+            143
+          ],
+          "allowed_change_box_px": [
+            4569,
+            4,
+            4585,
+            21
+          ]
+        },
+        {
+          "character": "R",
+          "anchor_ss": [
+            36670,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36670,
+            57,
+            36752,
+            143
+          ],
+          "allowed_change_box_px": [
+            4580,
+            4,
+            4597,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            36769,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36769,
+            57,
+            36850,
+            143
+          ],
+          "allowed_change_box_px": [
+            4593,
+            4,
+            4610,
+            21
+          ]
+        },
+        {
+          "character": "4",
+          "anchor_ss": [
+            36923,
+            57
+          ],
+          "ink_rectangle_ss": [
+            36923,
+            57,
+            36998,
+            143
+          ],
+          "allowed_change_box_px": [
+            4612,
+            4,
+            4628,
+            21
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            37015,
+            57
+          ],
+          "ink_rectangle_ss": [
+            37015,
+            57,
+            37090,
+            147
+          ],
+          "allowed_change_box_px": [
+            4623,
+            4,
+            4640,
+            22
+          ]
+        },
+        {
+          "character": "0",
+          "anchor_ss": [
+            37108,
+            57
+          ],
+          "ink_rectangle_ss": [
+            37108,
+            57,
+            37183,
+            147
+          ],
+          "allowed_change_box_px": [
+            4635,
+            4,
+            4651,
+            22
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            39735,
+            57
+          ],
+          "ink_rectangle_ss": [
+            39735,
+            57,
+            39815,
+            143
+          ],
+          "allowed_change_box_px": [
+            4963,
+            4,
+            4980,
+            21
+          ]
+        },
+        {
+          "character": "O",
+          "anchor_ss": [
+            39843,
+            57
+          ],
+          "ink_rectangle_ss": [
+            39843,
+            57,
+            39936,
+            147
+          ],
+          "allowed_change_box_px": [
+            4977,
+            4,
+            4995,
+            22
+          ]
+        },
+        {
+          "character": "D",
+          "anchor_ss": [
+            39965,
+            57
+          ],
+          "ink_rectangle_ss": [
+            39965,
+            57,
+            40056,
+            143
+          ],
+          "allowed_change_box_px": [
+            4992,
+            4,
+            5010,
+            21
+          ]
+        },
+        {
+          "character": "A",
+          "anchor_ss": [
+            40086,
+            57
+          ],
+          "ink_rectangle_ss": [
+            40086,
+            57,
+            40167,
+            143
+          ],
+          "allowed_change_box_px": [
+            5007,
+            4,
+            5012,
+            21
+          ]
+        },
+        {
+          "character": "K",
+          "anchor_ss": [
+            40196,
+            57
+          ],
+          "ink_rectangle_ss": [
+            40196,
+            57,
+            40276,
+            143
+          ],
+          "allowed_change_box_px": null
+        }
+      ],
+      "brand_boxes": [
+        [
+          2964,
+          0,
+          3155,
+          25
+        ],
+        [
+          3471,
+          0,
+          3662,
+          25
+        ],
+        [
+          3967,
+          0,
+          4158,
+          25
+        ],
+        [
+          4461,
+          0,
+          4652,
+          25
+        ],
+        [
+          4963,
+          0,
+          5012,
+          25
+        ]
+      ],
+      "source_url": "https://www.light11.de/download/Flos_Stories_Ausgabe_3.pdf#page=38",
+      "limitations": [
+        "Display typography is authored, not a factory font or metrology claim.",
+        "Only legend stroke weight is aligned with the existing Portra160/800 presentation.",
+        "Per-glyph design rectangles, character anchors, advances and all film coordinates are unchanged.",
+        "Antialias samples change with new strokes; the ink and background paint colors are unchanged."
+      ]
+    }
+  ]
+}

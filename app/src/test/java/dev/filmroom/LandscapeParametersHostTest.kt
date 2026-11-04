@@ -71,8 +71,10 @@ class LandscapeParametersHostTest {
             try {await{model.state.value.canExport && model.state.value.parameters.filmStock=="kodak_ultramax_400"}}
             catch(e:AssertionError){throw AssertionError("Stock change failed: stock=${model.state.value.parameters.filmStock}, updating=${model.state.value.updating}, error=${model.state.value.message}, renderedStock=${model.state.value.renderedParameters?.filmStock}",e)}
             layout(a)
-            assertTrue(formats().isEmpty())
-            assertEquals(2,all(section(a,"composition")).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
+            assertEquals(listOf("composition-format:135"),formats().map{it.tag})
+            assertFalse(formats().single().isEnabled)
+            assertEquals(1,all(section(a,"composition")).count{it.tag=="composition-orientation-toggle"})
+            assertEquals(0,all(section(a,"composition")).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
             all(section(a,"filmStock")).single{it.tag==before.filmStock}.performClick()
             await{model.state.value.canExport && model.state.value.parameters.filmStock==before.filmStock};layout(a)
             assertEquals(6,formats().size)
@@ -182,10 +184,10 @@ class LandscapeParametersHostTest {
             assertEquals(x,all(section(a,"composition")).filterIsInstance<HorizontalScrollView>().single().scrollX)
             dev.filmroom.border.BorderCatalog.initialize(a.assets){model.borderMemorySnapshot()}
             model.parameters(model.state.value.parameters.copy(filmBorder=true));await{model.state.value.canExport};layout(a)
-            assertEquals(setOf("crop-mode:RATIO_3_2","crop-mode:RATIO_2_3"),modes().map{it.tag}.toSet())
-            assertTrue(modes().all{!it.isEnabled})
+            assertTrue(modes().isEmpty())
+            assertFalse(tagged("composition-orientation-toggle").isEnabled)
             tagged("crop-adjust").performClick();await{model.state.value.compositionEditing};layout(a)
-            assertEquals(2,modes().size);assertTrue(modes().all{it.isEnabled})
+            assertTrue(modes().isEmpty());assertTrue(tagged("composition-orientation-toggle").isEnabled)
             tagged("crop-cancel").performClick();await{!model.state.value.compositionEditing}
         }
     }

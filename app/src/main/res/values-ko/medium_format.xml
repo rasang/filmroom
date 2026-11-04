@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">프레임 판형</string>
+    <string name="composition_orientation_toggle_description">현재 %1$s. %2$s 전환</string>
 </resources>

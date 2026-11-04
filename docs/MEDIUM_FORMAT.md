@@ -6,7 +6,7 @@ This feature changes the final crop and film-edge presentation only. It does not
 
 Nine physical stocks support 120: Kodak Portra 160, 400, 800, Gold 200, Ektar 100, Ektachrome E100, Fujifilm Provia 100F, Velvia 100 and historical Pro 400H. Portra 800 +1/+2 are processing aliases of the same physical 800 artwork and edge strip. No 120 option is fabricated for the other profiles. Choosing another stock without a 120 version returns to its existing frame. The 135 path, existing monochrome frames and immutable historical queue records retain their earlier contracts.
 
-The output format is selected directly inside Composition, alongside the existing landscape/portrait controls. Format, orientation and crop form one draft: Cancel restores the whole prior composition, and Confirm creates one undoable edit. A nullable medium-format setting represents the existing 135 output. In 120 mode, perforation-matte selection is disabled because 120 has no perforations. Landscape/portrait is explicit, including square 6×6, where orientation selects which pair of sides carries the long film edges.
+The output format is selected directly inside Composition, after one fixed landscape/portrait toggle. The toggle stays outside the horizontally scrolling format choices and uses the selected overlapping-frame icon. Format, orientation and crop form one draft: Cancel restores the whole prior composition, and Confirm creates one undoable edit. A nullable medium-format setting represents the existing 135 output. In 120 mode, perforation-matte selection is disabled because 120 has no perforations. Landscape/portrait is explicit, including square 6×6, where orientation selects which pair of sides carries the long film edges.
 
 Nominal design geometry is 61 mm strip width, 56 mm image width across the strip and longitudinal apertures of 41.5, 56, 70, 84 and 168 mm for 645, 6×6, 6×7, 6×9 and 6×17. Each end adds a 3 mm design margin. These are nominal model dimensions, not measurements of a particular camera gate; real camera apertures and scanned margins differ. 645 landscape rotates the strip so that its rails are left/right. Other landscape apertures use top/bottom rails. One uniform scale is used, without stretching text or reshuffling it per frame size.
 
@@ -30,13 +30,15 @@ These source audit notes retain the evidence and limits; the editor does not dis
 
 ## Reviewed lower-rail revisions
 
-The current set uses Portra 160/400/800 v5, Gold 200/Ektar 100/E100 v4, and the three Fuji v2 illustrations. Their exact version IDs, encoded byte counts and hashes are registered in `MediumStripDefinitions.kt`. All 24 historical and current PNGs remain available; obsolete candidates are never substituted for a frozen snapshot.
+The current set uses Portra 400 v6, Portra 160/800 v5, Gold 200/Ektar 100/E100 v4, and the three Fuji v2 illustrations. Their exact version IDs, encoded byte counts and hashes are registered in `MediumStripDefinitions.kt`. All 25 historical and current PNGs remain available; obsolete candidates are never substituted for a frozen snapshot.
 
 The v4 compiler places reusable authored arrow and digit atoms using a separate coordinate model for each stock. Portra 400, Ektar 100 and E100 use independently fitted three-arrow patterns within their observed finite spans. Gold 200 uses its finite observed sequence. Portra 800 uses an approximate midpoint pattern; its absolute pitch and phase are authored, not factory measurements. A model/placement guard rejects drift, and the upper rails are unchanged.
 
 The final v5 revision flattens only Portra 160/400/800 arrows vertically, with stock-specific reference guidance. The visible horizontal boundaries, vertical centers, number positions and spacing remain fixed. At the documented 45% contrast threshold the authored arrow boxes change from 7×8 to 7×4, 16×11 to 16×9, and 12×13 to 12×7 atlas pixels. Weak antialias fringes are not represented by that threshold. All changes are restricted to the declared arrow boxes; no other stock, upper-rail or digit pixels change.
 
 Portable scripts, source URLs, uncertainty and exact before/after manifests are in `tools/medium120/v4/` and `tools/medium120/v5/`. They consume only existing authored assets and numeric data. Review photographs and sample compositions are not bundled.
+
+The v6 Portra 400 revision adjusts only the upper brand-letter strokes to visually match the approved Portra 160/800 weight. Original character design boxes, anchors and advances are retained; upper numbering, all lower-rail pixels, arrows, spacing and other stocks are unchanged. This is an authored application styling choice, not a claim that factory lettering has identical weight. Exact masks, pinned-font reproduction and rejection checks are recorded in `tools/medium120/v6/`.
 
 ## Persistence and compatibility
 

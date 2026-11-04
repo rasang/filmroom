@@ -73,8 +73,10 @@ class MediumFormatActivityHostTest {
                 assertEquals(format,flow.value.parameters.effectiveMediumFormat)
                 assertTrue(flow.value.compositionEditing);assertFalse(flow.value.canExport)
                 assertTrue(tagged(formatTag(format)).isSelected);noMisplacedControls();layout()
-                assertEquals("Landscape",(tagged("crop-mode:RATIO_3_2") as android.widget.TextView).text.toString())
-                assertEquals("Portrait",(tagged("crop-mode:RATIO_2_3") as android.widget.TextView).text.toString())
+                val orientation=tagged("composition-orientation-toggle") as android.widget.TextView
+                val portrait=if(format!=null)flow.value.parameters.effectiveMediumPortrait else (flow.value.parameters.composition.targetAspect ?: 1.5)<1.0
+                assertEquals(if(portrait)"Portrait" else "Landscape",orientation.text.toString())
+                assertFalse(all(root).any{(it.tag as? String)?.startsWith("crop-mode:")==true})
                 val strip=tagged("strip:composition-formats") as android.widget.HorizontalScrollView
                 val chosen=tagged(formatTag(format))
                 assertTrue("Selected format remains visible after rebuild",chosen.left>=strip.scrollX && chosen.right<=strip.scrollX+strip.width)
@@ -92,7 +94,7 @@ class MediumFormatActivityHostTest {
             for(format in MediumFormat.entries){
                 select(format)
                 for(portrait in listOf(true,false)){
-                    tagged("crop-mode:${if(portrait)CropMode.RATIO_2_3 else CropMode.RATIO_3_2}").performClick()
+                    tagged("composition-orientation-toggle").performClick()
                     await{!flow.value.updating && flow.value.presentation?.mediumPortrait==portrait}
                     assertEquals(format,flow.value.presentation!!.mediumFormat)
                     assertEquals(format.geometry(portrait).aspect,flow.value.presentation!!.composition.targetAspect!!,0.0)
@@ -112,7 +114,7 @@ class MediumFormatActivityHostTest {
             assertEquals("Cancel includes the format selection",baseline,flow.value.parameters)
             retainedFormatButton.performClick();assertEquals("Old detached control cannot edit outside a draft",baseline,flow.value.parameters)
             enter();select(MediumFormat.MF66)
-            tagged("crop-mode:RATIO_2_3").performClick();await{!flow.value.updating && flow.value.parameters.effectiveMediumPortrait}
+            tagged("composition-orientation-toggle").performClick();await{!flow.value.updating && flow.value.parameters.effectiveMediumPortrait}
             select(MediumFormat.MF67);assertTrue(flow.value.parameters.effectiveMediumPortrait)
             select(MediumFormat.MF66);assertTrue("Square has explicit orientation",flow.value.parameters.effectiveMediumPortrait)
             val beforeConfirmedGesture=flow.value.parameters.composition
@@ -154,4 +156,73 @@ class MediumFormatActivityHostTest {
             assertEquals(rapidBaseline,flow.value.parameters)
         }} finally {BorderCatalog.clearCache();BorderCatalog.initialize(app.assets)}
     }
+    @Test fun fixedDirectionButtonStaysPinnedAndDrawsBothOrientations(){
+        resetAndroidViewModelFactoryForHostTest()
+        val app=RuntimeEnvironment.getApplication()
+        dev.filmroom.i18n.L10n.choose(app,"zh")
+        RuntimeEnvironment.setQualifiers("w360dp-h800dp-port-xxhdpi");RuntimeEnvironment.setFontScale(1f)
+        app.getSharedPreferences("local-session",0).edit().clear().commit()
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try{
+            val a=controller.get()
+            fun field(name:String)=MainActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.get(a)
+            val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+            @Suppress("UNCHECKED_CAST") val flow=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(vm) as MutableStateFlow<EditorUiState>
+            val operation=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}
+            await{(operation.get(vm) as? Job)?.isCompleted==true}
+            vm.localDetailEnabled=false;(field("photo") as PhotoView).disableDetail()
+            vm.borderMemorySnapshot={NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
+            BorderCatalog.initialize(app.assets){vm.borderMemorySnapshot()}
+            vm.renderPreview={source,_,_,_->source.copy(Bitmap.Config.ARGB_8888,false)};vm.detailPreviewEdge={96}
+            val original=Bitmap.createBitmap(96,64,Bitmap.Config.ARGB_8888).apply{eraseColor(0xff527682.toInt())}
+            val p=EditorState()
+            flow.value=EditorUiState(photo=PhotoSource(File(app.cacheDir,"orientation-ui-source"),"fixture.jpg","image/jpeg",6000,4000,0),original=original,
+                rendered=original.copy(Bitmap.Config.ARGB_8888,false),parameters=p,renderedParameters=p)
+            val root=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+            fun layout(){repeat(2){root.measure(View.MeasureSpec.makeMeasureSpec(1080,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(2400,View.MeasureSpec.EXACTLY));root.layout(0,0,1080,2400)}}
+            fun tagged(tag:String)=all(root).single{it.tag==tag}
+            await{all(root).any{it.tag=="film-border-switch"}};layout()
+            (tagged("film-border-switch") as Switch).performClick();await{flow.value.canExport}
+            tagged("composition").performClick();await{flow.value.compositionEditing};layout()
+            val toggle=tagged("composition-orientation-toggle") as android.widget.Button
+            val strip=tagged("strip:composition-formats") as android.widget.HorizontalScrollView
+            assertSame(toggle.parent,strip.parent)
+            assertTrue(toggle.right<strip.left);assertTrue(toggle.width>=144 && toggle.height>=144)
+            val position=IntArray(2);toggle.getLocationOnScreen(position);val originalPosition=position.clone()
+            strip.scrollTo((strip.getChildAt(0).width-strip.width).coerceAtLeast(0),0);toggle.getLocationOnScreen(position);assertArrayEquals(originalPosition,position)
+            // Scroll back to the start for the review so the fixed button is visibly before 135.
+            strip.scrollTo(0,0);layout()
+            val output=File("build/ui-host-renders/orientation-final").apply{mkdirs()}
+            for(portrait in listOf(false,true)){
+                if(portrait){tagged("composition-orientation-toggle").performClick();await{!flow.value.updating && (flow.value.parameters.composition.targetAspect ?: 1.5)<1.0};layout()}
+                val currentToggle=tagged("composition-orientation-toggle") as android.widget.Button
+                assertEquals(if(portrait)"纵向" else "横向",currentToggle.text.toString())
+                assertTrue(currentToggle.compoundDrawablesRelative[0] is dev.filmroom.ui.OrientationToggleDrawable)
+                val currentStrip=tagged("strip:composition-formats") as android.widget.HorizontalScrollView
+                currentStrip.scrollTo(0,0);layout()
+                val toolHost=field("toolHost") as View
+                val rootPosition=IntArray(2);root.getLocationOnScreen(rootPosition)
+                val hostPosition=IntArray(2);toolHost.getLocationOnScreen(hostPosition)
+                val top=(hostPosition[1]-rootPosition[1]).coerceIn(0,2399)
+                val image=Bitmap.createBitmap(1080,2400-top,Bitmap.Config.ARGB_8888)
+                val canvas=android.graphics.Canvas(image);canvas.drawColor(dev.filmroom.ui.FilmroomPalette.background)
+                canvas.translate(0f,-top.toFloat());root.draw(canvas)
+                File(output,"final-orientation-${if(portrait)"portrait" else "landscape"}.png").outputStream().use{image.compress(Bitmap.CompressFormat.PNG,100,it)};image.recycle()
+            }
+            tagged("composition-format:MF617").performClick();await{!flow.value.updating && flow.value.parameters.effectiveMediumFormat==MediumFormat.MF617};layout()
+            // The same retained button must read the latest draft when tapped rapidly.
+            val retainedToggle=tagged("composition-orientation-toggle")
+            assertTrue(flow.value.parameters.effectiveMediumPortrait)
+            retainedToggle.performClick();assertFalse(flow.value.parameters.effectiveMediumPortrait)
+            retainedToggle.performClick();assertTrue(flow.value.parameters.effectiveMediumPortrait)
+            retainedToggle.performClick();assertFalse(flow.value.parameters.effectiveMediumPortrait)
+            tagged("crop-cancel").performClick();await{flow.value.canExport}
+            assertNull(flow.value.parameters.effectiveMediumFormat)
+            assertFalse(flow.value.parameters.effectiveMediumPortrait)
+        }finally{
+            controller.pause().stop().destroy();BorderCatalog.clearCache();BorderCatalog.initialize(app.assets)
+            RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi");RuntimeEnvironment.setFontScale(1f)
+        }
+    }
+
 }

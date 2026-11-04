@@ -209,9 +209,10 @@ class CompositionToolbarActivityHostTest {
             all(tools).filterIsInstance<Switch>().single{it.tag=="film-border-switch"}.performClick();await{state.value.canExport}
             val framed=state.value.parameters
             action.performClick();await{state.value.compositionEditing}
-            assertEquals(2,all(tools).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
+            assertEquals(0,all(tools).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
+            assertTrue(tagged("composition-orientation-toggle").isEnabled)
             capture("framed135-landscape-panel")
-            tagged("crop-mode:RATIO_2_3").performClick();assertEquals(2.0/3.0,state.value.parameters.composition.targetAspect!!,0.0)
+            tagged("composition-orientation-toggle").performClick();assertEquals(2.0/3.0,state.value.parameters.composition.targetAspect!!,0.0)
             capture("framed135-portrait-panel")
             tagged("crop-cancel").performClick();await{state.value.canExport}
             assertEquals(framed,state.value.parameters)
@@ -325,7 +326,8 @@ class CompositionToolbarActivityHostTest {
 
     @Test fun cropPanelStaysSingleLineAndActionsFitNarrowLandscapeAndLargeFont(){
         val app=RuntimeEnvironment.getApplication()
-        try{for((w,h)in listOf(400 to 800,800 to 400,320 to 640))for(font in listOf(1f,2f))for(framed in listOf(false,true)){
+        try{for((w,h)in listOf(400 to 800,800 to 400,320 to 640))for(font in listOf(1f,2f))for(framed in listOf(false,true))for(language in listOf("zh","en")){
+            dev.filmroom.i18n.L10n.choose(app,language)
             RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-${if(w>h)"land" else "port"}-mdpi");RuntimeEnvironment.setFontScale(font)
             app.getSharedPreferences("local-session",0).edit().clear().commit()
             val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
@@ -345,12 +347,26 @@ class CompositionToolbarActivityHostTest {
                 val tools=field(a,"tools") as ViewGroup
                 assertTrue("Crop actions stay directly visible at large text",tools.isShown)
                 val modes=all(tools).filterIsInstance<Button>().filter{(it.tag as? String)?.startsWith("crop-mode:")==true}
-                assertEquals(if(framed)2 else 9,modes.size)
-                val scroll=all(tools).filterIsInstance<android.widget.HorizontalScrollView>().single{(it.tag as? String)?.startsWith("strip:crop-modes:")==true}
+                assertEquals(if(framed)0 else 9,modes.size)
+                val scroll=all(tools).filterIsInstance<android.widget.HorizontalScrollView>().single{if(framed)it.tag=="strip:composition-formats" else (it.tag as? String)?.startsWith("strip:crop-modes:")==true}
+                if(framed){
+                    val toggle=all(tools).single{it.tag=="composition-orientation-toggle"} as Button
+                    assertSame("Fixed toggle and format strip are siblings",toggle.parent,scroll.parent)
+                    assertTrue(toggle.right<scroll.left);assertTrue(scroll.width>=48)
+                    assertEquals(1,toggle.lineCount);assertTrue(toggle.width>=48 && toggle.height>=48)
+                    assertEquals("Orientation label must not ellipsize at $w x $h font$font $language",0,toggle.layout.getEllipsisCount(0))
+                    assertTrue("Orientation label must fit at $w x $h font$font $language",toggle.layout.getLineWidth(0)<=toggle.width-toggle.compoundPaddingLeft-toggle.compoundPaddingRight+1f)
+                    val location=IntArray(2);toggle.getLocationOnScreen(location);val initial=location.clone()
+                    scroll.scrollTo((scroll.getChildAt(0).width-scroll.width).coerceAtLeast(0),0);toggle.getLocationOnScreen(location)
+                    assertArrayEquals("Orientation must not scroll with formats",initial,location)
+                    scroll.scrollTo(0,0)
+                    assertTrue(toggle.compoundDrawablesRelative[0] is dev.filmroom.ui.OrientationToggleDrawable)
+                    assertTrue(toggle.contentDescription.contains(if(language=="zh")"切换" else "Switch"))
+                }
                 assertFalse(scroll.isHorizontalScrollBarEnabled);assertFalse(scroll.isVerticalScrollBarEnabled)
                 if(!framed)assertTrue("Ratios scroll instead of wrapping",scroll.getChildAt(0).width>scroll.width)
                 val title=all(tools).filterIsInstance<android.widget.TextView>().single{it.tag=="crop-title"}
-                assertEquals("构图",title.text.toString());assertEquals(1,title.lineCount)
+                assertEquals(if(language=="zh")"构图" else "Composition",title.text.toString());assertEquals(1,title.lineCount)
                 val cancel=all(tools).filterIsInstance<Button>().single{it.tag=="crop-cancel"};val confirm=all(tools).filterIsInstance<Button>().single{it.tag=="crop-confirm"}
                 assertTrue(cancel.right<=confirm.left);assertEquals(cancel.top,confirm.top)
                 for(button in modes+listOf(cancel,confirm)){
@@ -359,6 +375,14 @@ class CompositionToolbarActivityHostTest {
                     assertTrue("Label height is not clipped",button.height>=button.lineHeight+button.compoundPaddingTop+button.compoundPaddingBottom)
                 }
                 val actions=confirm.parent as ViewGroup;assertTrue(confirm.right<=actions.width)
+                if(w<h)for(button in listOf(cancel,confirm)){
+                    val background=button.background as android.graphics.drawable.InsetDrawable
+                    background.setBounds(0,0,button.width,button.height)
+                    val painted=requireNotNull(background.drawable).bounds
+                    assertEquals("Width is unchanged",0,painted.left);assertEquals(button.width,painted.right)
+                    assertEquals("Only four dp removed above and below",4,painted.top)
+                    assertEquals(button.height-4,painted.bottom)
+                }
                 assertNotNull("Normal categories remain available",(field(a,"categoryBar") as View).let{(it.parent as View).background})
                 if(w>h){
                     assertTrue(all(tools).any{it.tag=="parameter-section:filmStock"})
@@ -379,9 +403,9 @@ class CompositionToolbarActivityHostTest {
                 assertTrue(modes.all{it.compoundDrawables[1] is dev.filmroom.ui.CropAspectDrawable})
                 val output=File("build/ui-host-renders/composition-inline").apply{mkdirs()}
                 val capture=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root.draw(Canvas(capture))
-                File(output,"${w}x${h}-font${font}-border${framed}.png").outputStream().use{capture.compress(Bitmap.CompressFormat.PNG,100,it)};capture.recycle()
+                File(output,"${w}x${h}-font${font}-border${framed}-$language.png").outputStream().use{capture.compress(Bitmap.CompressFormat.PNG,100,it)};capture.recycle()
             }finally{controller.pause().stop().destroy()}
-        }}finally{RuntimeEnvironment.setFontScale(1f);RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi")}
+        }}finally{RuntimeEnvironment.setFontScale(1f);RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi");dev.filmroom.i18n.L10n.choose(app,"zh")}
     }
 
     @Test fun borderOptionsRetainWhitePreferenceAndNeverWrapAtNarrowLargeText(){

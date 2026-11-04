@@ -757,70 +757,105 @@ class MainActivity:ComponentActivity() {
     }
     private fun buildCompositionTools(p:EditorState,editable:Boolean,target:LinearLayout=tools){
         val editing=model.state.value.compositionEditing
-        val heading=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this)else row()
+        val heading=dev.filmroom.ui.ResponsiveSectionHeading(this)
         heading.addView(sectionTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),R.drawable.ic_composition).apply{tag="crop-title";if(!landscapeEditor)maxLines=1},LinearLayout.LayoutParams(0,-2,1f))
         target.addView(heading,LinearLayout.LayoutParams(-1,-2))
-        if(p.filmBorder && dev.filmroom.border.MediumFormatStocks.available(p.frameStock)){
-            val formats=listOf<dev.filmroom.border.MediumFormat?>(null)+dev.filmroom.border.MediumFormat.entries
-            val formatScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false}
-            val formatChoices=row();formatScroll.addView(formatChoices)
-            for(format in formats){
-                val label=format?.label ?: "135"
-                formatChoices.addView(button(label){
-                    photo.finishCompositionGesture();model.chooseCompositionFormat(format)
-                }.apply{
-                    tag="composition-format:${format?.name ?: "135"}";maxLines=1;setHorizontallyScrolling(false)
-                    isSelected=p.effectiveMediumFormat==format;setTextColor(if(isSelected)accent else ink)
-                    contentDescription=dev.filmroom.i18n.L10n.text(R.string.medium_format_label)+" · "+label
-                    background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable && editing)
-                },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
-            }
-            retainStrip(formatScroll,formatChoices,"composition-formats", "composition-format:${p.effectiveMediumFormat?.name ?: "135"}")
-            target.addView(formatScroll,LinearLayout.LayoutParams(-1,-2))
+        if(p.filmBorder){
+            buildFramedCompositionChoices(p,editable,editing,target)
+        }else{
+            val choices=listOf(
+                CropMode.ORIGINAL to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4b1db520af46),CropMode.FREE to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d1047eed5dd5),CropMode.SQUARE to "1:1",
+                CropMode.RATIO_3_2 to "3:2",CropMode.RATIO_2_3 to "2:3",CropMode.RATIO_4_3 to "4:3",
+                CropMode.RATIO_3_4 to "3:4",CropMode.RATIO_16_9 to "16:9",CropMode.RATIO_9_16 to "9:16")
+            val current=p.crop.mode
+            val scroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;tag="crop-modes-scroll"}
+            val modes=row();scroll.addView(modes)
+            for((mode,label)in choices)modes.addView(button(label){photo.finishCompositionGesture();model.chooseCompositionMode(mode)}.apply{
+                tag="crop-mode:${mode.name}";maxLines=1;setHorizontallyScrolling(false);isSelected=current==mode;setTextColor(if(isSelected)accent else ink)
+                val ratio=when(mode){
+                    CropMode.RATIO_3_2->1.5;CropMode.RATIO_2_3->2.0/3.0;CropMode.RATIO_4_3->4.0/3.0;CropMode.RATIO_3_4->.75
+                    CropMode.RATIO_16_9->16.0/9.0;CropMode.RATIO_9_16->9.0/16.0;CropMode.SQUARE->1.0
+                    else->model.state.value.photo?.let{it.originalWidth.toDouble()/it.originalHeight.coerceAtLeast(1)} ?: 1.5
+                }
+                val icon=dev.filmroom.ui.CropAspectDrawable(ratio,when(mode){CropMode.FREE->"free";CropMode.ORIGINAL->"original";else->"ratio"},if(isSelected)accent else ink)
+                icon.setBounds(0,0,dp(24),dp(24));setCompoundDrawables(null,icon,null,null);compoundDrawablePadding=dp(4)
+                contentDescription=label
+                background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable && editing)
+            },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
+            retainStrip(scroll,modes,"crop-modes:false","crop-mode:${current.name}")
+            target.addView(scroll,LinearLayout.LayoutParams(-1,-2))
         }
-        val choices=if(p.filmBorder)listOf(CropMode.RATIO_3_2 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_61d5477ed69a),CropMode.RATIO_2_3 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cad49035a99d)) else listOf(
-            CropMode.ORIGINAL to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4b1db520af46),CropMode.FREE to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d1047eed5dd5),CropMode.SQUARE to "1:1",
-            CropMode.RATIO_3_2 to "3:2",CropMode.RATIO_2_3 to "2:3",CropMode.RATIO_4_3 to "4:3",
-            CropMode.RATIO_3_4 to "3:4",CropMode.RATIO_16_9 to "16:9",CropMode.RATIO_9_16 to "9:16")
-        val current=if(p.filmBorder){
-            val source=model.state.value.photo
-            val ratio=p.composition.targetAspect ?: if(source!=null && source.originalHeight>source.originalWidth)2.0/3.0 else 1.5
-            if(if(p.effectiveMediumFormat!=null)p.effectiveMediumPortrait else ratio<1.0)CropMode.RATIO_2_3 else CropMode.RATIO_3_2
-        }else p.crop.mode
-        val scroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;tag="crop-modes-scroll"}
-        val modes=row();scroll.addView(modes)
-        for((mode,label)in choices)modes.addView(button(label){photo.finishCompositionGesture();model.chooseCompositionMode(mode)}.apply{
-            tag="crop-mode:${mode.name}";maxLines=1;setHorizontallyScrolling(false);isSelected=current==mode;setTextColor(if(isSelected)accent else ink)
-            val ratio=if(p.filmBorder)dev.filmroom.border.BorderCatalog.frameAspect(p.frameStock,mode==CropMode.RATIO_2_3,p.effectiveMediumFormat)else when(mode){
-                CropMode.RATIO_3_2->1.5;CropMode.RATIO_2_3->2.0/3.0;CropMode.RATIO_4_3->4.0/3.0;CropMode.RATIO_3_4->.75
-                CropMode.RATIO_16_9->16.0/9.0;CropMode.RATIO_9_16->9.0/16.0;CropMode.SQUARE->1.0
-                else->model.state.value.photo?.let{it.originalWidth.toDouble()/it.originalHeight.coerceAtLeast(1)} ?: 1.5
-            }
-            val icon=dev.filmroom.ui.CropAspectDrawable(ratio,when(mode){CropMode.FREE->"free";CropMode.ORIGINAL->"original";else->"ratio"},if(isSelected)accent else ink)
-            icon.setBounds(0,0,dp(24),dp(24));setCompoundDrawables(null,icon,null,null);compoundDrawablePadding=dp(4)
-            contentDescription=label
-            background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable && editing)
-        },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
-        retainStrip(scroll,modes,"crop-modes:${p.filmBorder}","crop-mode:${current.name}")
-        target.addView(scroll,LinearLayout.LayoutParams(-1,-2))
-        val actions=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this,false).also{heading.addView(it,LinearLayout.LayoutParams(-2,-2))}else heading
+        val actions=(if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this,false)else row()).also{heading.addView(it,LinearLayout.LayoutParams(-2,-2))}
         if(!editing){
             actions.addView(compositionAction(getString(R.string.composition_adjust_action),true){compositionButton.performClick()}.apply{
                 tag="crop-adjust";enabled(this,editable && compositionButton.isEnabled)
             })
         }else{
-            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738)){photo.discardCompositionGesture();model.cancelComposition()}.apply{tag="crop-cancel";enabled(this,editable)})
-            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36f33adaf094),true){photo.finishCompositionGesture();model.confirmComposition()}.apply{tag="crop-confirm";enabled(this,editable)},LinearLayout.LayoutParams(-2,-2).apply{if(!landscapeEditor)marginStart=dp(4)})
+            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),compactPortrait=true){photo.discardCompositionGesture();model.cancelComposition()}.apply{tag="crop-cancel";enabled(this,editable)})
+            actions.addView(compositionAction(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36f33adaf094),true,compactPortrait=true){photo.finishCompositionGesture();model.confirmComposition()}.apply{tag="crop-confirm";enabled(this,editable)},LinearLayout.LayoutParams(-2,-2).apply{if(!landscapeEditor)marginStart=dp(4)})
         }
     }
-    private fun compositionAction(label:String,primary:Boolean=false,action:()->Unit)=button(label,primary=primary,action=action).apply{
+    private fun compositionPortrait(p:EditorState):Boolean = if(p.effectiveMediumFormat!=null)p.effectiveMediumPortrait
+        else p.composition.targetAspect?.let{it<1.0} ?: (model.state.value.photo?.let{it.originalHeight>it.originalWidth} ?: false)
+    private fun buildFramedCompositionChoices(p:EditorState,editable:Boolean,editing:Boolean,target:LinearLayout){
+        val portrait=compositionPortrait(p)
+        val label=dev.filmroom.i18n.L10n.text(if(portrait)R.string.text_cad49035a99d else R.string.text_61d5477ed69a)
+        val nextLabel=dev.filmroom.i18n.L10n.text(if(portrait)R.string.text_61d5477ed69a else R.string.text_cad49035a99d)
+        val controls=row().apply{tag="composition-frame-controls"}
+        val toggle=button(label){
+            // Read the live draft, not the captured binding: rapid taps must alternate.
+            photo.finishCompositionGesture()
+            val state=model.state.value
+            if(state.editable && state.compositionEditing && state.parameters.filmBorder){
+                model.chooseCompositionMode(if(compositionPortrait(state.parameters))CropMode.RATIO_3_2 else CropMode.RATIO_2_3)
+            }
+        }.apply{
+            tag="composition-orientation-toggle";textSize=12f;maxLines=1
+            setPadding(dp(10),dp(8),dp(10),dp(8));setTextColor(ink)
+            background=android.graphics.drawable.InsetDrawable(shape(raised),0,dp(4),0,dp(4))
+            // InsetDrawable supplies padding; restore the intended text bounds afterwards.
+            setPadding(dp(10),dp(8),dp(10),dp(8))
+            val icon=dev.filmroom.ui.OrientationToggleDrawable(portrait,ink)
+            icon.setBounds(0,0,dp(24),dp(24));setCompoundDrawablesRelative(icon,null,null,null);compoundDrawablePadding=dp(6)
+            contentDescription=getString(R.string.composition_orientation_toggle_description,label,nextLabel)
+            androidx.core.view.ViewCompat.setStateDescription(this,label);tooltipText=contentDescription;enabled(this,editable && editing)
+        }
+        controls.addView(toggle,LinearLayout.LayoutParams(-2,-2))
+        controls.addView(View(this).apply{setBackgroundColor(raised);importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO},LinearLayout.LayoutParams(dp(1),dp(24)).apply{marginStart=dp(8);marginEnd=dp(8)})
+        val hasMedium=dev.filmroom.border.MediumFormatStocks.available(p.frameStock)
+        val formats=if(hasMedium)listOf<dev.filmroom.border.MediumFormat?>(null)+dev.filmroom.border.MediumFormat.entries else listOf(null)
+        val formatScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;clipToPadding=false}
+        val formatChoices=row();formatScroll.addView(formatChoices)
+        for(format in formats){
+            val formatLabel=format?.label ?: "135"
+            formatChoices.addView(button(formatLabel){photo.finishCompositionGesture();model.chooseCompositionFormat(format)}.apply{
+                tag="composition-format:${format?.name ?: "135"}";maxLines=1;setHorizontallyScrolling(false)
+                isSelected=p.effectiveMediumFormat==format;setTextColor(if(isSelected)accent else ink)
+                contentDescription=dev.filmroom.i18n.L10n.text(R.string.medium_format_label)+" · "+formatLabel
+                background=android.graphics.drawable.InsetDrawable(shape(if(isSelected)raised else Color.TRANSPARENT),0,dp(4),0,dp(4))
+                setPadding(dp(12),dp(8),dp(12),dp(8));enabled(this,editable && editing && hasMedium)
+            },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
+        }
+        retainStrip(formatScroll,formatChoices,"composition-formats", "composition-format:${p.effectiveMediumFormat?.name ?: "135"}")
+        controls.addView(formatScroll,LinearLayout.LayoutParams(0,-2,1f))
+        target.addView(controls,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8);bottomMargin=dp(4)})
+    }
+    private fun compositionAction(label:String,primary:Boolean=false,compactPortrait:Boolean=false,action:()->Unit)=button(label,primary=primary,action=action).apply{
         if(landscapeEditor){
             // The visual pill is smaller; the actual focus/touch bounds remain at least 48dp.
             textSize=12f
             background=android.graphics.drawable.InsetDrawable(shape(if(primary)accent else raised),dp(2),dp(7),dp(2),dp(7))
             // InsetDrawable installs its own padding, so set the text padding afterwards.
             setPadding(dp(10),dp(7),dp(10),dp(7))
-        }else maxLines=1
+        }else{
+            maxLines=1
+            if(compactPortrait){
+                // Reduce only the visible pill height; retain text, width, padding and 48dp touch bounds.
+                val insets=intArrayOf(paddingLeft,paddingTop,paddingRight,paddingBottom)
+                background=android.graphics.drawable.InsetDrawable(shape(if(primary)accent else raised),0,dp(4),0,dp(4))
+                setPadding(insets[0],insets[1],insets[2],insets[3])
+            }
+        }
     }
     private fun sectionTitle(label:String,icon:Int):TextView{
         if(!landscapeEditor)return text(label,14f)
@@ -962,7 +997,7 @@ class MainActivity:ComponentActivity() {
         else->if(control.exactValue)dev.filmroom.i18n.L10n.format("%.2f",value)else dev.filmroom.i18n.L10n.format("%+.0f",(value-control.neutral)/(control.max-control.min)*100)
     }
     private fun controlHeading(control:Control,value:String?,target:LinearLayout=tools):TextView{
-        val heading=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this)else row()
+        val heading=dev.filmroom.ui.ResponsiveSectionHeading(this)
         heading.addView(sectionTitle(control.label,control.icon),LinearLayout.LayoutParams(0,-2,1f))
         val values=if(landscapeEditor)row().also{heading.addView(it,LinearLayout.LayoutParams(-2,-2))}else heading
         val label=text(value ?: "",14f,accent)

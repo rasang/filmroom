@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">フレーム判型</string>
+    <string name="composition_orientation_toggle_description">現在：%1$s。%2$sに切り替え</string>
 </resources>

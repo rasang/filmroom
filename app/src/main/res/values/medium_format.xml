@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">画幅</string>
+    <string name="composition_orientation_toggle_description">当前%1$s，切换为%2$s</string>
 </resources>

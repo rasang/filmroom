@@ -1,4 +1,4 @@
-Current revision (2026-11-04): New snapshots use the reviewed Portra160/400/800 v5 arrow shapes, Gold200/Ektar100/E100 v4 lower-rail coordinate models, and three Fuji v2 corrections. See v2/README.txt and tools/medium120/v4 and v5 for per-stock evidence, coverage, methods and limitations. All earlier v1/v2/v4 PNGs and exact-version definitions are preserved for frozen snapshots and reproducible generation. The following report is historical v1 provenance, not the current asset selection.
+Current revision (2026-11-04): New snapshots use the reviewed Portra160/800 v5 arrow shapes and Portra400 v6 brand-letter weight (retaining its v5 arrows), Gold200/Ektar100/E100 v4 lower-rail coordinate models, and three Fuji v2 corrections. See v2/README.txt and tools/medium120/v4 v5 and v6 for per-stock evidence, coverage, methods and limitations. All earlier v1/v2/v4/v5 PNGs and exact-version definitions are preserved for frozen snapshots and reproducible generation. The following report is historical v1 provenance, not the current asset selection.
 
 120 九款片边研究审阅包（未完成实证，2026-11-03）
 

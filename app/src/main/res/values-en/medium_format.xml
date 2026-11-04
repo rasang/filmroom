@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">Frame format</string>
+    <string name="composition_orientation_toggle_description">Orientation: %1$s. Switch to %2$s</string>
 </resources>

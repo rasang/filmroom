@@ -116,6 +116,9 @@ class MediumStripVersioningHostTest {
             "kodak_gold_200" to "mf120-v4-gold200-6fad2b869ee0",
             "kodak_ektar_100" to "mf120-v4-ektar100-91d648b6bb15",
             "kodak_ektachrome_100" to "mf120-v4-e100-12d17d86a868",
+            "kodak_portra_160" to "mf120-v5-portra160-a970a81fe0dc",
+            "kodak_portra_400" to "mf120-v5-portra400-b6bc018bda16",
+            "kodak_portra_800" to "mf120-v5-portra800-64b689c66093",
         )
         val app=ApplicationProvider.getApplicationContext<Application>()
         val worker=Executors.newSingleThreadExecutor()

@@ -34,7 +34,7 @@ class MediumFormatCurrentParityHostTest {
         "kodak_gold_200" to "mf120-v4-gold200-6fad2b869ee0",
         "kodak_ektar_100" to "mf120-v4-ektar100-91d648b6bb15",
         "kodak_ektachrome_100" to "mf120-v4-e100-12d17d86a868",
-        "kodak_portra_400" to "mf120-v5-portra400-b6bc018bda16",
+        "kodak_portra_400" to "mf120-v6-portra400-3c329d78f008",
         "fujifilm_provia_100f" to "mf120-v2-provia100f-a897d5f2ea77",
         "fujifilm_velvia_100" to "mf120-v2-velvia100-9836225fb731",
         "fujifilm_pro_400h" to "mf120-v2-pro400h-2d036c5cba8c",
