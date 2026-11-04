@@ -1,4 +1,4 @@
-> **Filmroom 0.1.20-beta.4**: Development pre-release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_20_BETA_4.md) for functionality and validation limits.
+> **Filmroom 0.1.20**: Stable release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_20.md) for functionality and validation limits.
 
 <div align="center">
 
@@ -80,13 +80,13 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current source version: 0.1.20-beta.4; latest stable remains 0.1.19.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current stable version: 0.1.20.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
-- This is an early preview project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
+- This is an early-stage project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
 - Versions through 0.1.16 used the old debug certificate. Version 0.1.17 starts a new fixed release certificate; see the migration notice below. Keep your own signing key; source release builds are unsigned by default.
 
-See [0.1.19 notes](docs/RELEASE_0_1_19.md) for RAW, HEIC, monochrome film, detail-preview and export-history changes. [0.1.18 notes](docs/RELEASE_0_1_18.md) retain the earlier interface changes.
+See [0.1.20 notes](docs/RELEASE_0_1_20.md) for JPEG XL DNG, medium-format and composition changes. See [0.1.19 notes](docs/RELEASE_0_1_19.md) for RAW, HEIC, monochrome film, detail-preview and export-history changes. [0.1.18 notes](docs/RELEASE_0_1_18.md) retain the earlier interface changes.
 
 ## Your first photo
 
