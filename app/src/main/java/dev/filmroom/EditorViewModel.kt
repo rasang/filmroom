@@ -140,7 +140,9 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         if(!s.editable || s.compositionEditing)return
         // A retained old frame can still be on screen while ON/OFF presentation catches up.
         // Never route an unframed crop's arbitrary aspect into the new fixed-135 transform.
-        if(s.renderedParameters?.filmBorder!=s.parameters.filmBorder)return
+        if(s.renderedParameters?.filmBorder!=s.parameters.filmBorder ||
+            s.renderedParameters?.effectiveMediumFormat!=s.parameters.effectiveMediumFormat ||
+            s.renderedParameters?.effectiveMediumPortrait!=s.parameters.effectiveMediumPortrait)return
         if(if(s.parameters.filmBorder)s.presentation==null else s.cropPresentation==null)return
         compositionBaseline=s.parameters
         mutable.value=s.copy(compositionEditing=true,compare=false)
@@ -164,8 +166,8 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         if(!s.compositionEditing)return
         val next=if(s.parameters.filmBorder){
             val portrait=when(mode){CropMode.RATIO_3_2->false;CropMode.RATIO_2_3->true;else->return}
-            val aspect=dev.filmroom.border.BorderCatalog.frameAspect(s.parameters.frameStock,portrait)
-            s.parameters.copy(composition=s.parameters.composition.copy(targetAspect=aspect).clamped(p.originalWidth,p.originalHeight))
+            val aspect=dev.filmroom.border.BorderCatalog.frameAspect(s.parameters.frameStock,portrait,s.parameters.effectiveMediumFormat)
+            s.parameters.copy(mediumPortrait=s.parameters.effectiveMediumFormat!=null && portrait,composition=s.parameters.composition.copy(targetAspect=aspect).clamped(p.originalWidth,p.originalHeight))
         }else s.parameters.copy(crop=if(mode==CropMode.ORIGINAL)CropSettings() else s.parameters.crop.copy(mode=mode))
         compositionGestureActive=false
         mutable.value=s.copy(parameters=next,compare=false)
@@ -341,7 +343,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                         if(mutable.value.photo===s.photo && newest.json(includePresentation=false)==science)params=newest
                         val photo=checkNotNull(s.photo)
                         val border=if(params.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(params.filmStock,params.paperStock,params.outputRoute),filmResult.width,filmResult.height,
-                            photo.originalWidth,photo.originalHeight,params.composition,params.negativeWhiteHoles,params.outputRoute) else null
+                            photo.originalWidth,photo.originalHeight,params.composition,params.negativeWhiteHoles,params.outputRoute,params.effectiveMediumFormat,params.effectiveMediumPortrait) else null
                         val crop=if(border==null)dev.filmroom.crop.CropSnapshot.create(filmResult.width,filmResult.height,photo.originalWidth,photo.originalHeight,params.crop)else null
                         val coroutine=currentCoroutineContext()
                         rendered=if(border!=null)dev.filmroom.border.BorderPreview.owned {

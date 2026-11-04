@@ -54,7 +54,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
     suspend fun enqueue(source:PhotoSource,parameters:EditorState,format:ExportFormat,maxEdge:Int?,quality:Int,thumbnail:Bitmap?=null,onAccepted:(ExportJob)->Unit={},onEnqueued:(ExportJob)->Unit={}):ExportJob=withContext(Dispatchers.IO) {
         require(quality in 1..100)
         val size=if(maxEdge==null)PhotoLimits.Dimensions(source.originalWidth,source.originalHeight)else source.outputSize(maxEdge)
-        val border=if(parameters.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(parameters.filmStock,parameters.paperStock,parameters.outputRoute),size.width,size.height,source.originalWidth,source.originalHeight,parameters.composition,parameters.negativeWhiteHoles,parameters.outputRoute)else null
+        val border=if(parameters.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(parameters.filmStock,parameters.paperStock,parameters.outputRoute),size.width,size.height,source.originalWidth,source.originalHeight,parameters.composition,parameters.negativeWhiteHoles,parameters.outputRoute,parameters.effectiveMediumFormat,parameters.effectiveMediumPortrait)else null
         border?.let{BorderExportPolicy.validate(it,format)}
         val crop=if(border==null)CropSnapshot.create(size.width,size.height,source.originalWidth,source.originalHeight,parameters.crop)else null
         val id=ExportJobStore.newId()

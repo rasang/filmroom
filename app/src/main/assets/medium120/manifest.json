@@ -1,0 +1,109 @@
+{
+  "contract": "synthetic-120-reference-v1",
+  "strip_length_mm": 820,
+  "film_width_mm": 61,
+  "aperture_cross_mm": 56,
+  "end_allowance_mm": 3,
+  "strip_center_mm": 410,
+  "assets": [
+    {
+      "stock": "kodak_portra_160",
+      "path": "medium120/portra160-rails.png",
+      "width": 4920,
+      "height": 30,
+      "ppm": 6,
+      "bytes": 7565,
+      "sha256": "c9c42f121b4d8441f78844e85cf5b97ee76fce0b41b370a9d80328a579ebadfb",
+      "source_sha256": "e67facf4a2d935d845d3c5af2114050cf64fdf760c642a3ae0d7323a10a26a10",
+      "version": "mf120-v1-portra160-c9c42f121b4d"
+    },
+    {
+      "stock": "kodak_portra_400",
+      "path": "medium120/portra400-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 8271,
+      "sha256": "320ec685f5e9d88edf48651b723459c83ab59590a0c9d43021b23aa449326b3c",
+      "source_sha256": "cb4a7ae2496313c3e80c12cd15d4b3d042078c673f7d31d0d2e6e3d8a2946e7a",
+      "version": "mf120-v1-portra400-320ec685f5e9"
+    },
+    {
+      "stock": "kodak_portra_800",
+      "path": "medium120/portra800-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 14317,
+      "sha256": "97f3db5dcab7182c80bea0ae75c2d6d74b655680b53c1bf9a5dddbb658f5e6ac",
+      "source_sha256": "cd7864e016f748849c1bb85a158b962c1917f03d82e4aca4c2c07f72cfb4bf36",
+      "version": "mf120-v1-portra800-97f3db5dcab7"
+    },
+    {
+      "stock": "kodak_gold_200",
+      "path": "medium120/gold200-rails.png",
+      "width": 4920,
+      "height": 30,
+      "ppm": 6,
+      "bytes": 3144,
+      "sha256": "489478cd6d24a7f4d10a54d5efb8b0557aa5338fff5bcd431844d436a3441bc6",
+      "source_sha256": "18a1d88f6b79def0490371f60f75afe30c3df076fa72566d835033725320affe",
+      "version": "mf120-v1-gold200-489478cd6d24"
+    },
+    {
+      "stock": "kodak_ektar_100",
+      "path": "medium120/ektar100-rails.png",
+      "width": 4920,
+      "height": 30,
+      "ppm": 6,
+      "bytes": 4194,
+      "sha256": "0455d81beb1668b2d7ce3314ad60e2578321d15d6fa5cb3261703bcae6b480db",
+      "source_sha256": "ee5c3262188c111488a24a132c232534900211b0c55ea8447a2e3c2af867a2eb",
+      "version": "mf120-v1-ektar100-0455d81beb16"
+    },
+    {
+      "stock": "kodak_ektachrome_100",
+      "path": "medium120/e100-rails.png",
+      "width": 4920,
+      "height": 30,
+      "ppm": 6,
+      "bytes": 2785,
+      "sha256": "82c3280b815f3f1c37170f0cde93ad6d48c1f6f0584a83660ae066b3c9ccfebb",
+      "source_sha256": "c00f8f759b5df9a598c697c710c597515bfadc16099e35491525d374c131c9df",
+      "version": "mf120-v1-e100-82c3280b815f"
+    },
+    {
+      "stock": "fujifilm_provia_100f",
+      "path": "medium120/provia100f-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 8565,
+      "sha256": "b42a9f00398587ddab5d0ce23145302bcf8989e40a001ba29c1cd310e40b3339",
+      "source_sha256": "346039422831b2a6a460d7258b24d2ce31a4c0a6cdffdb823620f93975e2b92b",
+      "version": "mf120-v1-provia100f-b42a9f003985"
+    },
+    {
+      "stock": "fujifilm_velvia_100",
+      "path": "medium120/velvia100-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 7155,
+      "sha256": "cac0f6246306d65351d360a2b725078eef9d235710e1827460aea627ed40bd13",
+      "source_sha256": "4fd17b389937638e8c1d8435a53baba0d3bd36491ba049e9a7bb7dc7917e640f",
+      "version": "mf120-v1-velvia100-cac0f6246306"
+    },
+    {
+      "stock": "fujifilm_pro_400h",
+      "path": "medium120/pro400h-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 7364,
+      "sha256": "111c05d1353e9ee9aaa2fc5f8c06871038c12b2eb19efc6d282d193985831191",
+      "source_sha256": "38116deb9e9afa1658ae4421d022a5a4e9332113d1e5b57e5e3f07b9ce148b40",
+      "version": "mf120-v1-pro400h-111c05d1353e"
+    }
+  ]
+}

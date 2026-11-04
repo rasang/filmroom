@@ -1,4 +1,4 @@
-> **Filmroom 0.1.20-beta.1**：开发测试版源码。原生 JNI 库不随源码提交，构建 APK 前须按[开发指南](docs/DEVELOPMENT.md)从源码重建。功能范围与验证边界见[更新说明](docs/RELEASE_0_1_19.md)。
+> **Filmroom 0.1.20-beta.2**：开发测试版源码。原生 JNI 库不随源码提交，构建 APK 前须按[开发指南](docs/DEVELOPMENT.md)从源码重建。功能范围与验证边界见[更新说明](docs/RELEASE_0_1_20_BETA_2.md)。
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 ## 安装与版本
 
-**当前源码版本：0.1.20-beta.1；最新正式版仍为 0.1.19。** 从 [GitHub Releases](https://github.com/rasang/filmroom/releases) 下载 APK，也可按[开发指南](docs/DEVELOPMENT.md)自行构建。
+**当前源码版本：0.1.20-beta.2；最新正式版仍为 0.1.19。** 从 [GitHub Releases](https://github.com/rasang/filmroom/releases) 下载 APK，也可按[开发指南](docs/DEVELOPMENT.md)自行构建。
 
 - 面向 **Android 10（API 29）及以上的 64 位设备**；源码默认构建 ARM64 和 x86_64，可单独构建 ARM64 手机包。
 - 项目仍处于早期体验阶段。已有主机构建、算法及 JNI/UI 测试，**尚未完成 Android 真机全流程验证**，不作手机速度或耗电保证。

@@ -1,0 +1,229 @@
+{
+  "entries": [
+    {
+      "profile_id": "kodak_portra_160",
+      "name": "Kodak Portra 160",
+      "physical_stock_id": "kodak_portra_160",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_portra_160.webp",
+      "source_model": "kodak_portra_160.blend",
+      "sha256": "9224a2d0b380386794397253217e49bef604c78ccfea1f657750920f1604258f",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_portra_400",
+      "name": "Kodak Portra 400",
+      "physical_stock_id": "kodak_portra_400",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_portra_400.webp",
+      "source_model": "kodak_portra_400.blend",
+      "sha256": "5f501669542006e8ed8841fe347d92c5e5c0263b3a37672ce94dabf21483cab0",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_portra_800",
+      "name": "Kodak Portra 800",
+      "physical_stock_id": "kodak_portra_800",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_portra_800.webp",
+      "source_model": "kodak_portra_800.blend",
+      "sha256": "731df699b6a8a5e31615d7a4363d79dac768bd6cf933932d9c957e5e7ea0ef76",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_portra_800_push1",
+      "name": "Kodak Portra 800 +1",
+      "physical_stock_id": "kodak_portra_800",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_portra_800_push1.webp",
+      "source_model": "kodak_portra_800.blend",
+      "sha256": "731df699b6a8a5e31615d7a4363d79dac768bd6cf933932d9c957e5e7ea0ef76",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_portra_800_push2",
+      "name": "Kodak Portra 800 +2",
+      "physical_stock_id": "kodak_portra_800",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_portra_800_push2.webp",
+      "source_model": "kodak_portra_800.blend",
+      "sha256": "731df699b6a8a5e31615d7a4363d79dac768bd6cf933932d9c957e5e7ea0ef76",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_gold_200",
+      "name": "Kodak Gold 200",
+      "physical_stock_id": "kodak_gold_200",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_gold_200.webp",
+      "source_model": "kodak_gold_200.blend",
+      "sha256": "28f66bf186accf898369e4cad39c705b24163fbc81f8d52d49ea301050836535",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_ultramax_400",
+      "name": "Kodak Ultramax 400",
+      "physical_stock_id": "kodak_ultramax_400",
+      "form": "135 only",
+      "thumbnail": "thumbnails/kodak_ultramax_400.webp",
+      "source_model": "kodak_ultramax_400.blend",
+      "sha256": "39c5dd81b570248ff769da478d3e26e9f57dde75e3f6f41fe308bfa0c3d05ca4",
+      "alpha_bbox": [
+        88,
+        89,
+        192,
+        209
+      ]
+    },
+    {
+      "profile_id": "kodak_ektar_100",
+      "name": "Kodak Ektar 100",
+      "physical_stock_id": "kodak_ektar_100",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_ektar_100.webp",
+      "source_model": "kodak_ektar_100.blend",
+      "sha256": "666d0b3846a36597ecbc68b059964200fd4a012f70ddfc492aecdd1aa07d7657",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "fujifilm_c200",
+      "name": "Fujifilm C200",
+      "physical_stock_id": "fujifilm_c200",
+      "form": "135 only",
+      "thumbnail": "thumbnails/fujifilm_c200.webp",
+      "source_model": "fujifilm_c200.blend",
+      "sha256": "6c76a5ddf032293acc940548c43c73a5fb384fccd52712f4ecd1cf99f352c588",
+      "alpha_bbox": [
+        88,
+        89,
+        192,
+        209
+      ]
+    },
+    {
+      "profile_id": "fujifilm_xtra_400",
+      "name": "Fujifilm X-TRA 400",
+      "physical_stock_id": "fujifilm_xtra_400",
+      "form": "135 only",
+      "thumbnail": "thumbnails/fujifilm_xtra_400.webp",
+      "source_model": "fujifilm_xtra_400.blend",
+      "sha256": "b819b40735898278b02f88c08f0424b00303b52cf74c79c713666982cae9d217",
+      "alpha_bbox": [
+        88,
+        89,
+        192,
+        209
+      ]
+    },
+    {
+      "profile_id": "fujifilm_pro_400h",
+      "name": "Fujifilm Pro 400H",
+      "physical_stock_id": "fujifilm_pro_400h",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/fujifilm_pro_400h.webp",
+      "source_model": "fujifilm_pro_400h.blend",
+      "sha256": "f659e4390e6010ce77f8e31cc74348ceb7dc2b95164ce3af6a14506a4bda9e86",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "fujifilm_provia_100f",
+      "name": "Fujifilm Provia 100F",
+      "physical_stock_id": "fujifilm_provia_100f",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/fujifilm_provia_100f.webp",
+      "source_model": "fujifilm_provia_100f.blend",
+      "sha256": "e2c4bea75643271227edad55dc07ccce36929828b44b9fadeb50d0f141c5332d",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "fujifilm_velvia_100",
+      "name": "Fujifilm Velvia 100",
+      "physical_stock_id": "fujifilm_velvia_100",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/fujifilm_velvia_100.webp",
+      "source_model": "fujifilm_velvia_100.blend",
+      "sha256": "32448eef4526f5f429d4b0e7e167af14c891d3f9a7981f5b1833ce8c5c9c0ce0",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_ektachrome_100",
+      "name": "Kodak Ektachrome 100",
+      "physical_stock_id": "kodak_ektachrome_100",
+      "form": "135 + 120",
+      "thumbnail": "thumbnails/kodak_ektachrome_100.webp",
+      "source_model": "kodak_ektachrome_100.blend",
+      "sha256": "b52dec0cdf00a7e61a73bb0e74e4f9e26a1fdc0d590e8f0dc27b6ea85e3b5eae",
+      "alpha_bbox": [
+        47,
+        39,
+        197,
+        208
+      ]
+    },
+    {
+      "profile_id": "kodak_kodachrome_64",
+      "name": "Kodak Kodachrome 64",
+      "physical_stock_id": "kodak_kodachrome_64",
+      "form": "135 only",
+      "thumbnail": "thumbnails/kodak_kodachrome_64.webp",
+      "source_model": "kodak_kodachrome_64.blend",
+      "sha256": "c00834ed898fddd138a811df0a1455ca621cef97721a5a416f1d7cd447b13a7b",
+      "alpha_bbox": [
+        88,
+        89,
+        192,
+        209
+      ]
+    }
+  ]
+}

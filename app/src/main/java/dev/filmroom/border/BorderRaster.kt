@@ -43,6 +43,13 @@ interface BorderProvider {
     /** Route-aware capture. Legacy fixture providers deliberately retain their authored frame. */
     fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String):BorderSnapshot =
         snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles)
+    /** Opt-in nominal 120 capture. Providers without 120 support must fail, never silently use 135. */
+    fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String,mediumFormat:MediumFormat?):BorderSnapshot =
+        snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,outputRoute,mediumFormat,false)
+    fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String,mediumFormat:MediumFormat?,mediumPortrait:Boolean):BorderSnapshot {
+        require(mediumFormat==null && !mediumPortrait){"Provider does not support 120"}
+        return snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,outputRoute)
+    }
     /** Metadata-only preflight; must never decode or retain an atlas. */
     fun verifySnapshot(snapshot:BorderSnapshot)=Unit
     fun resolve(snapshot:BorderSnapshot):BorderRaster
@@ -80,10 +87,10 @@ object BorderCatalog:BorderProvider {
             snapshot.stock=="kodak_2302" && snapshot.geometryVersion==4 &&
             snapshot.assetVersion=="bw-v4-print_2302-white-d84db54b27" &&
             snapshot.appearance?.filmKind==FrameAppearanceContext.FilmKind.PRINT && snapshot.appearance?.outputRoute=="print"
-    fun frameAspect(stock:String,portrait:Boolean):Double {val a=BwFrameGeometry.forStock(stock)?.aspect ?: 1.5;return if(portrait)1/a else a}
-    fun available(stock:String)=PROTOTYPE_ENABLED && registry.available(stock)
-    fun clearCache(){registry.clearCache()}
-    override fun verifySnapshot(snapshot:BorderSnapshot){enabled();registry.verifySnapshot(snapshot)}
+    fun frameAspect(stock:String,portrait:Boolean,mediumFormat:MediumFormat?=null):Double {val a=mediumFormat?.landscapeAspect ?: BwFrameGeometry.forStock(stock)?.aspect ?: 1.5;return if(portrait)1/a else a}
+    fun available(stock:String,mediumFormat:MediumFormat?=null)=PROTOTYPE_ENABLED && if(mediumFormat==null)registry.available(stock)else MediumFormatStocks.available(stock)
+    fun clearCache(){registry.clearCache();MediumStripProvider.clearCache()}
+    override fun verifySnapshot(snapshot:BorderSnapshot){enabled();if(snapshot.geometryVersion==5)MediumStripProvider.verify(snapshot)else registry.verifySnapshot(snapshot)}
     private fun enabled(){if(!PROTOTYPE_ENABLED)throw PhotoException(PhotoException.Reason.UNSUPPORTED,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_1384551c8e44))}
     override fun snapshot(stock:String,width:Int,height:Int):BorderSnapshot {
         enabled();return registry.snapshot(stock,width,height)
@@ -105,9 +112,23 @@ object BorderCatalog:BorderProvider {
         return BorderSnapshot.authored(stock,spec.version,width,height,canonicalWidth,canonicalHeight,composition,spec.featherTotalAt3072)
             .copy(appearance=context).also{registry.verifySnapshot(it)}
     }
+    override fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:dev.filmroom.model.CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String,mediumFormat:MediumFormat?,mediumPortrait:Boolean):BorderSnapshot {
+        enabled()
+        if(mediumFormat==null){require(!mediumPortrait);return snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,outputRoute)}
+        return MediumStripProvider.snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,outputRoute,mediumFormat,mediumPortrait)
+    }
     override fun resolve(snapshot:BorderSnapshot)=resolve(snapshot,{})
     override fun resolve(snapshot:BorderSnapshot,checkActive:()->Unit):BorderRaster {
-        enabled();return registry.resolve(snapshot,checkActive)
+        enabled()
+        if(snapshot.geometryVersion==5){
+            registry.clearCache() // Drop the other format cache; already-borrowed rasters remain immutable.
+            val input=checkNotNull(source){"Border asset source not initialized"}
+            return BorderMemoryAdmission.withBudget(BorderMemoryAdmission.DECODE_ESTIMATE_BYTES,input.memory){
+                MediumStripProvider.resolve(snapshot,{input.assets.open(it)},checkActive)
+            }
+        }
+        MediumStripProvider.clearCache()
+        return registry.resolve(snapshot,checkActive)
     }
 }
 

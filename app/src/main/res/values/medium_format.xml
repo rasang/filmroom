@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="medium_format_label">片边画幅</string>
+    <string name="medium_format_evidence">120 参考说明</string>
+    <string name="medium_format_evidence_body">120 片边为参考重建，并非原片扫描。五种画幅使用名义尺寸，同款共享一条连续片边；字体、间距、相位和颜色尚未逐项标定。部分胶卷仅确认局部编号，未确认内容不补造。Portra 800 采用已核到的 800-2 批次，Pro 400H 为历史产品。无齿孔、不添加漏光。此选择只改变输出裁切和片边，不修改颗粒或光学片宽参数。</string>
+    <string name="medium_format_reconstruction">参考重建</string>
+    <string name="medium_evidence_portra160">已见41–55及1–12；56未确认，间距与相位为示意。</string>
+    <string name="medium_evidence_portra400">仅局部序号已确认，未核完整卷；间距与相位为示意。</string>
+    <string name="medium_evidence_portra800">采用已核到的800-2整卷序号；不代表全部批次，间距与相位为示意。</string>
+    <string name="medium_evidence_gold">只确认52、对侧10和箭头；未核连续卷，位置为示意。</string>
+    <string name="medium_evidence_ektar">49–51与7/8来自未确认同卷的图片；组合与相位为示意。</string>
+    <string name="medium_evidence_e100">仅确认局部片名及8/箭头；未核连续卷，间距与相位为示意。</string>
+    <string name="medium_evidence_fuji">依据原厂120示意图；未核完整实卷及准确节距、相位，批次码未补造。</string>
+</resources>

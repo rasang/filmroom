@@ -7,10 +7,12 @@ import dev.filmroom.io.PhotoException
 object BorderExportPolicy {
     data class Option(val label:String,val available:Boolean)
     /** One unsupported full size must not crash or disable a valid smaller export. */
-    fun option(stock:String,width:Int,height:Int,enabled:Boolean,provider:BorderProvider=BorderCatalog,canonicalWidth:Int=width,canonicalHeight:Int=height,composition:dev.filmroom.model.CompositionTransform=dev.filmroom.model.CompositionTransform(),negativeWhiteHoles:Boolean=true,outputRoute:String?=null):Option {
+    fun option(stock:String,width:Int,height:Int,enabled:Boolean,provider:BorderProvider=BorderCatalog,canonicalWidth:Int=width,canonicalHeight:Int=height,composition:dev.filmroom.model.CompositionTransform=dev.filmroom.model.CompositionTransform(),negativeWhiteHoles:Boolean=true,outputRoute:String?=null,mediumFormat:MediumFormat?=null,mediumPortrait:Boolean=false):Option {
         if(!enabled)return Option("$width × $height",true)
         return try {
-            val s=if(outputRoute==null)provider.snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles)
+            require(mediumFormat!=null || !mediumPortrait)
+            val s=if(mediumFormat!=null)provider.snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,requireNotNull(outputRoute){"120 capture requires explicit output route"},mediumFormat,mediumPortrait)
+                else if(outputRoute==null)provider.snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles)
                 else provider.snapshot(stock,width,height,canonicalWidth,canonicalHeight,composition,negativeWhiteHoles,outputRoute)
             Option(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ad1d18f9d3e5, s.outputWidth, s.outputHeight),true)
         }catch(_:IllegalArgumentException){Option(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_96fa923afb1a, width, height),false)}

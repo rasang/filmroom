@@ -7,3 +7,7 @@
 - Brand boundary: Kodak, Fujifilm and film-stock names remain their respective owners' marks. The assets do not claim endorsement or official packaging-art status. Labels are intentionally simplified interpretations, not exact packaging reproductions.
 - Existing film simulation profiles: those are separate third-party data in the application repository, credited there to Andrea Volpato / spektrafilm under CC BY-SA 4.0. This asset set uses only catalog identifiers/names to map images; it does not distribute or alter the simulation profile data. Preserve the application's existing profile attribution and licensing independently.
 - This document records provenance; it does not purport to license third-party trademarks or photographs. No standalone third-party artwork license file is needed because those files are not incorporated.
+
+## 135 + 120 artwork update
+
+The approved no-carton model set replaces the 13 ordinary cartridge artworks (15 profiles including identical Portra 800 Push aliases). Nine physical stocks show a smaller 135 cartridge beside a bare 120 roll; four remain 135 only. Motion-picture cans are unchanged. All retain the same common camera/lighting and nominal physical scale: 135 height 47.5 mm, diameter 25.1 mm; 120 spool height 65.75 mm, flange diameter 25.15 mm. Packaging lettering and fine geometry are simplified reconstructions, not scans or calibrated reproductions. No manufacturer endorsement is implied. `medium-format-manifest.json` pins exact thumbnail bytes and aliases. The source model pack is maintained separately.

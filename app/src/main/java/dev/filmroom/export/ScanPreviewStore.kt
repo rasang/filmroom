@@ -42,6 +42,9 @@ internal object ScanPreviewStore {
                 provider.verifySnapshot(frozen)
                 val raster=provider.resolve(frozen,checkActive)
                 val snapshot=(if(frozen.geometryVersion==1)BorderSnapshot.create(frozen.stock,frozen.assetVersion,original.width,original.height,raster.railRatio,raster.endRatio,frozen.featherTotalAt3072)
+                    else if(frozen.geometryVersion==5)BorderSnapshot.medium120(frozen.stock,frozen.assetVersion,original.width,original.height,
+                        frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,checkNotNull(frozen.mediumFormat),frozen.mediumPortrait,
+                        checkNotNull(frozen.stripCenterMm),frozen.featherTotalAt3072)
                     else BorderSnapshot.authored(frozen.stock,frozen.assetVersion,original.width,original.height,frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,frozen.featherTotalAt3072)).copy(appearance=frozen.appearance)
                 BorderPreview.compose(original,snapshot,raster,checkActive)
             } ?: job.crop?.takeUnless{it.isIdentity}?.let{crop->CropPreview.compose(original,CropSnapshot.create(original.width,original.height,crop.canonicalWidth,crop.canonicalHeight,crop.settings),checkActive)} ?: original

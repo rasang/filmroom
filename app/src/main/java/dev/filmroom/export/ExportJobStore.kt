@@ -59,6 +59,8 @@ data class ExportJob(
         require(border==null || border.geometryVersion==1 ||
             (border.canonicalWidth==sourceWidth && border.canonicalHeight==sourceHeight &&
              border.composition==parameters.presentationTransformForFrame(sourceWidth,sourceHeight,if(frozen2302)border.stock else parameters.frameStock))) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_eca4546685f7) }
+        require(border==null || (border.mediumFormat==parameters.effectiveMediumFormat &&
+            border.mediumPortrait==parameters.effectiveMediumPortrait)) { "Queued medium-format frame differs from frozen parameters" }
         border?.appearance?.let {
             require(it==dev.filmroom.border.FrameAppearanceContext.forProfile(border.stock,parameters.outputRoute,parameters.negativeWhiteHoles)) { "Queued frame appearance differs from frozen parameters" }
         }
@@ -174,18 +176,20 @@ class ExportJobStore(val root:File) {
         private fun validId(id:String)=runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)
         private fun encode(j:ExportJob)=JSONObject().apply {
             put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
-            put("completionViewed",j.completionViewed);put("version",if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
+            put("completionViewed",j.completionViewed);put("version",if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
             put("format",j.format.name);put("quality",j.quality);put("state",j.state.name);put("stage",j.progress.stage);put("done",j.progress.done);put("total",j.progress.total)
             put("mediaUri",j.mediaUri);put("message",j.message);put("messageUi",j.messageUi?.toJson());put("inputReady",j.inputReady);put("inputKind",j.inputKind);put("sourceWidth",j.sourceWidth);put("sourceHeight",j.sourceHeight);put("maxEdge",j.maxEdge);put("requestGeneration",j.requestGeneration);put("failure",j.failure.name)
         }.toString()
         private fun decode(text:String)=JSONObject(text).let { j ->
             val version=j.getInt("version")
-            require(version in 1..5)
+            require(version in 1..6)
             // A legacy app must reject framed jobs rather than silently export without their border.
             val border=j.optString("border").takeIf{it.isNotEmpty()}?.let(BorderSnapshot::fromJson)
             val crop=j.optString("crop").takeIf{it.isNotEmpty()}?.let(CropSnapshot::fromJson)
-            require(version==5 || border?.appearance==null)
-            if(version==5){
+            require(version>=5 || border?.appearance==null)
+            if(version==6){
+                require(border?.appearance!=null && border.geometryVersion==5 && border.mediumFormat!=null && crop==null)
+            }else if(version==5){
                 require(border?.appearance!=null && border.geometryVersion in 2..4 && crop==null)
             }else if(version<4){
                 require((version>=2)==j.has("border") && !j.has("crop"))

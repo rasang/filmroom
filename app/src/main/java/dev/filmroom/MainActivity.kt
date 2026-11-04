@@ -314,7 +314,7 @@ class MainActivity:ComponentActivity() {
         // A reusable film-tool action, never an image overlay or a parameter selection.
         compositionButton=toolButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),R.drawable.ic_composition,false){
             val current=model.state.value
-            val ready=if(current.parameters.filmBorder)current.presentation!=null && current.renderedParameters?.filmBorder==true
+            val ready=if(current.parameters.filmBorder)current.presentation!=null && current.renderedParameters?.filmBorder==true && current.presentation.mediumFormat==current.parameters.effectiveMediumFormat && current.presentation.mediumPortrait==current.parameters.effectiveMediumPortrait
                 else current.cropPresentation!=null && current.renderedParameters?.filmBorder==false
             if(current.editable && current.rendered!=null && ready && !current.compare && !current.compositionEditing){
                 expandedTools?.dismiss()
@@ -345,8 +345,8 @@ class MainActivity:ComponentActivity() {
         if(!::detailLoading.isInitialized)return
         val state=model.state.value
         val key=state.photo?.cacheKey?.takeIf{it==shownSource}
-        val scienceReady=state.renderedParameters?.copy(filmBorder=state.parameters.filmBorder,negativeWhiteHoles=state.parameters.negativeWhiteHoles,composition=state.parameters.composition,crop=state.parameters.crop)==state.parameters
-        val presentationChanged=state.renderedParameters?.let{it.filmBorder!=state.parameters.filmBorder || it.negativeWhiteHoles!=state.parameters.negativeWhiteHoles || it.composition!=state.parameters.composition || it.crop!=state.parameters.crop}==true
+        val scienceReady=state.renderedParameters?.copy(filmBorder=state.parameters.filmBorder,negativeWhiteHoles=state.parameters.negativeWhiteHoles,composition=state.parameters.composition,crop=state.parameters.crop,mediumFormat=state.parameters.mediumFormat,mediumPortrait=state.parameters.mediumPortrait)==state.parameters
+        val presentationChanged=state.renderedParameters?.let{it.filmBorder!=state.parameters.filmBorder || it.negativeWhiteHoles!=state.parameters.negativeWhiteHoles || it.composition!=state.parameters.composition || it.crop!=state.parameters.crop || it.mediumFormat!=state.parameters.mediumFormat || it.mediumPortrait!=state.parameters.mediumPortrait}==true
         val compositionOnly=state.compositionSource!=null && scienceReady && (state.compositionEditing || presentationChanged)
         val eligible=model.localDetailEnabled && state.startupReady && state.busy==null && !state.exporting && ((!state.updating && !state.previewRefining) || compositionOnly) && !state.compare && state.rendered!=null && scienceReady
         detailLoading.visibility=if(detailFeedback.showLoading(status,key,eligible,detailForeground))View.VISIBLE else View.INVISIBLE
@@ -367,15 +367,15 @@ class MainActivity:ComponentActivity() {
             if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let(model::previewBound)
         }
         if(!model.localDetailEnabled)photo.disableDetail()
-        val scienceReady=s.renderedParameters?.copy(filmBorder=s.parameters.filmBorder,negativeWhiteHoles=s.parameters.negativeWhiteHoles,composition=s.parameters.composition,crop=s.parameters.crop)==s.parameters
-        val presentationChanged=s.renderedParameters?.let{it.filmBorder!=s.parameters.filmBorder || it.negativeWhiteHoles!=s.parameters.negativeWhiteHoles || it.composition!=s.parameters.composition || it.crop!=s.parameters.crop}==true
+        val scienceReady=s.renderedParameters?.copy(filmBorder=s.parameters.filmBorder,negativeWhiteHoles=s.parameters.negativeWhiteHoles,composition=s.parameters.composition,crop=s.parameters.crop,mediumFormat=s.parameters.mediumFormat,mediumPortrait=s.parameters.mediumPortrait)==s.parameters
+        val presentationChanged=s.renderedParameters?.let{it.filmBorder!=s.parameters.filmBorder || it.negativeWhiteHoles!=s.parameters.negativeWhiteHoles || it.composition!=s.parameters.composition || it.crop!=s.parameters.crop || it.mediumFormat!=s.parameters.mediumFormat || it.mediumPortrait!=s.parameters.mediumPortrait}==true
         val compositionOnly=s.compositionSource!=null && scienceReady && (s.compositionEditing || presentationChanged)
         // Never enter a new presentation kind through the previous bitmap's gesture adapter.
-        val presentationReady=if(s.parameters.filmBorder)s.presentation!=null && s.renderedParameters?.filmBorder==true
+        val presentationReady=if(s.parameters.filmBorder)s.presentation!=null && s.renderedParameters?.filmBorder==true && s.presentation.mediumFormat==s.parameters.effectiveMediumFormat && s.presentation.mediumPortrait==s.parameters.effectiveMediumPortrait
             else s.cropPresentation!=null && s.renderedParameters?.filmBorder==false
         photo.bindDetail(s.photo,s.parameters,model.localDetailEnabled && s.startupReady && s.busy==null && ((!s.updating && !s.previewRefining) || compositionOnly) && !s.exporting && s.rendered!=null && scienceReady,s.compare,presentedBorder=!s.compare && s.rendered!=null && (s.renderedParameters?.filmBorder==true || s.cropPresentation!=null))
         if(sourceChanged){if(restoredSource==s.photo?.cacheKey&&restoredViewer!=null)photo.restoreViewerState(restoredViewer!!)else if(restoredSource==s.photo?.cacheKey&&restoredZoom!=null)photo.restoreTransform(restoredZoom!!)else photo.resetZoom();restoredZoom=null;restoredViewer=null}
-        if((s.presentation!=null && s.renderedParameters?.filmBorder==true) || (s.rendered==null && s.parameters.filmBorder))photo.bindComposition(if(s.compare)null else s.presentation,s.compositionSource,s.photo?.let{s.parameters.presentationTransform(it.originalWidth,it.originalHeight)} ?: s.parameters.composition,
+        if((s.presentation!=null && s.renderedParameters?.filmBorder==true && s.presentation.mediumFormat==s.parameters.effectiveMediumFormat && s.presentation.mediumPortrait==s.parameters.effectiveMediumPortrait) || (s.rendered==null && s.parameters.filmBorder))photo.bindComposition(if(s.compare)null else s.presentation,s.compositionSource,s.photo?.let{s.parameters.presentationTransform(it.originalWidth,it.originalHeight)} ?: s.parameters.composition,
             s.compositionEditing && presentationReady && !s.compare,interactiveBorder=s.interactiveBorder){transform,commit->model.composition(transform,commit)}
         else photo.bindCrop(if(s.compare)null else s.cropPresentation,s.compositionSource,s.parameters.crop,
             s.compositionEditing && presentationReady && !s.compare){transform,commit->model.composition(transform,commit)}
@@ -663,7 +663,7 @@ class MainActivity:ComponentActivity() {
         val controls=controls()+extraControls()
         for(control in controls){
             val id=control.id
-            val value=when(id){"filmStock"->listOf(p.filmStock,p.filmBorder,p.negativeWhiteHoles,p.outputRoute);"paper"->p.paperStock;else->if(choiceValues(id).isNotEmpty())choiceValue(p,id)else control.read(p)}
+            val value=when(id){"filmStock"->listOf(p.filmStock,p.filmBorder,p.negativeWhiteHoles,p.outputRoute,p.effectiveMediumFormat,p.effectiveMediumPortrait);"paper"->p.paperStock;else->if(choiceValues(id).isNotEmpty())choiceValue(p,id)else control.read(p)}
             val key=listOf(value,p.filmStock,p.paperStock,p.outputRoute,s.editable,control.active(p),if(group=="print")p.outputRoute else null,
                 if(id=="outputRoute" || id=="scanWhiteCorrection" || id=="scanBlackCorrection")listOf(p.isReversalFilm,p.preferredOutputRoute,p.scannerCorrectionSupported,p.scanWhiteCorrection,p.scanBlackCorrection)else null)
             val section=landscapeSections.getOrPut(id){
@@ -680,7 +680,7 @@ class MainActivity:ComponentActivity() {
                 section.key=key
             }
             if(id=="filmStock"){
-                val cropKey=listOf(s.compositionEditing,s.editable,p.filmBorder,p.crop.mode,p.composition.targetAspect)
+                val cropKey=listOf(s.compositionEditing,s.editable,p.filmBorder,p.crop.mode,p.composition.targetAspect,p.effectiveMediumFormat,p.effectiveMediumPortrait)
                 val crop=landscapeSections.getOrPut("composition"){
                     ParameterSection(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="parameter-section:composition";setPadding(0,dp(8),0,dp(12))},emptyList()).also{tools.addView(it.view,LinearLayout.LayoutParams(-1,-2))}
                 }
@@ -767,13 +767,13 @@ class MainActivity:ComponentActivity() {
         val current=if(p.filmBorder){
             val source=model.state.value.photo
             val ratio=p.composition.targetAspect ?: if(source!=null && source.originalHeight>source.originalWidth)2.0/3.0 else 1.5
-            if(ratio<1.0)CropMode.RATIO_2_3 else CropMode.RATIO_3_2
+            if(if(p.effectiveMediumFormat!=null)p.effectiveMediumPortrait else ratio<1.0)CropMode.RATIO_2_3 else CropMode.RATIO_3_2
         }else p.crop.mode
         val scroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;tag="crop-modes-scroll"}
         val modes=row();scroll.addView(modes)
         for((mode,label)in choices)modes.addView(button(label){photo.finishCompositionGesture();model.chooseCompositionMode(mode)}.apply{
             tag="crop-mode:${mode.name}";maxLines=1;setHorizontallyScrolling(false);isSelected=current==mode;setTextColor(if(isSelected)accent else ink)
-            val ratio=if(p.filmBorder)dev.filmroom.border.BorderCatalog.frameAspect(p.frameStock,mode==CropMode.RATIO_2_3)else when(mode){
+            val ratio=if(p.filmBorder)dev.filmroom.border.BorderCatalog.frameAspect(p.frameStock,mode==CropMode.RATIO_2_3,p.effectiveMediumFormat)else when(mode){
                 CropMode.RATIO_3_2->1.5;CropMode.RATIO_2_3->2.0/3.0;CropMode.RATIO_4_3->4.0/3.0;CropMode.RATIO_3_4->.75
                 CropMode.RATIO_16_9->16.0/9.0;CropMode.RATIO_9_16->9.0/16.0;CropMode.SQUARE->1.0
                 else->model.state.value.photo?.let{it.originalWidth.toDouble()/it.originalHeight.coerceAtLeast(1)} ?: 1.5
@@ -927,7 +927,47 @@ class MainActivity:ComponentActivity() {
                 },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             }
             target.addView(infoScroll,LinearLayout.LayoutParams(-1,-2))
+            if(dev.filmroom.border.MediumFormatStocks.available(p.frameStock)){
+                val formats=listOf<dev.filmroom.border.MediumFormat?>(null)+dev.filmroom.border.MediumFormat.entries
+                fun formatLabel(format:dev.filmroom.border.MediumFormat?)=format?.let{"120 · ${it.label}"} ?: "135"
+                val formatRow=row()
+                formatRow.addView(button(dev.filmroom.i18n.L10n.text(R.string.medium_format_label)+" · "+formatLabel(p.effectiveMediumFormat)){
+                    val openedStock=model.state.value.parameters.frameStock
+                    val openedPhoto=model.state.value.photo
+                    AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(R.string.medium_format_label))
+                        .setSingleChoiceItems(choiceAdapter(formats.map(::formatLabel),true),formats.indexOf(model.state.value.parameters.effectiveMediumFormat)){dialog,which->
+                            val current=model.state.value
+                            // A dialog is a selection UI, never authority to replace a newer stock.
+                            if(current.editable && current.parameters.filmBorder && current.parameters.frameStock==openedStock && current.photo===openedPhoto && dev.filmroom.border.MediumFormatStocks.available(openedStock)){
+                                finishCompositionForParameterEdit();photo.finishCompositionGesture()
+                                val now=model.state.value;val parameters=now.parameters
+                                val portrait=if(parameters.effectiveMediumFormat!=null)parameters.effectiveMediumPortrait
+                                    else parameters.composition.targetAspect?.let{it<1.0} ?: (now.photo?.let{it.originalHeight>it.originalWidth} ?: false)
+                                model.parameters(parameters.selectMediumFormat(formats[which],portrait))
+                            }
+                            dialog.dismiss()
+                        }.setNegativeButton(dev.filmroom.i18n.L10n.text(R.string.text_2cd0f3be8738),null).showReadable()
+                }.apply{tag="medium-format-selector";enabled(this,s.editable && p.filmBorder)},LinearLayout.LayoutParams(0,-2,1f))
+                formatRow.addView(button(dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence),R.drawable.ic_info){
+                    AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence))
+                        .setMessage(mediumFormatEvidence(model.state.value.parameters.frameStock)+"\n\n"+dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence_body))
+                        .setPositiveButton(android.R.string.ok,null).showReadable()
+                }.apply{tag="medium-format-evidence";maxLines=2},LinearLayout.LayoutParams(-2,-2))
+                target.addView(formatRow,LinearLayout.LayoutParams(-1,-2))
+                if(p.effectiveMediumFormat!=null)target.addView(text(dev.filmroom.i18n.L10n.text(R.string.medium_format_reconstruction)+" · "+mediumFormatEvidence(p.frameStock),12f,muted).apply{
+                    tag="medium-format-evidence-status";setPadding(dp(4),dp(2),dp(4),dp(4))
+                },LinearLayout.LayoutParams(-1,-2))
+            }
     }
+    private fun mediumFormatEvidence(stock:String):String=dev.filmroom.i18n.L10n.text(when(dev.filmroom.border.MediumFormatStocks.profiles[stock]){
+        "kodak_portra_160"->R.string.medium_evidence_portra160
+        "kodak_portra_400"->R.string.medium_evidence_portra400
+        "kodak_portra_800"->R.string.medium_evidence_portra800
+        "kodak_gold_200"->R.string.medium_evidence_gold
+        "kodak_ektar_100"->R.string.medium_evidence_ektar
+        "kodak_ektachrome_100"->R.string.medium_evidence_e100
+        else->R.string.medium_evidence_fuji
+    })
     private fun formatted(control:Control,value:Float):String=when(control.id){
         "brightness","filmExposure"->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ffd510bae3ad,value)
         "grain","halation","diffusionStrength","scanSharpenAmount"->"${(value*100).roundToInt()}%"
@@ -1094,7 +1134,7 @@ class MainActivity:ComponentActivity() {
         content.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4a7b0d4654d7),16f).apply{setPadding(0,dp(16),0,dp(4))})
         val choices=RadioGroup(this)
         val largest=maxOf(p.originalWidth,p.originalHeight)
-        fun outputOption(w:Int,h:Int)=dev.filmroom.border.BorderExportPolicy.option(s.parameters.frameStock,w,h,s.parameters.filmBorder,canonicalWidth=p.originalWidth,canonicalHeight=p.originalHeight,composition=s.parameters.composition,negativeWhiteHoles=s.parameters.negativeWhiteHoles,outputRoute=s.parameters.outputRoute)
+        fun outputOption(w:Int,h:Int)=dev.filmroom.border.BorderExportPolicy.option(s.parameters.frameStock,w,h,s.parameters.filmBorder,canonicalWidth=p.originalWidth,canonicalHeight=p.originalHeight,composition=s.parameters.composition,negativeWhiteHoles=s.parameters.negativeWhiteHoles,outputRoute=s.parameters.outputRoute,mediumFormat=s.parameters.effectiveMediumFormat,mediumPortrait=s.parameters.effectiveMediumPortrait)
         val standard=p.outputSize(2560)
         val standardOption=outputOption(standard.width,standard.height)
         val small=RadioButton(this).apply{isEnabled=standardOption.available;id=View.generateViewId();text=(if(largest<=2560)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f60066ec4bbf)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6bea77acefb3))+" · ${standardOption.label}";minHeight=dp(48);setTextColor(ink);textSize=14f}
