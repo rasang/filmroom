@@ -173,6 +173,21 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         mutable.value=s.copy(parameters=next,compare=false)
         schedulePresentationRender()
     }
+    /** Format selection belongs to the same cancellable draft as crop and orientation. */
+    fun chooseCompositionFormat(format:dev.filmroom.border.MediumFormat?) {
+        val s=mutable.value;val photo=s.photo ?: return
+        if(!s.editable || !s.compositionEditing || !s.parameters.filmBorder ||
+            !dev.filmroom.border.MediumFormatStocks.available(s.parameters.frameStock))return
+        val parameters=s.parameters
+        if(parameters.effectiveMediumFormat==format)return
+        val portrait=if(parameters.effectiveMediumFormat!=null)parameters.effectiveMediumPortrait
+            else parameters.composition.targetAspect?.let{it<1.0} ?: (photo.originalHeight>photo.originalWidth)
+        val selected=parameters.selectMediumFormat(format,portrait)
+        val next=selected.copy(composition=selected.composition.clamped(photo.originalWidth,photo.originalHeight))
+        compositionGestureActive=false
+        mutable.value=s.copy(parameters=next,compare=false)
+        schedulePresentationRender()
+    }
     private var compositionGestureActive=false
     fun composition(transform:CompositionTransform,commit:Boolean=true) {
         val s=mutable.value; val photo=s.photo ?: return

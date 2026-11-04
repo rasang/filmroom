@@ -1,0 +1,37 @@
+{
+  "stock": "kodak_ektachrome_100",
+  "file": "e100-rails.png",
+  "version": "mf120-v2-e100-221b4b71c6e5",
+  "sha256": "221b4b71c6e58730e5d5f0bab78ded240b9ff9c44ab7b6e3027327683e431329",
+  "byteCount": 20263,
+  "width": 8200,
+  "height": 50,
+  "pixelsPerMm": 10,
+  "coverageStartMm": 319.6882909667428,
+  "coverageEndMm": 500.3117090332572,
+  "defaultCenterMm": 410,
+  "semantic_mode": "full_observed_segment",
+  "tests": "PASS: dimensions,opaque alpha,five crop intervals,exact numbers,three brands,six arrows/three independent,all mark boundaries and ink presence",
+  "crop_intervals_mm": {
+    "645": [
+      386.25,
+      433.75
+    ],
+    "6x6": [
+      379.0,
+      441.0
+    ],
+    "6x7": [
+      372.0,
+      448.0
+    ],
+    "6x9": [
+      365.0,
+      455.0
+    ],
+    "6x17": [
+      323.0,
+      497.0
+    ]
+  }
+}

@@ -1,0 +1,1100 @@
+{
+  "schema": 1,
+  "stocks": [
+    {
+      "name": "portra160",
+      "stock": "kodak_portra_160",
+      "base_path": "portra160-rails.png",
+      "base_sha256": "c9c42f121b4d8441f78844e85cf5b97ee76fce0b41b370a9d80328a579ebadfb",
+      "base_version": "mf120-v1-portra160-c9c42f121b4d",
+      "pixels_per_mm": 6,
+      "background_rgba": [
+        9,
+        9,
+        9,
+        255
+      ],
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "mode": "preserve",
+      "source_urls": [
+        "https://www.photrio.com/forum/attachments/img_e4614-jpg.283384/"
+      ],
+      "model": {
+        "type": "frozen_approved_current",
+        "reason": "Already regular arrow anchors"
+      },
+      "confidence": "Exact preservation of approved authored pixels; physical full-roll spacing is not verified.",
+      "limitations": [
+        "No new physical cadence claim.",
+        "Same-stock photo or manufacturer diagram confirms semantic family, not complete measured174mm factory coordinates."
+      ]
+    },
+    {
+      "name": "portra400",
+      "stock": "kodak_portra_400",
+      "base_path": "v2/portra400-rails.png",
+      "base_sha256": "a096b757d5185c58df1e90b374c7d9afa3e75c68059789004623341af287b1b6",
+      "base_version": "mf120-v2-portra400-a096b757d518",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        285.211538,
+        500.865385
+      ],
+      "mode": "recompose",
+      "source_urls": [
+        "https://www.light11.de/download/Flos_Stories_Ausgabe_3.pdf#page=38"
+      ],
+      "model": {
+        "type": "three_arrow_cycle",
+        "first_anchor_mm": 286.8509615384616,
+        "cycle_mm": 94.87019230769226,
+        "offsets_mm": [
+          0.0,
+          29.3966346153846,
+          62.343750000000014
+        ],
+        "cycle_steps_mm": [
+          29.3966346153846,
+          32.947115384615415,
+          32.52644230769224
+        ]
+      },
+      "confidence": "high for relative three-step pattern, approximate metric scale",
+      "limitations": [
+        "Finite photographed segment only; no extrapolation to unseen marks or entire roll.",
+        "Nominal aperture-based metric scale is approximate, not factory metrology.",
+        "Font, color and vertical alignment preserve prior authored illustration; source-photo pixels are not used."
+      ],
+      "glyphs": [
+        {
+          "id": "arrow",
+          "source_box": [
+            3151,
+            25,
+            3175,
+            50
+          ],
+          "readable_bbox": [
+            3155,
+            32,
+            3171,
+            43
+          ]
+        },
+        {
+          "id": "number_7",
+          "source_box": [
+            3180,
+            25,
+            3196,
+            50
+          ],
+          "readable_bbox": [
+            3183,
+            31,
+            3193,
+            44
+          ]
+        },
+        {
+          "id": "number_8",
+          "source_box": [
+            3835,
+            25,
+            3852,
+            50
+          ],
+          "readable_bbox": [
+            3839,
+            31,
+            3849,
+            45
+          ]
+        },
+        {
+          "id": "number_9",
+          "source_box": [
+            4454,
+            25,
+            4471,
+            50
+          ],
+          "readable_bbox": [
+            4458,
+            31,
+            4468,
+            45
+          ]
+        }
+      ],
+      "number_gap_mm": 1.2,
+      "placements": [
+        {
+          "arrow_center_mm": 286.8509615384616,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 316.2475961538462,
+          "number": 7
+        },
+        {
+          "arrow_center_mm": 349.1947115384616,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 381.72115384615387,
+          "number": 8
+        },
+        {
+          "arrow_center_mm": 411.1177884615385,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 444.06490384615387,
+          "number": 9
+        },
+        {
+          "arrow_center_mm": 476.59134615384613,
+          "number": null
+        }
+      ],
+      "measurement": {
+        "gap_uncertainty_mm": 0.2,
+        "phase_note": "Preserve original authored mean arrow phase, while fitting the complete repeated motif.",
+        "source_pixels_per_mm_for_bottom_model": 7.428571428571429,
+        "source_to_final_mm_affine": {
+          "scale": 0.1346153846153846,
+          "offset": 282.1057692307693
+        },
+        "fit_residual_mm": [
+          -0.16826923076930345,
+          -0.08413461538467278,
+          0.2860576923076005,
+          0.134615384615354,
+          0.08413461538460008,
+          -0.28605769230772293,
+          0.03365384615387676
+        ],
+        "fit_rms_mm": 0.1794370923703954,
+        "equal_pitch_rms_mm": 0.934512003620734,
+        "measurement_uncertainty_mm": 0.15,
+        "absolute_metric_scale_uncertainty_percent": 3
+      }
+    },
+    {
+      "name": "portra800",
+      "stock": "kodak_portra_800",
+      "base_path": "portra800-rails.png",
+      "base_sha256": "97f3db5dcab7182c80bea0ae75c2d6d74b655680b53c1bf9a5dddbb658f5e6ac",
+      "base_version": "mf120-v1-portra800-97f3db5dcab7",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "mode": "recompose",
+      "source_urls": [
+        "https://www.monsterchildren.com/articles/andrew-peters-20-year-issue"
+      ],
+      "model": {
+        "type": "authored_midpoint_lattice",
+        "first_anchor_mm": 8.55,
+        "step_mm": 31.25,
+        "arrow_count": 25,
+        "numbered_indices": "odd indices1..23"
+      },
+      "confidence": "Approximate midpoint pattern corroborated by six same-stock triplets. Exact metric pitch and phase remain authored choices.",
+      "limitations": [
+        "Authored nominal scale, not calibrated factory dimensions.",
+        "Six photographed fractions0.448..0.536 have mean0.501; do not claim exact equality measured on film.",
+        "The617 layout is substantially the same as the prior midpoint option, not a new large visual correction."
+      ],
+      "glyphs": [
+        {
+          "id": "arrow",
+          "source_box": [
+            79,
+            25,
+            94,
+            50
+          ],
+          "readable_bbox": [
+            80,
+            33,
+            92,
+            46
+          ]
+        },
+        {
+          "id": "number_1",
+          "source_box": [
+            433,
+            25,
+            445,
+            50
+          ],
+          "readable_bbox": [
+            435,
+            31,
+            443,
+            44
+          ]
+        },
+        {
+          "id": "number_2",
+          "source_box": [
+            1058,
+            25,
+            1069,
+            50
+          ],
+          "readable_bbox": [
+            1059,
+            31,
+            1068,
+            44
+          ]
+        },
+        {
+          "id": "number_3",
+          "source_box": [
+            1683,
+            25,
+            1694,
+            50
+          ],
+          "readable_bbox": [
+            1684,
+            31,
+            1693,
+            44
+          ]
+        },
+        {
+          "id": "number_4",
+          "source_box": [
+            2307,
+            25,
+            2320,
+            50
+          ],
+          "readable_bbox": [
+            2309,
+            31,
+            2319,
+            44
+          ]
+        },
+        {
+          "id": "number_5",
+          "source_box": [
+            2933,
+            25,
+            2945,
+            50
+          ],
+          "readable_bbox": [
+            2934,
+            31,
+            2943,
+            44
+          ]
+        },
+        {
+          "id": "number_6",
+          "source_box": [
+            3558,
+            25,
+            3570,
+            50
+          ],
+          "readable_bbox": [
+            3559,
+            31,
+            3568,
+            44
+          ]
+        },
+        {
+          "id": "number_7",
+          "source_box": [
+            4183,
+            25,
+            4194,
+            50
+          ],
+          "readable_bbox": [
+            4184,
+            31,
+            4193,
+            44
+          ]
+        },
+        {
+          "id": "number_8",
+          "source_box": [
+            4808,
+            25,
+            4820,
+            50
+          ],
+          "readable_bbox": [
+            4809,
+            31,
+            4818,
+            44
+          ]
+        },
+        {
+          "id": "number_9",
+          "source_box": [
+            5432,
+            25,
+            5445,
+            50
+          ],
+          "readable_bbox": [
+            5434,
+            31,
+            5443,
+            44
+          ]
+        },
+        {
+          "id": "number_10",
+          "source_box": [
+            6058,
+            25,
+            6081,
+            50
+          ],
+          "readable_bbox": [
+            6060,
+            31,
+            6080,
+            44
+          ]
+        },
+        {
+          "id": "number_11",
+          "source_box": [
+            6683,
+            25,
+            6706,
+            50
+          ],
+          "readable_bbox": [
+            6685,
+            31,
+            6704,
+            44
+          ]
+        },
+        {
+          "id": "number_12",
+          "source_box": [
+            7308,
+            25,
+            7330,
+            50
+          ],
+          "readable_bbox": [
+            7310,
+            31,
+            7329,
+            44
+          ]
+        }
+      ],
+      "number_gap_mm": 0.7,
+      "placements": [
+        {
+          "arrow_center_mm": 8.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 39.8,
+          "number": 1
+        },
+        {
+          "arrow_center_mm": 71.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 102.3,
+          "number": 2
+        },
+        {
+          "arrow_center_mm": 133.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 164.8,
+          "number": 3
+        },
+        {
+          "arrow_center_mm": 196.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 227.3,
+          "number": 4
+        },
+        {
+          "arrow_center_mm": 258.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 289.8,
+          "number": 5
+        },
+        {
+          "arrow_center_mm": 321.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 352.3,
+          "number": 6
+        },
+        {
+          "arrow_center_mm": 383.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 414.8,
+          "number": 7
+        },
+        {
+          "arrow_center_mm": 446.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 477.3,
+          "number": 8
+        },
+        {
+          "arrow_center_mm": 508.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 539.8,
+          "number": 9
+        },
+        {
+          "arrow_center_mm": 571.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 602.3,
+          "number": 10
+        },
+        {
+          "arrow_center_mm": 633.55,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 664.8,
+          "number": 11
+        },
+        {
+          "arrow_center_mm": 696.05,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 727.3,
+          "number": 12
+        },
+        {
+          "arrow_center_mm": 758.55,
+          "number": null
+        }
+      ]
+    },
+    {
+      "name": "gold200",
+      "stock": "kodak_gold_200",
+      "base_path": "v2/gold200-rails.png",
+      "base_sha256": "12416fd08dbaf71928c91dd3393f3b40db80435f3ad2108e47824aacd07ff10a",
+      "base_version": "mf120-v2-gold200-12416fd08dba",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        292.6666666666667,
+        527.3333333333334
+      ],
+      "mode": "recompose",
+      "source_urls": [
+        "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+        "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+      ],
+      "model": {
+        "type": "finite_measured_motif",
+        "first_anchor_mm": 307.4833335833334,
+        "offsets_mm": [
+          0.0,
+          28.73333333333335,
+          61.56666666666666,
+          90.33333333333331,
+          117.93333333333334,
+          151.86666666666667,
+          183.86666666666667,
+          213.2333333333334
+        ],
+        "repeat": false
+      },
+      "confidence": "high that early-roll uneven sequence is real in two independent scans; moderate for exact metric coordinates",
+      "limitations": [
+        "Finite photographed segment only; no extrapolation to unseen marks or entire roll.",
+        "Nominal aperture-based metric scale is approximate, not factory metrology.",
+        "Font, color and vertical alignment preserve prior authored illustration; source-photo pixels are not used."
+      ],
+      "glyphs": [
+        {
+          "id": "arrow",
+          "source_box": [
+            3066,
+            25,
+            3086,
+            50
+          ],
+          "readable_bbox": [
+            3069,
+            34,
+            3083,
+            42
+          ]
+        },
+        {
+          "id": "number_1",
+          "source_box": [
+            3088,
+            25,
+            3102,
+            50
+          ],
+          "readable_bbox": [
+            3092,
+            33,
+            3098,
+            42
+          ]
+        },
+        {
+          "id": "number_2",
+          "source_box": [
+            3706,
+            25,
+            3720,
+            50
+          ],
+          "readable_bbox": [
+            3710,
+            33,
+            3717,
+            42
+          ]
+        },
+        {
+          "id": "number_3",
+          "source_box": [
+            4270,
+            25,
+            4284,
+            50
+          ],
+          "readable_bbox": [
+            4274,
+            33,
+            4281,
+            42
+          ]
+        },
+        {
+          "id": "number_4",
+          "source_box": [
+            4929,
+            25,
+            4944,
+            50
+          ],
+          "readable_bbox": [
+            4933,
+            33,
+            4941,
+            42
+          ]
+        }
+      ],
+      "number_gap_mm": 0.8,
+      "placements": [
+        {
+          "arrow_center_mm": 307.4833335833334,
+          "number": 1
+        },
+        {
+          "arrow_center_mm": 336.2166669166667,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 369.05000025000004,
+          "number": 2
+        },
+        {
+          "arrow_center_mm": 397.8166669166667,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 425.4166669166667,
+          "number": 3
+        },
+        {
+          "arrow_center_mm": 459.35000025000005,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 491.35000025000005,
+          "number": 4
+        },
+        {
+          "arrow_center_mm": 520.7166669166668,
+          "number": null
+        }
+      ],
+      "measurement": {
+        "gap_uncertainty_mm": 0.15,
+        "phase_note": "Preserve existing mean arrow phase. Independent Gold scan corroborates the irregular early-roll sequence; do not force the 7–9 three-step cycle onto 1–4.",
+        "source_pixels_per_mm_for_bottom_model": 15,
+        "source_to_final_mm_affine": {
+          "scale": 0.06666666666666667,
+          "offset": 291.35000025000005
+        },
+        "fit_residual_mm": null,
+        "fit_rms_mm": null,
+        "equal_pitch_rms_mm": 1.4662912127660426,
+        "measurement_uncertainty_mm": 0.2,
+        "absolute_metric_scale_uncertainty_percent": 3
+      }
+    },
+    {
+      "name": "ektar100",
+      "stock": "kodak_ektar_100",
+      "base_path": "v2/ektar100-rails.png",
+      "base_sha256": "98df0ed38e94962fa8665470be42015c3a2def8e3599df9ac6f375d78cf21359",
+      "base_version": "mf120-v2-ektar100-98df0ed38e94",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        319.85135135135135,
+        500.14864864864865
+      ],
+      "mode": "recompose",
+      "source_urls": [
+        "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+      ],
+      "model": {
+        "type": "three_arrow_cycle",
+        "first_anchor_mm": 321.45157661261266,
+        "cycle_mm": 92.07207207207205,
+        "offsets_mm": [
+          0.0,
+          28.66216216216222,
+          60.51689189189192
+        ],
+        "cycle_steps_mm": [
+          28.66216216216222,
+          31.85472972972971,
+          31.55518018018012
+        ]
+      },
+      "confidence": "high for relative three-step pattern, approximate metric scale",
+      "limitations": [
+        "Finite photographed segment only; no extrapolation to unseen marks or entire roll.",
+        "Nominal aperture-based metric scale is approximate, not factory metrology.",
+        "Font, color and vertical alignment preserve prior authored illustration; source-photo pixels are not used."
+      ],
+      "glyphs": [
+        {
+          "id": "arrow",
+          "source_box": [
+            3200,
+            25,
+            3222,
+            50
+          ],
+          "readable_bbox": [
+            3203,
+            33,
+            3219,
+            42
+          ]
+        },
+        {
+          "id": "number_7",
+          "source_box": [
+            3524,
+            25,
+            3539,
+            50
+          ],
+          "readable_bbox": [
+            3527,
+            32,
+            3535,
+            43
+          ]
+        },
+        {
+          "id": "number_8",
+          "source_box": [
+            4158,
+            25,
+            4173,
+            50
+          ],
+          "readable_bbox": [
+            4161,
+            32,
+            4169,
+            43
+          ]
+        },
+        {
+          "id": "number_9",
+          "source_box": [
+            4760,
+            25,
+            4775,
+            50
+          ],
+          "readable_bbox": [
+            4764,
+            32,
+            4772,
+            43
+          ]
+        }
+      ],
+      "number_gap_mm": 1.4,
+      "placements": [
+        {
+          "arrow_center_mm": 321.45157661261266,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 350.11373877477484,
+          "number": 7
+        },
+        {
+          "arrow_center_mm": 381.9684685045046,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 413.52364868468464,
+          "number": 8
+        },
+        {
+          "arrow_center_mm": 442.1858108468469,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 474.04054057657663,
+          "number": 9
+        }
+      ],
+      "measurement": {
+        "gap_uncertainty_mm": 0.3,
+        "phase_note": "Preserve original authored mean arrow phase, while fitting the complete repeated motif.",
+        "source_pixels_per_mm_for_bottom_model": 10.571428571428571,
+        "source_to_final_mm_affine": {
+          "scale": 0.0945945945945946,
+          "offset": 314.63288291891894
+        },
+        "fit_residual_mm": [
+          -0.05518018018024829,
+          -0.007882882883004764,
+          0.0630630630629627,
+          0.05518018018015151,
+          0.00788288288278968,
+          -0.06306306306313476
+        ],
+        "fit_rms_mm": 0.04859335362700973,
+        "equal_pitch_rms_mm": 0.8152898059819017,
+        "measurement_uncertainty_mm": 0.3,
+        "absolute_metric_scale_uncertainty_percent": 3
+      }
+    },
+    {
+      "name": "e100",
+      "stock": "kodak_ektachrome_100",
+      "base_path": "v2/e100-rails.png",
+      "base_sha256": "221b4b71c6e58730e5d5f0bab78ded240b9ff9c44ab7b6e3027327683e431329",
+      "base_version": "mf120-v2-e100-221b4b71c6e5",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        319.6882909667428,
+        500.3117090332572
+      ],
+      "mode": "recompose",
+      "source_urls": [
+        "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+      ],
+      "model": {
+        "type": "three_arrow_cycle",
+        "first_anchor_mm": 331.5930528715047,
+        "cycle_mm": 96.63134947922458,
+        "offsets_mm": [
+          0.0,
+          30.1194686279478,
+          63.881291601600836
+        ],
+        "cycle_steps_mm": [
+          30.1194686279478,
+          33.76182297365303,
+          32.75005787762375
+        ]
+      },
+      "confidence": "high for relative three-step pattern, approximate metric scale",
+      "limitations": [
+        "Finite photographed segment only; no extrapolation to unseen marks or entire roll.",
+        "Nominal aperture-based metric scale is approximate, not factory metrology.",
+        "Font, color and vertical alignment preserve prior authored illustration; source-photo pixels are not used."
+      ],
+      "glyphs": [
+        {
+          "id": "arrow",
+          "source_box": [
+            3607,
+            25,
+            3632,
+            50
+          ],
+          "readable_bbox": [
+            3610,
+            33,
+            3628,
+            42
+          ]
+        },
+        {
+          "id": "number_7",
+          "source_box": [
+            3642,
+            25,
+            3658,
+            50
+          ],
+          "readable_bbox": [
+            3646,
+            31,
+            3655,
+            43
+          ]
+        },
+        {
+          "id": "number_8",
+          "source_box": [
+            4303,
+            25,
+            4319,
+            50
+          ],
+          "readable_bbox": [
+            4307,
+            32,
+            4316,
+            43
+          ]
+        },
+        {
+          "id": "number_9",
+          "source_box": [
+            4928,
+            25,
+            4944,
+            50
+          ],
+          "readable_bbox": [
+            4932,
+            32,
+            4941,
+            43
+          ]
+        }
+      ],
+      "number_gap_mm": 1.4,
+      "placements": [
+        {
+          "arrow_center_mm": 331.5930528715047,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 361.7125214994525,
+          "number": 7
+        },
+        {
+          "arrow_center_mm": 395.47434447310553,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 428.2244023507293,
+          "number": 8
+        },
+        {
+          "arrow_center_mm": 458.34387097867705,
+          "number": null
+        },
+        {
+          "arrow_center_mm": 492.1056939523301,
+          "number": 9
+        }
+      ],
+      "measurement": {
+        "gap_uncertainty_mm": 0.2,
+        "phase_note": "Preserve existing first-arrow phase exactly. Use one affine source scale over finite safe span, not former piecewise aperture warp; later transcription drift is intentionally removed.",
+        "source_pixels_per_mm_for_bottom_model": 5.353680106108405,
+        "source_to_final_mm_affine": {
+          "scale": 0.1867874023438619,
+          "offset": 311.3110541003337
+        },
+        "fit_residual_mm": [
+          0.07782808430990087,
+          0.03113123372386373,
+          -0.10895931803402208,
+          -0.07782808431002032,
+          -0.03113123372411855,
+          0.10895931803377787
+        ],
+        "fit_rms_mm": 0.07936938412038708,
+        "equal_pitch_rms_mm": 0.8836163881693165,
+        "measurement_uncertainty_mm": 0.2,
+        "absolute_metric_scale_uncertainty_percent": 3
+      }
+    },
+    {
+      "name": "provia100f",
+      "stock": "fujifilm_provia_100f",
+      "base_path": "v2/provia100f-rails.png",
+      "base_sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91",
+      "base_version": "mf120-v2-provia100f-a897d5f2ea77",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "mode": "preserve",
+      "source_urls": [
+        "https://asset.fujifilm.com/www/us/files/2025-06/76ccbf624f1b5db023c093c94917708f/films_provia-100f_datasheet_01.pdf#page=4"
+      ],
+      "model": {
+        "type": "frozen_approved_current",
+        "reason": "Already regular arrow anchors"
+      },
+      "confidence": "Exact preservation of approved authored pixels; physical full-roll spacing is not verified.",
+      "limitations": [
+        "No new physical cadence claim.",
+        "Same-stock photo or manufacturer diagram confirms semantic family, not complete measured174mm factory coordinates."
+      ]
+    },
+    {
+      "name": "velvia100",
+      "stock": "fujifilm_velvia_100",
+      "base_path": "v2/velvia100-rails.png",
+      "base_sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd",
+      "base_version": "mf120-v2-velvia100-9836225fb731",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "mode": "preserve",
+      "source_urls": [
+        "https://asset.fujifilm.com/master/emea/files/2020-10/2f3c7f90a0b0c6e605e84f98b7d489c2/films_velvia-100_datasheet_01.pdf#page=6"
+      ],
+      "model": {
+        "type": "frozen_approved_current",
+        "reason": "Current lower rail blank; no verified new marks to add"
+      },
+      "confidence": "Exact preservation of approved authored pixels; physical full-roll spacing is not verified.",
+      "limitations": [
+        "No new physical cadence claim.",
+        "Same-stock photo or manufacturer diagram confirms semantic family, not complete measured174mm factory coordinates."
+      ]
+    },
+    {
+      "name": "pro400h",
+      "stock": "fujifilm_pro_400h",
+      "base_path": "v2/pro400h-rails.png",
+      "base_sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56",
+      "base_version": "mf120-v2-pro400h-2d036c5cba8c",
+      "pixels_per_mm": 10,
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "mode": "preserve",
+      "source_urls": [
+        "https://www.fujifilm.com.hk/products/professional_films/pdf/pro_400h_datasheet.pdf#page=6"
+      ],
+      "model": {
+        "type": "frozen_approved_current",
+        "reason": "Current lower rail blank; no verified new marks to add"
+      },
+      "confidence": "Exact preservation of approved authored pixels; physical full-roll spacing is not verified.",
+      "limitations": [
+        "No new physical cadence claim.",
+        "Same-stock photo or manufacturer diagram confirms semantic family, not complete measured174mm factory coordinates."
+      ]
+    }
+  ],
+  "method": "Clear and recompose complete lower rail from canonical authored arrow and number glyph bank, with finite per-stock coordinate models. No per-mark translation patches and no reference-photo pixels.",
+  "rounding": "Each absolute atlas position quantized independently using floor(x+0.5); no incremental rounding."
+}

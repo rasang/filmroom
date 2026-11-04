@@ -1,0 +1,175 @@
+{
+  "source": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+  "native_rotated_crop": [
+    560,
+    82,
+    907,
+    1117
+  ],
+  "rotation_clockwise_degrees": 90,
+  "gate_nominal_mm": 56,
+  "gate_native_intervals": [
+    [
+      32,
+      326
+    ],
+    [
+      359,
+      658
+    ],
+    [
+      697,
+      1003
+    ]
+  ],
+  "calibration_knots": [
+    [
+      32,
+      0
+    ],
+    [
+      326,
+      56
+    ],
+    [
+      359,
+      62.232715008431704
+    ],
+    [
+      658,
+      118.2327150084317
+    ],
+    [
+      697,
+      125.4525497191755
+    ],
+    [
+      1003,
+      181.45254971917552
+    ]
+  ],
+  "model": "piecewise local gate-scale; gap scale interpolated from neighboring gates; approximate photo calibration, not factory-certified",
+  "usable_native_interval": [
+    45,
+    1012
+  ],
+  "usable_calibrated_mm": 180.62341806651446,
+  "recommended174mm_native_interval": [
+    70,
+    1001.8281594426686
+  ],
+  "marks": [
+    {
+      "text": "48",
+      "x_native": 108.5,
+      "y_native": 12,
+      "rail": "brand",
+      "x_mm_from_crop": 7.333
+    },
+    {
+      "text": "KODAK E100",
+      "x_native": 235,
+      "y_native": 12,
+      "rail": "brand",
+      "x_mm_from_crop": 31.429
+    },
+    {
+      "text": "49",
+      "x_native": 381,
+      "y_native": 12,
+      "rail": "brand",
+      "x_mm_from_crop": 59.115
+    },
+    {
+      "text": "KODAK E100",
+      "x_native": 505,
+      "y_native": 12,
+      "rail": "brand",
+      "x_mm_from_crop": 82.339
+    },
+    {
+      "text": "50",
+      "x_native": 650,
+      "y_native": 10,
+      "rail": "brand",
+      "x_mm_from_crop": 109.496
+    },
+    {
+      "text": "KODAK E100",
+      "x_native": 779,
+      "y_native": 10,
+      "rail": "brand",
+      "x_mm_from_crop": 133.221
+    },
+    {
+      "text": "51",
+      "x_native": 921,
+      "y_native": 10,
+      "rail": "brand",
+      "x_mm_from_crop": 159.208
+    },
+    {
+      "text": "arrow",
+      "x_native": 107.5,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 7.143
+    },
+    {
+      "text": "arrow",
+      "x_native": 267,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 37.524
+    },
+    {
+      "text": "7",
+      "x_native": 283,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 40.571
+    },
+    {
+      "text": "arrow",
+      "x_native": 446,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 71.289
+    },
+    {
+      "text": "arrow",
+      "x_native": 620,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 103.878
+    },
+    {
+      "text": "8",
+      "x_native": 635,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 106.687
+    },
+    {
+      "text": "arrow",
+      "x_native": 779,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 133.221
+    },
+    {
+      "text": "arrow",
+      "x_native": 959.5,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 166.254
+    },
+    {
+      "text": "9",
+      "x_native": 975.5,
+      "y_native": 330,
+      "rail": "opposite",
+      "x_mm_from_crop": 169.182
+    }
+  ]
+}

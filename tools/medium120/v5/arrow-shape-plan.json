@@ -1,0 +1,555 @@
+{
+  "schema": 1,
+  "operation": "Only y coordinates within authored arrow boxes are resampled. No x translation, glyph/number placement or color grading.",
+  "stocks": [
+    {
+      "name": "portra160",
+      "stock": "kodak_portra_160",
+      "version": "mf120-v1-portra160-c9c42f121b4d",
+      "sha256": "c9c42f121b4d8441f78844e85cf5b97ee76fce0b41b370a9d80328a579ebadfb",
+      "width": 4920,
+      "height": 30,
+      "pixelsPerMm": 6,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "portra160-rails.png",
+      "mode": "vertical_arrow_only",
+      "background_rgba": [
+        9,
+        9,
+        9,
+        255
+      ],
+      "vertical_scale": 0.5,
+      "resampling_phase_px": 0.25,
+      "arrow_boxes": [
+        [
+          179,
+          15,
+          189,
+          30
+        ],
+        [
+          347,
+          15,
+          357,
+          30
+        ],
+        [
+          515,
+          15,
+          525,
+          30
+        ],
+        [
+          683,
+          15,
+          693,
+          30
+        ],
+        [
+          851,
+          15,
+          861,
+          30
+        ],
+        [
+          1019,
+          15,
+          1029,
+          30
+        ],
+        [
+          1187,
+          15,
+          1197,
+          30
+        ],
+        [
+          1355,
+          15,
+          1365,
+          30
+        ],
+        [
+          1523,
+          15,
+          1533,
+          30
+        ],
+        [
+          1691,
+          15,
+          1701,
+          30
+        ],
+        [
+          1859,
+          15,
+          1869,
+          30
+        ],
+        [
+          2027,
+          15,
+          2037,
+          30
+        ],
+        [
+          2195,
+          15,
+          2205,
+          30
+        ],
+        [
+          2363,
+          15,
+          2373,
+          30
+        ],
+        [
+          2531,
+          15,
+          2541,
+          30
+        ],
+        [
+          2699,
+          15,
+          2709,
+          30
+        ],
+        [
+          2867,
+          15,
+          2877,
+          30
+        ],
+        [
+          3035,
+          15,
+          3045,
+          30
+        ],
+        [
+          3203,
+          15,
+          3213,
+          30
+        ],
+        [
+          3371,
+          15,
+          3381,
+          30
+        ],
+        [
+          3539,
+          15,
+          3549,
+          30
+        ],
+        [
+          3707,
+          15,
+          3717,
+          30
+        ],
+        [
+          3875,
+          15,
+          3885,
+          30
+        ]
+      ],
+      "source_url": "https://www.photrio.com/forum/attachments/img_e4614-jpg.283384/",
+      "source_ratio_h_over_w_median": 0.522,
+      "limitation": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "portra400",
+      "stock": "kodak_portra_400",
+      "version": "mf120-v4-portra400-e4cbfdada2fd",
+      "sha256": "e4cbfdada2fd01c9e949ce4bd38c5176fefe0aa0d65e1ab7aa5cfe9e17b901c1",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        285.211538,
+        500.865385
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v4/portra400-rails.png",
+      "mode": "vertical_arrow_only",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "vertical_scale": 0.92,
+      "resampling_phase_px": 0,
+      "arrow_boxes": [
+        [
+          2857,
+          25,
+          2881,
+          50
+        ],
+        [
+          3151,
+          25,
+          3175,
+          50
+        ],
+        [
+          3480,
+          25,
+          3504,
+          50
+        ],
+        [
+          3806,
+          25,
+          3830,
+          50
+        ],
+        [
+          4100,
+          25,
+          4124,
+          50
+        ],
+        [
+          4429,
+          25,
+          4453,
+          50
+        ],
+        [
+          4754,
+          25,
+          4778,
+          50
+        ]
+      ],
+      "source_url": "https://www.light11.de/download/Flos_Stories_Ausgabe_3.pdf#page=38",
+      "source_ratio_h_over_w_median": 0.538,
+      "limitation": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "portra800",
+      "stock": "kodak_portra_800",
+      "version": "mf120-v4-portra800-d54e235ec886",
+      "sha256": "d54e235ec886634867e407def76d135cd37e0c4b6a21e68aaf98af9046ccc7fa",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v4/portra800-rails.png",
+      "mode": "vertical_arrow_only",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ],
+      "vertical_scale": 0.56,
+      "resampling_phase_px": 0,
+      "arrow_boxes": [
+        [
+          79,
+          25,
+          94,
+          50
+        ],
+        [
+          392,
+          25,
+          407,
+          50
+        ],
+        [
+          704,
+          25,
+          719,
+          50
+        ],
+        [
+          1017,
+          25,
+          1032,
+          50
+        ],
+        [
+          1329,
+          25,
+          1344,
+          50
+        ],
+        [
+          1642,
+          25,
+          1657,
+          50
+        ],
+        [
+          1954,
+          25,
+          1969,
+          50
+        ],
+        [
+          2267,
+          25,
+          2282,
+          50
+        ],
+        [
+          2579,
+          25,
+          2594,
+          50
+        ],
+        [
+          2892,
+          25,
+          2907,
+          50
+        ],
+        [
+          3204,
+          25,
+          3219,
+          50
+        ],
+        [
+          3517,
+          25,
+          3532,
+          50
+        ],
+        [
+          3829,
+          25,
+          3844,
+          50
+        ],
+        [
+          4142,
+          25,
+          4157,
+          50
+        ],
+        [
+          4454,
+          25,
+          4469,
+          50
+        ],
+        [
+          4767,
+          25,
+          4782,
+          50
+        ],
+        [
+          5079,
+          25,
+          5094,
+          50
+        ],
+        [
+          5392,
+          25,
+          5407,
+          50
+        ],
+        [
+          5704,
+          25,
+          5719,
+          50
+        ],
+        [
+          6017,
+          25,
+          6032,
+          50
+        ],
+        [
+          6329,
+          25,
+          6344,
+          50
+        ],
+        [
+          6642,
+          25,
+          6657,
+          50
+        ],
+        [
+          6954,
+          25,
+          6969,
+          50
+        ],
+        [
+          7267,
+          25,
+          7282,
+          50
+        ],
+        [
+          7579,
+          25,
+          7594,
+          50
+        ]
+      ],
+      "source_url": "https://www.monsterchildren.com/articles/andrew-peters-20-year-issue",
+      "source_ratio_h_over_w_median": 0.6,
+      "limitation": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "gold200",
+      "stock": "kodak_gold_200",
+      "version": "mf120-v4-gold200-6fad2b869ee0",
+      "sha256": "6fad2b869ee046c84d0c573af2803bb9e648aa1ac02d355865e4260e4036b166",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        292.6666666666667,
+        527.3333333333334
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v4/gold200-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    },
+    {
+      "name": "ektar100",
+      "stock": "kodak_ektar_100",
+      "version": "mf120-v4-ektar100-91d648b6bb15",
+      "sha256": "91d648b6bb153c208c67f645e779b0f7cf78f10ce906f12eed3fefaa72043f58",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        319.85135135135135,
+        500.14864864864865
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v4/ektar100-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    },
+    {
+      "name": "e100",
+      "stock": "kodak_ektachrome_100",
+      "version": "mf120-v4-e100-12d17d86a868",
+      "sha256": "12d17d86a86873ba8b71534402043ee2eba896d282389ca82816fd4265a5b4ae",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        319.6882909667428,
+        500.3117090332572
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v4/e100-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    },
+    {
+      "name": "provia100f",
+      "stock": "fujifilm_provia_100f",
+      "version": "mf120-v2-provia100f-a897d5f2ea77",
+      "sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v2/provia100f-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    },
+    {
+      "name": "velvia100",
+      "stock": "fujifilm_velvia_100",
+      "version": "mf120-v2-velvia100-9836225fb731",
+      "sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v2/velvia100-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    },
+    {
+      "name": "pro400h",
+      "stock": "fujifilm_pro_400h",
+      "version": "mf120-v2-pro400h-2d036c5cba8c",
+      "sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "base_path": "v2/pro400h-rails.png",
+      "mode": "preserve",
+      "background_rgba": [
+        8,
+        8,
+        8,
+        255
+      ]
+    }
+  ]
+}

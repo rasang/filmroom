@@ -41,11 +41,43 @@ class LandscapeParametersHostTest {
     @Suppress("UNCHECKED_CAST") private fun fixture(a:MainActivity,render:Boolean=false){
         val vm=vm(a);await{(EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}.get(vm) as? Job)?.isCompleted==true}
         vm.localDetailEnabled=false;vm.borderMemorySnapshot={NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
+        dev.filmroom.border.BorderCatalog.initialize(a.assets){vm.borderMemorySnapshot()}
         vm.renderPreview={source,_,_,_->source.copy(Bitmap.Config.ARGB_8888,false)};vm.detailPreviewEdge={96}
         val source=Bitmap.createBitmap(96,72,Bitmap.Config.ARGB_8888).apply{eraseColor(0xff527682.toInt())}
         (EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(vm) as MutableStateFlow<EditorUiState>).value=EditorUiState(photo=PhotoSource(File(a.cacheDir,"landscape-controls-fixture"),"fixture.jpg","image/jpeg",640,480,0),original=source,rendered=if(render)null else source,parameters=EditorState())
         if(render){vm.parameters(EditorState());await{vm.state.value.canExport}}
         layout(a)
+    }
+    @Test(timeout=60000) fun compositionFormatOptionsFollowStockCapabilityAndOnlyEditInsideDraft(){
+        Robolectric.buildActivity(MainActivity::class.java).setup().use{c->
+            val a=c.get();fixture(a,true);val model=vm(a)
+            all(section(a,"filmStock")).single{it.tag=="film-border-switch"}.performClick()
+            await{model.state.value.canExport};layout(a)
+            fun formats()=all(section(a,"composition")).filter{(it.tag as? String)?.startsWith("composition-format:")==true}
+            assertEquals(6,formats().size);assertTrue(formats().all{!it.isEnabled})
+            assertFalse(all(section(a,"filmStock")).any{(it.tag as? String)?.startsWith("composition-format:")==true})
+            val before=model.state.value.parameters
+            formats().last().performClick();assertEquals(before,model.state.value.parameters)
+            all(section(a,"composition")).single{it.tag=="crop-adjust"}.performClick()
+            await{model.state.value.compositionEditing};layout(a)
+            assertTrue(formats().all{it.isEnabled})
+            formats().single{it.tag=="composition-format:MF617"}.performClick()
+            await{!model.state.value.updating && model.state.value.parameters.effectiveMediumFormat==dev.filmroom.border.MediumFormat.MF617};layout(a)
+            assertTrue(model.state.value.compositionEditing)
+            all(section(a,"composition")).single{it.tag=="crop-cancel"}.performClick()
+            await{model.state.value.canExport};assertEquals(before,model.state.value.parameters);layout(a)
+            // Same 135 geometry, different capability: the composition section must rebuild.
+            all(section(a,"filmStock")).single{it.tag=="kodak_ultramax_400"}.performClick()
+            try {await{model.state.value.canExport && model.state.value.parameters.filmStock=="kodak_ultramax_400"}}
+            catch(e:AssertionError){throw AssertionError("Stock change failed: stock=${model.state.value.parameters.filmStock}, updating=${model.state.value.updating}, error=${model.state.value.message}, renderedStock=${model.state.value.renderedParameters?.filmStock}",e)}
+            layout(a)
+            assertTrue(formats().isEmpty())
+            assertEquals(2,all(section(a,"composition")).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
+            all(section(a,"filmStock")).single{it.tag==before.filmStock}.performClick()
+            await{model.state.value.canExport && model.state.value.parameters.filmStock==before.filmStock};layout(a)
+            assertEquals(6,formats().size)
+            assertFalse(all(root(a)).any{(it.tag as? String)?.startsWith("medium-format-evidence")==true})
+        }
     }
     @Test(timeout=60000) fun sectionsReplaceOnlyLandscapeToolTabsAndKeepCategoryScrollAndStableViews(){
         Robolectric.buildActivity(MainActivity::class.java).setup().use{c->

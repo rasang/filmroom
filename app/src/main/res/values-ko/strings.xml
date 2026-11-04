@@ -278,8 +278,8 @@
     <string name="text_3b789c2037e2" formatted="false"> · 컬러 인화지</string>
     <string name="text_7b528c395978" formatted="false">135 구도</string>
     <string name="text_e76a25844aa5" formatted="false">구도 다시 잡기</string>
-    <string name="text_61d5477ed69a" formatted="false">가로 135</string>
-    <string name="text_cad49035a99d" formatted="false">세로 135</string>
+    <string name="text_61d5477ed69a" formatted="false">가로</string>
+    <string name="text_cad49035a99d" formatted="false">세로</string>
     <string name="text_4b1db520af46" formatted="false">원본 이미지</string>
     <string name="text_d1047eed5dd5" formatted="false">자유</string>
     <string name="text_36f33adaf094" formatted="false">확인</string>

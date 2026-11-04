@@ -1,0 +1,2150 @@
+{
+  "schema": 1,
+  "generator": "tools/medium120/v5/flatten_portra_arrows.py",
+  "assets": [
+    {
+      "name": "portra160",
+      "stock": "kodak_portra_160",
+      "width": 4920,
+      "height": 30,
+      "pixelsPerMm": 6,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "file": "portra160-rails.png",
+      "sha256": "a970a81fe0dc3449164f0f831a73dc5cb0045d82064f33b0c1b359e68f844c2a",
+      "byteCount": 7231,
+      "version": "mf120-v5-portra160-a970a81fe0dc",
+      "before_version": "mf120-v1-portra160-c9c42f121b4d",
+      "before_sha256": "c9c42f121b4d8441f78844e85cf5b97ee76fce0b41b370a9d80328a579ebadfb",
+      "before_path": "portra160-rails.png",
+      "changed_pixels": 828,
+      "arrow_changes": [
+        {
+          "allowed_box": [
+            179,
+            15,
+            189,
+            30
+          ],
+          "before_visible_bbox": [
+            180,
+            21,
+            187,
+            29
+          ],
+          "after_visible_bbox": [
+            180,
+            23,
+            187,
+            27
+          ],
+          "before_full_bbox": [
+            180,
+            21,
+            188,
+            30
+          ],
+          "after_full_bbox": [
+            180,
+            23,
+            188,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            347,
+            15,
+            357,
+            30
+          ],
+          "before_visible_bbox": [
+            348,
+            21,
+            355,
+            29
+          ],
+          "after_visible_bbox": [
+            348,
+            23,
+            355,
+            27
+          ],
+          "before_full_bbox": [
+            348,
+            21,
+            356,
+            30
+          ],
+          "after_full_bbox": [
+            348,
+            23,
+            356,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            515,
+            15,
+            525,
+            30
+          ],
+          "before_visible_bbox": [
+            516,
+            21,
+            523,
+            29
+          ],
+          "after_visible_bbox": [
+            516,
+            23,
+            523,
+            27
+          ],
+          "before_full_bbox": [
+            516,
+            21,
+            524,
+            30
+          ],
+          "after_full_bbox": [
+            516,
+            23,
+            524,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            683,
+            15,
+            693,
+            30
+          ],
+          "before_visible_bbox": [
+            684,
+            21,
+            691,
+            29
+          ],
+          "after_visible_bbox": [
+            684,
+            23,
+            691,
+            27
+          ],
+          "before_full_bbox": [
+            684,
+            21,
+            692,
+            30
+          ],
+          "after_full_bbox": [
+            684,
+            23,
+            692,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            851,
+            15,
+            861,
+            30
+          ],
+          "before_visible_bbox": [
+            852,
+            21,
+            859,
+            29
+          ],
+          "after_visible_bbox": [
+            852,
+            23,
+            859,
+            27
+          ],
+          "before_full_bbox": [
+            852,
+            21,
+            860,
+            30
+          ],
+          "after_full_bbox": [
+            852,
+            23,
+            860,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1019,
+            15,
+            1029,
+            30
+          ],
+          "before_visible_bbox": [
+            1020,
+            21,
+            1027,
+            29
+          ],
+          "after_visible_bbox": [
+            1020,
+            23,
+            1027,
+            27
+          ],
+          "before_full_bbox": [
+            1020,
+            21,
+            1028,
+            30
+          ],
+          "after_full_bbox": [
+            1020,
+            23,
+            1028,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1187,
+            15,
+            1197,
+            30
+          ],
+          "before_visible_bbox": [
+            1188,
+            21,
+            1195,
+            29
+          ],
+          "after_visible_bbox": [
+            1188,
+            23,
+            1195,
+            27
+          ],
+          "before_full_bbox": [
+            1188,
+            21,
+            1196,
+            30
+          ],
+          "after_full_bbox": [
+            1188,
+            23,
+            1196,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1355,
+            15,
+            1365,
+            30
+          ],
+          "before_visible_bbox": [
+            1356,
+            21,
+            1363,
+            29
+          ],
+          "after_visible_bbox": [
+            1356,
+            23,
+            1363,
+            27
+          ],
+          "before_full_bbox": [
+            1356,
+            21,
+            1364,
+            30
+          ],
+          "after_full_bbox": [
+            1356,
+            23,
+            1364,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1523,
+            15,
+            1533,
+            30
+          ],
+          "before_visible_bbox": [
+            1524,
+            21,
+            1531,
+            29
+          ],
+          "after_visible_bbox": [
+            1524,
+            23,
+            1531,
+            27
+          ],
+          "before_full_bbox": [
+            1524,
+            21,
+            1532,
+            30
+          ],
+          "after_full_bbox": [
+            1524,
+            23,
+            1532,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1691,
+            15,
+            1701,
+            30
+          ],
+          "before_visible_bbox": [
+            1692,
+            21,
+            1699,
+            29
+          ],
+          "after_visible_bbox": [
+            1692,
+            23,
+            1699,
+            27
+          ],
+          "before_full_bbox": [
+            1692,
+            21,
+            1700,
+            30
+          ],
+          "after_full_bbox": [
+            1692,
+            23,
+            1700,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1859,
+            15,
+            1869,
+            30
+          ],
+          "before_visible_bbox": [
+            1860,
+            21,
+            1867,
+            29
+          ],
+          "after_visible_bbox": [
+            1860,
+            23,
+            1867,
+            27
+          ],
+          "before_full_bbox": [
+            1860,
+            21,
+            1868,
+            30
+          ],
+          "after_full_bbox": [
+            1860,
+            23,
+            1868,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2027,
+            15,
+            2037,
+            30
+          ],
+          "before_visible_bbox": [
+            2028,
+            21,
+            2035,
+            29
+          ],
+          "after_visible_bbox": [
+            2028,
+            23,
+            2035,
+            27
+          ],
+          "before_full_bbox": [
+            2028,
+            21,
+            2036,
+            30
+          ],
+          "after_full_bbox": [
+            2028,
+            23,
+            2036,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2195,
+            15,
+            2205,
+            30
+          ],
+          "before_visible_bbox": [
+            2196,
+            21,
+            2203,
+            29
+          ],
+          "after_visible_bbox": [
+            2196,
+            23,
+            2203,
+            27
+          ],
+          "before_full_bbox": [
+            2196,
+            21,
+            2204,
+            30
+          ],
+          "after_full_bbox": [
+            2196,
+            23,
+            2204,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2363,
+            15,
+            2373,
+            30
+          ],
+          "before_visible_bbox": [
+            2364,
+            21,
+            2371,
+            29
+          ],
+          "after_visible_bbox": [
+            2364,
+            23,
+            2371,
+            27
+          ],
+          "before_full_bbox": [
+            2364,
+            21,
+            2372,
+            30
+          ],
+          "after_full_bbox": [
+            2364,
+            23,
+            2372,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2531,
+            15,
+            2541,
+            30
+          ],
+          "before_visible_bbox": [
+            2532,
+            21,
+            2539,
+            29
+          ],
+          "after_visible_bbox": [
+            2532,
+            23,
+            2539,
+            27
+          ],
+          "before_full_bbox": [
+            2532,
+            21,
+            2540,
+            30
+          ],
+          "after_full_bbox": [
+            2532,
+            23,
+            2540,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2699,
+            15,
+            2709,
+            30
+          ],
+          "before_visible_bbox": [
+            2700,
+            21,
+            2707,
+            29
+          ],
+          "after_visible_bbox": [
+            2700,
+            23,
+            2707,
+            27
+          ],
+          "before_full_bbox": [
+            2700,
+            21,
+            2708,
+            30
+          ],
+          "after_full_bbox": [
+            2700,
+            23,
+            2708,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2867,
+            15,
+            2877,
+            30
+          ],
+          "before_visible_bbox": [
+            2868,
+            21,
+            2875,
+            29
+          ],
+          "after_visible_bbox": [
+            2868,
+            23,
+            2875,
+            27
+          ],
+          "before_full_bbox": [
+            2868,
+            21,
+            2876,
+            30
+          ],
+          "after_full_bbox": [
+            2868,
+            23,
+            2876,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3035,
+            15,
+            3045,
+            30
+          ],
+          "before_visible_bbox": [
+            3036,
+            21,
+            3043,
+            29
+          ],
+          "after_visible_bbox": [
+            3036,
+            23,
+            3043,
+            27
+          ],
+          "before_full_bbox": [
+            3036,
+            21,
+            3044,
+            30
+          ],
+          "after_full_bbox": [
+            3036,
+            23,
+            3044,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3203,
+            15,
+            3213,
+            30
+          ],
+          "before_visible_bbox": [
+            3204,
+            21,
+            3211,
+            29
+          ],
+          "after_visible_bbox": [
+            3204,
+            23,
+            3211,
+            27
+          ],
+          "before_full_bbox": [
+            3204,
+            21,
+            3212,
+            30
+          ],
+          "after_full_bbox": [
+            3204,
+            23,
+            3212,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3371,
+            15,
+            3381,
+            30
+          ],
+          "before_visible_bbox": [
+            3372,
+            21,
+            3379,
+            29
+          ],
+          "after_visible_bbox": [
+            3372,
+            23,
+            3379,
+            27
+          ],
+          "before_full_bbox": [
+            3372,
+            21,
+            3380,
+            30
+          ],
+          "after_full_bbox": [
+            3372,
+            23,
+            3380,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3539,
+            15,
+            3549,
+            30
+          ],
+          "before_visible_bbox": [
+            3540,
+            21,
+            3547,
+            29
+          ],
+          "after_visible_bbox": [
+            3540,
+            23,
+            3547,
+            27
+          ],
+          "before_full_bbox": [
+            3540,
+            21,
+            3548,
+            30
+          ],
+          "after_full_bbox": [
+            3540,
+            23,
+            3548,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3707,
+            15,
+            3717,
+            30
+          ],
+          "before_visible_bbox": [
+            3708,
+            21,
+            3715,
+            29
+          ],
+          "after_visible_bbox": [
+            3708,
+            23,
+            3715,
+            27
+          ],
+          "before_full_bbox": [
+            3708,
+            21,
+            3716,
+            30
+          ],
+          "after_full_bbox": [
+            3708,
+            23,
+            3716,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3875,
+            15,
+            3885,
+            30
+          ],
+          "before_visible_bbox": [
+            3876,
+            21,
+            3883,
+            29
+          ],
+          "after_visible_bbox": [
+            3876,
+            23,
+            3883,
+            27
+          ],
+          "before_full_bbox": [
+            3876,
+            21,
+            3884,
+            30
+          ],
+          "after_full_bbox": [
+            3876,
+            23,
+            3884,
+            28
+          ],
+          "vertical_scale": 0.5,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        }
+      ],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": "https://www.photrio.com/forum/attachments/img_e4614-jpg.283384/",
+      "limitations": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "portra400",
+      "stock": "kodak_portra_400",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        285.211538,
+        500.865385
+      ],
+      "defaultCenterMm": 410,
+      "file": "portra400-rails.png",
+      "sha256": "b6bc018bda16c372a8f162553514ab74dd4f435a1bacea7bd67b233627d90618",
+      "byteCount": 28606,
+      "version": "mf120-v5-portra400-b6bc018bda16",
+      "before_version": "mf120-v4-portra400-e4cbfdada2fd",
+      "before_sha256": "e4cbfdada2fd01c9e949ce4bd38c5176fefe0aa0d65e1ab7aa5cfe9e17b901c1",
+      "before_path": "v4/portra400-rails.png",
+      "changed_pixels": 1050,
+      "arrow_changes": [
+        {
+          "allowed_box": [
+            2857,
+            25,
+            2881,
+            50
+          ],
+          "before_visible_bbox": [
+            2861,
+            32,
+            2877,
+            43
+          ],
+          "after_visible_bbox": [
+            2861,
+            33,
+            2877,
+            42
+          ],
+          "before_full_bbox": [
+            2858,
+            30,
+            2880,
+            45
+          ],
+          "after_full_bbox": [
+            2858,
+            30,
+            2880,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3151,
+            25,
+            3175,
+            50
+          ],
+          "before_visible_bbox": [
+            3155,
+            32,
+            3171,
+            43
+          ],
+          "after_visible_bbox": [
+            3155,
+            33,
+            3171,
+            42
+          ],
+          "before_full_bbox": [
+            3152,
+            30,
+            3174,
+            45
+          ],
+          "after_full_bbox": [
+            3152,
+            30,
+            3174,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3480,
+            25,
+            3504,
+            50
+          ],
+          "before_visible_bbox": [
+            3484,
+            32,
+            3500,
+            43
+          ],
+          "after_visible_bbox": [
+            3484,
+            33,
+            3500,
+            42
+          ],
+          "before_full_bbox": [
+            3481,
+            30,
+            3503,
+            45
+          ],
+          "after_full_bbox": [
+            3481,
+            30,
+            3503,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3806,
+            25,
+            3830,
+            50
+          ],
+          "before_visible_bbox": [
+            3810,
+            32,
+            3826,
+            43
+          ],
+          "after_visible_bbox": [
+            3810,
+            33,
+            3826,
+            42
+          ],
+          "before_full_bbox": [
+            3807,
+            30,
+            3829,
+            45
+          ],
+          "after_full_bbox": [
+            3807,
+            30,
+            3829,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4100,
+            25,
+            4124,
+            50
+          ],
+          "before_visible_bbox": [
+            4104,
+            32,
+            4120,
+            43
+          ],
+          "after_visible_bbox": [
+            4104,
+            33,
+            4120,
+            42
+          ],
+          "before_full_bbox": [
+            4101,
+            30,
+            4123,
+            45
+          ],
+          "after_full_bbox": [
+            4101,
+            30,
+            4123,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4429,
+            25,
+            4453,
+            50
+          ],
+          "before_visible_bbox": [
+            4433,
+            32,
+            4449,
+            43
+          ],
+          "after_visible_bbox": [
+            4433,
+            33,
+            4449,
+            42
+          ],
+          "before_full_bbox": [
+            4430,
+            30,
+            4452,
+            45
+          ],
+          "after_full_bbox": [
+            4430,
+            30,
+            4452,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4754,
+            25,
+            4778,
+            50
+          ],
+          "before_visible_bbox": [
+            4758,
+            32,
+            4774,
+            43
+          ],
+          "after_visible_bbox": [
+            4758,
+            33,
+            4774,
+            42
+          ],
+          "before_full_bbox": [
+            4755,
+            30,
+            4777,
+            45
+          ],
+          "after_full_bbox": [
+            4755,
+            30,
+            4777,
+            45
+          ],
+          "vertical_scale": 0.92,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        }
+      ],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": "https://www.light11.de/download/Flos_Stories_Ausgabe_3.pdf#page=38",
+      "limitations": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "portra800",
+      "stock": "kodak_portra_800",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "file": "portra800-rails.png",
+      "sha256": "64b689c66093f1417fa25cefcb35472d4e2ab802d51b0eef420101e8017fb2cd",
+      "byteCount": 13946,
+      "version": "mf120-v5-portra800-64b689c66093",
+      "before_version": "mf120-v4-portra800-d54e235ec886",
+      "before_sha256": "d54e235ec886634867e407def76d135cd37e0c4b6a21e68aaf98af9046ccc7fa",
+      "before_path": "v4/portra800-rails.png",
+      "changed_pixels": 1775,
+      "arrow_changes": [
+        {
+          "allowed_box": [
+            79,
+            25,
+            94,
+            50
+          ],
+          "before_visible_bbox": [
+            80,
+            33,
+            92,
+            46
+          ],
+          "after_visible_bbox": [
+            80,
+            36,
+            92,
+            43
+          ],
+          "before_full_bbox": [
+            80,
+            32,
+            93,
+            47
+          ],
+          "after_full_bbox": [
+            80,
+            35,
+            93,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            392,
+            25,
+            407,
+            50
+          ],
+          "before_visible_bbox": [
+            393,
+            33,
+            405,
+            46
+          ],
+          "after_visible_bbox": [
+            393,
+            36,
+            405,
+            43
+          ],
+          "before_full_bbox": [
+            393,
+            32,
+            406,
+            47
+          ],
+          "after_full_bbox": [
+            393,
+            35,
+            406,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            704,
+            25,
+            719,
+            50
+          ],
+          "before_visible_bbox": [
+            705,
+            33,
+            717,
+            46
+          ],
+          "after_visible_bbox": [
+            705,
+            36,
+            717,
+            43
+          ],
+          "before_full_bbox": [
+            705,
+            32,
+            718,
+            47
+          ],
+          "after_full_bbox": [
+            705,
+            35,
+            718,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1017,
+            25,
+            1032,
+            50
+          ],
+          "before_visible_bbox": [
+            1018,
+            33,
+            1030,
+            46
+          ],
+          "after_visible_bbox": [
+            1018,
+            36,
+            1030,
+            43
+          ],
+          "before_full_bbox": [
+            1018,
+            32,
+            1031,
+            47
+          ],
+          "after_full_bbox": [
+            1018,
+            35,
+            1031,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1329,
+            25,
+            1344,
+            50
+          ],
+          "before_visible_bbox": [
+            1330,
+            33,
+            1342,
+            46
+          ],
+          "after_visible_bbox": [
+            1330,
+            36,
+            1342,
+            43
+          ],
+          "before_full_bbox": [
+            1330,
+            32,
+            1343,
+            47
+          ],
+          "after_full_bbox": [
+            1330,
+            35,
+            1343,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1642,
+            25,
+            1657,
+            50
+          ],
+          "before_visible_bbox": [
+            1643,
+            33,
+            1655,
+            46
+          ],
+          "after_visible_bbox": [
+            1643,
+            36,
+            1655,
+            43
+          ],
+          "before_full_bbox": [
+            1643,
+            32,
+            1656,
+            47
+          ],
+          "after_full_bbox": [
+            1643,
+            35,
+            1656,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            1954,
+            25,
+            1969,
+            50
+          ],
+          "before_visible_bbox": [
+            1955,
+            33,
+            1967,
+            46
+          ],
+          "after_visible_bbox": [
+            1955,
+            36,
+            1967,
+            43
+          ],
+          "before_full_bbox": [
+            1955,
+            32,
+            1968,
+            47
+          ],
+          "after_full_bbox": [
+            1955,
+            35,
+            1968,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2267,
+            25,
+            2282,
+            50
+          ],
+          "before_visible_bbox": [
+            2268,
+            33,
+            2280,
+            46
+          ],
+          "after_visible_bbox": [
+            2268,
+            36,
+            2280,
+            43
+          ],
+          "before_full_bbox": [
+            2268,
+            32,
+            2281,
+            47
+          ],
+          "after_full_bbox": [
+            2268,
+            35,
+            2281,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2579,
+            25,
+            2594,
+            50
+          ],
+          "before_visible_bbox": [
+            2580,
+            33,
+            2592,
+            46
+          ],
+          "after_visible_bbox": [
+            2580,
+            36,
+            2592,
+            43
+          ],
+          "before_full_bbox": [
+            2580,
+            32,
+            2593,
+            47
+          ],
+          "after_full_bbox": [
+            2580,
+            35,
+            2593,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            2892,
+            25,
+            2907,
+            50
+          ],
+          "before_visible_bbox": [
+            2893,
+            33,
+            2905,
+            46
+          ],
+          "after_visible_bbox": [
+            2893,
+            36,
+            2905,
+            43
+          ],
+          "before_full_bbox": [
+            2893,
+            32,
+            2906,
+            47
+          ],
+          "after_full_bbox": [
+            2893,
+            35,
+            2906,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3204,
+            25,
+            3219,
+            50
+          ],
+          "before_visible_bbox": [
+            3205,
+            33,
+            3217,
+            46
+          ],
+          "after_visible_bbox": [
+            3205,
+            36,
+            3217,
+            43
+          ],
+          "before_full_bbox": [
+            3205,
+            32,
+            3218,
+            47
+          ],
+          "after_full_bbox": [
+            3205,
+            35,
+            3218,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3517,
+            25,
+            3532,
+            50
+          ],
+          "before_visible_bbox": [
+            3518,
+            33,
+            3530,
+            46
+          ],
+          "after_visible_bbox": [
+            3518,
+            36,
+            3530,
+            43
+          ],
+          "before_full_bbox": [
+            3518,
+            32,
+            3531,
+            47
+          ],
+          "after_full_bbox": [
+            3518,
+            35,
+            3531,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            3829,
+            25,
+            3844,
+            50
+          ],
+          "before_visible_bbox": [
+            3830,
+            33,
+            3842,
+            46
+          ],
+          "after_visible_bbox": [
+            3830,
+            36,
+            3842,
+            43
+          ],
+          "before_full_bbox": [
+            3830,
+            32,
+            3843,
+            47
+          ],
+          "after_full_bbox": [
+            3830,
+            35,
+            3843,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4142,
+            25,
+            4157,
+            50
+          ],
+          "before_visible_bbox": [
+            4143,
+            33,
+            4155,
+            46
+          ],
+          "after_visible_bbox": [
+            4143,
+            36,
+            4155,
+            43
+          ],
+          "before_full_bbox": [
+            4143,
+            32,
+            4156,
+            47
+          ],
+          "after_full_bbox": [
+            4143,
+            35,
+            4156,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4454,
+            25,
+            4469,
+            50
+          ],
+          "before_visible_bbox": [
+            4455,
+            33,
+            4467,
+            46
+          ],
+          "after_visible_bbox": [
+            4455,
+            36,
+            4467,
+            43
+          ],
+          "before_full_bbox": [
+            4455,
+            32,
+            4468,
+            47
+          ],
+          "after_full_bbox": [
+            4455,
+            35,
+            4468,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            4767,
+            25,
+            4782,
+            50
+          ],
+          "before_visible_bbox": [
+            4768,
+            33,
+            4780,
+            46
+          ],
+          "after_visible_bbox": [
+            4768,
+            36,
+            4780,
+            43
+          ],
+          "before_full_bbox": [
+            4768,
+            32,
+            4781,
+            47
+          ],
+          "after_full_bbox": [
+            4768,
+            35,
+            4781,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            5079,
+            25,
+            5094,
+            50
+          ],
+          "before_visible_bbox": [
+            5080,
+            33,
+            5092,
+            46
+          ],
+          "after_visible_bbox": [
+            5080,
+            36,
+            5092,
+            43
+          ],
+          "before_full_bbox": [
+            5080,
+            32,
+            5093,
+            47
+          ],
+          "after_full_bbox": [
+            5080,
+            35,
+            5093,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            5392,
+            25,
+            5407,
+            50
+          ],
+          "before_visible_bbox": [
+            5393,
+            33,
+            5405,
+            46
+          ],
+          "after_visible_bbox": [
+            5393,
+            36,
+            5405,
+            43
+          ],
+          "before_full_bbox": [
+            5393,
+            32,
+            5406,
+            47
+          ],
+          "after_full_bbox": [
+            5393,
+            35,
+            5406,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            5704,
+            25,
+            5719,
+            50
+          ],
+          "before_visible_bbox": [
+            5705,
+            33,
+            5717,
+            46
+          ],
+          "after_visible_bbox": [
+            5705,
+            36,
+            5717,
+            43
+          ],
+          "before_full_bbox": [
+            5705,
+            32,
+            5718,
+            47
+          ],
+          "after_full_bbox": [
+            5705,
+            35,
+            5718,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            6017,
+            25,
+            6032,
+            50
+          ],
+          "before_visible_bbox": [
+            6018,
+            33,
+            6030,
+            46
+          ],
+          "after_visible_bbox": [
+            6018,
+            36,
+            6030,
+            43
+          ],
+          "before_full_bbox": [
+            6018,
+            32,
+            6031,
+            47
+          ],
+          "after_full_bbox": [
+            6018,
+            35,
+            6031,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            6329,
+            25,
+            6344,
+            50
+          ],
+          "before_visible_bbox": [
+            6330,
+            33,
+            6342,
+            46
+          ],
+          "after_visible_bbox": [
+            6330,
+            36,
+            6342,
+            43
+          ],
+          "before_full_bbox": [
+            6330,
+            32,
+            6343,
+            47
+          ],
+          "after_full_bbox": [
+            6330,
+            35,
+            6343,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            6642,
+            25,
+            6657,
+            50
+          ],
+          "before_visible_bbox": [
+            6643,
+            33,
+            6655,
+            46
+          ],
+          "after_visible_bbox": [
+            6643,
+            36,
+            6655,
+            43
+          ],
+          "before_full_bbox": [
+            6643,
+            32,
+            6656,
+            47
+          ],
+          "after_full_bbox": [
+            6643,
+            35,
+            6656,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            6954,
+            25,
+            6969,
+            50
+          ],
+          "before_visible_bbox": [
+            6955,
+            33,
+            6967,
+            46
+          ],
+          "after_visible_bbox": [
+            6955,
+            36,
+            6967,
+            43
+          ],
+          "before_full_bbox": [
+            6955,
+            32,
+            6968,
+            47
+          ],
+          "after_full_bbox": [
+            6955,
+            35,
+            6968,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            7267,
+            25,
+            7282,
+            50
+          ],
+          "before_visible_bbox": [
+            7268,
+            33,
+            7280,
+            46
+          ],
+          "after_visible_bbox": [
+            7268,
+            36,
+            7280,
+            43
+          ],
+          "before_full_bbox": [
+            7268,
+            32,
+            7281,
+            47
+          ],
+          "after_full_bbox": [
+            7268,
+            35,
+            7281,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        },
+        {
+          "allowed_box": [
+            7579,
+            25,
+            7594,
+            50
+          ],
+          "before_visible_bbox": [
+            7580,
+            33,
+            7592,
+            46
+          ],
+          "after_visible_bbox": [
+            7580,
+            36,
+            7592,
+            43
+          ],
+          "before_full_bbox": [
+            7580,
+            32,
+            7593,
+            47
+          ],
+          "after_full_bbox": [
+            7580,
+            35,
+            7593,
+            44
+          ],
+          "vertical_scale": 0.56,
+          "x_translation_px": 0,
+          "visible_center_y_changed_px": 0
+        }
+      ],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": "https://www.monsterchildren.com/articles/andrew-peters-20-year-issue",
+      "limitations": "Image-relative approximate shape evidence, not manufacturer metrology. Source blur/perspective and raster quantization limit precision; stock-specific conservative vertical compression only."
+    },
+    {
+      "name": "gold200",
+      "stock": "kodak_gold_200",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        292.6666666666667,
+        527.3333333333334
+      ],
+      "defaultCenterMm": 410,
+      "file": "gold200-rails.png",
+      "sha256": "6fad2b869ee046c84d0c573af2803bb9e648aa1ac02d355865e4260e4036b166",
+      "byteCount": 21332,
+      "version": "mf120-v4-gold200-6fad2b869ee0",
+      "before_version": "mf120-v4-gold200-6fad2b869ee0",
+      "before_sha256": "6fad2b869ee046c84d0c573af2803bb9e648aa1ac02d355865e4260e4036b166",
+      "before_path": "v4/gold200-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    },
+    {
+      "name": "ektar100",
+      "stock": "kodak_ektar_100",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        319.85135135135135,
+        500.14864864864865
+      ],
+      "defaultCenterMm": 410,
+      "file": "ektar100-rails.png",
+      "sha256": "91d648b6bb153c208c67f645e779b0f7cf78f10ce906f12eed3fefaa72043f58",
+      "byteCount": 27599,
+      "version": "mf120-v4-ektar100-91d648b6bb15",
+      "before_version": "mf120-v4-ektar100-91d648b6bb15",
+      "before_sha256": "91d648b6bb153c208c67f645e779b0f7cf78f10ce906f12eed3fefaa72043f58",
+      "before_path": "v4/ektar100-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    },
+    {
+      "name": "e100",
+      "stock": "kodak_ektachrome_100",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        319.6882909667428,
+        500.3117090332572
+      ],
+      "defaultCenterMm": 410,
+      "file": "e100-rails.png",
+      "sha256": "12d17d86a86873ba8b71534402043ee2eba896d282389ca82816fd4265a5b4ae",
+      "byteCount": 18200,
+      "version": "mf120-v4-e100-12d17d86a868",
+      "before_version": "mf120-v4-e100-12d17d86a868",
+      "before_sha256": "12d17d86a86873ba8b71534402043ee2eba896d282389ca82816fd4265a5b4ae",
+      "before_path": "v4/e100-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    },
+    {
+      "name": "provia100f",
+      "stock": "fujifilm_provia_100f",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "file": "provia100f-rails.png",
+      "sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91",
+      "byteCount": 9187,
+      "version": "mf120-v2-provia100f-a897d5f2ea77",
+      "before_version": "mf120-v2-provia100f-a897d5f2ea77",
+      "before_sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91",
+      "before_path": "v2/provia100f-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    },
+    {
+      "name": "velvia100",
+      "stock": "fujifilm_velvia_100",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "file": "velvia100-rails.png",
+      "sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd",
+      "byteCount": 7263,
+      "version": "mf120-v2-velvia100-9836225fb731",
+      "before_version": "mf120-v2-velvia100-9836225fb731",
+      "before_sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd",
+      "before_path": "v2/velvia100-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    },
+    {
+      "name": "pro400h",
+      "stock": "fujifilm_pro_400h",
+      "width": 8200,
+      "height": 50,
+      "pixelsPerMm": 10,
+      "coverage_mm": [
+        0.0,
+        820.0
+      ],
+      "defaultCenterMm": 410,
+      "file": "pro400h-rails.png",
+      "sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56",
+      "byteCount": 7593,
+      "version": "mf120-v2-pro400h-2d036c5cba8c",
+      "before_version": "mf120-v2-pro400h-2d036c5cba8c",
+      "before_sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56",
+      "before_path": "v2/pro400h-rails.png",
+      "changed_pixels": 0,
+      "arrow_changes": [],
+      "unchanged_outside_arrow_boxes": true,
+      "source_url": null,
+      "limitations": null
+    }
+  ]
+}

@@ -278,8 +278,8 @@
     <string name="text_3b789c2037e2" formatted="false"> · カラー印画紙</string>
     <string name="text_7b528c395978" formatted="false">135判の構図</string>
     <string name="text_e76a25844aa5" formatted="false">構図を変更</string>
-    <string name="text_61d5477ed69a" formatted="false">135判 横</string>
-    <string name="text_cad49035a99d" formatted="false">135判 縦</string>
+    <string name="text_61d5477ed69a" formatted="false">横</string>
+    <string name="text_cad49035a99d" formatted="false">縦</string>
     <string name="text_4b1db520af46" formatted="false">元の画像</string>
     <string name="text_d1047eed5dd5" formatted="false">自由</string>
     <string name="text_36f33adaf094" formatted="false">確定</string>

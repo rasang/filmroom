@@ -1,14 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">フレーム判型</string>
-    <string name="medium_format_evidence">120 参考情報</string>
-    <string name="medium_format_evidence_body">120 の縁は資料を基にした再構成で、実物のスキャンではありません。5つの公称判型で銘柄ごとに同じ連続した縁を使います。字体、間隔、位置、色は未校正です。一部の銘柄は番号の確認が部分的で、未確認の印字は補いません。Portra 800 は確認済みの 800-2、Pro 400H は過去の製品です。穴や光漏れは追加しません。出力の切り抜きと縁だけを変更し、粒状感や光学的なフィルム幅は変更しません。</string>
-    <string name="medium_format_reconstruction">資料に基づく再構成</string>
-    <string name="medium_evidence_portra160">41–55 と 1–12 を確認。56 は未確認で、間隔と配置は模式的です。</string>
-    <string name="medium_evidence_portra400">番号は一部のみ確認済みで、全巻は未確認です。間隔と配置は模式的です。</string>
-    <string name="medium_evidence_portra800">確認済み 800-2 の番号例で、全製造ロットを代表しません。間隔と配置は模式的です。</string>
-    <string name="medium_evidence_gold">52、反対側の10と矢印のみ確認済み。連続した全巻と正確な配置は未確認です。</string>
-    <string name="medium_evidence_ektar">49–51 と 7/8 の画像が同じ巻かは未確認です。組み合わせと配置は模式的です。</string>
-    <string name="medium_evidence_e100">銘柄表示と8・矢印の一部のみ確認済み。全巻、間隔と配置は未確認です。</string>
-    <string name="medium_evidence_fuji">メーカーの120模式図に基づきます。全巻の実物と正確な間隔・配置は未確認で、製造コードは補いません。</string>
 </resources>

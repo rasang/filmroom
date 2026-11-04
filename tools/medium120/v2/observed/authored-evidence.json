@@ -1,0 +1,503 @@
+{
+  "generator": "tools/medium120/v2/observed/generate.py",
+  "font_sha256": {
+    "DejaVuSans.ttf": "57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e",
+    "DejaVuSansCondensed-Bold.ttf": "21f02ebcea75529d3ed9d26e089cd1b9c59a4b784119ba3a96e9bc83cf755ec7"
+  },
+  "physical_calibration": false,
+  "assets": [
+    {
+      "stock": "kodak_portra_400",
+      "path": "medium120/v2/portra400-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 29958,
+      "sha256": "a096b757d5185c58df1e90b374c7d9afa3e75c68059789004623341af287b1b6",
+      "version": "mf120-v2-portra400-a096b757d518",
+      "defaultCenterMm": 410.0,
+      "legacy_sha256": "320ec685f5e9d88edf48651b723459c83ab59590a0c9d43021b23aa449326b3c",
+      "semantic_scope": "full_observed_segment",
+      "source_url": "https://www.light11.de/download/Flos_Stories_Ausgabe_3.pdf#page=38",
+      "corroborating_source": "https://note.com/sykmelo/n/na4b58d3349a9",
+      "reference_pixels_per_mm_estimate": 7.428571428571429,
+      "reference_center_px": 950,
+      "calibration": "416px photographed cross aperture mapped to nominal 56mm; no ruler measurement",
+      "coverageStartMm": 285.211538,
+      "coverageEndMm": 500.865385,
+      "semantic_coverage": "One continuous three-frame strip: upper 48–52; lower 7–9 and interleaved independent solid right triangles.",
+      "limitations": [
+        "Typography, pitch, phase and display RGB remain approximations.",
+        "No 56 inferred; no third-party photograph pixels shipped.",
+        "Unknown portions outside coverage are not available for new crops."
+      ],
+      "marks": [
+        {
+          "kind": "number",
+          "rail": 0,
+          "text": "48",
+          "source_center_px": 34,
+          "x_mm": 285.45230769230767,
+          "width_mm": 2.48,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "number",
+          "rail": 0,
+          "text": "49",
+          "source_center_px": 412,
+          "x_mm": 336.3369230769231,
+          "width_mm": 2.48,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "number",
+          "rail": 0,
+          "text": "50",
+          "source_center_px": 781,
+          "x_mm": 386.01,
+          "width_mm": 2.48,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "number",
+          "rail": 0,
+          "text": "51",
+          "source_center_px": 1152,
+          "x_mm": 435.95230769230767,
+          "width_mm": 2.48,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "number",
+          "rail": 0,
+          "text": "52",
+          "source_center_px": 1520,
+          "x_mm": 485.4907692307692,
+          "width_mm": 2.48,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 109,
+          "x_mm": 296.78846153846155,
+          "width_mm": 18.307692307692307,
+          "height_mm": 1.08
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 485,
+          "x_mm": 347.40384615384613,
+          "width_mm": 18.307692307692307,
+          "height_mm": 1.08
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 854,
+          "x_mm": 397.0769230769231,
+          "width_mm": 18.307692307692307,
+          "height_mm": 1.08
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "KODAK PORTRA 400",
+          "source_start_px": 1221,
+          "x_mm": 446.4807692307692,
+          "width_mm": 18.307692307692307,
+          "height_mm": 1.08
+        },
+        {
+          "kind": "partial_stock_text",
+          "rail": 0,
+          "text": "KODAK",
+          "source_start_px": 1594,
+          "source_clip_end_px": 1625,
+          "x_mm": 496.6923076923077,
+          "width_mm": 4.173076923076923,
+          "height_mm": 1.08,
+          "clipped": true
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 34,
+          "x_mm": 285.84230769230766,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 254,
+          "x_mm": 315.4576923076923,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "number",
+          "rail": 1,
+          "text": "7",
+          "source_center_px": 273,
+          "x_mm": 318.22538461538466,
+          "width_mm": 1.28,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 500,
+          "x_mm": 348.5730769230769,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 740,
+          "x_mm": 380.8807692307692,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "number",
+          "rail": 1,
+          "text": "8",
+          "source_center_px": 760,
+          "x_mm": 383.7830769230769,
+          "width_mm": 1.28,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 959,
+          "x_mm": 410.36153846153843,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 1201,
+          "x_mm": 442.9384615384615,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        },
+        {
+          "kind": "number",
+          "rail": 1,
+          "text": "9",
+          "source_center_px": 1220,
+          "x_mm": 445.7061538461539,
+          "width_mm": 1.28,
+          "height_mm": 1.4
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_center_px": 1445,
+          "x_mm": 475.78461538461534,
+          "width_mm": 1.7,
+          "height_mm": 1.1
+        }
+      ]
+    },
+    {
+      "stock": "fujifilm_provia_100f",
+      "path": "medium120/v2/provia100f-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 9187,
+      "sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91",
+      "version": "mf120-v2-provia100f-a897d5f2ea77",
+      "defaultCenterMm": 410.0,
+      "legacy_sha256": "b42a9f00398587ddab5d0ce23145302bcf8989e40a001ba29c1cd310e40b3339",
+      "semantic_scope": "delta_from_legacy",
+      "source_url": "https://asset.fujifilm.com/www/us/files/2025-06/76ccbf624f1b5db023c093c94917708f/films_provia-100f_datasheet_01.pdf#page=4",
+      "coverageStartMm": 0,
+      "coverageEndMm": 820,
+      "semantic_coverage": "Official 120 diagram: two printed edges; numbered 1–19, outlined right arrow with rectangular shaft.",
+      "limitations": [
+        "Only arrow geometry corrected; existing illustrative spacing and color retained.",
+        "Coverage is authored geometry, not a physically measured full roll.",
+        "Unknown production codes remain omitted."
+      ],
+      "marks": [
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 1,
+          "x_mm": 21.7,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 2,
+          "x_mm": 63.4,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 3,
+          "x_mm": 105.1,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 4,
+          "x_mm": 146.8,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 5,
+          "x_mm": 188.5,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 6,
+          "x_mm": 230.2,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 7,
+          "x_mm": 271.9,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 8,
+          "x_mm": 313.6,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 9,
+          "x_mm": 355.3,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 10,
+          "x_mm": 397.0,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 11,
+          "x_mm": 438.7,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 12,
+          "x_mm": 480.4,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 13,
+          "x_mm": 522.1,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 14,
+          "x_mm": 563.8,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 15,
+          "x_mm": 605.5,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 16,
+          "x_mm": 647.2,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 17,
+          "x_mm": 688.9,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 18,
+          "x_mm": 730.6,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "outlined_right_arrow_with_shaft",
+          "rail": 1,
+          "number": 19,
+          "x_mm": 772.3,
+          "width_mm": 1.8,
+          "height_mm": 1.5
+        }
+      ]
+    },
+    {
+      "stock": "fujifilm_velvia_100",
+      "path": "medium120/v2/velvia100-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 7263,
+      "sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd",
+      "version": "mf120-v2-velvia100-9836225fb731",
+      "defaultCenterMm": 410.0,
+      "legacy_sha256": "cac0f6246306d65351d360a2b725078eef9d235710e1827460aea627ed40bd13",
+      "semantic_scope": "delta_from_legacy",
+      "source_url": "https://asset.fujifilm.com/master/emea/files/2020-10/2f3c7f90a0b0c6e605e84f98b7d489c2/films_velvia-100_datasheet_01.pdf#page=6",
+      "coverageStartMm": 0,
+      "coverageEndMm": 820,
+      "semantic_coverage": "Additional explicitly depicted FUJI before 4; existing FUJI before2 preserved; terminal19. dot restored.",
+      "limitations": [
+        "No every-even-number FUJI cadence inferred.",
+        "Remaining unknown manufacturing marks/phase are not claimed physically blank.",
+        "Coverage remains authored geometry, not a physically measured full roll."
+      ],
+      "marks": [
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "FUJI",
+          "before_number": 4,
+          "x_mm": 134.1,
+          "width_mm": 4.1,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "terminal_index_dot",
+          "rail": 0,
+          "after_number": 19,
+          "x_mm": 758.7,
+          "y_mm": 1.4,
+          "width_mm": 0.5,
+          "height_mm": 0.5
+        }
+      ]
+    },
+    {
+      "stock": "fujifilm_pro_400h",
+      "path": "medium120/v2/pro400h-rails.png",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 7593,
+      "sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56",
+      "version": "mf120-v2-pro400h-2d036c5cba8c",
+      "defaultCenterMm": 410.0,
+      "legacy_sha256": "111c05d1353e9ee9aaa2fc5f8c06871038c12b2eb19efc6d282d193985831191",
+      "semantic_scope": "delta_from_legacy",
+      "source_url": "https://www.fujifilm.com.hk/products/professional_films/pdf/pro_400h_datasheet.pdf#page=6",
+      "coverageStartMm": 0,
+      "coverageEndMm": 820,
+      "semantic_coverage": "Additional explicitly depicted FUJI before 19; existing FUJI before2 preserved; terminal19. dot restored. Actual Safelight120 photo independently confirms FUJI6./8, added locally without full-period inference.",
+      "limitations": [
+        "No every-even-number FUJI cadence inferred.",
+        "Remaining unknown manufacturing marks/phase are not claimed physically blank.",
+        "Coverage remains authored geometry, not a physically measured full roll."
+      ],
+      "marks": [
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "FUJI",
+          "before_number": 19,
+          "x_mm": 744.9,
+          "width_mm": 4.1,
+          "height_mm": 1.5
+        },
+        {
+          "kind": "terminal_index_dot",
+          "rail": 0,
+          "after_number": 19,
+          "x_mm": 751.5,
+          "y_mm": 1.4,
+          "width_mm": 0.5,
+          "height_mm": 0.5
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "FUJI",
+          "before_number": 6,
+          "x_mm": 214.5,
+          "width_mm": 4.1,
+          "height_mm": 1.5,
+          "source_url": "https://safelightberlin.com/cdn/shop/products/120-color-film-developing-116907.jpg?v=1646324668"
+        },
+        {
+          "kind": "stock_text",
+          "rail": 0,
+          "text": "FUJI",
+          "before_number": 8,
+          "x_mm": 296.1,
+          "width_mm": 4.1,
+          "height_mm": 1.5,
+          "source_url": "https://safelightberlin.com/cdn/shop/products/120-color-film-developing-116907.jpg?v=1646324668"
+        },
+        {
+          "kind": "index_disambiguation_dot",
+          "rail": 0,
+          "after_number": 6,
+          "x_mm": 220.1,
+          "y_mm": 1.4,
+          "width_mm": 0.5,
+          "height_mm": 0.5,
+          "source_url": "https://safelightberlin.com/cdn/shop/products/120-color-film-developing-116907.jpg?v=1646324668"
+        }
+      ]
+    }
+  ]
+}

@@ -279,8 +279,8 @@
     <string name="text_3b789c2037e2" formatted="false"> · 彩色相纸</string>
     <string name="text_7b528c395978" formatted="false">135 构图</string>
     <string name="text_e76a25844aa5" formatted="false">重新构图</string>
-    <string name="text_61d5477ed69a" formatted="false">横 135</string>
-    <string name="text_cad49035a99d" formatted="false">竖 135</string>
+    <string name="text_61d5477ed69a" formatted="false">横向</string>
+    <string name="text_cad49035a99d" formatted="false">纵向</string>
     <string name="text_4b1db520af46" formatted="false">原图</string>
     <string name="text_d1047eed5dd5" formatted="false">自由</string>
     <string name="text_36f33adaf094" formatted="false">确认</string>

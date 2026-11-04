@@ -1,0 +1,24 @@
+[
+  {
+    "stock": "gold200",
+    "file": "gold200-rails.png",
+    "version": "mf120-v2-gold200-12416fd08dba",
+    "sha256": "12416fd08dbaf71928c91dd3393f3b40db80435f3ad2108e47824aacd07ff10a",
+    "byteCount": 21783,
+    "coverageStartMm": 292.6666666666667,
+    "coverageEndMm": 527.3333333333334,
+    "defaultCenterMm": 410,
+    "tests": "PASS: dimensions, opaque alpha, five crop intervals, exact numeral sets, independent triangles, mark bounds and raster presence"
+  },
+  {
+    "stock": "ektar100",
+    "file": "ektar100-rails.png",
+    "version": "mf120-v2-ektar100-98df0ed38e94",
+    "sha256": "98df0ed38e94962fa8665470be42015c3a2def8e3599df9ac6f375d78cf21359",
+    "byteCount": 29660,
+    "coverageStartMm": 319.85135135135135,
+    "coverageEndMm": 500.14864864864865,
+    "defaultCenterMm": 410,
+    "tests": "PASS: dimensions, opaque alpha, five crop intervals, exact numeral sets, independent triangles, mark bounds and raster presence"
+  }
+]

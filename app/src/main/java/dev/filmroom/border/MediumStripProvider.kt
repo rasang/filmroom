@@ -9,22 +9,22 @@ import dev.filmroom.model.CompositionTransform
 
 /** Metadata-only capture, worker-only bounded decode, one physical strip cached across aliases. */
 internal object MediumStripProvider {
-    private data class Cached(val stock:String,val raster:MediumStripRaster)
+    private data class Cached(val stock:String,val version:String,val raster:MediumStripRaster)
     private val loadLock=Any()
     private val cacheLock=Any()
     private var cached:Cached?=null
     private var generation=0L
     fun clearCache(){synchronized(cacheLock){cached=null;generation++}}
     fun snapshot(stock:String,width:Int,height:Int,canonicalWidth:Int,canonicalHeight:Int,composition:CompositionTransform,negativeWhiteHoles:Boolean,outputRoute:String,format:MediumFormat,portrait:Boolean):BorderSnapshot {
-        val definition=definition(stock)
-        return BorderSnapshot.medium120(stock,definition.version,width,height,canonicalWidth,canonicalHeight,composition,format,portrait)
+        val definition=MediumStripDefinitions.registry.latest(MediumFormatStocks.physicalStock(stock))
+        return BorderSnapshot.medium120(stock,definition.version,width,height,canonicalWidth,canonicalHeight,composition,format,portrait,definition.defaultCenterMm)
             .copy(appearance=FrameAppearanceContext.forProfile(stock,outputRoute,negativeWhiteHoles)).also{verify(it)}
     }
-    private fun definition(stock:String)=requireNotNull(MediumStripDefinitions.definitions[MediumFormatStocks.physicalStock(stock)])
+    private fun definition(snapshot:BorderSnapshot)=MediumStripDefinitions.registry.exact(MediumFormatStocks.physicalStock(snapshot.stock),snapshot.assetVersion)
     fun verify(snapshot:BorderSnapshot){
         require(snapshot.geometryVersion==5)
-        val definition=definition(snapshot.stock)
-        require(snapshot.assetVersion==definition.version){"Unknown frozen 120 asset version"}
+        val definition=definition(snapshot)
+        definition.verifyCoverage(snapshot)
         val appearance=requireNotNull(snapshot.appearance){"120 appearance must be frozen"}
         require(appearance==FrameAppearanceContext.forProfile(snapshot.stock,appearance.outputRoute,appearance.negativeWhiteHoles))
         val expected=BorderSnapshot.medium120(snapshot.stock,definition.version,snapshot.sourceWidth,snapshot.sourceHeight,snapshot.canonicalWidth,snapshot.canonicalHeight,snapshot.composition,
@@ -34,13 +34,13 @@ internal object MediumStripProvider {
     fun resolve(snapshot:BorderSnapshot,open:(String)->InputStream,checkActive:()->Unit):BorderRaster {
         checkActive();verify(snapshot)
         check(android.os.Looper.myLooper()!=android.os.Looper.getMainLooper()){"120 strip decoding must run off Main"}
-        val definition=definition(snapshot.stock)
-        val physical=synchronized(cacheLock){cached?.takeIf{it.stock==definition.stock}?.raster} ?: synchronized(loadLock){
+        val definition=definition(snapshot)
+        val physical=synchronized(cacheLock){cached?.takeIf{it.stock==definition.stock && it.version==definition.version}?.raster} ?: synchronized(loadLock){
             checkActive()
-            val(hit,epoch)=synchronized(cacheLock){val hit=cached?.takeIf{it.stock==definition.stock}?.raster;if(hit==null)cached=null;hit to generation}
+            val(hit,epoch)=synchronized(cacheLock){val hit=cached?.takeIf{it.stock==definition.stock && it.version==definition.version}?.raster;if(hit==null)cached=null;hit to generation}
             hit ?: decode(definition,{open(definition.path)},checkActive).also{loaded->
                 checkActive();loaded.validate(snapshot)
-                synchronized(cacheLock){if(generation==epoch)cached=Cached(definition.stock,loaded)}
+                synchronized(cacheLock){if(generation==epoch)cached=Cached(definition.stock,definition.version,loaded)}
             }
         }
         checkActive()

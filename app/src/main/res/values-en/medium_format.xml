@@ -1,14 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">Frame format</string>
-    <string name="medium_format_evidence">120 reference notes</string>
-    <string name="medium_format_evidence_body">120 edges are reference-based reconstructions, not film scans. Five nominal apertures share one continuous strip per stock. Typography, spacing, phase and color are not fully calibrated. Some stocks have only partial numbering evidence; unknown markings are omitted. Portra 800 depicts the documented 800-2 batch; Pro 400H is historical. No perforations or light leaks are added. This choice changes output cropping and borders only, not grain or optical film-width parameters.</string>
-    <string name="medium_format_reconstruction">Reference reconstruction</string>
-    <string name="medium_evidence_portra160">Observed 41–55 and 1–12; 56 is unconfirmed. Spacing and phase are illustrative.</string>
-    <string name="medium_evidence_portra400">Only partial numbers are verified, not a whole roll. Spacing and phase are illustrative.</string>
-    <string name="medium_evidence_portra800">Documented 800-2 roll numbering, not every batch. Spacing and phase are illustrative.</string>
-    <string name="medium_evidence_gold">Only 52, opposite 10 and arrows are confirmed. No verified continuous roll; positions are illustrative.</string>
-    <string name="medium_evidence_ektar">49–51 and 7/8 come from images not confirmed as one roll. Their combination and phase are illustrative.</string>
-    <string name="medium_evidence_e100">Only a local stock mark and 8/arrows are confirmed. No verified continuous roll; spacing and phase are illustrative.</string>
-    <string name="medium_evidence_fuji">Based on official 120 diagrams, not a calibrated complete roll. Exact spacing/phase are unverified; batch codes are omitted.</string>
 </resources>

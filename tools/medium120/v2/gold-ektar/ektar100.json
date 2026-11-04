@@ -1,0 +1,353 @@
+{
+  "stock": "ektar100",
+  "version": "v2-observed-local",
+  "width": 8200,
+  "height": 50,
+  "pixelsPerMm": 10,
+  "railHeightMm": 2.5,
+  "baseRGBA": [
+    8,
+    8,
+    8,
+    255
+  ],
+  "inkRGBA": [
+    208,
+    143,
+    126,
+    255
+  ],
+  "defaultCenterMm": 410,
+  "coverageStartMm": 319.85135135135135,
+  "coverageEndMm": 500.14864864864865,
+  "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+  "source_coordinate_image": "eskdale-p5-000-strip.png",
+  "source_span_px": [
+    56,
+    1962
+  ],
+  "estimated_source_pixels_per_mm": 10.571428571428571,
+  "calibration": "Nominal aperture-based illustration estimate, not a ruler measurement. No full-roll sequence is asserted. Unobserved atlas areas are blank and must not be exposed by position controls.",
+  "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "font_note": "Uniformly scaled DejaVu Sans Bold outlines with explicit tracking; approximation, not a verified Kodak typeface. No anisotropic text scaling. Ink retained from prior illustrative stock asset, not source-calibrated.",
+  "marks": [
+    {
+      "kind": "number",
+      "text": "48",
+      "number": 48,
+      "rail": "top",
+      "x_mm": 320.011083,
+      "y_mm": 0.625,
+      "width_mm": 2.329185,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 70,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "49",
+      "number": 49,
+      "rail": "top",
+      "x_mm": 369.009081,
+      "y_mm": 0.625,
+      "width_mm": 2.33319,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 588,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "50",
+      "number": 50,
+      "rail": "top",
+      "x_mm": 417.443516,
+      "y_mm": 0.625,
+      "width_mm": 2.329185,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1100,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "51",
+      "number": 51,
+      "rail": "top",
+      "x_mm": 466.423169,
+      "y_mm": 0.625,
+      "width_mm": 2.369878,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1618,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK EKTAR 100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 331.139457,
+      "y_mm": 0.625,
+      "width_mm": 17.721087,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 269,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK EKTAR 100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 380.234051,
+      "y_mm": 0.625,
+      "width_mm": 17.721087,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 788,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK EKTAR 100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 428.666484,
+      "y_mm": 0.625,
+      "width_mm": 17.721087,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1300,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK EKTAR 100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 477.3827,
+      "y_mm": 0.625,
+      "width_mm": 17.721087,
+      "height_mm": 1.25,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1815,
+        "center_y_px": 48,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "7",
+      "number": 7,
+      "rail": "bottom",
+      "x_mm": 352.635586,
+      "y_mm": 0.7125,
+      "width_mm": 1.026125,
+      "height_mm": 1.075,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 408,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "8",
+      "number": 8,
+      "rail": "bottom",
+      "x_mm": 416.032702,
+      "y_mm": 0.7125,
+      "width_mm": 0.988649,
+      "height_mm": 1.075,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1078,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "number",
+      "text": "9",
+      "number": 9,
+      "rail": "bottom",
+      "x_mm": 476.288598,
+      "y_mm": 0.7125,
+      "width_mm": 0.990372,
+      "height_mm": 1.075,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1715,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 320.331926,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 70,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 349.183277,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 375,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": 7,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 381.15625,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 713,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 412.845439,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1048,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": 8,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 441.413007,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1350,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 473.291385,
+      "y_mm": 0.78125,
+      "width_mm": 1.6875,
+      "height_mm": 0.9375,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "eskdale-p5-000-strip.png",
+        "center_x_px": 1687,
+        "center_y_px": 658,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://rdsgallery.co.nz/wp-content/uploads/2025/10/2025_Eskdale_catalogue_sm.pdf",
+      "associated_number": 9,
+      "direction": "right"
+    }
+  ]
+}

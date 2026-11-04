@@ -1,14 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="medium_format_label">프레임 판형</string>
-    <string name="medium_format_evidence">120 참고 정보</string>
-    <string name="medium_format_evidence_body">120 테두리는 참고 자료를 바탕으로 재구성한 것으로 실제 필름 스캔이 아닙니다. 5개 명목 판형은 필름별로 하나의 연속 테두리를 공유합니다. 글꼴, 간격, 위치와 색상은 완전히 보정되지 않았습니다. 일부 필름은 번호 일부만 확인되었으며 확인되지 않은 표시는 만들지 않습니다. Portra 800은 확인된 800-2 배치이며 Pro 400H는 과거 제품입니다. 천공이나 빛샘은 추가하지 않습니다. 출력 자르기와 테두리만 바꾸며 입자나 광학 필름 폭 설정은 바꾸지 않습니다.</string>
-    <string name="medium_format_reconstruction">참고 자료 기반 재구성</string>
-    <string name="medium_evidence_portra160">41–55와1–12는 확인되었지만56은 미확인입니다. 간격과 위치는 예시입니다.</string>
-    <string name="medium_evidence_portra400">일부 번호만 확인되었으며 전체 롤은 검증되지 않았습니다. 간격과 위치는 예시입니다.</string>
-    <string name="medium_evidence_portra800">확인된800-2 롤 번호이며 모든 배치를 대표하지 않습니다. 간격과 위치는 예시입니다.</string>
-    <string name="medium_evidence_gold">52, 반대쪽10과 화살표만 확인되었습니다. 연속된 전체 롤과 정확한 위치는 미검증입니다.</string>
-    <string name="medium_evidence_ektar">49–51과7/8 이미지는 같은 롤인지 미확인입니다. 조합과 위치는 예시입니다.</string>
-    <string name="medium_evidence_e100">일부 필름명과8·화살표만 확인되었습니다. 전체 롤과 간격·위치는 미검증입니다.</string>
-    <string name="medium_evidence_fuji">공식120 도식 기반입니다. 실제 전체 롤 및 정확한 간격·위치는 미검증이며 배치 코드는 생략합니다.</string>
 </resources>

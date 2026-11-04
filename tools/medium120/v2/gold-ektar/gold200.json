@@ -1,0 +1,448 @@
+{
+  "stock": "gold200",
+  "version": "v2-observed-local",
+  "width": 8200,
+  "height": 50,
+  "pixelsPerMm": 10,
+  "railHeightMm": 2.5,
+  "baseRGBA": [
+    8,
+    8,
+    8,
+    255
+  ],
+  "inkRGBA": [
+    223,
+    208,
+    193,
+    255
+  ],
+  "defaultCenterMm": 410,
+  "coverageStartMm": 292.6666666666667,
+  "coverageEndMm": 527.3333333333334,
+  "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+  "source_coordinate_image": "gold-contact-strip.jpg",
+  "source_span_px": [
+    20,
+    3540
+  ],
+  "estimated_source_pixels_per_mm": 15,
+  "calibration": "Nominal aperture-based illustration estimate, not a ruler measurement. No full-roll sequence is asserted. Unobserved atlas areas are blank and must not be exposed by position controls.",
+  "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "font_note": "Uniformly scaled DejaVu Sans Bold outlines with explicit tracking; approximation, not a verified Kodak typeface. No anisotropic text scaling. Ink retained from prior illustrative stock asset, not source-calibrated.",
+  "marks": [
+    {
+      "kind": "number",
+      "text": "41",
+      "number": 41,
+      "rail": "top",
+      "x_mm": 293.935011,
+      "y_mm": 0.7,
+      "width_mm": 2.129977,
+      "height_mm": 1.1,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 55,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "42",
+      "number": 42,
+      "rail": "top",
+      "x_mm": 344.153628,
+      "y_mm": 0.7,
+      "width_mm": 2.092744,
+      "height_mm": 1.1,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 808,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "43",
+      "number": 43,
+      "rail": "top",
+      "x_mm": 393.840025,
+      "y_mm": 0.7,
+      "width_mm": 2.053283,
+      "height_mm": 1.1,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1553,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "44",
+      "number": 44,
+      "rail": "top",
+      "x_mm": 443.468345,
+      "y_mm": 0.7,
+      "width_mm": 2.129977,
+      "height_mm": 1.1,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 2298,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "45",
+      "number": 45,
+      "rail": "top",
+      "x_mm": 492.82212,
+      "y_mm": 0.7,
+      "width_mm": 2.089093,
+      "height_mm": 1.1,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 3038,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK 200",
+      "number": null,
+      "rail": "top",
+      "x_mm": 313.852116,
+      "y_mm": 0.7,
+      "width_mm": 12.962435,
+      "height_mm": 1.1,
+      "tracking_mm": 0.45,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 435,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK 200",
+      "number": null,
+      "rail": "top",
+      "x_mm": 363.518783,
+      "y_mm": 0.7,
+      "width_mm": 12.962435,
+      "height_mm": 1.1,
+      "tracking_mm": 0.45,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1180,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK 200",
+      "number": null,
+      "rail": "top",
+      "x_mm": 412.918783,
+      "y_mm": 0.7,
+      "width_mm": 12.962435,
+      "height_mm": 1.1,
+      "tracking_mm": 0.45,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1921,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK 200",
+      "number": null,
+      "rail": "top",
+      "x_mm": 462.452116,
+      "y_mm": 0.7,
+      "width_mm": 12.962435,
+      "height_mm": 1.1,
+      "tracking_mm": 0.45,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 2664,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "brand",
+      "text": "KODAK 200",
+      "number": null,
+      "rail": "top",
+      "x_mm": 512.185449,
+      "y_mm": 0.7,
+      "width_mm": 12.962435,
+      "height_mm": 1.1,
+      "tracking_mm": 0.45,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 3410,
+        "center_y_px": 42,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "1",
+      "number": 1,
+      "rail": "bottom",
+      "x_mm": 309.015172,
+      "y_mm": 0.777,
+      "width_mm": 0.90299,
+      "height_mm": 0.9460000000000001,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 272,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate",
+        "confidence_note": "First lower digit1 is dim; its presence is visible but precise glyph shape is not verified."
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "2",
+      "number": 2,
+      "rail": "bottom",
+      "x_mm": 370.889843,
+      "y_mm": 0.777,
+      "width_mm": 0.88698,
+      "height_mm": 0.9460000000000001,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1200,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "3",
+      "number": 3,
+      "rail": "bottom",
+      "x_mm": 427.298328,
+      "y_mm": 0.777,
+      "width_mm": 0.870012,
+      "height_mm": 0.9460000000000001,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 2046,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "number",
+      "text": "4",
+      "number": 4,
+      "rail": "bottom",
+      "x_mm": 493.215172,
+      "y_mm": 0.777,
+      "width_mm": 0.90299,
+      "height_mm": 0.9460000000000001,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 3035,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 306.924167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 245,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": 1,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 335.524167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 674,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 368.2575,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1165,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": 2,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 396.924167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 1595,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 424.724167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 2012,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": 3,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 458.4575,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 2518,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": null,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 490.724167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 3002,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": 4,
+      "direction": "right"
+    },
+    {
+      "kind": "triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 519.924167,
+      "y_mm": 0.8375,
+      "width_mm": 1.485,
+      "height_mm": 0.8250000000000001,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "gold-contact-strip.jpg",
+        "center_x_px": 3440,
+        "center_y_px": 920,
+        "interpretation": "estimated visual landmark, not measured film coordinate"
+      },
+      "source_url": "https://www.photrio.com/forum/attachments/dscf7174-jpg.416154/",
+      "associated_number": null,
+      "direction": "right"
+    }
+  ]
+}

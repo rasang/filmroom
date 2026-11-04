@@ -680,7 +680,7 @@ class MainActivity:ComponentActivity() {
                 section.key=key
             }
             if(id=="filmStock"){
-                val cropKey=listOf(s.compositionEditing,s.editable,p.filmBorder,p.crop.mode,p.composition.targetAspect,p.effectiveMediumFormat,p.effectiveMediumPortrait)
+                val cropKey=listOf(s.compositionEditing,s.editable,p.frameStock,p.filmBorder,p.crop.mode,p.composition.targetAspect,p.effectiveMediumFormat,p.effectiveMediumPortrait)
                 val crop=landscapeSections.getOrPut("composition"){
                     ParameterSection(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="parameter-section:composition";setPadding(0,dp(8),0,dp(12))},emptyList()).also{tools.addView(it.view,LinearLayout.LayoutParams(-1,-2))}
                 }
@@ -760,6 +760,24 @@ class MainActivity:ComponentActivity() {
         val heading=if(landscapeEditor)dev.filmroom.ui.ResponsiveSectionHeading(this)else row()
         heading.addView(sectionTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),R.drawable.ic_composition).apply{tag="crop-title";if(!landscapeEditor)maxLines=1},LinearLayout.LayoutParams(0,-2,1f))
         target.addView(heading,LinearLayout.LayoutParams(-1,-2))
+        if(p.filmBorder && dev.filmroom.border.MediumFormatStocks.available(p.frameStock)){
+            val formats=listOf<dev.filmroom.border.MediumFormat?>(null)+dev.filmroom.border.MediumFormat.entries
+            val formatScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false}
+            val formatChoices=row();formatScroll.addView(formatChoices)
+            for(format in formats){
+                val label=format?.label ?: "135"
+                formatChoices.addView(button(label){
+                    photo.finishCompositionGesture();model.chooseCompositionFormat(format)
+                }.apply{
+                    tag="composition-format:${format?.name ?: "135"}";maxLines=1;setHorizontallyScrolling(false)
+                    isSelected=p.effectiveMediumFormat==format;setTextColor(if(isSelected)accent else ink)
+                    contentDescription=dev.filmroom.i18n.L10n.text(R.string.medium_format_label)+" · "+label
+                    background=shape(if(isSelected)raised else Color.TRANSPARENT);enabled(this,editable && editing)
+                },LinearLayout.LayoutParams(-2,-2).apply{marginEnd=dp(4)})
+            }
+            retainStrip(formatScroll,formatChoices,"composition-formats", "composition-format:${p.effectiveMediumFormat?.name ?: "135"}")
+            target.addView(formatScroll,LinearLayout.LayoutParams(-1,-2))
+        }
         val choices=if(p.filmBorder)listOf(CropMode.RATIO_3_2 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_61d5477ed69a),CropMode.RATIO_2_3 to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cad49035a99d)) else listOf(
             CropMode.ORIGINAL to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4b1db520af46),CropMode.FREE to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d1047eed5dd5),CropMode.SQUARE to "1:1",
             CropMode.RATIO_3_2 to "3:2",CropMode.RATIO_2_3 to "2:3",CropMode.RATIO_4_3 to "4:3",
@@ -927,47 +945,7 @@ class MainActivity:ComponentActivity() {
                 },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             }
             target.addView(infoScroll,LinearLayout.LayoutParams(-1,-2))
-            if(dev.filmroom.border.MediumFormatStocks.available(p.frameStock)){
-                val formats=listOf<dev.filmroom.border.MediumFormat?>(null)+dev.filmroom.border.MediumFormat.entries
-                fun formatLabel(format:dev.filmroom.border.MediumFormat?)=format?.let{"120 · ${it.label}"} ?: "135"
-                val formatRow=row()
-                formatRow.addView(button(dev.filmroom.i18n.L10n.text(R.string.medium_format_label)+" · "+formatLabel(p.effectiveMediumFormat)){
-                    val openedStock=model.state.value.parameters.frameStock
-                    val openedPhoto=model.state.value.photo
-                    AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(R.string.medium_format_label))
-                        .setSingleChoiceItems(choiceAdapter(formats.map(::formatLabel),true),formats.indexOf(model.state.value.parameters.effectiveMediumFormat)){dialog,which->
-                            val current=model.state.value
-                            // A dialog is a selection UI, never authority to replace a newer stock.
-                            if(current.editable && current.parameters.filmBorder && current.parameters.frameStock==openedStock && current.photo===openedPhoto && dev.filmroom.border.MediumFormatStocks.available(openedStock)){
-                                finishCompositionForParameterEdit();photo.finishCompositionGesture()
-                                val now=model.state.value;val parameters=now.parameters
-                                val portrait=if(parameters.effectiveMediumFormat!=null)parameters.effectiveMediumPortrait
-                                    else parameters.composition.targetAspect?.let{it<1.0} ?: (now.photo?.let{it.originalHeight>it.originalWidth} ?: false)
-                                model.parameters(parameters.selectMediumFormat(formats[which],portrait))
-                            }
-                            dialog.dismiss()
-                        }.setNegativeButton(dev.filmroom.i18n.L10n.text(R.string.text_2cd0f3be8738),null).showReadable()
-                }.apply{tag="medium-format-selector";enabled(this,s.editable && p.filmBorder)},LinearLayout.LayoutParams(0,-2,1f))
-                formatRow.addView(button(dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence),R.drawable.ic_info){
-                    AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence))
-                        .setMessage(mediumFormatEvidence(model.state.value.parameters.frameStock)+"\n\n"+dev.filmroom.i18n.L10n.text(R.string.medium_format_evidence_body))
-                        .setPositiveButton(android.R.string.ok,null).showReadable()
-                }.apply{tag="medium-format-evidence";maxLines=2},LinearLayout.LayoutParams(-2,-2))
-                target.addView(formatRow,LinearLayout.LayoutParams(-1,-2))
-                if(p.effectiveMediumFormat!=null)target.addView(text(dev.filmroom.i18n.L10n.text(R.string.medium_format_reconstruction)+" · "+mediumFormatEvidence(p.frameStock),12f,muted).apply{
-                    tag="medium-format-evidence-status";setPadding(dp(4),dp(2),dp(4),dp(4))
-                },LinearLayout.LayoutParams(-1,-2))
-            }
     }
-    private fun mediumFormatEvidence(stock:String):String=dev.filmroom.i18n.L10n.text(when(dev.filmroom.border.MediumFormatStocks.profiles[stock]){
-        "kodak_portra_160"->R.string.medium_evidence_portra160
-        "kodak_portra_400"->R.string.medium_evidence_portra400
-        "kodak_portra_800"->R.string.medium_evidence_portra800
-        "kodak_gold_200"->R.string.medium_evidence_gold
-        "kodak_ektar_100"->R.string.medium_evidence_ektar
-        "kodak_ektachrome_100"->R.string.medium_evidence_e100
-        else->R.string.medium_evidence_fuji
-    })
     private fun formatted(control:Control,value:Float):String=when(control.id){
         "brightness","filmExposure"->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ffd510bae3ad,value)
         "grain","halation","diffusionStrength","scanSharpenAmount"->"${(value*100).roundToInt()}%"

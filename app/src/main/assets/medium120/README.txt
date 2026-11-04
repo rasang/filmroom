@@ -1,3 +1,5 @@
+Current revision (2026-11-04): New snapshots use the reviewed Portra160/400/800 v5 arrow shapes, Gold200/Ektar100/E100 v4 lower-rail coordinate models, and three Fuji v2 corrections. See v2/README.txt and tools/medium120/v4 and v5 for per-stock evidence, coverage, methods and limitations. All earlier v1/v2/v4 PNGs and exact-version definitions are preserved for frozen snapshots and reproducible generation. The following report is historical v1 provenance, not the current asset selection.
+
 120 九款片边研究审阅包（未完成实证，2026-11-03）
 
 本包是合成的版式研究，不是实物扫描，不可声称所有数字、位置、节距、字体或颜色均为实测。九条母带和五种裁切仅供核对方向和结构；空缺代表证据不足，不是原片确有空白。645旋转，其他画幅按胶片长边裁切；画幅和相机实际开窗可不同。45项一致性检查仅证明裁切来自同一母带，不证明母带真实。未使用漏光、齿孔或未经授权的外部照片像素。

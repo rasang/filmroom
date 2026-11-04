@@ -1,0 +1,350 @@
+{
+  "stock": "kodak_ektachrome_100",
+  "semantic_mode": "full_observed_segment",
+  "width": 8200,
+  "height": 50,
+  "pixelsPerMm": 10,
+  "railHeightMm": 2.5,
+  "defaultCenterMm": 410,
+  "coverageStartMm": 319.6882909667428,
+  "coverageEndMm": 500.3117090332572,
+  "baseRGBA": [
+    8,
+    8,
+    8,
+    255
+  ],
+  "inkRGBA": [
+    220,
+    216,
+    207,
+    255
+  ],
+  "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+  "source_native_interval": [
+    45,
+    1012
+  ],
+  "calibration_knots": [
+    [
+      32,
+      0
+    ],
+    [
+      326,
+      56
+    ],
+    [
+      359,
+      62.232715008431704
+    ],
+    [
+      658,
+      118.2327150084317
+    ],
+    [
+      697,
+      125.4525497191755
+    ],
+    [
+      1003,
+      181.45254971917552
+    ]
+  ],
+  "calibration": "Piecewise nominal56mm aperture calibration; whole safe span centered410. Photo-derived approximate positions, not factory measurement. ~1mm landmark uncertainty.",
+  "conservative_single_scale_length_mm": 176.9673202614379,
+  "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "font_sha256": "a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890",
+  "font_note": "Uniform DejaVu Sans Bold glyph scaling plus explicit tracking. Approximate typeface/height/spacing. Prior illustrative E100 RGB retained; no source photo RGB sampled.",
+  "limitations": [
+    "Only this one continuous48\u201351/7\u20139 strip reconstructed. No marks borrowed from neighboring strips or other rolls.",
+    "No full-roll numbering or unseen terminal label inferred. Atlas outside observed coverage is blank and unavailable for crops.",
+    "y_mm is local to its2.5mm rail; top rows0\u201324,bottom25\u201349."
+  ],
+  "marks": [
+    {
+      "kind": "number",
+      "text": "48",
+      "number": 48,
+      "rail": "top",
+      "x_mm": 330.66492036632866,
+      "y_mm": 0.65,
+      "width_mm": 2.2372173913043474,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 108.5,
+        "center_y_px": 12
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "stock_text",
+      "text": "KODAK E100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 349.4202562876538,
+      "y_mm": 0.65,
+      "width_mm": 12.917021739130433,
+      "height_mm": 1.2,
+      "tracking_mm": 0.18,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 235,
+        "center_y_px": 12
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "number",
+      "text": "49",
+      "number": 49,
+      "rail": "top",
+      "x_mm": 382.44468547789165,
+      "y_mm": 0.65,
+      "width_mm": 2.241062717770035,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 381,
+        "center_y_px": 12
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "stock_text",
+      "text": "KODAK E100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 400.33078623476996,
+      "y_mm": 0.65,
+      "width_mm": 12.917021739130433,
+      "height_mm": 1.2,
+      "tracking_mm": 0.18,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 505,
+        "center_y_px": 12
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "number",
+      "text": "50",
+      "number": 50,
+      "rail": "top",
+      "x_mm": 432.8278790441345,
+      "y_mm": 0.65,
+      "width_mm": 2.2372173913043474,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 650,
+        "center_y_px": 10
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "stock_text",
+      "text": "KODAK E100",
+      "number": null,
+      "rail": "top",
+      "x_mm": 451.21267528787496,
+      "y_mm": 0.65,
+      "width_mm": 12.917021739130433,
+      "height_mm": 1.2,
+      "tracking_mm": 0.18,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 779,
+        "center_y_px": 10
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "number",
+      "text": "51",
+      "number": 51,
+      "rail": "top",
+      "x_mm": 482.519972669095,
+      "y_mm": 0.65,
+      "width_mm": 2.2762831858407075,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 921,
+        "center_y_px": 10
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 330.6680528715047,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 107.5,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": null
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 361.04900525245705,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 267,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": 7
+    },
+    {
+      "kind": "number",
+      "text": "7",
+      "number": 7,
+      "rail": "bottom",
+      "x_mm": 364.4489031809425,
+      "y_mm": 0.65,
+      "width_mm": 1.145442238267148,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 283,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 394.8141298802549,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 446,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": null
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 427.40275864279664,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 620,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": 8
+    },
+    {
+      "kind": "number",
+      "text": "8",
+      "number": 8,
+      "rail": "bottom",
+      "x_mm": 430.58531884346564,
+      "y_mm": 0.65,
+      "width_mm": 1.1036086956521738,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 635,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 456.74618615744015,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 779,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": null
+    },
+    {
+      "kind": "solid_right_triangle",
+      "text": null,
+      "number": null,
+      "rail": "bottom",
+      "x_mm": 489.7788658960023,
+      "y_mm": 0.775,
+      "width_mm": 1.85,
+      "height_mm": 0.95,
+      "tracking_mm": 0,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 959.5,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg",
+      "direction": "right",
+      "associated_number": 9
+    },
+    {
+      "kind": "number",
+      "text": "9",
+      "number": 9,
+      "rail": "bottom",
+      "x_mm": 493.07920479172316,
+      "y_mm": 0.65,
+      "width_mm": 1.1055313588850175,
+      "height_mm": 1.2,
+      "tracking_mm": 0.03,
+      "source_landmark": {
+        "coordinate_image": "Native clockwise-rotated crop(560,82,907,1117),1035x347",
+        "center_x_px": 975.5,
+        "center_y_px": 330
+      },
+      "source_url": "https://www.35mmc.com/wp-content/uploads/2023/09/20210331_222042.jpg"
+    }
+  ]
+}
