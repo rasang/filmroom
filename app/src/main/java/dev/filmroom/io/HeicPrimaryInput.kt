@@ -250,7 +250,10 @@ internal object HeicPrimaryInput {
                 }))
                 write(box("iprp", box("ipco", data { selectedProps.forEach { write(bytes(it)) } }) + full("ipma", data {
                     writeInt(selected.size)
-                    for (id in selected) { val links = associations[id].orEmpty(); writeShort(id); writeByte(links.size)
+                    // ISO/IEC 23008-12:2017 section 9.3.1 requires increasing item_ID in ipma. Keep this
+                    // table order independent of the primary-first payload and dimg tile order.
+                    // Android 17's CrabbyAvif rejects an unsorted table before codec creation.
+                    for (id in selected.sorted()) { val links = associations[id].orEmpty(); writeShort(id); writeByte(links.size)
                         for (link in links) writeShort(remap.getValue(link.property) or if (link.essential) 0x8000 else 0)
                     }
                 }, flags = 1)))

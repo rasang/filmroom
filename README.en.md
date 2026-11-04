@@ -1,4 +1,4 @@
-> **Filmroom 0.1.20.1**: Stable HEIF import patch release based on 0.1.20. Selects the SDR primary in a temporary decoder view without changing the original. No GPU experiments. [Scope and validation](docs/RELEASE_0_1_20_1.md).
+> **Filmroom 0.1.20.2**: Corrects the standard ordering of the temporary HEIF view's property table, which Android 17's new parser rejected. SDR primary only; the original stays unchanged. No GPU experiments. [Scope and validation](docs/RELEASE_0_1_20_2.md).
 
 <div align="center">
 

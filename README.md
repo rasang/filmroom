@@ -1,4 +1,4 @@
-> **Filmroom 0.1.20.1**：基于 0.1.20 的 HEIF 导入正式修复版。仅对处理用临时副本隔离 SDR 主图，原图不动；不含 GPU 实验。[范围与验证](docs/RELEASE_0_1_20_1.md)。
+> **Filmroom 0.1.20.2**：修正 HEIF 临时视图属性表的标准排序，解决 Android 17 新解析器拒绝该视图的问题。仍只处理 SDR 主图，原图不动；不含 GPU 实验。[范围与验证](docs/RELEASE_0_1_20_2.md)。
 
 <div align="center">
 

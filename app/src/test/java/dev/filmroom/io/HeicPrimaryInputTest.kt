@@ -95,6 +95,131 @@ class HeicPrimaryInputTest {
     @Test fun supportsGridAndPreservesOrderedPayload(){for(method in 0..1)withSource(sample(grid=true,method=method)){_,source->
         HeicPrimaryInput.open(source).use {assertEquals(96,it.info.width);assertEquals(6144L,it.info.estimatedDecodePixels);assertArrayEquals(coded,it.file.readBytes().takeLast(coded.size).toByteArray())}
     }}
+    @Test fun ipmaIdsIncreaseWithoutSortingGridTilesOrChangingTheirPropertiesAndPayloads(){
+        // Android 17's CrabbyAvif rejects unsorted ipma even with strict mode disabled.
+        // Deliberately keep dimg in the opposite order: its order defines tile placement.
+        for(method in 0..1)withSource(descendingTileIdsSample(method)){_,source->
+            val original=source.readBytes()
+            val sourceProperties=propertyAssociations(original)
+            val sourcePayloads=itemPayloads(original)
+            val sourceMeta=children(original,topBox(original,"meta"),full=true)
+            val sourceData=if(method==1)sourceMeta.single {it.type=="idat"}else topBox(original,"mdat")
+            HeicPrimaryInput.open(source).use {prepared->
+                val view=prepared.file.readBytes()
+                val outputProperties=propertyAssociations(view)
+                val ids=outputProperties.keys.toList()
+                assertEquals("ipma must be sorted independently of payload order, method=$method",listOf(10,40,50),ids)
+                assertTrue(ids.zipWithNext().all {(previous,current)->previous<current})
+                for(id in ids)assertEquals("Properties, association order and essential bits for item $id",sourceProperties.getValue(id),outputProperties.getValue(id))
+                assertEquals(listOf(40,10),derivedItems(original,50))
+                assertEquals("Never sort the grid's dimg references",derivedItems(original,50),derivedItems(view,50))
+                val outputPayloads=itemPayloads(view)
+                assertEquals(listOf(50,40,10),sourcePayloads.keys.toList())
+                assertEquals("Keep primary-first, dimg-ordered payload locations",sourcePayloads.keys.toList(),outputPayloads.keys.toList())
+                assertEquals("Every selected item's exact bytes survive",sourcePayloads,outputPayloads)
+                val outputData=topBox(view,"mdat")
+                assertArrayEquals("The encoded payload sequence must not change",original.copyOfRange(sourceData.body,sourceData.end),view.copyOfRange(outputData.body,outputData.end))
+                assertEquals(192,prepared.info.width)
+                assertEquals(64,prepared.info.height)
+                assertEquals(prepared.info,HeicContainer.inspect(prepared.file))
+                assertArrayEquals("The source stays unchanged",original,source.readBytes())
+            }
+        }
+    }
+
+    private fun descendingTileIdsSample(method:Int):ByteArray {
+        val gridPayload=byteArrayOf(0,0,0,1,0,192.toByte(),0,64)
+        val highTile=coded.copyOf().also {it[it.lastIndex]=0x44}
+        val lowTile=coded.copyOf().also {it[it.lastIndex]=0x11}
+        val payloads=linkedMapOf(50 to gridPayload,40 to highTile,10 to lowTile)
+        val payload=gridPayload+highTile+lowTile
+        val ftyp=box("ftyp",data {writeBytes("heic");writeInt(0);writeBytes("mif1");writeBytes("tmap")})
+        // Dropping unselected property 5 also exercises property-index remapping for pixi.
+        val props=listOf(ispe(192,64),ispe(),hvcc(0),colr(13),colr(16),full("pixi",byteArrayOf(3,8,8,8)))
+        val associations=linkedMapOf(10 to listOf(0x84,2,0x83),40 to listOf(0x83,0x82,4),50 to listOf(0x81,0x86,0x84),60 to listOf(5))
+        fun meta(start:Int)=full("meta",data {
+            write(full("hdlr",data {writeInt(0);writeBytes("pict");repeat(3){writeInt(0)};writeByte(0)}))
+            write(full("pitm",data {writeShort(50)}))
+            val entries=listOf(infe(10,"hvc1"),infe(20,"hvc1"),infe(40,"hvc1"),infe(50,"grid"),infe(60,"tmap"))
+            write(full("iinf",data {writeShort(entries.size);entries.forEach {write(it)}}))
+            write(box("iprp",box("ipco",data {props.forEach {write(it)}})+full("ipma",data {
+                writeInt(associations.size)
+                for((id,links)in associations){writeShort(id);writeByte(links.size);links.forEach {writeByte(it)}}
+            })))
+            write(full("iref",reference("dimg",60,listOf(50,20))+reference("dimg",50,listOf(40,10))))
+            write(full("iloc",data {
+                writeByte(0x44);writeByte(0);writeShort(payloads.size)
+                var offset=if(method==1)0 else start
+                for((id,bytes)in payloads){writeShort(id);writeShort(method);writeShort(0);writeShort(1);writeInt(offset);writeInt(bytes.size);offset+=bytes.size}
+            },1))
+            if(method==1)write(box("idat",payload))
+        })
+        val firstMeta=meta(0)
+        return ftyp+meta(ftyp.size+firstMeta.size+8)+box("mdat",if(method==1)byteArrayOf()else payload)
+    }
+
+    private data class TestBox(val type:String,val start:Int,val body:Int,val end:Int)
+    private fun number(bytes:ByteArray,at:Int,size:Int):Int {
+        var value=0
+        repeat(size){value=(value shl 8)or(bytes[at+it].toInt()and 255)}
+        return value
+    }
+    private fun boxes(bytes:ByteArray,start:Int,end:Int):List<TestBox> {
+        val out=ArrayList<TestBox>();var at=start
+        while(at<end){
+            val size=number(bytes,at,4);assertTrue("Complete synthetic box",size>=8&&at+size<=end)
+            out.add(TestBox(String(bytes,at+4,4,Charsets.US_ASCII),at,at+8,at+size));at+=size
+        }
+        assertEquals(end,at);return out
+    }
+    private fun topBox(bytes:ByteArray,type:String)=boxes(bytes,0,bytes.size).single {it.type==type}
+    private fun children(bytes:ByteArray,parent:TestBox,full:Boolean=false)=boxes(bytes,parent.body+if(full)4 else 0,parent.end)
+    private fun propertyAssociations(bytes:ByteArray):Map<Int,List<Pair<Boolean,List<Byte>>>> {
+        val meta=children(bytes,topBox(bytes,"meta"),full=true)
+        val iprp=children(bytes,meta.single {it.type=="iprp"})
+        val properties=children(bytes,iprp.single {it.type=="ipco"}).map {bytes.copyOfRange(it.start,it.end).toList()}
+        val ipma=iprp.single {it.type=="ipma"};var at=ipma.body
+        val version=number(bytes,at,1);val flags=number(bytes,at+1,3);val count=number(bytes,at+4,4);at+=8
+        val result=linkedMapOf<Int,List<Pair<Boolean,List<Byte>>>>()
+        repeat(count){
+            val idSize=if(version==0)2 else 4;val id=number(bytes,at,idSize);at+=idSize
+            val associationCount=number(bytes,at++,1)
+            val links=List(associationCount){
+                val width=if(flags and 1==0)1 else 2;val raw=number(bytes,at,width);at+=width
+                val essentialMask=if(width==1)0x80 else 0x8000
+                val index=raw and(essentialMask-1);assertTrue(index in 1..properties.size)
+                (raw and essentialMask!=0)to properties[index-1]
+            }
+            assertNull("Unique ipma item",result.put(id,links))
+        }
+        assertEquals(ipma.end,at);return result
+    }
+    private fun derivedItems(bytes:ByteArray,primary:Int):List<Int> {
+        val iref=children(bytes,topBox(bytes,"meta"),full=true).single {it.type=="iref"}
+        assertEquals(0,number(bytes,iref.body,4))
+        val dimg=children(bytes,iref,full=true).single {it.type=="dimg"&&number(bytes,it.body,2)==primary}
+        val count=number(bytes,dimg.body+2,2)
+        assertEquals(dimg.end,dimg.body+4+count*2)
+        return List(count){number(bytes,dimg.body+4+it*2,2)}
+    }
+    private fun itemPayloads(bytes:ByteArray):Map<Int,List<Byte>> {
+        val meta=children(bytes,topBox(bytes,"meta"),full=true)
+        val iloc=meta.single {it.type=="iloc"};var at=iloc.body
+        val version=number(bytes,at,1);assertTrue(version in 0..1)
+        assertEquals(0x44,number(bytes,at+4,1));assertEquals(0,number(bytes,at+5,1))
+        val count=number(bytes,at+6,2);at+=8
+        val result=linkedMapOf<Int,List<Byte>>()
+        repeat(count){
+            val id=number(bytes,at,2);at+=2
+            val method=if(version==1)number(bytes,at,2).also {at+=2}else 0
+            assertEquals(0,number(bytes,at,2));at+=2
+            assertEquals(1,number(bytes,at,2));at+=2
+            val offset=number(bytes,at,4);val length=number(bytes,at+4,4);at+=8
+            val absolute=offset+if(method==1)meta.single {it.type=="idat"}.body else 0
+            assertNull("Unique iloc item",result.put(id,bytes.copyOfRange(absolute,absolute+length).toList()))
+        }
+        assertEquals(iloc.end,at);return result
+    }
     @Test fun hdrPrimaryIsNotRelabeledSrgb(){rejected(sample(transfer=16))}
     @Test fun tenBitPrimaryIsStillRejected(){rejected(sample(depth=2))}
     @Test fun unknownEssentialPrimaryPropertyIsNotStripped(){rejected(sample(essentialUnknown=true))}
