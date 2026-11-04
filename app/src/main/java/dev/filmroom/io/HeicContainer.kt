@@ -44,7 +44,42 @@ internal object HeicContainer {
     }
 
     fun inspect(file: File, checkCancelled: () -> Unit = {}): Info =
-        RandomAccessFile(file, "r").use { Reader(it, checkCancelled).inspect() }
+        RandomAccessFile(file, "r").use { Reader(FileInput(it), checkCancelled).inspect() }
+
+    /** In-memory admission of a remux plan; the plan separately bounds every source extent. */
+    internal fun inspectSelectedMetadata(bytes: ByteArray, checkCancelled: () -> Unit): Info {
+        if (bytes.size.toLong() > MAX_METADATA_BYTES + 4096) limit()
+        return Reader(MemoryInput(bytes), checkCancelled).inspect()
+    }
+
+    private interface Input {
+        val filePointer: Long
+        fun length(): Long
+        fun seek(at: Long)
+        fun readUnsignedByte(): Int
+        fun readUnsignedShort(): Int
+        fun readInt(): Int
+        fun readFully(bytes: ByteArray)
+    }
+    private class FileInput(private val file: RandomAccessFile): Input {
+        override val filePointer get() = file.filePointer
+        override fun length() = file.length()
+        override fun seek(at: Long) = file.seek(at)
+        override fun readUnsignedByte() = file.readUnsignedByte()
+        override fun readUnsignedShort() = file.readUnsignedShort()
+        override fun readInt() = file.readInt()
+        override fun readFully(bytes: ByteArray) = file.readFully(bytes)
+    }
+    private class MemoryInput(bytes: ByteArray): Input {
+        private val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.BIG_ENDIAN)
+        override val filePointer get() = buffer.position().toLong()
+        override fun length() = buffer.limit().toLong()
+        override fun seek(at: Long) { buffer.position(at.toInt()) }
+        override fun readUnsignedByte() = buffer.get().toInt() and 255
+        override fun readUnsignedShort() = buffer.short.toInt() and 65535
+        override fun readInt() = buffer.int
+        override fun readFully(bytes: ByteArray) { buffer.get(bytes) }
+    }
 
     private fun invalid(): Nothing = throw Rejected(Failure.INVALID, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_f515de6af876))
     private fun unsupported(): Nothing = throw Rejected(Failure.UNSUPPORTED,
@@ -55,7 +90,7 @@ internal object HeicContainer {
     private data class Property(val type: String, val width: Int = 0, val height: Int = 0, val angle: Int = 0, val nclx:Nclx? = null, val icc:HeicIccProfile.Profile? = null)
     private data class Item(val type: String, val hidden: Boolean)
 
-    private class Reader(val input: RandomAccessFile, val check: () -> Unit) {
+    private class Reader(val input: Input, val check: () -> Unit) {
         var boxes = 0
         val length = input.length()
         private fun need(end: Long, bytes: Int) {

@@ -1,4 +1,4 @@
-> **Filmroom 0.1.20**: Stable release source. Prebuilt JNI libraries are omitted; rebuild them using the [development guide](docs/DEVELOPMENT.md) before building an APK. See [release notes](docs/RELEASE_0_1_20.md) for functionality and validation limits.
+> **Filmroom 0.1.20.1**: Stable HEIF import patch release based on 0.1.20. Selects the SDR primary in a temporary decoder view without changing the original. No GPU experiments. [Scope and validation](docs/RELEASE_0_1_20_1.md).
 
 <div align="center">
 
@@ -80,7 +80,7 @@ Filmroom brings film stocks, photographic papers and scanning paths into one mob
 
 ## Availability
 
-**Current stable version: 0.1.20.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**Current stable version: 0.1.20.1.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early-stage project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.

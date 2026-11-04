@@ -32,9 +32,10 @@ class HeicRepositoryHostTest {
     private fun fixture(name:String="corners-sdr8.heic")=listOf(File("src/androidTest/assets/heic/$name"),File("app/src/androidTest/assets/heic/$name")).first{it.isFile}.readBytes()
     private class Backend:HeicBackend {
         var calls=0;var closed=false;var fail=false
+        var seenFile:File?=null;var seenBytes:ByteArray?=null
         override fun supported()=true
         override fun decode(file:File,info:HeicContainer.Info,job:CoroutineContext):HeicPixels {
-            calls++
+            calls++;seenFile=file;seenBytes=file.readBytes()
             return object:HeicPixels{
                 override val width=info.displayWidth;override val height=info.displayHeight
                 override fun readRow(y:Int,argb:IntArray){if(fail)throw IOException("injected failure");for(x in argb.indices)argb[x]=0xff000000.toInt() or ((x*2) shl 16) or (y*3)}
@@ -162,4 +163,25 @@ class HeicRepositoryHostTest {
         }finally{queue.cancel(original.id);queue.cancel(sized.id)}
         assertEquals(ExportJobState.CANCELLED,queue.store.get(original.id)!!.state)
     }
+    @Test fun toneMapImportUsesSdrViewAndRestoreUsesRetainedSpool()=runBlocking {
+        val bytes=HeicPrimaryInputTest().sample(grid=true,method=1)
+        val backend=Backend();val(repo,uri)=setup(backend,bytes);val photo=repo.import(uri,48)
+        try {
+            assertEquals(96,photo.source.originalWidth);assertEquals(64,photo.source.originalHeight)
+            assertArrayEquals(bytes,photo.source.localFile.readBytes())
+            val view=checkNotNull(backend.seenFile);assertNotEquals(photo.source.localFile,view)
+            assertTrue(view.name.startsWith("heic-primary-"));assertFalse(view.exists())
+            assertFalse(checkNotNull(backend.seenBytes).toString(Charsets.ISO_8859_1).contains("tmap"))
+            val restored=repo.reopen(photo.source.cacheKey,previewMaxEdge=48,rawCacheKey=photo.source.rawCacheKey)
+            try {assertEquals(1,backend.calls);assertEquals(48,restored.preview.width)}finally{restored.preview.recycle()}
+            assertTrue(photo.source.localFile.parentFile!!.listFiles()!!.none{it.name.startsWith("heic-primary-")})
+        }finally{photo.preview.recycle();repo.discard(photo.source)}
+    }
+    @Test fun failedToneMapDecodeRemovesTemporaryViewAndPartialSpool()=runBlocking {
+        val backend=Backend().apply{fail=true};val(repo,uri)=setup(backend,HeicPrimaryInputTest().sample())
+        try {repo.import(uri);fail("Injected pixel failure")}catch(_:PhotoException){}
+        assertEquals(1,backend.calls);assertTrue(backend.closed);assertFalse(checkNotNull(backend.seenFile).exists())
+        assertTrue(File(app.cacheDir,"photo-sources").listFiles()!!.none{it.name.startsWith("heic-primary-")})
+    }
+
 }

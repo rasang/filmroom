@@ -92,4 +92,19 @@ class PrivateWorkRecoveryTest {
   }finally{root.deleteRecursively()}
  }
 
+ @Test fun orphanHeicPrimaryViewIsRecoveredWithoutTouchingUnrelatedFiles(){
+  val root=Files.createTempDirectory("recovery-heic-primary").toFile()
+  try {
+   val cache=File(root,"cache").apply{mkdirs()};val files=File(root,"files").apply{mkdirs()}
+   val sources=File(cache,"photo-sources").apply{mkdirs()}
+   val orphan=File(sources,"heic-primary-12345678.heic").apply{writeText("private view")}
+   val retained=File(sources,"source-123.image").apply{writeText("original")}
+   val unrelated=File(sources,"holiday.heic").apply{writeText("keep")}
+   val similar=File(sources,"heic-primary-not-owned.heic").apply{writeText("keep")}
+   val report=PrivateWorkRecovery.recover(cache,files,retained.name)
+   assertEquals(1,report.removed);assertEquals(0,report.failed)
+   assertFalse(orphan.exists());assertTrue(retained.exists());assertTrue(unrelated.exists());assertTrue(similar.exists())
+  }finally{root.deleteRecursively()}
+ }
+
 }

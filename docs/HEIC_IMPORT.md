@@ -10,7 +10,7 @@
 
 ImageDecoder 的 ImageInfo.colorSpace 是默认输出空间，官方明确不保证等于编码源空间。设置目标之前先做严格descriptor匹配；仅对下文精确rounded Display P3数值能力，允许由平台 ColorSpace.match 对实际矩阵/TRC计算出的命名P3报告，且仍核对矩阵/range。此报告规范化不修改文件ICC，也不把P3像素重标sRGB；实际转换由保留编码ICC的native ImageDecoder完成。P3 超出 sRGB 的颜色不保留；界面明确显示转换提示。原文件及其 profile 不修改。
 
-仍明确拒绝 10 位/高位深、PQ/HLG 主图、标准容器辅助图（包括深度/alpha）、`imir` 镜像、`clap` 裁切、非方形像素、未支持的必需属性与动画/视频轨。**某些手机的普通拍摄 HEIC 也可能带这些辅助项，因此不能宣称兼容全部 iPhone/OPPO HEIC。** 这里的 HDR/辅助项检查针对解析到的标准容器属性；不声称能够识别每家厂商的不透明尾部扩展。SDR 主图导入不解释或传递这些私有扩展，因而不是 HDR 往返。拒绝不修改源文件，也不自动改用内嵌 JPEG、缩略图或低分辨率转换。
+仍明确拒绝 10 位/高位深、PQ/HLG 主图、未接入的标准容器辅助图（包括深度/alpha；下述独立 tmap SDR 主图隔离除外）、`imir` 镜像、`clap` 裁切、非方形像素、未支持的必需属性与动画/视频轨。**某些手机的普通拍摄 HEIC 也可能带这些辅助项，因此不能宣称兼容全部 iPhone/OPPO HEIC。** 这里的 HDR/辅助项检查针对解析到的标准容器属性；不声称能够识别每家厂商的不透明尾部扩展。SDR 主图导入不解释或传递这些私有扩展，因而不是 HDR 往返。拒绝不修改源文件，也不自动改用内嵌 JPEG、缩略图或低分辨率转换。
 
 ## 单一输入保证
 
@@ -92,3 +92,21 @@ ImageDecoder 的 ImageInfo.colorSpace 是默认输出空间，官方明确不保
 - [SkHeifCodec](https://skia.googlesource.com/skia/+/3296f7ba1f66bad209eb6a861a8bcbd89634f6ae/src/codec/SkHeifCodec.cpp)保留mIccData为编码profile；[SkCodec](https://skia.googlesource.com/skia/+/5f3e5240dc364bad6a744d6ea16608e06ecb4883/src/codec/SkCodec.cpp)将fEncodedInfo.profile()传入skcms_Transform。Java报告规范化不替换这个native源ICC。
 
 实现仍只请求一次目标sRGB、一次原尺寸decode；无重新标记源bitmap、无把目标像素当raw重复套ICC。尺寸/配置/输出sRGB/gainmap方向/内存全部保留。API29与35 host合同测试验证ColorSpace.match规范化及负例；现有384色LittleCMS对照验证实际曲线转换而非标准P3曲线。host ImageDecoder nCreate限制尚未消失，这些不是API37 OEM原片像素的端到端实测。需要真机重新导入并对照色块/原图色彩后才可声明该设备兼容成功。
+
+
+## 标准 tmap HEIF：隔离明确的 SDR primary
+
+0.1.20 的全局属性准入会把同一容器内另一个 rendition 的 HDR NCLX、10-bit pixi 和 gainmap ICC 当作当前主图能力，导致尚未调用 ImageDecoder 就拒绝。一些符合标准的文件同时有 SDR primary 和 tmap 派生 HDR 图，且 altr 把 HDR 图放在前面。仅放宽全局检查不安全：系统可选择另一个 rendition，而最终 sRGB 标签不证明输入没有被 tone-map。
+
+新路径不按品牌、机型、文件名、ICC描述或照片hash放行。普通已支持文件不变；原严格准入明确 UNSUPPORTED 时，才尝试以下标准结构路径：
+
+1. primary 必须是可独立验证的 hvc1 或 grid，并明确是唯一 tmap 的 dimg 第一输入；第二输入必须是不同的 gainmap 图。动画、外部引用、受保护图、未知主图依赖和关联 alpha 仍拒绝。
+2. 解析并验证所选 item 的 iloc。支持内部文件 method0 与 idat method1，0/4/8字节字段；16-bit范围的item ID。禁止外部data_reference、method2、越界、溢出、缺失或重复位置和零长度extent。grid payload行列/尺寸、tile数量和覆盖必须一致。
+3. 只读生成内存 plan，重新使用同一个 HeicContainer Reader 核验所选主图及tile的全部严格SDR规则。主图自己是10-bit/PQ/HLG、未知ICC/TRC、mirror/crop、未知essential属性时仍失败。已有spool恢复仅读plan，不创建临时文件，不增加磁盘空间要求。
+4. 真正解码时流式生成私有 `heic-primary-*.heic`：保留原编码主图/grid/tile payload、dimg顺序及关联ICC/hvcC/尺寸/旋转/essential位，只重写容器索引和iloc offset。剥离tmap/altr、非主图properties、其他items和私有uuid。不是像素解码、JPEG转换、缩略图替代或重压缩。
+5. 新文件再过一次严格准入，再交给原 ImageDecoder 路径。因为系统看不到另一个rendition，不能根据altr改选HDR图。原图仍保存并用于PhotoMetadata和恢复；视图在成功、异常或取消后删除，进程中断的孤儿由启动回收按严格文件名清理。
+6. 输出仍是原尺寸SDR8→线性RGB float32工作文件，仍明确提示不应用/保留HDR gainmap。本次不实现HDR高位深、广色域保留、编辑后gainmap重建或HEIF导出。完整能力矩阵见 [HEIF_COVERAGE.md](HEIF_COVERAGE.md)。
+
+验证分层：两张原始标准tmap样本在正式源码上均稳定于全局NCLX检查失败。候选每张保留49个item（grid+48 tiles），各item payload与关联属性逐字节一致，dimg顺序一致，原文件hash不变。主机libheif对原始primary与视图完整解码，共25,116,672像素，两对RGB hash与实际ICC→sRGB LittleCMS转换后hash均完全一致。抽样独立矩阵/TRC数学与LittleCMS差异最多1个8-bit码值。
+
+这些证据证明容器选择和主机像素保真，不证明目标Android系统HEVC实现已成功。Robolectric native ColorSpace、输入生命周期、失败清理和恢复测试与真实HEVC probe分别记录；当前host实际ImageDecoder仍在nCreate报unimplemented。没有把替身像素或支持查询true当作真机成功。设备端仍需完整解码、原尺寸/颜色核验，发布前不得略过该边界。

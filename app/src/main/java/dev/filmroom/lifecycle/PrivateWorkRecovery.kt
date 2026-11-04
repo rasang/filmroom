@@ -22,6 +22,7 @@ object PrivateWorkRecovery {
     )
     private val nativeScratchPattern=Regex("film-native-v5-[0-9]{1,20}-[0-9]{1,39}-[0-9]{1,20}")
     private val rawPattern=Regex("(?:raw|heic)-source-$uuid\\.rgb")
+    private val heicPrimaryPattern=Regex("heic-primary-[A-Za-z0-9]+\\.heic")
     private val sourcePattern=Regex("source-[A-Za-z0-9]+\\.image")
     fun recover(cacheDir:File,filesDir:File,retainedSourceKey:String?,retainedRawKey:String?=null):Report {
         var removed=0;var failed=0
@@ -60,7 +61,7 @@ object PrivateWorkRecovery {
         if(Files.isDirectory(sources.toPath(),NOFOLLOW_LINKS)) {
             val sourceEntries=sources.listFiles()
             if(sourceEntries==null)failed++
-            sourceEntries?.forEach {file->if((sourcePattern.matches(file.name)&&file.name!=retained)||(rawPattern.matches(file.name)&&file.name!=retainedRawKey))deleteKnown(file,sources)}
+            sourceEntries?.forEach {file->if((sourcePattern.matches(file.name)&&file.name!=retained)||(rawPattern.matches(file.name)&&file.name!=retainedRawKey)||heicPrimaryPattern.matches(file.name))deleteKnown(file,sources)}
         }
         val data=File(filesDir,"engine-data")
         if(Files.isDirectory(data.toPath(),NOFOLLOW_LINKS)) data.walkTopDown().maxDepth(4).onFail{_,_->failed++}.onEnter{Files.isDirectory(it.toPath(),NOFOLLOW_LINKS)&&it.canonicalFile.toPath().startsWith(data.canonicalFile.toPath())}.forEach {file->
