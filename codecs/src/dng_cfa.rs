@@ -153,16 +153,10 @@ pub fn rows(
     cancel: &AtomicBool,
     mut sink: impl FnMut(usize, &[u16]) -> Result<()>,
 ) -> Result<()> {
-    if width == 0
-        || width % 2 != 0
-        || height == 0
-        || width > 32768
-        || height > 32768
-        || width
-            .checked_mul(height)
-            .is_none_or(|n| n > crate::MAX_PIXELS as usize)
-        || !matches!(precision, 12 | 14 | 16)
-    {
+    if width == 0 || height == 0 { return Err(invalid()); }
+    if width > 32768 || height > 32768 { return Err(err("EDGE_LIMIT", "decode")); }
+    crate::validate_dimensions(width as u32, height as u32)?;
+    if width % 2 != 0 || !matches!(precision, 12 | 14 | 16) {
         return Err(unsupported());
     }
     if offset

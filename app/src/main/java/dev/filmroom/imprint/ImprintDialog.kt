@@ -157,7 +157,7 @@ internal object ImprintDialog {
         dateRow.addView(dateValue, LinearLayout.LayoutParams(0, -2, 1f))
         val restore = ImageButton(context).apply {
             tag = "imprint-restore-capture"
-            setImageResource(android.R.drawable.ic_menu_revert)
+            setImageResource(dev.filmroom.R.drawable.ic_restore_capture_date)
             imageTintList = android.content.res.ColorStateList.valueOf(dev.filmroom.ui.FilmroomPalette.muted)
             contentDescription = t(ImprintText.RESTORE_CAPTURE)
             tooltipText = contentDescription
@@ -170,7 +170,6 @@ internal object ImprintDialog {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         var showDateError = draft?.getBoolean("imprint-date-error", false) ?: false
-        val source = label("").apply { tag = "imprint-source" }
         val preview = label("").apply { tag = "imprint-content" }
 
         fun choice(key: ImprintText, labels: List<String>, index: Int, tagName: String): Spinner {
@@ -196,15 +195,18 @@ internal object ImprintDialog {
         }.also { column.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         val corner = choice(ImprintText.POSITION, listOf(ImprintText.BR, ImprintText.BL, ImprintText.TR, ImprintText.TL).map(::t), ImprintSettings.CORNERS.indexOf(old.corner), "imprint-corner")
         fun slider(key: ImprintText, start: Int, tagName: String): SeekBar {
-            label(t(key))
+            label(t(key)).tag = "$tagName-label"
             return SeekBar(context).apply {
                 tag = tagName; contentDescription = t(key); max = 100
                 progress = (draft?.getInt(tagName, start) ?: start).coerceIn(0, 100); minimumHeight = dp(48)
             }.also { column.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
         val size = slider(ImprintText.SIZE, ((old.size - .6) * 100).roundToInt(), "imprint-size")
+        val sizeTip = label(t(ImprintText.EDGE_SIZE_FIXED)).apply {
+            tag = "imprint-size-tip"
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         val glow = slider(ImprintText.GLOW, (old.glow * 100).roundToInt(), "imprint-glow")
-        label(t(ImprintText.SHARED_APPEARANCE))
         fun settings(): ImprintSettings = old.copy(
             dateStyle = styles[buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)],
             corner = ImprintSettings.CORNERS[corner.selectedItemPosition],
@@ -218,6 +220,14 @@ internal object ImprintDialog {
             // Edge dates have a fixed 120 placement. Keep the user's photo corner intact.
             val photoPositionEnabled = placement.visibility != View.VISIBLE || !placement.isChecked
             if (!adjusting) {
+            size.isEnabled = photoPositionEnabled
+            size.alpha = if (photoPositionEnabled) 1f else .4f
+            size.tooltipText = if (photoPositionEnabled) null else t(ImprintText.EDGE_SIZE_FIXED)
+            column.findViewWithTag<TextView>("imprint-size-label").apply {
+                isEnabled = photoPositionEnabled
+                alpha = if (photoPositionEnabled) 1f else .4f
+            }
+            sizeTip.visibility = if (photoPositionEnabled) View.GONE else View.VISIBLE
             corner.isEnabled = photoPositionEnabled
             corner.alpha = if (photoPositionEnabled) 1f else .4f
             column.findViewWithTag<TextView>("imprint-corner-label").apply {
@@ -229,8 +239,6 @@ internal object ImprintDialog {
             dateValue.text = t(ImprintText.DATE) + " · " + (values.date?.toString() ?: t(ImprintText.CHOOSE_DATE))
             dateValue.contentDescription = dateValue.text
             error.visibility = if (showDateError && values.manual && dateTime == null) View.VISIBLE else View.GONE
-            source.isSelected = values.manual
-            source.text = if (values.manual) t(ImprintText.MANUAL) else if (original == null) t(ImprintText.MISSING) else t(ImprintText.source(metadata))
             val selected = buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)
             val formatted = dateTime?.toLocalDate()?.let { ImprintContent.formatDate(it, styles[selected]) }
             preview.text = formatted ?: if (values.manual) t(ImprintText.INVALID_DATE_TIME) else t(ImprintText.MISSING)

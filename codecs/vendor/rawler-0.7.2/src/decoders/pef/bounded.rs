@@ -143,13 +143,11 @@ fn layout<'a>(
   let w = scalar(raw, TiffCommonTag::ImageWidth)? as usize;
   let h = scalar(raw, TiffCommonTag::ImageLength)? as usize;
   let bits = scalar(raw, TiffCommonTag::BitsPerSample)? as usize;
+  crate::check_bounded_raw_size(w, h)?;
   if w < 8
     || h < 8
     || w % 2 != 0
     || h % 2 != 0
-    || w > 32768
-    || h > 32768
-    || w.checked_mul(h).is_none_or(|n| n > 52_000_000)
     || !matches!(bits, 12 | 14 | 16)
   {
     return Err("PEF sensor dimensions/precision".into());

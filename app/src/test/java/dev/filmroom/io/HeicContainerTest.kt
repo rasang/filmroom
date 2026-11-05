@@ -209,7 +209,11 @@ class HeicContainerTest {
     }
 
     @Test fun invalidDimensionsAndHugeMetadataFailBeforeAnyDecoder() {
-        for ((w,h) in listOf(0 to 1, 30001 to 2, 30000 to 30000, -1 to 1))
+        // Empty dimensions are malformed input, not a resource limit. ispe stores unsigned
+        // dimensions, so -1 in this fixture encodes 0xffffffff and remains an edge limit.
+        rejects(HeicContainer.Failure.INVALID, heic(width=0,height=1))
+        rejects(HeicContainer.Failure.INVALID, heic(width=1,height=0))
+        for ((w,h) in listOf(30001 to 2, 30000 to 30000, -1 to 1))
             rejects(HeicContainer.Failure.LIMIT, heic(width=w,height=h))
         rejects(HeicContainer.Failure.LIMIT, ftyp(listOf("heic")) + full("meta", ByteArray(HeicContainer.MAX_METADATA_BYTES.toInt())))
         rejects(HeicContainer.Failure.LIMIT, ByteArrayOutputStream().apply { repeat(HeicContainer.MAX_BOXES+1) { write(box("free", byteArrayOf())) } }.toByteArray())

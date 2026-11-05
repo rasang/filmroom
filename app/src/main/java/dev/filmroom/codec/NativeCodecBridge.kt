@@ -112,13 +112,14 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                     "IO_ERROR"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_19b3b0255d08)
                     "INVALID_INPUT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_199d9706e7a1)
                     "UNSUPPORTED_COLOR_SPACE"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_e92a0c3cbaef)
+                    "EDGE_LIMIT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.image_edge_limit_32768)
                     "PIXEL_LIMIT"->if(failureReason==PhotoException.Reason.EXPORT)dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d6bc69a0a6a8)else dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c55db3ba035)
                     "DISK_BUDGET","NO_SPACE"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_6bceec6d29d6)
                     "MEMORY_BUDGET"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d171c3322a9c)
                     "INVALID_COLOR_METADATA"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56858cdae70f)
                     else->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_aff865b41066)
                 }
-                throw PhotoException(failureReason,message,codecCode=safeCode,codecStage=safeStage,rawTechnical=RawTechnicalInfo.fromNative(result.optJSONObject("technical")))
+                throw PhotoException(if(failureReason!=PhotoException.Reason.EXPORT && code in setOf("PIXEL_LIMIT","EDGE_LIMIT")) PhotoException.Reason.TOO_LARGE else failureReason,message,codecCode=safeCode,codecStage=safeStage,rawTechnical=RawTechnicalInfo.fromNative(result.optJSONObject("technical")))
             }
             result
         } finally {

@@ -4,6 +4,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PhotoLimitsTest {
+    @Test fun sourceAdmissionKeepsInvalidEdgeAndPixelFailuresDistinct() {
+        assertNull(PhotoLimits.sourceFailure(15000,10000))
+        assertNull(PhotoLimits.sourceFailure(30000,1))
+        assertEquals(PhotoLimits.SourceFailure.INVALID,PhotoLimits.sourceFailure(0,30001))
+        assertEquals(PhotoLimits.SourceFailure.EDGE,PhotoLimits.sourceFailure(30001,1))
+        assertEquals(PhotoLimits.SourceFailure.EDGE,PhotoLimits.sourceFailure(1,30001))
+        assertEquals(PhotoLimits.SourceFailure.EDGE,PhotoLimits.sourceFailure(Long.MAX_VALUE,Long.MAX_VALUE))
+        assertEquals(PhotoLimits.SourceFailure.PIXELS,PhotoLimits.sourceFailure(15000,10001))
+        assertTrue(PhotoLimits.acceptsCopiedBytes(PhotoLimits.MAX_COMPRESSED_BYTES-1,1))
+        assertFalse(PhotoLimits.acceptsCopiedBytes(PhotoLimits.MAX_COMPRESSED_BYTES,1))
+    }
+
     @Test fun recognizesOnlyJpegAndPngSignatures() {
         assertEquals("image/jpeg", PhotoLimits.supportedMime(byteArrayOf(-1, -40, -1, 0)))
         assertEquals("image/png", PhotoLimits.supportedMime(byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)))

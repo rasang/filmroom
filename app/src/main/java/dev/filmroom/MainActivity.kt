@@ -286,7 +286,7 @@ class MainActivity:ComponentActivity() {
         root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
         val imageColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         body.addView(imageColumn,if(body.orientation==LinearLayout.HORIZONTAL)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,0,1f))
-        val frame=FrameLayout(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
+        val frame=dev.filmroom.ui.PhotoPreviewFrame(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
         photo=PhotoView(this);model.detailInvalidator=invalidateDetail;if(model.localDetailEnabled)photo.configureDetail(model.detailProviderFactory());frame.addView(photo,FrameLayout.LayoutParams(-1,-1))
         welcome=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12),dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12))}
         welcome.addView(ImageView(this).apply{setImageResource(R.drawable.welcome_cplift)},LinearLayout.LayoutParams(dp(if(wideLayout)40 else 76),dp(if(wideLayout)40 else 76)))
@@ -327,6 +327,7 @@ class MainActivity:ComponentActivity() {
         }.apply{tag="composition";contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08)}
         infoButton=iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c3154414c11),R.drawable.ic_info){photoInfo()}
         frame.addView(infoButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.START).apply{leftMargin=dp(12);bottomMargin=dp(8)})
+        frame.avoidControls(photo,infoButton,compare)
         val toolColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(surface);setPadding(dp(12),dp(8),dp(12),dp(8))}
         body.addView(toolColumn,if(wideLayout)LinearLayout.LayoutParams(dp((resources.configuration.screenWidthDp*0.45f).roundToInt().coerceAtLeast(240)),-1)else LinearLayout.LayoutParams(-1,-2))
         // The current tool is measured at its natural height: never a vertically scrolling slot.
@@ -1023,7 +1024,11 @@ class MainActivity:ComponentActivity() {
         target.addView(dateRow,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12)})
         target.addView(Switch(this).apply{
             text=t(dev.filmroom.imprint.ImprintText.EXPOSURE);tag="imprint-exposure-switch";isChecked=p.imprint.exposure
-            minHeight=dp(48);enabled(this,s.editable);setOnCheckedChangeListener{_,checked->update{it.copy(exposure=checked)}}
+            // Keep the saved selection while no film edge is available; only disable editing.
+            minHeight=dp(48);enabled(this,s.editable && p.filmBorder)
+            setOnCheckedChangeListener{_,checked->
+                if(isEnabled && model.state.value.parameters.filmBorder)update{it.copy(exposure=checked)}
+            }
         },LinearLayout.LayoutParams(-1,-2))
         if(p.imprint.exposure){
             val supported=p.filmBorder && p.frameStock !in setOf("kodak_trix","kodak_2302")

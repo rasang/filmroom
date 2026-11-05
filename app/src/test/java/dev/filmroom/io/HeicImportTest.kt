@@ -12,6 +12,17 @@ import org.junit.Test
 
 /** Pixel backend is an explicit substitute. These tests do NOT execute Android HEVC decoding. */
 class HeicImportTest {
+    @Test fun containerGeometryMessagesDoNotClaimMetadataOrFormatFailure() {
+        HeicContainer.validateSourceSize(30000,1)
+        for((w,h,key) in listOf(Triple(30001L,1L,"image_edge_limit_30000"),Triple(15000L,10001L,"text_56e47360aaca"))) {
+            try {HeicContainer.validateSourceSize(w,h);fail()} catch(e:HeicContainer.Rejected) {
+                assertEquals(HeicContainer.Failure.LIMIT,e.failure)
+                assertEquals(key,e.uiMessage?.key)
+            }
+        }
+        try {HeicContainer.validateSourceSize(0,1);fail()} catch(e:HeicContainer.Rejected) {assertEquals(HeicContainer.Failure.INVALID,e.failure)}
+    }
+
     private val plentiful = { NativeMemorySnapshot(8L*1024*1024*1024, 128L*1024*1024, false) }
     private fun info(w:Int=3,h:Int=2,rotation:Int=0,pixels:Long=w.toLong()*h)=HeicContainer.Info(w,h,rotation,pixels,pixels)
     private class Backend(var supported:Boolean=true):HeicBackend {

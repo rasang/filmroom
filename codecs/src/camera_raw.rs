@@ -54,6 +54,8 @@ pub(crate) fn bounded<T>(stage: &'static str, f: impl FnOnce() -> rawler::Result
     result
         .map_err(|_| err("INVALID_INPUT", stage))?
         .map_err(|e| match e {
+            rawler::RawlerError::ImageEdgeLimit => err("EDGE_LIMIT", stage),
+            rawler::RawlerError::ImageSizeLimit => err("PIXEL_LIMIT", stage),
             rawler::RawlerError::RowAllocationFailed => err("MEMORY_BUDGET", stage),
             rawler::RawlerError::Unsupported { .. } => err("UNSUPPORTED_CAMERA", stage),
             _ if stage == "decode" => err("DECODE_FAILED", stage),
@@ -1615,4 +1617,30 @@ mod canon_bayer_stream_reference {
    assert_eq!(generic_strip_rows(256*MIB,base,6000),old);
   }
  }
+}
+
+#[cfg(test)]
+mod size_error_mapping_tests {
+    use super::*;
+    #[test]
+    fn bounded_size_error_survives_probe_and_decode() {
+        assert!(rawler::check_bounded_raw_size(10000, 5200).is_ok());
+        assert!(rawler::check_bounded_raw_size(32768, 8).is_ok());
+        assert_eq!(bounded("probe", || rawler::check_bounded_raw_size(10000, 5201)).unwrap_err().code, "PIXEL_LIMIT");
+        assert_eq!(bounded("probe", || rawler::check_bounded_raw_size(32769, 8)).unwrap_err().code, "EDGE_LIMIT");
+        assert_eq!(bounded("probe", || rawler::check_bounded_raw_size(8, 32769)).unwrap_err().code, "EDGE_LIMIT");
+        assert!(rawler::check_bounded_raw_size(0, 8).is_ok());
+        assert!(rawler::check_bounded_raw_size(9, 9).is_ok());
+        for stage in ["probe", "decode"] {
+            let e = bounded::<()>(stage, || Err(rawler::RawlerError::ImageSizeLimit)).unwrap_err();
+            assert_eq!(e.code, "PIXEL_LIMIT");
+            assert_eq!(e.stage, stage);
+            let edge = bounded::<()>(stage, || Err(rawler::RawlerError::ImageEdgeLimit)).unwrap_err();
+            assert_eq!(edge.code, "EDGE_LIMIT");
+            let memory = bounded::<()>(stage, || Err(rawler::RawlerError::RowAllocationFailed)).unwrap_err();
+            assert_eq!(memory.code, "MEMORY_BUDGET");
+            let other = bounded::<()>(stage, || Err("unsupported variant".into())).unwrap_err();
+            assert_ne!(other.code, "PIXEL_LIMIT");
+        }
+    }
 }

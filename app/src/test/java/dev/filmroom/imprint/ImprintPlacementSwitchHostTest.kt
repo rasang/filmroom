@@ -100,12 +100,65 @@ class ImprintPlacementSwitchHostTest {
             assertTrue(date.width > 0)
             assertTrue(restore.contentDescription.isNotBlank())
             assertNotNull(restore.drawable)
+            assertTrue(restore.drawable is android.graphics.drawable.VectorDrawable)
+            assertEquals(restore.contentDescription, restore.tooltipText)
+            assertNull(root.findViewWithTag<View>("imprint-source"))
             restore.performClick(); idle()
             assertNull(applied)
             assertTrue(date.text.contains("2026-11-05"))
             assertFalse(ImprintDialog.capture(dialog).getBoolean("imprint-manual"))
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick(); idle()
             assertNull(applied!!.manualDateTime)
+        } finally { host.pause().stop().destroy() }
+    }
+
+    @Test fun edgeDateLocksOnlySizeShowsTipAndRestoresPhotoPreference() {
+        val host = Robolectric.buildActivity(Activity::class.java).setup()
+        try {
+            val old = ImprintSettings(dateStyle="contax_t2", size=1.43, glow=.27)
+            var applied: ImprintSettings? = null
+            val dialog = ImprintDialog.show(host.get(), medium.copy(imprint=old), metadata) { applied=it }
+            idle()
+            val root=dialog.window!!.decorView
+            val size=root.findViewWithTag<android.widget.SeekBar>("imprint-size")
+            val glow=root.findViewWithTag<android.widget.SeekBar>("imprint-glow")
+            val label=root.findViewWithTag<View>("imprint-size-label")
+            val tip=root.findViewWithTag<android.widget.TextView>("imprint-size-tip")
+            assertEquals(ImprintText.ON_EDGE.text(host.get()),toggle(dialog).text)
+            assertTrue(size.isEnabled);assertEquals(83,size.progress);assertEquals(View.GONE,tip.visibility)
+            repeat(2) {
+                toggle(dialog).performClick();idle()
+                assertFalse(size.isEnabled);assertFalse(size.createAccessibilityNodeInfo().isEnabled)
+                assertFalse(label.isEnabled);assertTrue(size.alpha<1f)
+                assertTrue(glow.isEnabled);assertEquals(View.VISIBLE,tip.visibility)
+                assertEquals(ImprintText.EDGE_SIZE_FIXED.text(host.get()),tip.text)
+                assertEquals(tip.text,size.tooltipText)
+                val fade=ImprintAdjustmentFade(dialog)
+                fade.begin(glow);fade.finishImmediately()
+                assertFalse(size.isEnabled);assertTrue(glow.isEnabled)
+                assertEquals(83,size.progress)
+                toggle(dialog).performClick();idle()
+                assertTrue(size.isEnabled);assertEquals(1f,size.alpha,0f)
+                assertEquals(83,size.progress);assertEquals(View.GONE,tip.visibility)
+            }
+            toggle(dialog).performClick();idle()
+            glow.progress=61
+            val draft=ImprintDialog.capture(dialog);dialog.dismiss()
+            val restored=ImprintDialog.show(host.get(),medium.copy(imprint=old),metadata,draft){applied=it}
+            idle()
+            assertFalse(restored.window!!.decorView.findViewWithTag<View>("imprint-size").isEnabled)
+            restored.getButton(AlertDialog.BUTTON_POSITIVE).performClick();idle()
+            assertEquals(1.43,applied!!.size,.0001);assertEquals(.61,applied!!.glow,.0001)
+            assertEquals("edge",applied!!.datePlacement)
+            for(state in listOf(medium.copy(mediumFormat=null),medium.copy(filmBorder=false))) {
+                val fallback=ImprintDialog.show(host.get(),state.copy(imprint=applied!!),metadata){}
+                idle()
+                val fallbackRoot=fallback.window!!.decorView
+                assertTrue(fallbackRoot.findViewWithTag<View>("imprint-size").isEnabled)
+                assertEquals(83,fallbackRoot.findViewWithTag<android.widget.SeekBar>("imprint-size").progress)
+                assertEquals(View.GONE,fallbackRoot.findViewWithTag<View>("imprint-size-tip").visibility)
+                fallback.dismiss()
+            }
         } finally { host.pause().stop().destroy() }
     }
 

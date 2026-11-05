@@ -28,7 +28,9 @@ internal object HeicMemoryPolicy {
     fun estimatedBytes(info: HeicContainer.Info, encodedBytes:Long=0): Long {
         require(encodedBytes in 0..PhotoLimits.MAX_COMPRESSED_BYTES)
         val pixels = maxOf(info.encodedWidth.toLong() * info.encodedHeight, info.estimatedDecodePixels)
-        if (pixels !in 1..MAX_PIXELS) throw PhotoException(PhotoException.Reason.TOO_LARGE,
+        if (pixels <= 0) throw PhotoException(PhotoException.Reason.UNREADABLE,
+            dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_199d9706e7a1))
+        if (pixels > MAX_PIXELS) throw PhotoException(PhotoException.Reason.TOO_LARGE,
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56e47360aaca))
         // Original output + decoder frame + orientation intermediate + YUV/reference buffers.
         // Budget for full image even if a platform advertises region/subsample decoding.

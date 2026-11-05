@@ -8,7 +8,7 @@ android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 40; versionName = "0.1.21-beta4"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 41; versionName = "0.1.21-beta5"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     // Optional distribution ABI filter; default source build retains both tested ABIs.
     providers.gradleProperty("filmroomAbi").orNull?.let { abi ->
         require(abi in setOf("arm64-v8a", "x86_64")) { "Unsupported filmroomAbi" }

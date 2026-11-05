@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Original drawing: an open return arrow and clock hands recall the source date.
+         Matches Filmroom's 1.75-unit, round-ended toolbar strokes. -->
+    <path
+        android:pathData="M4.5,5V10H9.5 M4.7,9.5A7.5,7.5 0,1 1,5.5,16.5 M12,8V12L15,14"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFF4F1E9" android:strokeWidth="1.75"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

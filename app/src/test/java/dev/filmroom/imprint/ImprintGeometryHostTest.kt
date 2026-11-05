@@ -98,6 +98,44 @@ class ImprintGeometryHostTest {
             assertEquals(frozen,m.toJson())
         }
     }
+    @Test fun dateSizeAndGlowNeverChangeCaptureDataPixelsIn135Or120() {
+        for(portrait in listOf(false,true)) {
+            val frames=listOf(
+                BorderSnapshot.authored("kodak_portra_400","test",if(portrait)960 else 1280,if(portrait)1280 else 960),
+                medium("kodak_portra_400",MediumFormat.MF66,portrait))
+            for(b in frames)for(placement in ImprintSettings.PLACEMENTS)for(dateEnabled in listOf(false,true)) {
+                val plans=listOf(.6,1.0,1.6).flatMap{size->listOf(0.0,.5,1.0).map{glow->plan(b,settings.copy(size=size,glow=glow,datePlacement=placement,dateEnabled=dateEnabled))}}
+                val edges=plans.map{it.stamps.drop(if(dateEnabled)1 else 0)}
+                assertTrue(edges.all{it.size==5})
+                val dimensions=edges.map{set->set.map{it.raster.width to it.raster.height}}
+                assertTrue(dimensions.all{it==dimensions[0]})
+                for(index in edges[0].indices)for(variant in edges.drop(1)) {
+                    val reference=edges[0][index].raster;val actual=variant[index].raster
+                    for(y in 0 until reference.height) {
+                        val expectedRow=IntArray(reference.width);val actualRow=IntArray(actual.width)
+                        reference.writeArgbRow(y,expectedRow);actual.writeArgbRow(y,actualRow)
+                        assertArrayEquals("Date size/glow must not change capture-data pixels",expectedRow,actualRow)
+                    }
+                }
+                for(p in plans){assertEquals(0,p.omittedFieldCount);bounded(p);if(b.geometryVersion==5)clearEdge(b,p,dateEnabled && placement=="photo")}
+                if(dateEnabled && b.geometryVersion==5 && placement=="edge") {
+                    assertTrue("Edge-date size is fixed",plans.all{it.stamps.first().raster.width==plans.first().stamps.first().raster.width})
+                    val dim=plans.first().stamps.first().raster
+                    val bright=plans[2].stamps.first().raster
+                    var differs=false
+                    for(y in 0 until dim.height) {
+                        val a=IntArray(dim.width);val b=IntArray(bright.width)
+                        dim.writeArgbRow(y,a);bright.writeArgbRow(y,b)
+                        if(!a.contentEquals(b))differs=true
+                    }
+                    assertTrue("Edge-date glow remains adjustable",differs)
+                } else if(dateEnabled) {
+                    assertNotEquals("Photo date itself must still resize",plans.first().stamps.first().raster.coreWidth,plans.last().stamps.first().raster.coreWidth)
+                }
+            }
+        }
+    }
+
     @Test fun missingFieldsCenterOn135And120WithoutReservedSlots() {
         val s=settings.copy(dateEnabled=false)
         val b135=BorderSnapshot.authored("kodak_portra_400","test",1280,960)

@@ -169,7 +169,7 @@ fn independent_linear_sensor_color_values() {
 fn hostile_dimensions_and_compression_rejected() {
     let source = fs::read(fixture("RGGB.dng")).unwrap();
     for (tag, value, code) in [
-        (256u16, 4_000_000_000u32, "PIXEL_LIMIT"),
+        (256u16, 4_000_000_000u32, "EDGE_LIMIT"),
         (259, 8, "UNSUPPORTED_COMPRESSION"),
     ] {
         let mut b = source.clone();

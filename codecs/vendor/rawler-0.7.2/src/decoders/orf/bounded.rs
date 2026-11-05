@@ -150,13 +150,11 @@ fn layout<'a>(
   let w = scalar(raw, TiffCommonTag::ImageWidth)?;
   let h = scalar(raw, TiffCommonTag::ImageLength)?;
   let bits = d.get_bits_per_pixel()?.unwrap_or(12) as usize;
+  crate::check_bounded_raw_size(w, h)?;
   if w < 8
     || h < 8
     || w % 2 != 0
     || h % 2 != 0
-    || w > 32768
-    || h > 32768
-    || w.checked_mul(h).is_none_or(|n| n > 52_000_000)
     || !matches!(bits, 12 | 14)
   {
     return Err("ORF dimensions/precision".into());

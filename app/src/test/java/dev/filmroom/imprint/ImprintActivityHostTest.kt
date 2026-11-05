@@ -253,7 +253,10 @@ class ImprintActivityHostTest {
             await("date settings committed after Apply"){flow.value.parameters.imprint==expected && !dialog.isShowing}
             settle()
         }
-        fun settle()=await("settled exact presentation"){flow.value.canExport && flow.value.renderedParameters==flow.value.parameters && boundPlan(photo(a))===flow.value.imprintPlan}
+        fun settle()=await("settled exact presentation",diagnostic={
+            val s=flow.value
+            "canExport=${s.canExport} editable=${s.editable} busy=${s.busy} updating=${s.updating} refining=${s.previewRefining} sameParameters=${s.renderedParameters==s.parameters} samePlan=${boundPlan(photo(a))===s.imprintPlan} plan=${s.imprintPlan} bound=${boundPlan(photo(a))} message=${s.message} engine=${s.engineUnavailable} compare=${s.compare} border=${s.parameters.filmBorder} exposure=${s.parameters.imprint.exposure}"
+        }){flow.value.canExport && flow.value.renderedParameters==flow.value.parameters && boundPlan(photo(a))===flow.value.imprintPlan}
         fun applyDate() {
             imprintTools()
             if(!(tagged("imprint-date-switch") as Switch).isChecked)tagged("imprint-date-switch").performClick()
@@ -383,6 +386,12 @@ class ImprintActivityHostTest {
             assertEquals("2025-04-28 12:34:56",draftDateTime(reopened))
             f.apply(reopened,f.flow.value.parameters.imprint.copy(manualDateTime=null))
             assertNull(f.flow.value.parameters.imprint.manualDateTime)
+            assertFalse("Restoring the source date does not enable a border",f.flow.value.parameters.filmBorder)
+            assertEquals("Restoring the source date preserves the edge-data preference",
+                applied.exposure,f.flow.value.parameters.imprint.exposure)
+            f.imprintTools()
+            val edge=f.tagged("imprint-exposure-switch") as Switch
+            assertFalse(edge.isEnabled);assertEquals(applied.exposure,edge.isChecked);assertEquals(.38f,edge.alpha,0f)
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
         }
     }
@@ -392,6 +401,7 @@ class ImprintActivityHostTest {
     @Test fun newPhotoDismissesStaleDraftAndRealImportClearsAppliedManualDate() {
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
             f.applyDate()
+            f.vm.parameters(f.flow.value.parameters.let{it.copy(filmBorder=true,imprint=it.imprint.copy(exposure=true))});f.settle()
             val d=f.open();chooseStyle(d,3);chooseDate(d,2000,1,2)
             val pendingChild=openDatePicker(d);pendingChild.updateDate(2012,1,29)
             val replacement=source("imprint-replacement.jpg","1999:12:31 23:59:59")
@@ -420,7 +430,10 @@ class ImprintActivityHostTest {
             try {incoming.outputStream().use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))}}finally{bitmap.recycle()}
             val uri=android.net.Uri.parse("content://imprint-activity/incoming.png")
             shadowOf(RuntimeEnvironment.getApplication().contentResolver).registerInputStream(uri,incoming.inputStream())
-            f.vm.importPhoto(uri)
+            val preferences=dev.filmroom.model.EditorPreferences(RuntimeEnvironment.getApplication())
+            val previousReset=preferences.resetOnImport
+            preferences.resetOnImport=true
+            try { f.vm.importPhoto(uri) } finally { preferences.resetOnImport=previousReset }
             val importJob=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}.get(f.vm) as? Job
             assertNotNull("Real import must create an operation",importJob)
             fun importDiagnostic():String {
@@ -440,6 +453,11 @@ class ImprintActivityHostTest {
             await("import discards open date draft and child picker"){!stale.isShowing && !staleChild.isShowing}
             // Adoption is real; host native-engine availability is not faked after repository import.
             assertNull(f.flow.value.parameters.imprint.manualDateTime)
+            assertFalse("Reset on import starts with no border",f.flow.value.parameters.filmBorder)
+            assertTrue("Reset on import retains the edge-data preference",f.flow.value.parameters.imprint.exposure)
+            f.imprintTools()
+            val edge=f.tagged("imprint-exposure-switch") as Switch
+            assertFalse(edge.isEnabled);assertTrue(edge.isChecked);assertEquals(.38f,edge.alpha,0f)
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
             assertTrue(incoming.exists())
             assertNull(ImprintContent.displayDateTime(f.flow.value.photo!!.photoMetadata,f.flow.value.parameters.imprint))
@@ -456,6 +474,9 @@ class ImprintActivityHostTest {
             assertFalse((f.tagged("imprint-date-switch") as Switch).isChecked)
             assertFalse((f.tagged("imprint-exposure-switch") as Switch).isChecked)
             assertEquals("'25 04 28",(f.tagged("imprint-date-preview") as ImprintDatePreviewButton).displayedDate)
+            assertFalse(f.tagged("imprint-exposure-switch").isEnabled)
+            f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
+            assertTrue(f.tagged("imprint-exposure-switch").isEnabled)
             f.tagged("imprint-exposure-switch").performClick();f.settle()
             assertTrue(f.flow.value.parameters.imprint.exposure);assertFalse(f.flow.value.parameters.imprint.dateEnabled)
             f.tagged("imprint-date-switch").performClick();f.settle()
@@ -482,6 +503,43 @@ class ImprintActivityHostTest {
             f.apply(dialog,f.flow.value.parameters.imprint.copy(dateStyle="yashica_t4"))
             assertFalse("Style edits must not silently enable dates",f.flow.value.parameters.imprint.dateEnabled)
             assertTrue(f.flow.value.parameters.imprint.exposure)
+        }
+    }
+    @Test fun exposureIsDisabledWithoutBorderAndRestoresSelectionAfterRepeatedToggles() {
+        Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
+            f.imprintTools()
+            val disabled=f.tagged("imprint-exposure-switch") as Switch
+            assertFalse(disabled.isEnabled);assertEquals(.38f,disabled.alpha,0f)
+            assertFalse(disabled.createAccessibilityNodeInfo().isEnabled)
+            // Defensive callback guard also blocks synthetic/programmatic checked changes.
+            disabled.isChecked=true;idleUi()
+            assertFalse(f.flow.value.parameters.imprint.exposure)
+            assertTrue(f.tagged("imprint-date-switch").isEnabled)
+            assertTrue(f.tagged("imprint-date-preview").isEnabled)
+            f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
+            val active=f.tagged("imprint-exposure-switch") as Switch
+            assertTrue(active.isEnabled);assertEquals(1f,active.alpha,0f)
+            active.performClick();f.settle()
+            val saved=f.flow.value.parameters.imprint
+            assertTrue(saved.exposure)
+            assertFalse(checkNotNull(f.flow.value.imprintPlan).isEmpty)
+            repeat(2) {
+                f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
+                val off=f.tagged("imprint-exposure-switch") as Switch
+                assertFalse(off.isEnabled);assertTrue(off.isChecked)
+                assertFalse(off.createAccessibilityNodeInfo().isEnabled)
+                assertEquals(saved,f.flow.value.parameters.imprint)
+                assertTrue(checkNotNull(f.flow.value.imprintPlan).isEmpty)
+                // A detached previously-enabled control must not edit the no-border state.
+                active.isChecked=false;idleUi()
+                assertEquals(saved,f.flow.value.parameters.imprint)
+                f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
+                val on=f.tagged("imprint-exposure-switch") as Switch
+                assertTrue(on.isEnabled);assertTrue(on.isChecked)
+                assertTrue(on.createAccessibilityNodeInfo().isEnabled)
+                assertEquals(saved,f.flow.value.parameters.imprint)
+                assertFalse(checkNotNull(f.flow.value.imprintPlan).isEmpty)
+            }
         }
     }
     @Test fun narrowLargeFontDateControlsStackWithoutOverlapping() {

@@ -25,6 +25,8 @@ class ImprintPlan private constructor(
     }
     companion object {
         const val MAX_WORKING_BYTES=32L*1024*1024
+        // Film-edge capture data has its own appearance; the date controls never modify it.
+        private const val CAPTURE_DATA_GLOW=1.0
         fun exposureSupported(border:BorderSnapshot?)=border!=null &&
             (border.geometryVersion in 2..3 || (border.geometryVersion==4 && border.stock=="kodak_doublex") ||
              (border.geometryVersion==5 && MediumImprintMarks.layout(border)!=null))
@@ -85,7 +87,7 @@ class ImprintPlan private constructor(
             if(border!=null && border.geometryVersion!=5){
                 // Fit the whole set at one height. Per-field shrinking made ISO/aperture
                 // much smaller than the shutter and exposure compensation.
-                var h=(.60*unit*ppm*settings.size).coerceIn(1.0,512.0)
+                var h=(.60*unit*ppm).coerceIn(1.0,512.0)
                 var commonHeight:Double?=null
                 repeat(64) {
                     if(commonHeight==null && fields.isNotEmpty()) {
@@ -104,7 +106,7 @@ class ImprintPlan private constructor(
                     val half=fields.size/2
                     val offset=if(fields.size%2==1) index-half else if(index<half) index-half else index-half+1
                     val center=(19.0+offset*4.75)*unit
-                    val r=ImprintRaster.create(field.text,"pentax_mzs",fh,settings.glow,tone)
+                    val r=ImprintRaster.create(field.text,"pentax_mzs",fh,CAPTURE_DATA_GLOW,tone)
                     val base=if(border.stock in setOf("fujifilm_c200","fujifilm_xtra_400","fujifilm_pro_400h"))30.48 else 31.28
                     val x=center-r.coreWidth/ppm/2
                     val y=nativeHeight-base*unit-r.coreHeight/ppm
@@ -118,7 +120,9 @@ class ImprintPlan private constructor(
                 }
                 if(pieces.isNotEmpty()){
                     val gaps=pieces.dropLast(1).map{if(it.date)2.0 else 1.8}
-                    var h=(.78*ppm*settings.size).coerceIn(1.0,512.0)
+                    // Dates on the 120 edge share its fixed, fitted type size. Preserve the
+                    // photo-date size preference, but never use it for film-edge lettering.
+                    var h=(.78*ppm).coerceIn(1.0,512.0)
                     var fittedHeight:Double?=null
                     repeat(64){
                         if(fittedHeight==null){
@@ -137,7 +141,7 @@ class ImprintPlan private constructor(
                         var x=(nativeWidth-total/ppm)/2
                         pieces.forEachIndexed { i,piece ->
                             // Create one raster at a time, so rotation cannot retain a second full set.
-                            val r=ImprintRaster.create(piece.text,piece.style,fh,settings.glow,tone)
+                            val r=ImprintRaster.create(piece.text,piece.style,fh,if(piece.date)settings.glow else CAPTURE_DATA_GLOW,tone)
                             val y=(nativeHeight-.92-r.coreHeight/ppm).coerceIn(58.5+r.coreTop/ppm,61.0-(r.height-r.coreTop)/ppm)
                             if(!add(r,x,y))omitted++
                             x+=r.coreWidth/ppm+(gaps.getOrNull(i) ?: 0.0)

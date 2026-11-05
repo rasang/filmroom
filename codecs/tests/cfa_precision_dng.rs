@@ -295,8 +295,8 @@ fn unsupported_fill_order_mono_tiles_and_sensor_limit_rejected_at_probe() {
     for (tag, value, expected) in [
         (266, 2, "UNSUPPORTED_DNG_VARIANT"),
         (262, 34892, "UNSUPPORTED_DNG_VARIANT"),
-        (256, 32769, "PIXEL_LIMIT"),
-        (257, 1, "PIXEL_LIMIT"),
+        (256, 32769, "EDGE_LIMIT"),
+        (257, 1, "INVALID_INPUT"),
     ] {
         let mut b = fixture(12, true, 1, [0, 1, 1, 2], false);
         let n = u16::from_le_bytes([b[8], b[9]]) as usize;

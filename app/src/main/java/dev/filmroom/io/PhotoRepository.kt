@@ -779,8 +779,14 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 job.ensureActive()
                 val width = info.size.width
                 val height = info.size.height
-                if (!PhotoLimits.validSource(width, height)) {
-                    throw PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d591741a5a6e))
+                PhotoLimits.sourceFailure(width.toLong(), height.toLong())?.let { failure ->
+                    val invalid = failure == PhotoLimits.SourceFailure.INVALID
+                    val resource = when(failure) {
+                        PhotoLimits.SourceFailure.INVALID -> dev.filmroom.R.string.text_199d9706e7a1
+                        PhotoLimits.SourceFailure.EDGE -> dev.filmroom.R.string.image_edge_limit_30000
+                        PhotoLimits.SourceFailure.PIXELS -> dev.filmroom.R.string.text_d591741a5a6e
+                    }
+                    throw PhotoException(if(invalid) PhotoException.Reason.UNREADABLE else PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(resource))
                 }
                 onDimensions(width, height)
                 val size = PhotoLimits.fit(width, height, maxEdge)

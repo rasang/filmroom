@@ -135,15 +135,8 @@ impl AdditionalRaw {
             let plan = decoder.bounded_bayer_plan(&source)?.ok_or_else(|| {
                 rawler::RawlerError::DecoderFailed("Bounded variant unsupported".into())
             })?;
-            if plan.width < 8
-                || plan.height < 8
-                || plan.width > 32768
-                || plan.height > 32768
-                || plan
-                    .width
-                    .checked_mul(plan.height)
-                    .is_none_or(|p| p > 52_000_000)
-            {
+            rawler::check_bounded_raw_size(plan.width, plan.height)?;
+            if plan.width < 8 || plan.height < 8 {
                 return Err("RAW sensor bounds".into());
             }
             let mut raw = decoder.raw_image(&source, &Default::default(), true)?;

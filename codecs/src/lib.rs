@@ -15,7 +15,13 @@ pub fn validate_dimensions(width: u32, height: u32) -> error::Result<u64> {
     let n = u64::from(width)
         .checked_mul(u64::from(height))
         .ok_or_else(|| error::err("PIXEL_LIMIT", "admission"))?;
-    if width == 0 || height == 0 || width > 32768 || height > 32768 || n > MAX_PIXELS {
+    if width == 0 || height == 0 {
+        return Err(error::err("INVALID_INPUT", "admission"));
+    }
+    if width > 32768 || height > 32768 {
+        return Err(error::err("EDGE_LIMIT", "admission"));
+    }
+    if n > MAX_PIXELS {
         return Err(error::err("PIXEL_LIMIT", "admission"));
     }
     Ok(n)
@@ -24,6 +30,10 @@ pub fn validate_dimensions(width: u32, height: u32) -> error::Result<u64> {
 mod dimension_tests {
     #[test]
     fn marketed_50mp_and_exact_guard() {
+        assert_eq!(super::validate_dimensions(0, 8).unwrap_err().code, "INVALID_INPUT");
+        assert_eq!(super::validate_dimensions(32769, 8).unwrap_err().code, "EDGE_LIMIT");
+        assert_eq!(super::validate_dimensions(8, 32769).unwrap_err().code, "EDGE_LIMIT");
+        assert_eq!(super::validate_dimensions(32768, 8).unwrap(), 262144);
         assert_eq!(super::validate_dimensions(8192, 6144).unwrap(), 50_331_648);
         assert_eq!(super::validate_dimensions(10000, 5200).unwrap(), 52_000_000);
         assert_eq!(

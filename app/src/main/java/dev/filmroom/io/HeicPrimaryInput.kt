@@ -167,7 +167,7 @@ internal object HeicPrimaryInput {
                         val at = if (method == 1) sum(idat?.body ?: invalid(), relative) else relative
                         val boundary = if (method == 1) idat!! else mdats.singleOrNull { at >= it.body && at < it.end } ?: invalid()
                         if (at < boundary.body || at > boundary.end || size > boundary.end - at) invalid()
-                        totalBytes = sum(totalBytes, size); if (totalBytes > PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+                        totalBytes = sum(totalBytes, size); if (totalBytes > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
                         extents.add(Extent(at, size))
                     }
                 }
@@ -180,7 +180,8 @@ internal object HeicPrimaryInput {
 
         fun plan(original: File): Prepared {
             val directory = original.parentFile ?: original.absoluteFile.parentFile ?: invalid()
-            if (length !in 1..PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+            if (length <= 0) invalid()
+            if (length > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
             val top = boxes(0, length)
             if (top.any { it.type in setOf("moov", "moof") }) unsupported()
             val ftyp = one(top, "ftyp"); input.seek(ftyp.body)
@@ -286,7 +287,7 @@ internal object HeicPrimaryInput {
             val firstMeta = outputMeta(0); val payloadStart = outputFtyp.size.toLong() + firstMeta.size + 8
             val outMeta = outputMeta(payloadStart); check(firstMeta.size == outMeta.size)
             val payloadSize = sizes.values.sum(); val outputSize = payloadStart + payloadSize
-            if (outputSize > PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+            if (outputSize > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
             // Validate the selected graph/profile in memory. Restoring a retained linear spool
             // must not write a new encoded file or require free disk space.
             val skeleton = outputFtyp + outMeta + box("mdat", byteArrayOf())
@@ -331,7 +332,7 @@ internal object HeicPrimaryInput {
                 val property = links[id].orEmpty().map { props[it.property - 1] }.filter { it.type == "ispe" }.singleOrNull() ?: invalid()
                 if (header(property) != (0 to 0)) unsupported()
                 val w = u32(property.end); val h = u32(property.end); end(property.end)
-                if (w > Int.MAX_VALUE || h > Int.MAX_VALUE || !PhotoLimits.validSource(w.toInt(), h.toInt())) limit()
+                HeicContainer.validateSourceSize(w, h)
                 return w to h
             }
             if (shape(primary) != (width to height)) invalid()

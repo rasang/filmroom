@@ -137,14 +137,10 @@ impl Dng {
         }
         let width = uint(raw, 256, None)? as usize;
         let height = uint(raw, 257, None)? as usize;
-        if width < 8
-            || height < 8
-            || width > 32768
-            || height > 32768
-            || (width as u64) * (height as u64) > crate::MAX_PIXELS
-        {
-            return Err(err("PIXEL_LIMIT", "probe"));
+        if width < 8 || height < 8 {
+            return Err(err("INVALID_INPUT", "probe"));
         }
+        crate::validate_dimensions(width as u32, height as u32)?;
         let cpp = uint(raw, 277, Some(1))? as usize;
         let cfa_mode = uint(raw, 262, None)? == 32803;
         if compression == 52546 && cfa_mode {

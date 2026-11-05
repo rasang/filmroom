@@ -373,7 +373,7 @@ class ImprintContractHostTest {
             }
         }finally{controller.pause().stop().destroy()}
     }
-    @Test fun missingCaptureUsesLabeledModifiedOrCreatedDate() {
+    @Test fun missingCaptureUsesModifiedOrCreatedDateWithoutSourceCaption() {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {
             for((attributes,expected,kind) in listOf(
@@ -383,7 +383,7 @@ class ImprintContractHostTest {
                 val metadata=PhotoMetadata.fromAttributes(attributes);var applied:ImprintSettings?=null
                 val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),metadata){applied=it}
                 idleUi();click(datePicker(d),AlertDialog.BUTTON_NEGATIVE)
-                assertEquals(kind.text(controller.get()),d.window!!.decorView.findViewWithTag<TextView>("imprint-source").text.toString())
+                assertNull(d.window!!.decorView.findViewWithTag<View>("imprint-source"))
                 click(d,AlertDialog.BUTTON_POSITIVE);assertEquals(setting,applied)
                 assertEquals(expected,ImprintContent.from(metadata,checkNotNull(applied)).date)
                 assertEquals(expected,ImprintContent.from(PhotoMetadata.fromJson(metadata.toJson()),setting).date)

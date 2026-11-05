@@ -120,6 +120,10 @@ impl<T: Read + Seek> ReadTrait for T {}
 
 #[derive(Error, Debug)]
 pub enum RawlerError {
+  #[error("Bounded RAW image exceeds the pixel or edge limit")]
+  ImageSizeLimit,
+  #[error("Bounded RAW image exceeds the edge limit")]
+  ImageEdgeLimit,
   #[error("Bounded Bayer row allocation failed")]
   RowAllocationFailed,
   #[error("Error: {}, model '{}', make: '{}', mode: '{}'", what, model, make, mode)]
@@ -260,3 +264,35 @@ pub(crate) fn init_test_logger() {
 
 /// Filmroom opt-in metadata resource budget.
 pub mod metadata_budget;
+
+/// Only upper-size admission. Zero/undersized dimensions, Bayer layout and
+/// precision remain the caller's distinct validation responsibilities.
+pub fn check_bounded_raw_size(width: usize, height: usize) -> Result<()> {
+  if width > 32_768 || height > 32_768 {
+    return Err(RawlerError::ImageEdgeLimit);
+  }
+  if width.checked_mul(height).is_none_or(|n| n > 52_000_000) {
+    return Err(RawlerError::ImageSizeLimit);
+  }
+  Ok(())
+}
+
+#[cfg(test)]
+mod bounded_raw_size_tests {
+  use super::*;
+  #[test]
+  fn exact_size_and_edge_boundaries() {
+    for (w, h) in [(10_000, 5_200), (5_200, 10_000), (32_768, 8), (8, 32_768)] {
+      assert!(check_bounded_raw_size(w, h).is_ok());
+    }
+    for (w, h) in [(10_000, 5_201), (5_201, 10_000), (32_769, 8), (8, 32_769), (usize::MAX, usize::MAX)] {
+      assert!(matches!(check_bounded_raw_size(w, h), Err(RawlerError::ImageSizeLimit | RawlerError::ImageEdgeLimit)));
+    }
+  }
+  #[test]
+  fn non_size_invalidity_is_not_reported_as_too_large() {
+    for (w, h) in [(0, 8), (8, 0), (7, 8), (9, 9)] {
+      assert!(check_bounded_raw_size(w, h).is_ok());
+    }
+  }
+}
