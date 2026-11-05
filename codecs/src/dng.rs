@@ -37,6 +37,7 @@ pub struct Dng {
     pub profile: Option<crate::profile_develop::ProfileDevelopment>,
     pub sample_bits: u8,
     pub streaming_linear: bool,
+    pub streaming_cfa: bool,
     pub linearization: Option<crate::profile_gain_table::LinearizationTable>,
     pub tile_width: usize,
     pub tile_height: usize,
@@ -160,7 +161,9 @@ impl Dng {
         if !(bits.len() == 1 || bits.len() == cpp)
             || bits.iter().any(|&v| {
                 v != bits[0]
-                    || !(v == 16 || (matches!(v, 12 | 14) && (cfa_mode || compression == 7)))
+                    || !(v == 16
+                        || (matches!(v, 12 | 14) && (cfa_mode || compression == 7))
+                        || (v == 8 && cfa_mode && compression == 1))
             })
         {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
@@ -175,7 +178,15 @@ impl Dng {
         let linearization = inherited(root, raw, 50712)
             .map(crate::profile_gain_table::LinearizationTable::parse)
             .transpose()?;
-        if linearization.is_some() && cfa_mode {
+        // Companded CFA codes are not linear sensor values. Admit only the
+        // explicitly bounded byte-code layout with a complete SHORT LUT and
+        // an explicit post-linearization white point; never normalize by 255.
+        let byte_lut_cfa = cfa_mode && bits[0] == 8 && compression == 1
+            && inherited(root, raw, 50712).is_some_and(|v| v.typ == 3 && v.count == 256)
+            && raw.contains_key(&50717)
+            && ![322, 323, 324, 325].iter().any(|tag| raw.contains_key(tag));
+        if (bits[0] == 8 && !byte_lut_cfa)
+            || (linearization.is_some() && cfa_mode && !byte_lut_cfa) {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
         // Beta4 admitted only 16-bit DNG. This explicit new SOF3 LinearRaw
@@ -446,6 +457,13 @@ impl Dng {
                     .checked_mul(tile_height)
                     .and_then(|n| n.checked_mul(cpp))
                     .is_none_or(|n| n > crate::lossless::MAX_SAMPLES));
+        // Large 16-bit containers can carry a lower-precision SOF3 scan.
+        // Keep existing small/tiled legacy layouts unchanged; large strips
+        // use bounded rows and anonymous storage rather than raising caps.
+        let streaming_cfa = compression == 7 && cfa_mode && bits[0] == 16 && !tiled
+            && (counts.iter().any(|&n| n as usize > crate::lossless::MAX_ENCODED)
+                || tile_width.checked_mul(tile_height)
+                    .is_none_or(|n| n > crate::lossless::MAX_SAMPLES));
         for (i, (&o, &n)) in offsets.iter().zip(&counts).enumerate() {
             let block_h = if tiled {
                 tile_height
@@ -471,6 +489,7 @@ impl Dng {
             }
             if compression == 7
                 && !streaming_linear
+                && !streaming_cfa
                 && !(cfa_mode && matches!(bits[0], 12 | 14))
                 && (samples > crate::lossless::MAX_SAMPLES
                     || n as usize > crate::lossless::MAX_ENCODED)
@@ -493,6 +512,7 @@ impl Dng {
             profile,
             sample_bits: bits[0] as u8,
             streaming_linear,
+            streaming_cfa,
             linearization,
             tile_width,
             tile_height,
@@ -524,6 +544,10 @@ impl Dng {
                 "DNG_LINEAR_RGB_U12_LOSSLESS_JPEG_STREAM"
             } else if self.streaming_linear && self.sample_bits == 14 {
                 "DNG_LINEAR_RGB_U14_LOSSLESS_JPEG_STREAM"
+            } else if self.cpp == 1 && self.sample_bits == 8 {
+                "DNG_BAYER_U8_LINEARIZED_UNCOMPRESSED_STRIPS"
+            } else if self.streaming_cfa {
+                "DNG_BAYER_U16_LOSSLESS_JPEG_STREAM"
             } else if self.cpp == 1 && matches!(self.sample_bits, 12 | 14) {
                 match (self.sample_bits, self.compression, self.rows_per_strip == 0) {
                     (12, 7, false) => "DNG_BAYER_U12_LOSSLESS_JPEG_STRIPS",
@@ -656,8 +680,9 @@ impl Dng {
     }
     pub fn cfa_spool(&self) -> bool {
         self.cpp == 1
-            && matches!(self.sample_bits, 12 | 14)
-            && (self.compression == 7 || self.rows_per_strip == 0)
+            && ((matches!(self.sample_bits, 12 | 14)
+                && (self.compression == 7 || self.rows_per_strip == 0))
+                || (self.streaming_cfa && self.compression == 7))
     }
     pub fn decode_scratch_bytes(&self) -> u64 {
         let map_bytes: u64 = self

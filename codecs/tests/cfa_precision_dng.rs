@@ -68,6 +68,9 @@ fn jpeg_region(precision: u8, w: usize, h: usize, x0: usize, y0: usize) -> Vec<u
     b
 }
 fn fixture(bits: u8, compressed: bool, orientation: u32, pattern: [u8; 4], big: bool) -> Vec<u8> {
+    fixture_options(bits, compressed, orientation, pattern, big, false)
+}
+fn fixture_options(bits: u8, compressed: bool, orientation: u32, pattern: [u8; 4], big: bool, companded: bool) -> Vec<u8> {
     // Directory endian deliberately varies independently of packed sample order.
     let u16bytes = |n: u16| {
         if big {
@@ -138,11 +141,14 @@ fn fixture(bits: u8, compressed: bool, orientation: u32, pattern: [u8; 4], big: 
             .flat_map(|v| [v, 1].into_iter().flat_map(u32bytes))
             .collect(),
     ));
+    if companded && bits == 8 {
+        tags.push((50712, 3, 256, (0u16..256).flat_map(|v| u16bytes(v * v / 4)).collect()));
+    }
     let data = if compressed {
         jpeg(bits)
     } else if bits == 16 {
         (0..H)
-            .flat_map(|y| (0..W).flat_map(move |x| u16bytes(sample(x, y))))
+            .flat_map(|y| (0..W).flat_map(move |x| u16bytes(if companded { let v = sample(x,y) & 255; v*v/4 } else { sample(x,y) })))
             .collect()
     } else {
         let stride = (W * bits as usize).div_ceil(8);
@@ -517,5 +523,137 @@ fn packed_strip_padding_is_not_sensor_data_and_short_extent_is_rejected() {
             .code,
         "INVALID_INPUT"
     );
+    fs::remove_file(input).unwrap();
+}
+
+#[test]
+fn byte_lut_cfa_matches_expanded_u16_all_patterns_orientations_and_endians() {
+    let input = path("byte-lut.dng");
+    let output = path("byte-lut.f32");
+    for pattern in [[0,1,1,2],[2,1,1,0],[1,0,2,1],[1,2,0,1]] {
+        for orientation in 1..=8 {
+            for big in [false,true] {
+                let mut expected = None;
+                for bits in [16,8] {
+                    fs::write(&input,fixture_options(bits,false,orientation,pattern,big,true)).unwrap();
+                    let (probe, admission)=decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();
+                    if bits==8 {
+                        assert_eq!(probe.variant,"DNG_BAYER_U8_LINEARIZED_UNCOMPRESSED_STRIPS");
+                        assert_eq!(&fs::read(&output).unwrap(),expected.as_ref().unwrap());
+                        assert_eq!(admission.required_disk_bytes,probe.output_bytes);
+                    } else {expected=Some(fs::read(&output).unwrap());}
+                    fs::remove_file(&output).unwrap();
+                }
+            }
+        }
+    }
+    fs::remove_file(input).unwrap();
+}
+
+#[test]
+fn byte_cfa_requires_complete_short_lut_and_explicit_white() {
+    let input=path("invalid-byte-lut.dng");
+    for (tag, field, replacement) in [(50712,2,4u32),(50712,4,255),(50712,0,65000),(50717,0,65000),(259,8,7)] {
+        let mut b=fixture_options(8,false,1,[0,1,1,2],false,true);
+        let n=u16::from_le_bytes([b[8],b[9]]) as usize;
+        let at=(0..n).find(|&i|u16::from_le_bytes([b[10+i*12],b[11+i*12]])==tag).unwrap()*12+10+field;
+        if field==0 || field==2 {b[at..at+2].copy_from_slice(&(replacement as u16).to_le_bytes());}
+        else {b[at..at+4].copy_from_slice(&replacement.to_le_bytes());}
+        fs::write(&input,b).unwrap();
+        assert!(Dng::read(&mut fs::File::open(&input).unwrap()).is_err(),"tag={tag},field={field}");
+    }
+    fs::remove_file(input).unwrap();
+}
+
+#[test]
+fn oversized_u16_cfa_jpeg_uses_spool_but_does_not_ignore_invalid_tail() {
+    let input=path("u16-large-strip.dng");
+    let output=path("u16-large-strip.f32");
+    let mut b=fixture(14,true,1,[0,1,1,2],false);
+    let n=u16::from_le_bytes([b[8],b[9]]) as usize;
+    let at=|tag|18+(0..n).find(|&i|u16::from_le_bytes([b[10+i*12],b[11+i*12]])==tag).unwrap()*12;
+    let bits_at=at(258);let count_at=at(279);
+    let old=u32::from_le_bytes(b[count_at..count_at+4].try_into().unwrap()) as usize;
+    b[bits_at..bits_at+4].copy_from_slice(&16u32.to_le_bytes());
+    let count=8*1024*1024+1; // Existing legacy per-block encoded cap.
+    b[count_at..count_at+4].copy_from_slice(&(count as u32).to_le_bytes());
+    b.resize(b.len()+count-old,0);
+    fs::write(&input,b).unwrap();
+    let d=Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();
+    assert!(d.cfa_spool());assert!(d.streaming_cfa);
+    let a=admit(&d,&Budget::default()).unwrap();
+    assert_eq!(a.required_disk_bytes,d.probe().output_bytes+(W*H*2)as u64);
+    assert_eq!(d.probe().variant,"DNG_BAYER_U16_LOSSLESS_JPEG_STREAM");
+    assert!(decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).is_err());
+    assert!(!output.exists());fs::remove_file(input).unwrap();
+}
+
+fn split_byte_strips(mut b:Vec<u8>,rows:usize)->Vec<u8> {
+    let n=u16::from_le_bytes([b[8],b[9]]) as usize;
+    let at=|tag|10+(0..n).find(|&i|u16::from_le_bytes([b[10+i*12],b[11+i*12]])==tag).unwrap()*12;
+    let offsets=at(273);let counts=at(279);let rows_at=at(278);
+    let first=u32::from_le_bytes(b[offsets+8..offsets+12].try_into().unwrap()) as usize;
+    let count=H.div_ceil(rows);
+    for (tag_at,values) in [(offsets,(0..count).map(|i|(first+i*rows*W)as u32).collect::<Vec<_>>()),(counts,(0..count).map(|i|(rows.min(H-i*rows)*W)as u32).collect::<Vec<_>>())] {
+        b[tag_at+4..tag_at+8].copy_from_slice(&(count as u32).to_le_bytes());
+        let address=if count==1 {values[0]} else {let address=b.len()as u32;b.extend(values.iter().flat_map(|v|v.to_le_bytes()));address};
+        b[tag_at+8..tag_at+12].copy_from_slice(&address.to_le_bytes());
+    }
+    b[rows_at+8..rows_at+12].copy_from_slice(&(rows as u32).to_le_bytes());b
+}
+#[test]
+fn byte_lut_partial_final_strips_and_failure_cleanup() {
+    let input=path("byte-lut-strips.dng");let output=path("byte-lut-strips.f32");
+    let base=fixture_options(8,false,1,[0,1,1,2],false,true);
+    let mut reference=None;
+    for rows in [H,17,1] {
+        fs::write(&input,split_byte_strips(base.clone(),rows)).unwrap();
+        decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();
+        let got=fs::read(&output).unwrap();if let Some(want)=&reference {assert_eq!(&got,want);} else {reference=Some(got);}
+        // Never overwrite an existing output, including cancellation requests.
+        let original=fs::read(&output).unwrap();
+        assert!(decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).is_err());
+        assert_eq!(fs::read(&output).unwrap(),original);fs::remove_file(&output).unwrap();
+        assert_eq!(decode(&input,&output,&Budget::default(),&AtomicBool::new(true)).unwrap_err().code,"CANCELLED");assert!(!output.exists());
+    }
+    let mut short=base;short.pop();fs::write(&input,short).unwrap();
+    assert!(Dng::read(&mut fs::File::open(&input).unwrap()).is_err());fs::remove_file(input).unwrap();
+}
+
+#[test]
+fn large_sample_count_u16_sof14_strip_develops_like_uncompressed_control() {
+    let input=path("u16-stream-success.dng");let output=path("u16-stream-success.f32");
+    let (width,height)=(2048usize,2050usize); // Just beyond 4 Mi-sample legacy cap.
+    let mut base=fixture(16,false,1,[0,1,1,2],false);
+    let n=u16::from_le_bytes([base[8],base[9]])as usize;
+    let at=|tag|18+(0..n).find(|&i|u16::from_le_bytes([base[10+i*12],base[11+i*12]])==tag).unwrap()*12;
+    let width_at=at(256);let height_at=at(257);let compression_at=at(259);let offset_at=at(273);let count_at=at(279);let rows_at=at(278);
+    // Retain the small shifted active/crop region to test halo coordinates.
+    base[width_at..width_at+4].copy_from_slice(&(width as u32).to_le_bytes());
+    base[height_at..height_at+4].copy_from_slice(&(height as u32).to_le_bytes());
+    base[rows_at..rows_at+4].copy_from_slice(&(height as u32).to_le_bytes());
+    let data_at=u32::from_le_bytes(base[offset_at..offset_at+4].try_into().unwrap())as usize;base.truncate(data_at);
+    let mut jpeg=jpeg_region(14,2,1,0,0); // Reuse the legal two-component header.
+    let sos=jpeg.windows(2).position(|p|p==[255,218]).unwrap();jpeg.truncate(sos+12);
+    jpeg[7..9].copy_from_slice(&(height as u16).to_be_bytes());jpeg[9..11].copy_from_slice(&((width/2)as u16).to_be_bytes());
+    let bit_count=width*height*5; // All category-zero codes under the 5-bit tree.
+    jpeg.extend(std::iter::repeat_n(0u8,bit_count/8));
+    if bit_count%8!=0 {jpeg.push((1u8<<(8-bit_count%8))-1);}
+    jpeg.extend([255,217]);
+    let mut expected=None;
+    for compressed in [false,true] {
+        let mut b=base.clone();let data=if compressed {jpeg.clone()} else {(0..width*height).flat_map(|_|8192u16.to_le_bytes()).collect()};
+        b[compression_at..compression_at+4].copy_from_slice(&(if compressed {7u32}else{1}).to_le_bytes());
+        b[count_at..count_at+4].copy_from_slice(&(data.len()as u32).to_le_bytes());b.extend(data);fs::write(&input,b).unwrap();
+        let d=Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();assert_eq!(d.streaming_cfa,compressed);
+        if compressed {
+            let mut budget=Budget::default();budget.disk_budget_bytes=d.probe().output_bytes;
+            assert_eq!(admit(&d,&budget).unwrap_err().code,"DISK_BUDGET");
+            assert_eq!(decode(&input,&output,&Budget::default(),&AtomicBool::new(true)).unwrap_err().code,"CANCELLED");assert!(!output.exists());
+        }
+        decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();let got=fs::read(&output).unwrap();
+        if let Some(want)=&expected {assert_eq!(&got,want);}else{expected=Some(got);}fs::remove_file(&output).unwrap();
+    }
+    fs::write(&input,fixture(16,true,1,[0,1,1,2],false)).unwrap();assert!(!Dng::read(&mut fs::File::open(&input).unwrap()).unwrap().streaming_cfa);
     fs::remove_file(input).unwrap();
 }

@@ -186,6 +186,7 @@ pub fn rows(
     let mut selectors = [0usize; 2];
     let mut restart = 0usize;
     let mut saw_restart = false;
+    let mut jpeg_precision = None;
     let mut header_bytes = 2usize;
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -206,13 +207,17 @@ pub fn rows(
             0xc3 => {
                 if !ids.is_empty()
                     || s.len() != 12
-                    || s[0] != precision
+                    || !(s[0] == precision
+                        || (precision == 16 && matches!(s[0], 12 | 14)))
                     || u16::from_be_bytes([s[1], s[2]]) as usize != height
                     || u16::from_be_bytes([s[3], s[4]]) as usize * 2 != width
                     || s[5] != 2
                 {
                     return Err(unsupported());
                 }
+                // The TIFF container's 16-bit storage width does not set the
+                // SOF3 predictor midpoint: that comes from the scan precision.
+                jpeg_precision = Some(s[0]);
                 for c in s[6..].chunks_exact(3) {
                     if c[1] != 0x11 || c[2] != 0 || ids.contains(&c[0]) {
                         return Err(unsupported());
@@ -269,6 +274,7 @@ pub fn rows(
             _ => return Err(unsupported()),
         }
     }
+    let precision = jpeg_precision.ok_or_else(invalid)?;
     let mut row = vec![0u16; width];
     let mut first = [1i32 << (precision - 1); 2];
     let mut rst = 0u8;
@@ -533,6 +539,24 @@ mod tests {
         fs::remove_file(p).unwrap();
         f.write_all(b).unwrap();
         rows(&mut f, 0, b.len() as u64, 18, 5, precision, cancel, sink)
+    }
+    #[test]
+    fn u16_container_uses_actual_scan_precision_without_bit_shifting() {
+        for precision in [12u8,14,16] {
+            for restart in [0usize,1,2] {
+                let b=fixture(precision,restart,1);
+                let mut exact=Vec::new();
+                run(&b,precision,&AtomicBool::new(false),|_,row|{exact.extend_from_slice(row);Ok(())}).unwrap();
+                let mut wide=Vec::new();
+                run(&b,16,&AtomicBool::new(false),|_,row|{wide.extend_from_slice(row);Ok(())}).unwrap();
+                assert_eq!(wide,exact);
+            }
+        }
+        for actual in [8,10,15,17] {
+            let mut b=fixture(14,0,1);b[6]=actual;
+            assert!(run(&b,16,&AtomicBool::new(false),|_,_|panic!("unsupported precision emitted rows")).is_err());
+        }
+        assert!(run(&fixture(16,0,1),14,&AtomicBool::new(false),|_,_|panic!()).is_err());
     }
     #[test]
     fn predictors_component_mapping_precision_wrap_and_restarts() {

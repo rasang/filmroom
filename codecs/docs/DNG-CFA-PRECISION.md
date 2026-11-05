@@ -67,3 +67,36 @@ results must be recorded separately; test design alone is not a passed result.
 New 12/14-bit CFA tile layouts also bound the sum of padded tile samples to twice the existing 52,000,000-pixel ceiling. Repeated compressed offsets cannot bypass this work bound. The synthetic repeated-offset regression and ordinary partial-edge tile parity tests pass; the legacy 16-bit/LinearRaw policy is unchanged.
 
 Pentax K10D and K-1 Mark II DNG controls compare exactly over 25,887,104 normalized active sensor samples against LibRaw-decoded sensor data. This comparison uses the adapter's black/white values and therefore does not independently certify those metadata choices or manufacturer rendering. The Sigma tiled-DNG production control produces the expected finite output and a Linux child peak RSS of 41,404 KiB. These results do not imply support for untested DNG variants or Android devices.
+
+## Companded byte CFA and large U16-container strips
+
+The generic uncompressed Bayer-strip path also accepts 8-bit code values only
+with a complete 256-entry SHORT LinearizationTable and an explicit WhiteLevel.
+The existing row reader maps codes through the table before black subtraction
+and white normalization. It does not treat the byte values as linear light,
+normalize them by 255, or use a camera-model exception. Other unverified CFA
+linearization layouts and byte-code JPEG/tiles remain rejected.
+
+A 16-bit TIFF CFA container with a non-tiled JPEG strip above the legacy 8 MiB
+encoded or 4 Mi-sample block limit now uses the bounded row/spool route rather
+than increasing those legacy limits. The scan must have the supported SOF3
+layout and 12, 14 or 16-bit precision. Its actual SOF precision sets the initial
+and restart predictor midpoint; decoded values are not shifted to fill 16 bits.
+Existing small-block and tiled U16 routes are unchanged. Original 12/14-bit
+container paths still require matching scan precision. The global 52 MP and
+32,768-dimension guards, complete entropy/EOI validation, private storage and
+memory/disk admission remain in force.
+
+Validation for this extension includes release all-targets (188 passed, 8
+explicit legacy opt-in ignores), every Bayer phase/orientation and both TIFF
+endians against an expanded-u16 control, partial final strips, malformed LUTs,
+wrong scan precisions, a complete >4 Mi-sample spool-to-RGB success case,
+resource rejection, cancellation and existing-output protection. Representative
+M8, M9 and M240 normalized samples exactly match LibRaw-decoded sensors; their
+full RGB output also exactly matches the unchanged developer supplied with
+those independent sensor values in u16 controls. Normalization still uses the
+adapter's black/white metadata, and this is not a claim of manufacturer-JPEG
+color matching. Six existing Ricoh/Pentax/Sigma DNG controls remain exact.
+The real Linux JNI regression additionally covers import, JPEG export,
+metadata/orientation and input preservation for byte-LUT and large-strip DNG.
+No physical Android device execution is claimed by these host checks.
