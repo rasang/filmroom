@@ -16,6 +16,7 @@
         <service android:name=".export.ExportService" android:exported="false" android:foregroundServiceType="dataSync|mediaProcessing"/>
         <!-- Same UID for the owned cache snapshot; separate process for native/driver failure. -->
         <service android:name=".engine.GpuRenderService" android:enabled="${gpuProbeEnabled}" android:exported="false" android:process=":gpu_render" android:stopWithTask="true"/>
+        <service android:name=".engine.GpuScienceService" android:enabled="${gpuProbeEnabled}" android:exported="false" android:process=":gpu_science" android:stopWithTask="true"/>
         <service android:name=".engine.GpuProbeService" android:enabled="${gpuProbeEnabled}" android:exported="false" android:process=":gpu_probe" android:stopWithTask="true"/>
         <provider android:name=".ui.DiagnosticFileProvider" android:authorities="${applicationId}.diagnostics" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/diagnostic_paths"/>

@@ -10,7 +10,7 @@ android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = if (filmroomPerf) 37 else 28; versionName = if (filmroomPerf) "0.1.19-opt.7.1" else "0.1.19"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = if (filmroomPerf) 38 else 28; versionName = if (filmroomPerf) "0.1.19-opt.7.2" else "0.1.19"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     defaultConfig {
         buildConfigField("boolean", "PERF_BUILD", filmroomPerf.toString())
         manifestPlaceholders["gpuProbeEnabled"] = filmroomPerf.toString()

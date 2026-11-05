@@ -1,5 +1,6 @@
 //! Immutable bounded exposure packets and all-three-plane atomic publication.
 //! The caller reserves disk before prepare and proves helper death before validate.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use super::ExposureDescriptor;
 use crate::gpu_stage_staging::{io_at, Phase};
 use serde::{Deserialize, Serialize};
@@ -181,7 +182,10 @@ pub(super) struct OwnedDir(pub PathBuf, pub bool);
 impl Drop for OwnedDir {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -223,6 +227,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> R<(T, Vec<u8>)> {
     Ok((value, bytes))
 }
 pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, ExposurePlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     owner(dir, token)?;
     let mut names = Vec::new();
     for entry in io(fs::read_dir(dir))?.take(5) {
@@ -252,7 +257,9 @@ pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, ExposurePlan)> {
     )?;
     regular(&dir.join("tables.f64le"), p.table_scalars * 8)?;
     Ok((m, p))
-}
+
+        })
+    }
 pub fn plan_stage(dir: &Path, token: u64) -> R<ExposurePlan> {
     load(dir, token).map(|(_, p)| p)
 }
@@ -319,6 +326,7 @@ pub(super) fn read_descriptor(
     p: &ExposurePlan,
     cancel: &mut impl FnMut() -> bool,
 ) -> R<ExposureDescriptor> {
+        trace::phase_result(GpuPhase::Prepare, || {
     let mut input = io(File::open(dir.join("tables.f64le")))?;
     let mut table = Vec::with_capacity(p.table_scalars as usize);
     let mut hash = Sha256::new();
@@ -342,7 +350,9 @@ pub(super) fn read_descriptor(
     let d = m.descriptor(table)?;
     d.validate()?;
     Ok(d)
-}
+
+        })
+    }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Complete {

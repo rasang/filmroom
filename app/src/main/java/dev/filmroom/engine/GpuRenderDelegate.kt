@@ -16,6 +16,9 @@ import android.os.StatFs
 import android.os.SystemClock
 import androidx.annotation.Keep
 import dev.filmroom.BuildConfig
+import dev.filmroom.diagnostics.GpuLifecycleRecorder
+import dev.filmroom.diagnostics.GpuLifecyclePhase
+import dev.filmroom.diagnostics.RenderMemoryInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -39,6 +42,13 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
     @Volatile private var rejected: GpuRenderPoll? = null
     private val enabled get() = (testHooks?.enabled ?: BuildConfig.PERF_BUILD) && !GpuProbeProcess.isWorker(this.context.packageName, Application.getProcessName())
 
+    private fun trace(token: Long, phase: GpuLifecyclePhase, code: GpuRenderCode? = null, durable: Boolean = false, memory: RenderMemoryInfo? = null) {
+        runCatching {
+            if (testHooks != null) { testHooks.lifecycle(token, phase, code, durable); return }
+            if (durable) GpuLifecycleRecorder.recordBeforeBlocking(context, token, operation, phase, code, memory = memory)
+            else GpuLifecycleRecorder.record(context, token, operation, phase, code, memory = memory)
+        }
+    }
     init { if (enabled) prepareRoot() }
     private fun prepareRoot(): Boolean = runCatching {
         val root = File(this.context.cacheDir.canonicalFile, "gpu-render")
@@ -57,16 +67,24 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
     }.getOrDefault(0)
 
     /** 0 is definitive no-launch; once accepted, only poll's proof-backed terminal is safe. */
-    fun begin(requestJson: String): Int {
+    @JvmOverloads
+    fun begin(requestJson: String, isCancelled: () -> Boolean = { false }): Int {
         if (!attempted.compareAndSet(false, true) || !enabled || Looper.myLooper() == Looper.getMainLooper()) return 0
         var reservation: RetainedNativeWork? = null
+        var diagnosticToken = 0L
         try {
             val request = GpuRenderProtocol.parseRequest(requestJson, context)
             require(request.operation == operation)
+            diagnosticToken = request.token
+            trace(request.token, GpuLifecyclePhase.STAGE_BEGIN, durable = true)
             rejected = GpuRenderPoll(request.token, GpuRenderStatus.NOT_STARTED, GpuRenderCode.INVALID_REQUEST, request.totalPixels)
+            if (isCancelled()) { rejected = rejected?.copy(code = GpuRenderCode.CANCELLED); return 0 }
             if (previewBudget?.expired() == true) { rejected = rejected?.copy(code = GpuRenderCode.PREVIEW_BUDGET_EXHAUSTED); return 0 }
+            trace(request.token, GpuLifecyclePhase.PLAN_ENTER, durable = true)
             val plan = GpuRenderProtocol.parseStagePlan(testHooks?.plan?.invoke(request.jobDir, request.token) ?: GpuRenderProtocol.nativePlan(operation, request.jobDir, request.token), request.token, operation)
             require(GpuRenderProtocol.matches(request, plan))
+            trace(request.token, GpuLifecyclePhase.PLAN_EXIT)
+            if (isCancelled()) { rejected = rejected?.copy(code = GpuRenderCode.CANCELLED); return 0 }
             if (previewBudget?.expired() == true) { rejected = rejected?.copy(code = GpuRenderCode.PREVIEW_BUDGET_EXHAUSTED); return 0 }
             if (!active.compareAndSet(null, this)) { rejected = rejected?.copy(code = GpuRenderCode.GPU_BUSY); return 0 }
             val pressure = AtomicBoolean(false)
@@ -77,13 +95,16 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                 synchronized(lock) { session }?.let { stop(it, GpuRenderCode.MEMORY_UNAVAILABLE) }
                 Unit
             }
+            trace(request.token, GpuLifecyclePhase.RESERVE_ENTER, durable = true, memory = RenderMemoryInfo(requestedBytes = plan.combinedPeakBytes))
             reservation = testHooks?.reserve?.invoke(plan.combinedPeakBytes, onPressure)
                 ?: NativeWorkReservations.retainForDetail(plan.combinedPeakBytes, { NativeWorkReservations.snapshot(context) }, onPressure)
+            trace(request.token, GpuLifecyclePhase.RESERVED, memory = RenderMemoryInfo(requestedBytes = plan.combinedPeakBytes, chargedBytes = Math.addExact(plan.combinedPeakBytes, 16L * NativeMemoryPolicy.MIB)))
             testHooks?.beforeSession?.invoke()
             val owned = Session(request, plan, reservation)
             synchronized(lock) { session = owned; rejected = null }
             reservation = null
             testHooks?.afterSession?.invoke()
+            if (isCancelled()) stop(owned, GpuRenderCode.CANCELLED)
             if (pressure.get()) stop(owned, GpuRenderCode.MEMORY_UNAVAILABLE)
             if (!main.post { start(owned) }) stop(owned, GpuRenderCode.START_REVOKED)
             return 1
@@ -110,6 +131,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
             if (synchronized(lock) { session } == null) {
                 reservation?.close()
                 active.compareAndSet(this, null)
+                if (diagnosticToken > 0) trace(diagnosticToken, GpuLifecyclePhase.NOT_STARTED, rejected?.code)
             }
         }
     }
@@ -117,6 +139,13 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
         val owned = synchronized(lock) { session }
             ?: return rejected?.takeIf { it.token == token }?.json() ?: GpuRenderPoll(token, GpuRenderStatus.NOT_STARTED, GpuRenderCode.NO_JOB, 0).json()
         if (owned.request.token != token) return GpuRenderPoll(token, GpuRenderStatus.STOPPING, GpuRenderCode.INVALID_REQUEST, 0).json()
+        val waiting = synchronized(lock) {
+            val now = SystemClock.elapsedRealtime()
+            if (!owned.done.isCompleted && owned.waitEvents < 60 && now - owned.lastWaitAt >= 2_000) {
+                owned.lastWaitAt = now; owned.waitEvents++; true
+            } else false
+        }
+        if (waiting) trace(token, GpuLifecyclePhase.WAIT)
         checkDeaths(owned)
         if (nowMillis() >= owned.deadline) stop(owned, deadlineCode())
         // Unknown death is NOT a terminal status. JNI converts this transport failure
@@ -137,6 +166,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
     /** False transfers cleanup to whenSafeToRelease, never permission to destroy. */
     suspend fun awaitSafeTermination(): Boolean = withContext(NonCancellable) {
         val owned = synchronized(lock) { session } ?: return@withContext true
+        if (owned.drainRecorded.compareAndSet(false, true)) trace(owned.request.token, GpuLifecyclePhase.DRAIN_START)
         val safe = runCatching {
             if (!owned.done.isCompleted) stop(owned, GpuRenderCode.CANCELLED)
             withTimeoutOrNull(drainMillis) {
@@ -145,6 +175,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
             } == true
         }.getOrDefault(false)
         if (!safe) quarantine(owned)
+        if (owned.done.isCompleted && owned.drainEndRecorded.compareAndSet(false, true)) trace(owned.request.token, GpuLifecyclePhase.DRAIN_END)
         owned.done.isCompleted
     }
     internal fun whenSafeToRelease(cleanup: () -> Unit) {
@@ -156,6 +187,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
         if (now) cleanup()
     }
     private fun quarantine(s: Session) {
+        if (s.quarantineRecorded.compareAndSet(false, true)) trace(s.request.token, GpuLifecyclePhase.QUARANTINED)
         synchronized(lock) {
             if (s.done.isCompleted) return
             // Preserve the global GPU owner and Binder death subscription. No further
@@ -166,6 +198,12 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
     private inner class Session(val request: GpuRenderRequest, val plan: GpuStagePlan, val reservation: RetainedNativeWork) {
         val life = GpuProbeLifetime(request.token)
         val done = CompletableDeferred<Unit>()
+        var lastWaitAt = SystemClock.elapsedRealtime()
+        var waitEvents = 0
+        val stopReasons = java.util.concurrent.ConcurrentHashMap.newKeySet<GpuRenderCode>()
+        val drainRecorded = AtomicBoolean(false)
+        val drainEndRecorded = AtomicBoolean(false)
+        val quarantineRecorded = AtomicBoolean(false)
         val deadline = (nowMillis() + GpuRenderIpc.MAIN_DEADLINE_MS).let { previewBudget?.limitDeadline(it) ?: it }
         var poll = GpuRenderPoll(request.token, GpuRenderStatus.PENDING, GpuRenderCode.OK, request.totalPixels)
         var stopCode: GpuRenderCode? = null
@@ -192,6 +230,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
         if (!current(s)) return
         if (nowMillis() >= s.deadline) { stop(s, deadlineCode()); return }
         if (!readmit()) { stop(s, GpuRenderCode.MEMORY_UNAVAILABLE); return }
+        trace(s.request.token, GpuLifecyclePhase.START_REQUEST)
         val started = synchronized(lock) {
             if (nowMillis() >= s.deadline) { stop(s, deadlineCode()); return }
             if (!current(s) || !s.life.requestHelper()) return
@@ -206,6 +245,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                     stop(s, GpuRenderCode.INVALID_RESULT); return
                 }
                 if (!current(s)) { cancelBinder(binder, s.request.token); return }
+                trace(s.request.token, GpuLifecyclePhase.CONNECTED)
                 val replacement = synchronized(lock) { s.binder != null && s.binder !== binder }
                 observe(s, binder)
                 if (replacement) { stop(s, GpuRenderCode.INVALID_RESULT); cancelBinder(binder, s.request.token); return }
@@ -214,12 +254,13 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                 val hello = Message.obtain(null, GpuRenderIpc.HELLO)
                 hello.replyTo = replies
                 hello.data = Bundle().apply { putLong(GpuRenderIpc.TOKEN, s.request.token) }
-                runCatching { Messenger(binder).send(hello) }.onFailure { stop(s, GpuRenderCode.BIND_FAILED); checkDeaths(s) }
+                runCatching { Messenger(binder).send(hello); trace(s.request.token, GpuLifecyclePhase.HELLO_SENT) }.onFailure { stop(s, GpuRenderCode.BIND_FAILED); checkDeaths(s) }
             }
             override fun onServiceDisconnected(name: ComponentName) { checkDeaths(s) }
             override fun onBindingDied(name: ComponentName) { stop(s, GpuRenderCode.BIND_FAILED); checkDeaths(s) }
             override fun onNullBinding(name: ComponentName) { stop(s, GpuRenderCode.BIND_FAILED) }
         }
+        trace(s.request.token, GpuLifecyclePhase.BIND_REQUEST)
         val bound = synchronized(lock) {
             if (!current(s) || s.life.stopping) return
             s.connection = connection; s.bindingAttempted = true
@@ -243,6 +284,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                     if (!s.life.acknowledgeStartup(s.request.token)) return
                     s.life.stopping
                 }
+                trace(s.request.token, GpuLifecyclePhase.READY_RECEIVED)
                 if (stopped) { sendCancel(s); return }
                 if (nowMillis() >= s.deadline) { stop(s, deadlineCode()); return }
                 if (!readmit()) { stop(s, GpuRenderCode.MEMORY_UNAVAILABLE); return }
@@ -260,7 +302,8 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                     s.poll = GpuRenderPoll(s.request.token, GpuRenderStatus.RUNNING, GpuRenderCode.OK, s.request.totalPixels)
                     s.remote
                 }
-                try { checkNotNull(remote).send(run) }
+                trace(s.request.token, GpuLifecyclePhase.RUN_SEND_REQUEST)
+                try { checkNotNull(remote).send(run); trace(s.request.token, GpuLifecyclePhase.RUN_SENT) }
                 catch (_: Exception) { stop(s, GpuRenderCode.BIND_FAILED); checkDeaths(s) }
             }
             GpuRenderIpc.RESULT -> {
@@ -275,6 +318,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
                     if (s.stopAt == null) s.stopAt = SystemClock.elapsedRealtime()
                     s.poll = GpuRenderPoll(s.request.token, GpuRenderStatus.STOPPING, result.first, s.request.totalPixels)
                 }
+                trace(s.request.token, GpuLifecyclePhase.RESULT_RECEIVED, result.first)
                 sendCancel(s)
             }
         }
@@ -287,6 +331,12 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
             s.poll = GpuRenderPoll(s.request.token, GpuRenderStatus.STOPPING, s.stopCode!!, s.request.totalPixels)
             !s.life.runAttempted
         }
+        if (s.stopReasons.add(code)) trace(s.request.token,
+            when (code) {
+                GpuRenderCode.CANCELLED -> GpuLifecyclePhase.CANCEL_REQUEST
+                GpuRenderCode.TIMED_OUT, GpuRenderCode.PREVIEW_BUDGET_EXHAUSTED -> GpuLifecyclePhase.TIMEOUT
+                else -> GpuLifecyclePhase.STOP_REQUEST
+            }, code)
         if (neverRun) {
             // Stop is permanent before revoking pending lifecycle. No callback can
             // ever authorize RUN afterward; no native reads/writes were permitted.
@@ -325,6 +375,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
             if (!current(s) || s.live.isNotEmpty()) return
             if (s.life.startupAcknowledged) s.life.died(s.request.token) else false
         }
+        trace(s.request.token, GpuLifecyclePhase.DEATH_OBSERVED)
         if (terminal) finish(s) else stop(s, GpuRenderCode.HELPER_DIED)
     }
     private fun unregister(s: Session) {
@@ -353,6 +404,7 @@ class GpuRenderDelegate private constructor(context: Context, private val testHo
             s.done.complete(Unit)
             s.safeCallbacks.toList().also { s.safeCallbacks.clear() }
         }
+        trace(s.request.token, GpuLifecyclePhase.STAGE_END, synchronized(lock) { s.poll.code })
         main.removeCallbacks(s.deadlineAction)
         unregister(s)
         synchronized(lock) { replyMessengers.remove(s) }
@@ -375,4 +427,5 @@ internal data class GpuRenderTestHooks(
     val drainMillis: Long = GpuRenderIpc.DRAIN_GRACE_MS,
     val beforeSession: (() -> Unit)? = null,
     val afterSession: (() -> Unit)? = null,
+    val lifecycle: (Long, GpuLifecyclePhase, GpuRenderCode?, Boolean) -> Unit = { _, _, _, _ -> },
 )

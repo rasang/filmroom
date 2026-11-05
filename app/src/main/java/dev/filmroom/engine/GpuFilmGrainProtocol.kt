@@ -38,7 +38,9 @@ internal object GpuFilmGrainProtocol {
     }
     fun validatePlan(p: GpuFilmGrainPlan) {
         val n = p.width.toLong() * p.height
-        GpuScienceFields.validateMemory(p, n, 20, 48 * n + 2 * GpuRenderProtocol.MIB)
+        // Eight bounded opcode-family pipelines add a conservative 64 MiB driver
+        // allowance. This is admission policy, not a measured driver allocation cap.
+        GpuScienceFields.validateMemory(p, n, 20, 48 * n + 2 * GpuRenderProtocol.MIB, driverMiB = 128, extraDeviceBytes = scratchBytes(p.rngMode), extraHostBytes = 9600)
         require(p.passCount in 0..15 && p.chunkPixels == minOf(p.rngMode.chunkLimit.toLong(), n).toInt() && p.chunkCount == (n + p.chunkPixels - 1) / p.chunkPixels)
         require(!p.microActive || (p.grainActive && p.sublayers))
         require(!p.finalBlurActive || (p.grainActive && p.passCount>=3))
@@ -47,11 +49,15 @@ internal object GpuFilmGrainProtocol {
         require(if(p.sublayers)p.passCount in finalPasses..(3L*p.layerCount+(if(p.microActive)3 else 0)+finalPasses) else !p.microActive && p.passCount==finalPasses)
         require(if (!p.grainActive) p.layerCount == 0 && p.passCount == 0L && !p.microActive && !p.finalBlurActive && !p.amountBlendActive else if (p.sublayers) p.layerCount == 3 else p.layerCount in 1..64)
     }
-    fun expectedSamplerSamples(@Suppress("UNUSED_PARAMETER") p: GpuFilmGrainPlan): Long = 3152
+    // Code prefix (93 + 207 vec4<u32>) and bounded per-lane prepared + ALU
+    // frames. Admission diagnostics require 256 frames even for tiny previews.
+    fun scratchBytes(mode: GpuGrainRngMode): Long = 4800L + 544L * mode.chunkLimit
+    fun expectedSamplerSamples(@Suppress("UNUSED_PARAMETER") p: GpuFilmGrainPlan): Long = 3280
     fun dispatchRange(p: GpuFilmGrainPlan): LongRange {
         val c=p.chunkCount;val s=p.rngMode.sequential;val l=p.layerCount.toLong()
         fun Boolean.count()=if(this)1L else 0L
-        val exact=16+3*(c+3+l*((1+3*s)*c+1+s)+p.microActive.count()*(c+1+s)+p.finalBlurActive.count()+p.amountBlendActive.count())+4*p.passCount
+        val diagnosticDispatches=25L+4L*((3120L+p.rngMode.chunkLimit-1)/p.rngMode.chunkLimit)
+        val exact=diagnosticDispatches+3*(c+3+l*(4*c+1+s)+p.microActive.count()*(c+1+s)+p.finalBlurActive.count()+p.amountBlendActive.count())+4*p.passCount
         return exact..exact
     }
     fun numericFlagReads(p:GpuFilmGrainPlan):Long {
@@ -60,7 +66,7 @@ internal object GpuFilmGrainProtocol {
         val batches=if(p.rngMode.sequential==1L)(p.chunkCount+15L)/16L else p.chunkCount
         return 1+3*(p.layerCount*(1+p.rngMode.sequential)*batches+(if(p.microActive)batches else 0)+1)
     }
-    fun expectedReadback(p:GpuFilmGrainPlan):Long=12L*p.width*p.height+1264320+8*p.passCount*(p.width.toLong()+p.height)+4*numericFlagReads(p)
+    fun expectedReadback(p:GpuFilmGrainPlan):Long=12L*p.width*p.height+1269184+8*p.passCount*(p.width.toLong()+p.height)+4*numericFlagReads(p)
     fun parseNativeResult(raw: String, p: GpuFilmGrainPlan): Pair<GpuRenderCode, GpuScienceSummary?> {
         val v = GpuRenderProtocol.objectOf(raw)
         if (!v.bool("ok")) return GpuRenderProtocol.nativeFailure(p.operation, v.opt("code")) to null
@@ -76,7 +82,7 @@ internal object GpuFilmGrainProtocol {
         result["rngMode"]=p.rngMode.wire;result["distributionArithmetic"]=DISTRIBUTION
         result["microActive"]=p.microActive;result["finalBlurActive"]=p.finalBlurActive;result["amountBlendActive"]=p.amountBlendActive
         result["stochasticScope"]=STOCHASTIC_SCOPE;result["microstructureArithmetic"]=MICROSTRUCTURE
-        result["samplerSampleCount"] = v.long("samplerSampleCount", 3120, 3120)
+        result["samplerSampleCount"] = v.long("samplerSampleCount", expectedSamplerSamples(p), expectedSamplerSamples(p))
         result["exactRngWordsChecked"] = v.long("exactRngWordsChecked", 98304, 98304)
         result["softwareArithmeticChecks"]=v.long("softwareArithmeticChecks",1280,1280)
         result["numericFlagReads"]=v.long("numericFlagReads",numericFlagReads(p),numericFlagReads(p))

@@ -1,27 +1,28 @@
 # Performance source review snapshot
 
-This independent branch is for code analysis. It does not update main or dev.
+This branch preserves experimental performance code. It does not update main or dev and is not a validated release.
 
-## Included
+## 2026-11-05 code checkpoint
 
-- CPU exact-computation optimizations, caching and native rendering changes.
-- GPU stage implementations, WGSL shaders, JNI bindings, isolated Android helper services, memory admission, cancellation and CPU fallback logic through the opt7.1 source checkpoint.
-- A frozen 2026-11-03 14:47 UTC work-in-progress patch: bounded grain submissions, software64 parameter prepass, preview progress and memory-budget changes.
-- Source tests, synthetic protocol fixtures, dependency manifests and license notices.
+This update captures the current GPU development source changes relative to the previous public snapshot: resident GPU session ownership and Android service transport; JNI lifetime and cancellation handling; bounded preview scheduling and display; streaming stage routing and contracts; grain ALU programs; diagnostics; source tests and synthetic protocol fixtures. Existing public documentation and privacy exclusions are retained.
+
+The algorithmic code_prefix.bin is source data consumed by the grain ALU interpreter, not a user image or prebuilt native library.
 
 ## Validation boundary
 
-The snapshot's ARM check passed. Host and final Android tests for the work-in-progress patch were pending at capture time; no physical-device success or speedup is asserted. Later comprehensive instrumentation is not included because it was still being edited. This branch is not a release or a claim that the preview issue is fixed.
+This is a source-preservation checkpoint. No new compilation, Android build, physical-device test or performance benchmark was run for this publication. Source review and whitespace checks are not runtime validation. The complete scientific-chain quality gate remains unresolved; no final-image quality pass, 50MP success, Adreno success or speedup is claimed.
+
+Separate exposure64 and optics64 frozen experiments, including the newer point-GPU owner experiment, have not been integrated into this checkpoint. Their scoped evidence must not be attributed to this source tree. In particular, the point-GPU owner still requires runtime validation.
 
 ## Excluded
 
-User photos, private RAW fixtures, execution logs/reports, credentials, signing keys, build caches, APKs and prebuilt JNI binaries. Existing public assets and sanitized documentation are inherited from the stable public tree. The separately released Samsung JPEG XL work is not part of this performance branch.
+User photos and RAW fixtures, local execution logs and reports, credentials, signing keys, build caches, APKs and prebuilt JNI libraries. Existing public assets and sanitized documentation remain inherited from the prior public branch. No release, main-branch merge or deployment is implied.
 
-## Suggested review entry points
+## Review entry points
 
-- `native/crates/film-engine/src/research_grain/`, `preview_gpu.rs`, `preview_reuse.rs`
-- `native/crates/film-engine/src/research_*`, `shaders/`, `science_jni.rs`
-- `app/src/main/java/dev/filmroom/engine/`: routing, helper processes, budgets and lifetime handling
-- `native/GRAIN_PREVIEW_BATCHING.md` and native numerical-domain contracts
+- native/crates/film-engine/src/gpu_session*, preview_gpu.rs, preview_display.rs
+- native/crates/film-engine/src/research_streaming*, research_grain/, research_global/
+- app/src/main/java/dev/filmroom/engine/GpuScience*, GpuStreamingProtocol.kt, PreviewDisplay.kt
+- app/src/test/ and native inline tests for session and cross-language contracts
 
-Build native components from source using the checked-in scripts and dependency lockfiles. Do not use old prebuilt libraries with this snapshot.
+Build native components from source before packaging. Do not reuse old prebuilt libraries with this checkpoint.

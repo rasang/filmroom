@@ -15,8 +15,8 @@ class SciencePerformanceInfoTest {
         for(stage in ScienceStage.entries)science.put(stage.objectKey,JSONObject().put("requested",true).put("attempted",true).put("resumed",false)
             .put("backend",stage.gpuBackend).put("fallbackReason","none").put("autoExposureEv",-3.5).put("sampleRms",0.002)
             .put("adapter","SECRET").put("sourcePath","/private/photo").put("prepareErrorCode","GPU_PREPARE_COPY_VERIFY_EIO"))
-        val info=PerformanceInfo.fromNative(JSONObject().put("metrics",JSONObject().put("gpuScience",science)),PerformanceInfo())
-        assertEquals(8,info.science.size)
+        val info=PerformanceInfo.fromNative(JSONObject().put("metrics",JSONObject().put("gpuScience",science).put("gpuLogDir",science.getJSONObject(ScienceStage.EXPOSURE_LOG_DIR.objectKey))),PerformanceInfo())
+        assertEquals(ScienceStage.entries.size,info.science.size)
         val fields=info.typedFields();assertFalse(fields.toString().contains("SECRET"));assertFalse(fields.toString().contains("/private"))
         val restored=PerformanceInfo.fromFields(fields.mapValues{it.value.toString()})!!
         assertEquals(info.science,restored.science)
@@ -43,6 +43,19 @@ class SciencePerformanceInfoTest {
         assertEquals(12.0,info.science.getValue(ScienceStage.FINISH_TAIL).numbers[ScienceNumber.STAGE_MS]!!,0.0)
         assertEquals(info,PerformanceInfo.fromFields(info.typedFields().mapValues{it.value.toString()}))
     }
+    @Test fun residentLogDirKeepsCombinedTimingAndSuppressesComponentMeasurements(){
+        val dir=JSONObject().put("backend","gpu_dir_f32_v1").put("fallbackReason","included_in_resident").put("gpuStageMs",42.0)
+        val log=JSONObject().put("backend",ScienceStage.EXPOSURE_LOG.gpuBackend).put("fallbackReason","included_in_resident").put("gpuStageMs",42.0)
+        val combined=JSONObject().put("backend",ScienceStage.EXPOSURE_LOG_DIR.gpuBackend).put("fallbackReason","none").put("gpuStageMs",42.0)
+            .put("uploadBytes",1234).put("adapter","SECRET")
+        val metrics=JSONObject().put("gpuDir",dir).put("gpuLogDir",combined).put("gpuScience",JSONObject().put("exposureLog",log))
+        val info=PerformanceInfo.fromNative(JSONObject().put("metrics",metrics),PerformanceInfo())
+        assertFalse(info.numbers.containsKey(PerformanceNumber.GPU_DIR_STAGE))
+        assertTrue(info.science.getValue(ScienceStage.EXPOSURE_LOG).numbers.isEmpty())
+        assertEquals(42.0,info.science.getValue(ScienceStage.EXPOSURE_LOG_DIR).numbers[ScienceNumber.STAGE_MS]!!,0.0)
+        assertFalse(info.typedFields().toString().contains("SECRET"))
+        assertEquals(info,PerformanceInfo.fromFields(info.typedFields().mapValues{it.value.toString()}))
+    }
     @Test fun compactV2AndHistoricalV1RemainReadableWithoutFreeText(){
         val stage=ScienceStage.AUTO_EXPOSURE
         val current=SciencePerformanceInfo(true,FullGpuFallback.NONE,true,true,false,null,mapOf(ScienceNumber.SAMPLES to 3120.0))
@@ -50,7 +63,7 @@ class SciencePerformanceInfoTest {
         val v1=v2.replaceFirst("2|g|","1|${stage.gpuBackend}|");assertEquals(current,SciencePerformanceInfo.decode(stage,v1))
         assertNull(SciencePerformanceInfo.decode(stage,v2.replaceFirst("2|g|","2|PRIVATE|")))
     }
-    @Test fun thirteenStageWorstCaseStaysBelowUnchangedEightKiBEventBoundary(){
+    @Test fun allStageWorstCaseStaysBelowUnchangedEightKiBEventBoundary(){
         val science=ScienceStage.entries.associateWith{stage->SciencePerformanceInfo(true,FullGpuFallback.UNSUPPORTED_CONFIGURATION,true,true,true,
             GpuPrepareCode.parse("GPU_PREPARE_STAGE_PARENT_CANONICAL_EOPNOTSUPP"),ScienceNumber.entries.filter{it!=ScienceNumber.EV || stage==ScienceStage.AUTO_EXPOSURE}.associateWith{it.max})}
         val performance=PerformanceInfo(PerformanceNumber.entries.associateWith{it.max},PerformanceFlag.entries.associateWith{true},CalibrationStatus.MEASURED,ProbeCaptureStatus.CAPTURED,
@@ -62,7 +75,7 @@ class SciencePerformanceInfoTest {
             gpuRequested=true,gpuActive=false,gpuBatches=1800000000,gpuFallbacks=1800000000,gpuReason=GpuReason.NO_MEASURED_BENEFIT)
         val line=DiagnosticEvent(1000,10,"a".repeat(32),1,1,Operation.EXPORT_RENDER,Stage.NATIVE_EXIT,info=info).line()
         assertEquals(8192,MAX_DIAGNOSTIC_EVENT_BYTES)
-        assertTrue("Thirteen-stage event is ${line.toByteArray(Charsets.UTF_8).size} bytes",line.toByteArray(Charsets.UTF_8).size<=MAX_DIAGNOSTIC_EVENT_BYTES)
+        assertTrue("All-stage event is ${line.toByteArray(Charsets.UTF_8).size} bytes",line.toByteArray(Charsets.UTF_8).size<=MAX_DIAGNOSTIC_EVENT_BYTES)
         assertEquals(info.fields(),DiagnosticEvent.parse(line)!!.info.fields())
     }
 }

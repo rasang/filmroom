@@ -9,14 +9,27 @@ pub const SHADER: &str = concat!(
     "\n",
     include_str!("shaders/research_global.wgsl")
 );
+// ExposureLog needs only packet upload, the original logarithm, and readback.
+// Keep the same guard source and ABI without compiling the unrelated metering
+// and highlight kernels into its pipeline.
+pub const LOG_SHADER: &str = concat!(
+    include_str!("shaders/research_global_guard.wgsl"),
+    "\n",
+    include_str!("shaders/research_global_log.wgsl")
+);
 pub const CHUNK: usize = 65536;
 pub const PACK_BASE: usize = 524288;
 pub const METER_STRIDE: usize = 7;
 pub const STATS: usize = 40;
 pub const NUMERIC_TOLERANCE: f64 = 2e-3;
 pub mod full_stage;
+pub mod streaming;
+#[cfg(any(test, feature = "gpu-diffusion-research"))]
+mod specialized;
 #[cfg(feature = "gpu-diffusion-research")]
 mod gpu;
+#[cfg(all(test, feature = "gpu-diffusion-research"))]
+pub(crate) use gpu::run_probe_for_test;
 #[cfg(test)]
 pub use full_stage::run_stage_cpu_mirror_for_test;
 pub use full_stage::{
@@ -840,6 +853,90 @@ pub(crate) mod tests {
         )
         .validate(&module)
         .unwrap();
+    }
+    #[test]
+    fn log_shader_preserves_original_guard_bindings_and_operation_bodies() {
+        fn block<'a>(source: &'a str, marker: &str) -> &'a str {
+            let start = source.find(marker).expect("shader marker");
+            let open = start + source[start..].find('{').expect("shader block");
+            let mut depth = 0;
+            for (offset, &byte) in source.as_bytes()[open..].iter().enumerate() {
+                match byte {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &source[start..=open + offset];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("unclosed shader block");
+        }
+        let original = include_str!("shaders/research_global.wgsl");
+        let specialized = include_str!("shaders/research_global_log.wgsl");
+        let guard = include_str!("shaders/research_global_guard.wgsl");
+        assert!(SHADER.starts_with(guard));
+        assert!(LOG_SHADER.starts_with(guard));
+        assert_eq!(
+            &original[original.find("struct Data").unwrap()..original.find("fn boost_point").unwrap()],
+            &specialized[specialized.find("struct Data").unwrap()..specialized.find("@compute").unwrap()]
+        );
+        assert_eq!(
+            &original[original.find("@compute").unwrap()..original.find(" let op=").unwrap()],
+            &specialized[specialized.find("@compute").unwrap()..specialized.find(" let op=").unwrap()]
+        );
+        for op in [10, 14, 15] {
+            let marker = format!("if(op=={op}u)");
+            assert_eq!(block(original, &marker), block(specialized, &marker));
+        }
+        let operations: Vec<u32> = specialized
+            .split("if(op==")
+            .skip(1)
+            .map(|part| part.split('u').next().unwrap().parse().unwrap())
+            .collect();
+        assert_eq!(operations, [10, 14, 15]);
+        assert!(!specialized.contains("boost_point"));
+        assert!(!specialized.contains("array<f32,40>"));
+        assert_eq!(specialized.matches("for(").count(), 1);
+        let runner = include_str!("research_global/gpu.rs");
+        assert!(runner.contains("if matches!(p.kind, GlobalKind::LogExposure { .. })"));
+        assert!(runner.contains("Runner::new_with_shader_error_explicit_layout(&spatial, allow_probe, LOG_SHADER)"));
+        assert!(runner.contains("Runner::new_with_shader_family_error_explicit_layout"));
+        assert!(runner.contains("specialized::shaders(&p.kind)?"));
+    }
+    #[test]
+    fn log_shader_validates_and_excludes_unrelated_entry_point_work() {
+        let original = naga::front::wgsl::parse_str(SHADER).unwrap();
+        let specialized = naga::front::wgsl::parse_str(LOG_SHADER).unwrap();
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&specialized)
+        .unwrap();
+        assert_eq!(specialized.entry_points.len(), 1);
+        let entry = &specialized.entry_points[0];
+        assert_eq!(entry.name, "main");
+        assert_eq!(entry.workgroup_size, [64, 1, 1]);
+        assert!(entry.function.expressions.len() < original.entry_points[0].function.expressions.len());
+        assert!(entry.function.local_variables.len() < original.entry_points[0].function.local_variables.len());
+        let mut bindings = Vec::new();
+        for (handle, variable) in specialized.global_variables.iter() {
+            let binding = variable.binding.as_ref().expect("bound shader resource");
+            assert_eq!(binding.group, 0);
+            bindings.push(binding.binding);
+            // These bindings must remain present in the explicit host layout,
+            // even though reflection correctly finds no use of their planes.
+            if [3, 4].contains(&binding.binding) {
+                assert!(info.get_entry_point(0)[handle].is_empty());
+            } else {
+                assert!(!info.get_entry_point(0)[handle].is_empty());
+            }
+        }
+        bindings.sort_unstable();
+        assert_eq!(bindings, (0..8).collect::<Vec<_>>());
     }
     #[test]
     fn seven_metering_methods_keep_original_grid_and_small_matrix_behavior() {

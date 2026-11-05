@@ -1,5 +1,6 @@
 //! Private immutable manifests and all-three-plane atomic candidate validation.
 //! Main process publishes only after confirmed helper death. No source mutation.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use super::*;
 use crate::research_spatial::{MEMORY_CAP, check};
 use sha2::{Digest, Sha256};
@@ -54,7 +55,10 @@ struct OwnedDir(PathBuf, bool);
 impl Drop for OwnedDir {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -110,6 +114,9 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
     m.dir_config.validate()?;
     let p = &m.dir_config;
     let memory = p.spatial_plan()?;
+    let extra = crate::research_spatial::PIPELINE_RESERVATION_BYTES;
+    let combined_peak_bytes = memory.combined_peak_bytes.checked_add(extra).ok_or("GPU_DIR_MEMORY_LIMIT")?;
+    if combined_peak_bytes > MEMORY_CAP { return Err("GPU_DIR_MEMORY_LIMIT".into()); }
     Ok(StagePlan {
         schema_version: 1,
         operation: OPERATION.into(),
@@ -125,13 +132,14 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
         pass_count: p.pass_count(),
         device_bytes: memory.device_bytes,
         host_bytes: memory.host_bytes,
-        driver_allowance_bytes: memory.driver_allowance_bytes,
+        driver_allowance_bytes: memory.driver_allowance_bytes + extra,
         helper_allowance_bytes: memory.helper_allowance_bytes,
-        combined_peak_bytes: memory.combined_peak_bytes,
+        combined_peak_bytes,
         disk_bytes: p.disk_bytes(),
     })
 }
 fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     owner(dir, token)?;
     let (m, b): (Manifest, _) = read_json(&dir.join("manifest.json"))?;
     if m.token != token {
@@ -145,7 +153,9 @@ fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
         )?;
     }
     Ok((m, p))
-}
+
+        })
+    }
 pub fn estimated_disk_bytes(width: u32, height: u32, dir_config: &DirPlan) -> R<u64> {
     dir_config.validate()?;
     if dir_config.width != width || dir_config.height != height {
@@ -224,6 +234,7 @@ fn plane_hash(path: &Path, n: u64, c: &mut impl FnMut() -> bool) -> R<String> {
     Ok(hex(&hash.finalize()))
 }
 fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool) -> R<()> {
+        trace::phase_result(GpuPhase::Commit, || {
     let candidate = dir.join("candidate");
     let n = p.width as u64 * p.height as u64;
     let mut hashes = std::array::from_fn(|_| String::new());
@@ -248,7 +259,9 @@ fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool
     check(c)?;
     io(fs::rename(temp, candidate.join("complete.json")))?;
     Ok(())
-}
+
+        })
+    }
 pub fn validate_outputs(
     dir: &Path,
     token: u64,

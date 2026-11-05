@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "operation": "planGpuStreamingStage",
+  "plan": {
+    "batchBytes": 4194304,
+    "combinedPeakBytes": 285278208,
+    "deviceBytes": 42008576,
+    "diskBytes": 3422617600,
+    "driverAllowanceBytes": 109051904,
+    "height": 6144,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 67108864,
+    "layout": "fullLineFileBackedV1",
+    "manifestSha256": "4ae4b6ad6691c9fbbf20e6ec1c25dfb098a832adb6fb8fdc8557196feb218bf6",
+    "operation": "fullFilmOpticsStreamV1",
+    "passCount": 18,
+    "schemaVersion": 1,
+    "token": 17,
+    "width": 8192
+  },
+  "schemaVersion": 1
+}

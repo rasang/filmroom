@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "token": 73001,
+  "stageCode": 8,
+  "sequence": 12,
+  "phaseCode": 5,
+  "stateCode": 1,
+  "elapsedMs": 142,
+  "totalElapsedMs": 2500,
+  "terminalCode": 0,
+  "diagnosticCode": 0,
+  "activityCode": 1,
+  "stepCode": 0,
+  "failureCode": 0,
+  "events": [
+    {
+      "sequence": 11,
+      "phaseCode": 4,
+      "stateCode": 2,
+      "elapsedMs": 3,
+      "totalElapsedMs": 2358,
+      "activityCode": 1,
+      "stepCode": 0
+    },
+    {
+      "sequence": 12,
+      "phaseCode": 5,
+      "stateCode": 1,
+      "elapsedMs": 0,
+      "totalElapsedMs": 2358,
+      "activityCode": 1,
+      "stepCode": 0
+    }
+  ]
+}

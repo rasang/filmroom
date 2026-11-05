@@ -6,10 +6,12 @@ import java.util.concurrent.atomic.AtomicLong
 object GpuProbeProcess {
     const val SUFFIX = ":gpu_probe"
     const val RENDER_SUFFIX = ":gpu_render"
+    const val SCIENCE_SUFFIX = ":gpu_science"
     fun isHelper(packageName: String, processName: String?): Boolean =
         processName == packageName + SUFFIX
     fun isRenderHelper(packageName: String, processName: String?): Boolean = processName == packageName + RENDER_SUFFIX
-    fun isWorker(packageName: String, processName: String?): Boolean = isHelper(packageName, processName) || isRenderHelper(packageName, processName)
+    fun isScienceHelper(packageName: String, processName: String?): Boolean = processName == packageName + SCIENCE_SUFFIX
+    fun isWorker(packageName: String, processName: String?): Boolean = isHelper(packageName, processName) || isRenderHelper(packageName, processName) || isScienceHelper(packageName, processName)
 }
 
 /** Deliberately never reset: a new GPU invocation requires a fresh helper process. */

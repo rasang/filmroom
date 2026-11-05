@@ -1,6 +1,7 @@
 //! Only invoked in the existing isolated helper lifecycle. CPU handles file IO,
 //! immutable calibration upload and bounded numeric witnesses, not image science.
 use super::*;
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use crate::research_spatial::gpu::{RunMetrics, Runner, params};
 use std::{
     fs::{File, OpenOptions},
@@ -34,16 +35,18 @@ fn upload(r: &Runner, v: &[f32], c: &mut impl FnMut() -> bool, m: &mut RunMetric
     r.upload_aux(CHUNK_BASE as u64 * 4, bytemuck::cast_slice(v), c, m)
 }
 fn point_guard(expected: [f32; 3], actual: &[f32], m: &mut RunMetrics) -> R<()> {
-    for (r, &a) in expected.into_iter().zip(actual) {
-        let e = (r as f64 - a as f64).abs();
-        if !r.is_finite() || !a.is_finite() || e > POINT_TOLERANCE * (r as f64).abs().max(1.) {
-            return Err("GPU_TAIL_NUMERIC_CHECK".into());
+    trace::phase_result(GpuPhase::Guard, || {
+        for (r, &a) in expected.into_iter().zip(actual) {
+            let e = (r as f64 - a as f64).abs();
+            if !r.is_finite() || !a.is_finite() || e > POINT_TOLERANCE * (r as f64).abs().max(1.) {
+                return Err("GPU_TAIL_NUMERIC_CHECK".into());
+            }
+            m.sample_count += 1;
+            m.sample_max_abs = m.sample_max_abs.max(e);
+            m.sample_sum += e * e;
         }
-        m.sample_count += 1;
-        m.sample_max_abs = m.sample_max_abs.max(e);
-        m.sample_sum += e * e;
-    }
-    Ok(())
+        Ok(())
+    })
 }
 struct Output<'a> {
     path: &'a Path,
@@ -104,16 +107,37 @@ fn run_files_inner(
     if let Some(g) = glare {
         full_stage::regular(g, n * 8)?;
     }
-    let source_shader = shader_checked(research_spatial::SHADER)?;
-    let (r, mut m) = if let Some(prefix) = prefix.as_ref() {
+    let pointwise_source = if prefix.is_some() {
+        crate::research_finish::fused::pointwise_shader(p)?
+    } else {
+        crate::research_finish::fused::standalone_pointwise_shader(p)?
+    };
+    let (r, mut m) = if let (Some(prefix), Some(source)) =
+        (prefix.as_ref(), pointwise_source.as_ref())
+    {
+        Runner::new_with_shader_error_tables_explicit_layout(
+            &p.spatial_plan()?,
+            allow_probe,
+            source,
+            prefix.storage(),
+        )?
+    } else if let Some(source) = pointwise_source.as_ref() {
+        Runner::new_with_shader_error(&p.spatial_plan()?, allow_probe, source)?
+    } else if let Some(prefix) = prefix.as_ref() {
+        let source_shader = shader_checked(research_spatial::SHADER)?;
         Runner::new_with_shader_error_tables(
             &p.spatial_plan()?,
             allow_probe,
-            &prefix.shader(&source_shader)?,
+            &crate::research_finish::fused::full_private_shader(&prefix.shader(&source_shader)?)?,
             prefix.storage(),
         )?
     } else {
-        Runner::new_with_shader_error(&p.spatial_plan()?, allow_probe, &source_shader)?
+        let source_shader = shader_checked(research_spatial::SHADER)?;
+        Runner::new_with_shader_error(
+            &p.spatial_plan()?,
+            allow_probe,
+            &crate::research_finish::fused::full_private_shader(&source_shader)?,
+        )?
     };
     let mut prefix_samples = 0u64;
     if let Some(prefix) = prefix.as_ref() {
@@ -313,6 +337,8 @@ fn run_files_inner(
     let o = result.as_object_mut().ok_or("GPU_TAIL_REPORT")?;
     if prefix.is_some() {
         o.insert("prefixSampleCount".into(), prefix_samples.into());
+        o.insert("privateNumericFlag".into(), true.into());
+        o.insert("finishPipelineCount".into(), 1.into());
     }
     o.insert("sampleCount".into(), m.sample_count.into());
     o.insert("gpuUsed".into(), true.into());
@@ -414,8 +440,12 @@ mod tests {
     #[ignore = "Requires a Vulkan device; validates original RNG consumption, not mobile timing"]
     fn actual_gpu_glare_preserves_long_original_stream() {
         let p = super::super::tests::plan(257, 257, 0., 0., true);
-        let (r, mut metrics) =
-            Runner::new_with_shader_error(&p.spatial_plan().unwrap(), true, &shader()).unwrap();
+        let (r, mut metrics) = Runner::new_with_shader_error(
+            &p.spatial_plan().unwrap(),
+            true,
+            &crate::research_finish::fused::full_private_shader(&shader()).unwrap(),
+        )
+        .unwrap();
         let (words, chunks) = generate_glare(&r, &p, &mut || false, &mut metrics).unwrap();
         assert!(chunks > 1);
         let n = p.width as usize * p.height as usize;

@@ -1,6 +1,7 @@
 //! Actual Vulkan dispatch implementation of the isolated FFT stage. No mobile
 //! routing. Call only on a dedicated worker; driver calls themselves can block.
 use super::{Plan, SHADER};
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use std::{
     sync::{
         Arc,
@@ -9,7 +10,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use wgpu::util::DeviceExt;
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunMetrics {
@@ -28,6 +29,7 @@ pub struct RunMetrics {
     pub exact_f64_claim: bool,
 }
 pub struct Runner {
+    _cleanup_start: trace::CleanupStart,
     pub(super) device: wgpu::Device,
     pub(super) queue: wgpu::Queue,
     pub(super) pipeline: wgpu::ComputePipeline,
@@ -37,6 +39,8 @@ pub struct Runner {
     pub(super) f64_cap: bool,
     pub(super) device_type: wgpu::DeviceType,
     admitted_shape: [u64; 8],
+    _cleanup_end: trace::CleanupEnd,
+    pub(super) context: crate::gpu_session::Context,
 }
 impl Runner {
     pub fn new(plan: &Plan, allow_non_adreno_for_probe: bool) -> Result<Self, String> {
@@ -50,73 +54,22 @@ impl Runner {
         shape: [u64; 8],
         allow_non_adreno_for_probe: bool,
     ) -> Result<Self, String> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .ok_or("no Vulkan adapter; no GPU timings available")?;
-        let info = adapter.get_info();
-        if !allow_non_adreno_for_probe
-            && !crate::adreno::eligible_adapter(
-                info.vendor,
-                &info.name,
-                info.backend == wgpu::Backend::Vulkan,
-                info.device_type == wgpu::DeviceType::IntegratedGpu,
-            )
-        {
-            return Err("not a qualified Qualcomm Adreno; research route unavailable".into());
-        }
-        let limits = adapter.limits();
-        if largest > limits.max_storage_buffer_binding_size as u64
-            || largest > limits.max_buffer_size
-            || limits.max_storage_buffers_per_shader_stage < 4
-            || limits.max_compute_workgroup_size_x < 64
-            || limits.max_compute_invocations_per_workgroup < 64
-            || limits.max_compute_workgroups_per_dimension < 65535
-        {
-            return Err("GPU limits cannot fit admitted original-PSF FFT".into());
-        }
-        let mut required = wgpu::Limits::downlevel_defaults();
-        required.max_storage_buffer_binding_size = largest as u32;
-        required.max_buffer_size = largest.max(64 * 1024 * 1024);
-        let f64_cap = adapter.features().contains(wgpu::Features::SHADER_F64);
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("isolated research diffusion"),
-                required_features: wgpu::Features::empty(),
-                required_limits: required,
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-            },
-            None,
-        ))
-        .map_err(|e| e.to_string())?;
-        let error = Arc::new(AtomicBool::new(false));
-        let flag = error.clone();
-        device.on_uncaptured_error(Box::new(move |_| {
-            flag.store(true, Ordering::Relaxed);
-        }));
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("research FFT"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("research FFT"),
-            layout: None,
-            module: &shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        if pollster::block_on(device.pop_error_scope()).is_some() {
-            return Err("FFT shader validation failed".into());
-        }
+        let device_phase = PhaseGuard::begin(GpuPhase::Device);
+        let context = crate::gpu_session::Context::acquire(largest, 4, allow_non_adreno_for_probe)?;
+        let device = context.device.clone();
+        let queue = context.queue.clone();
+        let error = context.error.clone();
+        let info = context.info.clone();
+        let f64_cap = context.f64_cap;
+        device_phase.finish();
+        let pipeline_phase = PhaseGuard::begin(GpuPhase::Pipeline);
+        let pipeline = context.pipelines(&[SHADER], None)?.0.remove(0);
+        pipeline_phase.finish();
+
+        let (_cleanup_start, _cleanup_end) = trace::cleanup_bounds();
         Ok(Self {
+            _cleanup_start,
+            _cleanup_end,
             device,
             queue,
             pipeline,
@@ -126,6 +79,7 @@ impl Runner {
             f64_cap,
             device_type: info.device_type,
             admitted_shape: shape,
+            context,
         })
     }
     /// One-shot: consumes the runner, so interrupted submitted work cannot be
@@ -196,29 +150,33 @@ impl Runner {
         let size = (n * n * 8) as u64;
         let twiddle_offset = (plan.width * plan.height + plan.kernel.len()) as u32;
         let mk = |label, size, usage| {
-            self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size,
-                usage,
-                mapped_at_creation: false,
-            })
+            self.context.buffer(
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                },
+                false,
+            )
         };
         let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
-        let a = mk("FFT A", size, usage);
-        let b = mk("FFT B", size, usage);
-        let spectrum = mk("kernel spectrum", size, wgpu::BufferUsages::STORAGE);
-        let source = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let a = mk("FFT A", size, usage)?;
+        let b = mk("FFT B", size, usage)?;
+        let spectrum = mk("kernel spectrum", size, wgpu::BufferUsages::STORAGE)?;
+        let source = self.context.buffer_init(
+            &wgpu::util::BufferInitDescriptor {
                 label: Some("source PSF twiddles"),
                 contents: bytemuck::cast_slice(&data),
                 usage: wgpu::BufferUsages::STORAGE,
-            });
+            },
+            false,
+        )?;
         let readback = mk(
             "tile readback",
             (plan.core * plan.core * 8) as u64,
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        );
+        )?;
         let mut params = [0u32; 16];
         params[0] = n as u32;
         params[1] = plan.width as u32;
@@ -232,14 +190,16 @@ impl Runner {
         let dispatch = |encoder: &mut wgpu::CommandEncoder,
                         p: [u32; 16],
                         count: usize,
-                        dispatches: &mut u64| {
-            let uniform = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        dispatches: &mut u64|
+         -> Result<(), String> {
+            let uniform = self.context.buffer_init(
+                &wgpu::util::BufferInitDescriptor {
                     label: Some("FFT pass params"),
                     contents: bytemuck::cast_slice(&p),
                     usage: wgpu::BufferUsages::UNIFORM,
-                });
+                },
+                true,
+            )?;
             let mut entries: Vec<_> = buffers
                 .iter()
                 .enumerate()
@@ -266,18 +226,20 @@ impl Runner {
             let groups = count.div_ceil(64) as u32;
             pass.dispatch_workgroups(groups.min(65535), groups.div_ceil(65535), 1);
             *dispatches += 1;
+            Ok(())
         };
         let fft = |encoder: &mut wgpu::CommandEncoder,
                    p: &mut [u32; 16],
                    current: &mut u32,
                    inverse: bool,
-                   dispatches: &mut u64| {
+                   dispatches: &mut u64|
+         -> Result<(), String> {
             p[9] = u32::from(inverse);
             for _ in 0..2 {
                 p[7] = 2;
                 p[10] = *current;
                 p[11] = 1 - *current;
-                dispatch(encoder, *p, n * n, dispatches);
+                dispatch(encoder, *p, n * n, dispatches)?;
                 *current = 1 - *current;
                 let mut span = 2;
                 while span <= n {
@@ -285,21 +247,22 @@ impl Runner {
                     p[8] = span as u32;
                     p[10] = *current;
                     p[11] = 1 - *current;
-                    dispatch(encoder, *p, n * n, dispatches);
+                    dispatch(encoder, *p, n * n, dispatches)?;
                     *current = 1 - *current;
                     span *= 2;
                 }
                 p[7] = 4;
                 p[10] = *current;
                 p[11] = 1 - *current;
-                dispatch(encoder, *p, n * n, dispatches);
+                dispatch(encoder, *p, n * n, dispatches)?;
                 *current = 1 - *current;
             }
+            Ok(())
         };
         let mut encoder = self.device.create_command_encoder(&Default::default());
         params[7] = 1;
         params[11] = 0;
-        dispatch(&mut encoder, params, n * n, &mut dispatches);
+        dispatch(&mut encoder, params, n * n, &mut dispatches)?;
         let mut current = 0;
         fft(
             &mut encoder,
@@ -307,10 +270,10 @@ impl Runner {
             &mut current,
             false,
             &mut dispatches,
-        );
+        )?;
         params[7] = 5;
         params[10] = current;
-        dispatch(&mut encoder, params, n * n, &mut dispatches);
+        dispatch(&mut encoder, params, n * n, &mut dispatches)?;
         self.queue.submit([encoder.finish()]);
         let (output_width, output_height) = roi.unwrap_or((plan.width, plan.height));
         let mut output = vec![0f64; output_width * output_height];
@@ -334,7 +297,7 @@ impl Runner {
                 let mut encoder = self.device.create_command_encoder(&Default::default());
                 params[7] = 0;
                 params[11] = 0;
-                dispatch(&mut encoder, params, n * n, &mut dispatches);
+                dispatch(&mut encoder, params, n * n, &mut dispatches)?;
                 current = 0;
                 fft(
                     &mut encoder,
@@ -342,11 +305,11 @@ impl Runner {
                     &mut current,
                     false,
                     &mut dispatches,
-                );
+                )?;
                 params[7] = 6;
                 params[10] = current;
                 params[11] = 1 - current;
-                dispatch(&mut encoder, params, n * n, &mut dispatches);
+                dispatch(&mut encoder, params, n * n, &mut dispatches)?;
                 current = 1 - current;
                 fft(
                     &mut encoder,
@@ -354,11 +317,11 @@ impl Runner {
                     &mut current,
                     true,
                     &mut dispatches,
-                );
+                )?;
                 params[7] = 7;
                 params[10] = current;
                 params[11] = 1 - current;
-                dispatch(&mut encoder, params, ww * hh, &mut dispatches);
+                dispatch(&mut encoder, params, ww * hh, &mut dispatches)?;
                 current = 1 - current;
                 let bytes = (ww * hh * 8) as u64;
                 encoder.copy_buffer_to_buffer(
@@ -411,6 +374,7 @@ impl Runner {
                 }
                 drop(mapped);
                 readback.unmap();
+                self.context.release_transients_after_fence()?;
                 readback_bytes += bytes;
             }
         }

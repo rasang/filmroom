@@ -1,5 +1,6 @@
 //! Private immutable manifests and all-three-plane atomic candidate validation.
 //! Main process publishes only after confirmed helper death. No source mutation.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use super::*;
 use crate::research_spatial::{MEMORY_CAP, check};
 use sha2::{Digest, Sha256};
@@ -60,7 +61,10 @@ struct OwnedDir(PathBuf, bool);
 impl Drop for OwnedDir {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -117,7 +121,8 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
     m.grain_config.validate()?;
     let p = &m.grain_config;
     let memory = p.spatial_plan()?;
-    let combined_peak_bytes = memory.combined_peak_bytes.checked_add(super::guarded_graph::BATCH_RESERVATION_BYTES).ok_or("GPU_GRAIN_MEMORY_LIMIT")?;
+    let scratch_bytes=super::guarded_graph::scratch_bytes(p.rng_mode)?;
+    let combined_peak_bytes = memory.combined_peak_bytes.checked_add(super::guarded_graph::BATCH_RESERVATION_BYTES).and_then(|v| v.checked_add(super::guarded_graph::PIPELINE_RESERVATION_BYTES)).and_then(|v|v.checked_add(scratch_bytes)).and_then(|v|v.checked_add(super::guarded_graph::CODE_HOST_RESERVATION_BYTES)).ok_or("GPU_GRAIN_MEMORY_LIMIT")?;
     if combined_peak_bytes > MEMORY_CAP { return Err("GPU_GRAIN_MEMORY_LIMIT".into()); }
     Ok(StagePlan {
         schema_version: 1,
@@ -137,15 +142,16 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
         chunk_pixels: p.chunk_pixels(),
         chunk_count: p.chunk_count(),
         pass_count: p.pass_count(),
-        device_bytes: memory.device_bytes,
-        host_bytes: memory.host_bytes+super::guarded_graph::BATCH_RESERVATION_BYTES,
-        driver_allowance_bytes: memory.driver_allowance_bytes,
+        device_bytes: memory.device_bytes+scratch_bytes,
+        host_bytes: memory.host_bytes+super::guarded_graph::BATCH_RESERVATION_BYTES+super::guarded_graph::CODE_HOST_RESERVATION_BYTES,
+        driver_allowance_bytes: memory.driver_allowance_bytes + super::guarded_graph::PIPELINE_RESERVATION_BYTES,
         helper_allowance_bytes: memory.helper_allowance_bytes,
         combined_peak_bytes,
         disk_bytes: p.disk_bytes(),
     })
 }
 fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     owner(dir, token)?;
     let (m, b): (Manifest, _) = read_json(&dir.join("manifest.json"))?;
     if m.token != token {
@@ -159,7 +165,9 @@ fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
         )?;
     }
     Ok((m, p))
-}
+
+        })
+    }
 pub fn estimated_disk_bytes(width: u32, height: u32, grain_config: &GrainPlan) -> R<u64> {
     grain_config.validate()?;
     if grain_config.width != width || grain_config.height != height {
@@ -239,6 +247,7 @@ fn plane_hash(path: &Path, n: u64, c: &mut impl FnMut() -> bool) -> R<String> {
     Ok(hex(&hash.finalize()))
 }
 fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool) -> R<()> {
+        trace::phase_result(GpuPhase::Commit, || {
     let candidate = dir.join("candidate");
     let n = p.width as u64 * p.height as u64;
     let mut hashes = std::array::from_fn(|_| String::new());
@@ -263,7 +272,9 @@ fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool
     check(c)?;
     io(fs::rename(temp, candidate.join("complete.json")))?;
     Ok(())
-}
+
+        })
+    }
 pub fn validate_outputs(
     dir: &Path,
     token: u64,
@@ -305,15 +316,18 @@ pub fn validate_outputs(
 /// Validate the actual helper result before its candidate can be published.
 /// This is shared with host contract regression tests, not a synthetic GPU run.
 pub(crate) fn validate_run_summary(config:&GrainPlan,result:&serde_json::Value)->R<()> {
+        trace::phase_result(GpuPhase::Guard, || {
     let expected=guarded_graph::execution_contract(config);
-    for (key,value) in [("passCount",config.pass_count()),("sampleCount",expected.spatial_samples),("samplerSampleCount",(super::guarded_graph::SAMPLER_CHECKS+super::guarded_graph::PREPASS_CHECKS)as u64),("exactRngWordsChecked",98304),("softwareArithmeticChecks",1280),("dispatches",expected.dispatches),("numericFlagReads",expected.numeric_flag_reads),("readbackBytes",expected.readback_bytes),("poissonCountMismatches",0),("binomialCountMismatches",0),("randomWordCountMismatches",0),("samplerTupleMismatches",0),("layerCount",config.layer_count()as u64),("chunkCount",config.chunk_count())] {
+    for (key,value) in [("passCount",config.pass_count()),("sampleCount",expected.spatial_samples),("samplerSampleCount",(super::guarded_graph::SAMPLER_CHECKS+super::guarded_graph::PREPASS_CHECKS*super::guarded_graph::PREPASS_RATES.len()as u32+super::guarded_graph::BOUNDARY_CHECKS)as u64),("exactRngWordsChecked",98304),("softwareArithmeticChecks",1280),("dispatches",expected.dispatches),("numericFlagReads",expected.numeric_flag_reads),("readbackBytes",expected.readback_bytes),("poissonCountMismatches",0),("binomialCountMismatches",0),("randomWordCountMismatches",0),("samplerTupleMismatches",0),("layerCount",config.layer_count()as u64),("chunkCount",config.chunk_count())] {
         if result[key].as_u64()!=Some(value){return Err("GPU_GRAIN_NUMERIC_CHECK".into());}
     }
     for (key,value) in [("grainActive",config.active),("sublayers",config.sublayers),("microActive",config.micro_active),("finalBlurActive",config.active&&config.final_sigma>0.),("amountBlendActive",config.active&&config.amount!=1.)]{if result[key].as_bool()!=Some(value){return Err("GPU_GRAIN_NUMERIC_CHECK".into());}}
     if result["rngMode"]!=serde_json::to_value(config.rng_mode).map_err(|_|"INVALID_GRAIN_RESULT")?||result["distributionArithmetic"].as_str()!=Some("guardedSoftwareBinary64")||result["stochasticScope"].as_str()!=Some("fixed_synthetic_reference_tuple_census")||result["microstructureArithmetic"].as_str()!=Some("original_words_guarded_f32_box_muller"){return Err("GPU_GRAIN_NUMERIC_CHECK".into());}
     for key in ["samplerMaxAbs","samplerRms"]{if !result[key].as_f64().is_some_and(|x|x.is_finite()&&(0. ..=1e-4).contains(&x)){return Err("GPU_GRAIN_NUMERIC_CHECK".into());}}
     Ok(())
-}
+
+        })
+    }
 pub fn run_stage(
     dir: &Path,
     token: u64,

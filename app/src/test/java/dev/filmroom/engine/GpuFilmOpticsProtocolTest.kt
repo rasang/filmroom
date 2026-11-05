@@ -16,8 +16,8 @@ internal object GpuFilmOpticsFixtures {
         return JSONObject().put("schemaVersion", 1).put("operation", "fullFilmOptics").put("token", token)
             .put("manifestSha256", "c".repeat(64)).put("width", 6000).put("height", 4000).put("passCount", 30)
             .put("deviceBytes", device).put("hostBytes", 16 * GpuRenderProtocol.MIB)
-            .put("driverAllowanceBytes", 64 * GpuRenderProtocol.MIB).put("helperAllowanceBytes", 64 * GpuRenderProtocol.MIB)
-            .put("combinedPeakBytes", device + 144 * GpuRenderProtocol.MIB).put("diskBytes", 48 * pixels + 65536)
+            .put("driverAllowanceBytes", 104 * GpuRenderProtocol.MIB).put("helperAllowanceBytes", 64 * GpuRenderProtocol.MIB)
+            .put("combinedPeakBytes", device + 184 * GpuRenderProtocol.MIB).put("diskBytes", 48 * pixels + 65536)
     }
     fun envelope(plan: JSONObject = plan()) = JSONObject().put("ok", true).put("schemaVersion", 1)
         .put("operation", "planGpuFilmOpticsStage").put("plan", plan).toString()
@@ -47,7 +47,7 @@ class GpuFilmOpticsProtocolTest {
     @Test fun exactPlanIncludesFiveResidentPlanesTwoTransfersAndWholeProcessHeadroom() {
         val p = GpuFilmOpticsFixtures.parsedPlan()
         assertEquals(20L * p.width * p.height + 8 * GpuRenderProtocol.MIB + 65536, p.deviceBytes)
-        assertEquals(p.deviceBytes + 144 * GpuRenderProtocol.MIB, p.combinedPeakBytes)
+        assertEquals(p.deviceBytes + (16 + 104 + 64) * GpuRenderProtocol.MIB, p.combinedPeakBytes)
         assertEquals(48L * p.width * p.height + 65536, p.diskBytes)
         assertTrue(GpuRenderProtocol.parseStagePlan(GpuFilmOpticsFixtures.envelope(), 94, GpuRenderOperation.FILM_OPTICS) is GpuFilmOpticsPlan)
     }

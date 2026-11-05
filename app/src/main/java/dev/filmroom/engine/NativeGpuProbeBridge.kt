@@ -2,6 +2,8 @@ package dev.filmroom.engine
 
 /** Separate diagnostic ABI. Loading this bridge does not create a GPU device. */
 object NativeGpuProbeBridge {
+    /** Closed numeric schema only; caller uses the bounded lifecycle recorder parser. */
+    external fun nativeGpuPhaseSnapshot(token: Long): String
     // Do not initialize NativeFilmBridge/L10n/Diagnostics in the helper process.
     init { System.loadLibrary("film_engine") }
     external fun nativePlanGpuDiffusionProbe(snapshotDir: String, token: Long): String
@@ -22,6 +24,9 @@ object NativeGpuProbeBridge {
     external fun nativePlanGpuFilmDirStage(snapshotDir: String, token: Long): String
     external fun nativeRunGpuFilmDirStage(snapshotDir: String, budgetBytes: Long, token: Long, manifestSha256: String): String
     external fun nativeCancelGpuFilmDirStage(token: Long)
+    external fun nativePlanGpuExposureLogDirStage(snapshotDir: String, token: Long): String
+    external fun nativeRunGpuExposureLogDirStage(snapshotDir: String, budgetBytes: Long, token: Long, manifestSha256: String): String
+    external fun nativeCancelGpuExposureLogDirStage(token: Long)
     external fun nativePlanGpuAutoExposureStage(snapshotDir: String, token: Long): String
     external fun nativeRunGpuAutoExposureStage(snapshotDir: String, budgetBytes: Long, token: Long, manifestSha256: String): String
     external fun nativeCancelGpuAutoExposureStage(token: Long)
@@ -46,4 +51,14 @@ object NativeGpuProbeBridge {
     external fun nativePlanGpuFinishTailStage(snapshotDir:String,token:Long):String
     external fun nativeRunGpuFinishTailStage(snapshotDir:String,budgetBytes:Long,token:Long,manifestSha256:String):String
     external fun nativeCancelGpuFinishTailStage(token:Long)
+
+
+
+
+
+
+    external fun nativePlanGpuStreamingStage(operation: String, snapshotDir: String, token: Long): String
+    external fun nativeRunGpuStreamingStage(operation: String, snapshotDir: String, budgetBytes: Long, token: Long, manifestSha256: String): String
+    external fun nativeCancelGpuStreamingStage(token: Long)
+
 }

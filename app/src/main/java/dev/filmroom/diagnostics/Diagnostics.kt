@@ -29,10 +29,11 @@ object Diagnostics {
     @Synchronized fun initialize(context: Context) {
         if (store != null) return
         val app = context.applicationContext
+        GpuLifecycleRecorder.configure(app)
         sharesDirectory = File(app.cacheDir, "diagnostic-shares")
         metadata = captureMetadata(app)
         val directory = File(app.filesDir, "diagnostics")
-        store = runCatching { DiagnosticStore(directory, clock, exitTracker = ProcessExitTracker(app, directory)) }.getOrNull()
+        store = runCatching { DiagnosticStore(directory, clock, run = GpuLifecycleRecorder.processRunId, exitTracker = ProcessExitTracker(app, directory)) }.getOrNull()
         // Only old exact diagnostic-share files; never package or sweep app cache.
         runCatching { DiagnosticArchive.cleanup(checkNotNull(sharesDirectory), clock.wallMs()) }
     }
@@ -64,7 +65,8 @@ object Diagnostics {
                 val directory = sharesDirectory ?: throw IOException(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2bec26a5c8e2))
                 check(directory.isDirectory || directory.mkdirs()) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_78d664a50890) }
                 DiagnosticArchive.cleanup(directory, clock.wallMs(), clock.elapsedMs())
-                val snapshot = source.snapshot(minutes)
+                val sourceSnapshot = source.snapshot(minutes)
+                val snapshot = sourceSnapshot.copy(renderLifecycle = GpuLifecycleRecorder.snapshot(minutes, sourceSnapshot.snapshotWallMs))
                 val meta = metadata ?: DiagnosticMetadata()
                 val job = currentCoroutineContext()
                 DiagnosticArchive.write(directory, snapshot, meta) { job.ensureActive() }.also { produced = it }

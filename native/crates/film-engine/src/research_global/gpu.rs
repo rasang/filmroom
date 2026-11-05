@@ -1,4 +1,5 @@
 //! Existing isolated Vulkan runner, bounded uploads and whole-stage publication.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use super::full_stage::{io, regular};
 use super::*;
 use crate::research_spatial::gpu::{params, RunMetrics, Runner};
@@ -29,12 +30,16 @@ fn read64(f: &mut File, count: usize) -> R<Vec<f32>> {
         .collect()
 }
 fn reject_numeric_error(r: &Runner, c: &mut impl FnMut() -> bool, m: &mut RunMetrics) -> R<()> {
+        trace::phase_result(GpuPhase::Guard, || {
     if r.read_error_flag(c, m)? != 0 {
         return Err("GPU_GLOBAL_NUMERIC_CHECK".into());
     }
     Ok(())
-}
+
+        })
+    }
 fn guard(expected: f64, actual: f32, m: &mut RunMetrics) -> R<()> {
+        trace::phase_result(GpuPhase::Guard, || {
     let delta = (expected - actual as f64).abs();
     if !expected.is_finite()
         || !actual.is_finite()
@@ -46,7 +51,9 @@ fn guard(expected: f64, actual: f32, m: &mut RunMetrics) -> R<()> {
     m.sample_max_abs = m.sample_max_abs.max(delta);
     m.sample_sum += delta * delta;
     Ok(())
-}
+
+        })
+    }
 pub(super) fn run_files(
     p: &GlobalPlan,
     source: &Path,
@@ -54,6 +61,13 @@ pub(super) fn run_files(
     c: &mut impl FnMut() -> bool,
 ) -> R<serde_json::Value> {
     run_files_inner(p, source, output, c, false).map_err(|s| s.replace("OPTICS", "GLOBAL"))
+}
+/// Test-only adapter eligibility override; the production operator is unchanged.
+#[cfg(test)]
+pub(crate) fn run_probe_for_test(
+    p: &GlobalPlan, source: &Path, output: &Path, c: &mut impl FnMut() -> bool,
+) -> R<serde_json::Value> {
+    run_files_inner(p, source, output, c, true)
 }
 fn run_files_inner(
     p: &GlobalPlan,
@@ -65,7 +79,37 @@ fn run_files_inner(
     check(c)?;
     p.validate()?;
     let at = Instant::now();
-    let (r, mut m) = Runner::new_with_shader_error(&p.spatial_plan()?, allow_probe, SHADER)?;
+    let spatial = p.spatial_plan()?;
+    let (r, mut m) = if matches!(p.kind, GlobalKind::LogExposure { .. }) {
+        // The log-only shader intentionally does not access planes 3 and 4.
+        // An explicit layout keeps the existing eight-entry binding ABI intact.
+        Runner::new_with_shader_error_explicit_layout(&spatial, allow_probe, LOG_SHADER)?
+    } else {
+        Runner::new_with_shader_family_error_explicit_layout(
+            &spatial, allow_probe, &specialized::shaders(&p.kind)?,
+        )?
+    };
+    #[cfg(test)]
+    {
+        // Full-stage tests may permit a software adapter through session scope
+        // while allow_probe remains false. Log the completed per-family timings
+        // in either path; this has no production code or scientific side effect.
+        use sha2::{Digest, Sha256};
+        let method = match &p.kind {
+            GlobalKind::Meter { method, .. } => method.name(), _ => "none",
+        };
+        eprintln!("GLOBAL_PIPELINE_COMPILE operation={} method={} compile_ms={:?}",
+            p.kind.operation(), method, m.pipeline_compile_ms);
+        if !matches!(p.kind, GlobalKind::LogExposure { .. }) {
+            let families = specialized::shaders(&p.kind)?;
+            assert_eq!(families.len(), m.pipeline_compile_ms.len());
+            for (index, ((ops, source), compile_ms)) in families.iter()
+                .zip(&m.pipeline_compile_ms).enumerate() {
+                eprintln!("GLOBAL_PIPELINE_FAMILY operation={} method={} index={} ops={:?} source_sha256={:x} source_bytes={} compile_ms={:.6}",
+                    p.kind.operation(), method, index, ops, Sha256::digest(source.as_bytes()), source.len(), compile_ms);
+            }
+        }
+    }
     m.sample_tolerance_absolute = NUMERIC_TOLERANCE;
     m.sample_tolerance_relative = NUMERIC_TOLERANCE;
     let n = p.width as u64 * p.height as u64;
@@ -313,6 +357,37 @@ fn run_files_inner(
 mod tests {
     use super::*;
     #[test]
+    #[ignore = "Explicit Vulkan LogExposure production runner; software results are not mobile speed evidence"]
+    fn actual_vulkan_log_preview_size_matches_all_cpu_oracle_scalars() {
+        let root = super::super::tests::root();
+        let (w, h) = (384, 512);
+        let p = GlobalPlan::log_exposure(w, h, 0.73).unwrap();
+        let paths = super::super::tests::planes(&root, w, h);
+        let dir = root.join("gpu-stage-7201");
+        prepare_plane_stage(paths.each_ref().map(|p| p.as_path()), &dir, 7201, &p, || false).unwrap();
+        let candidate = dir.join("candidate");
+        std::fs::create_dir(&candidate).unwrap();
+        let report = run_files_inner(&p, &dir, &candidate, &mut || false, true).unwrap();
+        let input = super::super::tests::read_planes(&paths);
+        let expected = planes_mirror(&p, &input, &mut || false).unwrap();
+        let mut maximum = 0.0f64;
+        let mut squared = 0.0f64;
+        let mut count = 0u64;
+        for ch in 0..3 {
+            let actual = std::fs::read(candidate.join(format!("plane-{ch}.f64le"))).unwrap();
+            assert_eq!(actual.len(), w as usize * h as usize * 8);
+            for (b, want) in actual.chunks_exact(8).zip(&expected[ch]) {
+                let got = f64::from_le_bytes(b.try_into().unwrap());
+                let error = (got - want).abs();
+                assert!(got.is_finite() && error < 2e-3 * want.abs().max(1.));
+                maximum = maximum.max(error); squared += error * error; count += 1;
+            }
+        }
+        assert_eq!(count, w as u64 * h as u64 * 3);
+        eprintln!("production_log_preview_size_metrics={report}; all_scalars={count}; max_abs={maximum}; rms={}", (squared / count as f64).sqrt());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     #[ignore = "Requires an explicit Vulkan device; integer error transport gate"]
     fn actual_vulkan_unsampled_overflow_rejects_entire_global_candidate() {
         let root = super::super::tests::root();
@@ -470,3 +545,7 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "specialization_tests.rs"]
+mod specialization_tests;

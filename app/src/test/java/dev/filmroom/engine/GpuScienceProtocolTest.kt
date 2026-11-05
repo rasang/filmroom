@@ -113,6 +113,24 @@ class GpuScienceProtocolTest {
             assertTrue(runCatching{GpuRenderProtocol.parseStageNativeResult(wrong.toString(),plan)}.isFailure)
         }
     }
+    @Test fun grainPipelineAllowanceIsReservedAndOldUnderbudgetPlanRejected() {
+        val p = GpuScienceFixtures.plan(GpuRenderOperation.FILM_GRAIN) as GpuFilmGrainPlan
+        assertEquals(128 * GpuRenderProtocol.MIB, p.driverAllowanceBytes)
+        assertEquals(p.deviceBytes + p.hostBytes + p.driverAllowanceBytes + p.helperAllowanceBytes, p.combinedPeakBytes)
+        GpuFilmGrainProtocol.validatePlan(p)
+        val old = p.copy(driverAllowanceBytes = 64 * GpuRenderProtocol.MIB,
+            combinedPeakBytes = p.combinedPeakBytes - 64 * GpuRenderProtocol.MIB)
+        assertTrue(runCatching { GpuFilmGrainProtocol.validatePlan(old) }.isFailure)
+        assertTrue(runCatching { GpuFilmGrainProtocol.validatePlan(p.copy(combinedPeakBytes = old.combinedPeakBytes)) }.isFailure)
+    }
+    @Test fun fullTailCompilerAllowanceUsesOnlyClosedPolicyClasses() {
+        val p = GpuScienceFixtures.plan(GpuRenderOperation.SCAN_TAIL) as GpuScanTailPlan
+        assertEquals(320 * GpuRenderProtocol.MIB, p.driverAllowanceBytes)
+        GpuScanTailProtocol.validatePlan(p)
+        val old = p.copy(driverAllowanceBytes = 192 * GpuRenderProtocol.MIB,
+            combinedPeakBytes = p.combinedPeakBytes - 128 * GpuRenderProtocol.MIB)
+        assertTrue(runCatching { GpuScanTailProtocol.validatePlan(old) }.isFailure)
+    }
     @Test fun sequentialGrainSeventeenChunksUseTwoBoundedBatches() {
         // Counter-only fixture: explicit independent arithmetic, not a helper-derived expectation.
         val p=(GpuScienceFixtures.plan(GpuRenderOperation.FILM_GRAIN) as GpuFilmGrainPlan).copy(
@@ -120,12 +138,12 @@ class GpuScienceProtocolTest {
             layerCount=3,sublayers=true,grainActive=true,microActive=false,finalBlurActive=false,
             amountBlendActive=false,passCount=0)
         assertEquals(40L,GpuFilmGrainProtocol.numericFlagReads(p))
-        assertEquals(706L..706L,GpuFilmGrainProtocol.dispatchRange(p))
-        assertEquals(3152L,GpuFilmGrainProtocol.expectedSamplerSamples(p))
-        assertEquals(1_316_704L,GpuFilmGrainProtocol.expectedReadback(p))
+        assertEquals(767L..767L,GpuFilmGrainProtocol.dispatchRange(p))
+        assertEquals(3280L,GpuFilmGrainProtocol.expectedSamplerSamples(p))
+        assertEquals(1_321_568L,GpuFilmGrainProtocol.expectedReadback(p))
         val micro=p.copy(microActive=true)
         assertEquals(46L,GpuFilmGrainProtocol.numericFlagReads(micro))
-        assertEquals(763L..763L,GpuFilmGrainProtocol.dispatchRange(micro))
+        assertEquals(824L..824L,GpuFilmGrainProtocol.dispatchRange(micro))
     }
     @Test fun grainRequiresExactGuardedReferenceCensusAndRejectsOldF32Scope() {
         val plan=GpuScienceFixtures.plan(GpuRenderOperation.FILM_GRAIN) as GpuFilmGrainPlan

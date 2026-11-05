@@ -116,17 +116,21 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,1);
+
     let result = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         };
         GATE.claim(token as u64)?;
         let dir = string(&mut env, &dir)?;
         let sha = string(&mut env, &sha)?;
+        prepare_phase.finish();
         super::full_stage::run_stage(Path::new(&dir), token as u64, budget as u64, &sha, || {
             GATE.is_cancelled(token as u64)
         })
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, result)
+    telemetry.finish(&result);reply(&mut env, result)
 }

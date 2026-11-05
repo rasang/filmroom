@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "operation": "planGpuStreamingStage",
+  "plan": {
+    "batchBytes": 4194304,
+    "combinedPeakBytes": 276889600,
+    "deviceBytes": 33619968,
+    "diskBytes": 2418016256,
+    "driverAllowanceBytes": 109051904,
+    "height": 6144,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 67108864,
+    "layout": "twoPassFileBackedHighlightV1",
+    "manifestSha256": "856e207350906dd8c1cfc49ade19da1c569c21a80669ad40c53abcf390d68aeb",
+    "metadataDiskBytes": 2097152,
+    "operation": "fullStreamingHighlightBoost",
+    "outputBytes": 1207959552,
+    "passCount": 2,
+    "pipelineCount": 5,
+    "residentDeviceBytes": 29425664,
+    "schemaVersion": 1,
+    "sourceSnapshotBytes": 1207959552,
+    "token": 7542,
+    "uploadStagingBytes": 4194304,
+    "width": 8192
+  },
+  "schemaVersion": 1
+}

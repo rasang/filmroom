@@ -386,6 +386,8 @@ fn private_cache(engine: &Engine) -> Result<PathBuf> {
     open_directory(&cache).map_err(|_| invalid())?;
     Ok(cache)
 }
+// The coupled ExposureLog→DIR operation uses the existing DIR request.
+// Therefore preview confinement and cancellation cover it through this same list.
 fn requests_mut(stages: &mut GpuStageRequests) -> impl Iterator<Item = &mut GpuDiffusionRequest> {
     stages
         .diffusion

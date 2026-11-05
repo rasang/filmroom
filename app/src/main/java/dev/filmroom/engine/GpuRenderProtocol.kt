@@ -15,8 +15,9 @@ internal enum class GpuRenderCode { OK, NO_JOB, INVALID_REQUEST, MEMORY_UNAVAILA
 /** Closed stage registry: never turn a packet operation into a reflective JNI name. */
 internal enum class GpuRenderOperation(val wire: String) {
     CAMERA_DIFFUSION("fullCameraDiffusion"), PRINT_SCAN("fullPrintScanLogXyz"), FILM_OPTICS("fullFilmOptics"), FILM_EXPOSURE("fullFilmExposure"), FILM_DIR("fullFilmDirDensity"),
-    AUTO_EXPOSURE("fullAutoExposure"), HIGHLIGHT_BOOST("fullHighlightBoost"), EXPOSURE_LOG("fullExposureLog"),
-    FILM_GRAIN("fullFilmGrain"), PRINT_EXPOSURE("fullPrintExposure"), PRINT_DIFFUSION("fullPrintDiffusion"), SCAN_TAIL("fullScanTail"), FINISH_TAIL("fullFinishTail");
+    AUTO_EXPOSURE("fullAutoExposure"), HIGHLIGHT_BOOST("fullHighlightBoost"), EXPOSURE_LOG("fullExposureLog"), EXPOSURE_LOG_DIR("fullExposureLogDir"),
+    FILM_GRAIN("fullFilmGrain"), PRINT_EXPOSURE("fullPrintExposure"), PRINT_DIFFUSION("fullPrintDiffusion"), SCAN_TAIL("fullScanTail"), FINISH_TAIL("fullFinishTail"),
+    FILM_OPTICS_STREAM_V1("fullFilmOpticsStreamV1"), FILM_GRAIN_STREAM_V1("fullFilmGrainStreamV1"), FILM_DIR_STREAM_V1("fullFilmDirDensityStreamV1"), EXPOSURE_LOG_DIR_STREAM_V1("fullExposureLogDirStreamV1"), SCAN_TAIL_STREAM_V1("fullScanTailStreamV1"), FINISH_TAIL_STREAM_V1("fullFinishTailStreamV1"), HIGHLIGHT_STREAM_V1("fullStreamingHighlightBoost");
     companion object { fun fromWire(value: Any?): GpuRenderOperation = entries.singleOrNull { it.wire == value } ?: error("Invalid GPU operation") }
 }
 internal sealed interface GpuStagePlan {
@@ -103,18 +104,23 @@ internal object GpuRenderProtocol {
     }
     /** Only named native codes cross IPC, never raw driver text or source paths. */
     fun nativeFailure(operation: GpuRenderOperation, code: Any?): GpuRenderCode {
+        if (operation in GpuStreamingProtocol.operations) return GpuStreamingProtocol.nativeFailure(operation, code)
         if(operation==GpuRenderOperation.FINISH_TAIL && code in setOf("GPU_TAIL_NUMERIC_CHECK","GPU_TAIL_NUMERIC_DOMAIN","GPU_TAIL_NONFINITE","NONFINITE_TAIL_INPUT","NONFINITE_TAIL_OUTPUT","NONFINITE_TAIL_INTERMEDIATE","NONFINITE_TAIL_PARAMETERS","GPU_TAIL_MEMORY_LIMIT","INSUFFICIENT_GPU_TAIL_MEMORY","GPU_TAIL_TIMEOUT","GPU_TAIL_UNSUPPORTED"))return nativeFailure(GpuRenderOperation.SCAN_TAIL,code)
         if(operation==GpuRenderOperation.FINISH_TAIL && code in setOf("GPU_FINISH_NUMERIC_CHECK","GPU_FINISH_NONFINITE","NONFINITE_FINISH_INPUT","NONFINITE_FINISH_OUTPUT","NONFINITE_FINISH_TABLE","GPU_FINISH_MEMORY_LIMIT","INSUFFICIENT_GPU_FINISH_MEMORY","GPU_FINISH_TIMEOUT","GPU_FINISH_UNSUPPORTED"))return nativeFailure(GpuRenderOperation.PRINT_SCAN,code)
+        if (operation == GpuRenderOperation.EXPOSURE_LOG_DIR && code is String && (code.startsWith("GPU_GLOBAL_") || code.startsWith("NONFINITE_GLOBAL_") || code == "INSUFFICIENT_GPU_GLOBAL_MEMORY")) return nativeFailure(GpuRenderOperation.EXPOSURE_LOG, code)
+        if (operation == GpuRenderOperation.EXPOSURE_LOG_DIR && code is String && (code.startsWith("GPU_DIR_") || code.startsWith("NONFINITE_DIR_") || code == "INSUFFICIENT_GPU_DIR_MEMORY")) return nativeFailure(GpuRenderOperation.FILM_DIR, code)
         val prefix = when (operation) {
             GpuRenderOperation.CAMERA_DIFFUSION, GpuRenderOperation.PRINT_DIFFUSION -> "GPU_STAGE"
             GpuRenderOperation.PRINT_SCAN, GpuRenderOperation.PRINT_EXPOSURE -> "GPU_FINISH"
             GpuRenderOperation.FILM_OPTICS -> "GPU_OPTICS"
             GpuRenderOperation.FILM_EXPOSURE -> "GPU_EXPOSURE"
             GpuRenderOperation.FILM_DIR -> "GPU_DIR"
+            GpuRenderOperation.EXPOSURE_LOG_DIR -> "GPU_LOG_DIR"
             GpuRenderOperation.FILM_GRAIN -> "GPU_GRAIN"
             GpuRenderOperation.SCAN_TAIL -> "GPU_TAIL"
             GpuRenderOperation.FINISH_TAIL -> "GPU_FUSION"
             GpuRenderOperation.AUTO_EXPOSURE, GpuRenderOperation.HIGHLIGHT_BOOST, GpuRenderOperation.EXPOSURE_LOG -> "GPU_GLOBAL"
+            GpuRenderOperation.FILM_OPTICS_STREAM_V1, GpuRenderOperation.FILM_GRAIN_STREAM_V1, GpuRenderOperation.FILM_DIR_STREAM_V1, GpuRenderOperation.EXPOSURE_LOG_DIR_STREAM_V1, GpuRenderOperation.SCAN_TAIL_STREAM_V1, GpuRenderOperation.FINISH_TAIL_STREAM_V1, GpuRenderOperation.HIGHLIGHT_STREAM_V1 -> error("Streaming failure handled above")
         }
         val data = prefix.removePrefix("GPU_")
         return when (code) {
@@ -129,7 +135,7 @@ internal object GpuRenderProtocol {
             "GPU_GRAIN_INTEGER_RNG_CHECK", "GPU_GRAIN_MT_RNG_CHECK", "GPU_GRAIN_SAMPLER_TUPLE_CHECK", "GPU_GRAIN_GUARDED_REJECTION" -> if (operation == GpuRenderOperation.FILM_GRAIN) GpuRenderCode.NUMERIC_REJECTED else GpuRenderCode.NATIVE_FAILED
             "GPU_GRAIN_COUNT_LIMIT", "GPU_GRAIN_SAMPLER_LIMIT", "GPU_GRAIN_UNSUPPORTED_CURVES", "GPU_GRAIN_LAYER_LIMIT", "GPU_GRAIN_SEQUENTIAL_PENDING", "GPU_GRAIN_GUARDED_PENDING" -> if (operation == GpuRenderOperation.FILM_GRAIN) GpuRenderCode.UNSUPPORTED else GpuRenderCode.NATIVE_FAILED
             "GPU_OPTICS_MEMORY_LIMIT" -> if (operation == GpuRenderOperation.FILM_GRAIN) GpuRenderCode.MEMORY_UNAVAILABLE else GpuRenderCode.NATIVE_FAILED
-            "GPU_OPTICS_NUMERIC_CHECK" -> if (operation in setOf(GpuRenderOperation.FILM_DIR, GpuRenderOperation.FILM_GRAIN)) GpuRenderCode.NUMERIC_REJECTED else GpuRenderCode.NATIVE_FAILED
+            "GPU_OPTICS_NUMERIC_CHECK" -> if (operation in setOf(GpuRenderOperation.FILM_DIR, GpuRenderOperation.EXPOSURE_LOG_DIR, GpuRenderOperation.FILM_GRAIN)) GpuRenderCode.NUMERIC_REJECTED else GpuRenderCode.NATIVE_FAILED
             else -> GpuRenderCode.NATIVE_FAILED
         }
     }
@@ -139,6 +145,7 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.FILM_OPTICS -> NativeGpuProbeBridge.nativePlanGpuFilmOpticsStage(directory, token)
         GpuRenderOperation.FILM_EXPOSURE -> NativeGpuProbeBridge.nativePlanGpuFilmExposureStage(directory, token)
         GpuRenderOperation.FILM_DIR -> NativeGpuProbeBridge.nativePlanGpuFilmDirStage(directory, token)
+        GpuRenderOperation.EXPOSURE_LOG_DIR -> NativeGpuProbeBridge.nativePlanGpuExposureLogDirStage(directory, token)
         GpuRenderOperation.AUTO_EXPOSURE -> NativeGpuProbeBridge.nativePlanGpuAutoExposureStage(directory, token)
         GpuRenderOperation.HIGHLIGHT_BOOST -> NativeGpuProbeBridge.nativePlanGpuHighlightBoostStage(directory, token)
         GpuRenderOperation.EXPOSURE_LOG -> NativeGpuProbeBridge.nativePlanGpuExposureLogStage(directory, token)
@@ -147,6 +154,13 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.PRINT_DIFFUSION -> NativeGpuProbeBridge.nativePlanGpuPrintDiffusionStage(directory, token)
         GpuRenderOperation.SCAN_TAIL -> NativeGpuProbeBridge.nativePlanGpuScanTailStage(directory, token)
         GpuRenderOperation.FINISH_TAIL -> NativeGpuProbeBridge.nativePlanGpuFinishTailStage(directory, token)
+        GpuRenderOperation.FILM_OPTICS_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.FILM_GRAIN_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.FILM_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.EXPOSURE_LOG_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.SCAN_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.FINISH_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
+        GpuRenderOperation.HIGHLIGHT_STREAM_V1 -> NativeGpuProbeBridge.nativePlanGpuStreamingStage(operation.wire, directory, token)
     }
     fun nativeRun(plan: GpuStagePlan, directory: String): String = when (plan.operation) {
         GpuRenderOperation.CAMERA_DIFFUSION -> NativeGpuProbeBridge.nativeRunGpuOpticalStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
@@ -154,6 +168,7 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.FILM_OPTICS -> NativeGpuProbeBridge.nativeRunGpuFilmOpticsStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.FILM_EXPOSURE -> NativeGpuProbeBridge.nativeRunGpuFilmExposureStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.FILM_DIR -> NativeGpuProbeBridge.nativeRunGpuFilmDirStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.EXPOSURE_LOG_DIR -> NativeGpuProbeBridge.nativeRunGpuExposureLogDirStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.AUTO_EXPOSURE -> NativeGpuProbeBridge.nativeRunGpuAutoExposureStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.HIGHLIGHT_BOOST -> NativeGpuProbeBridge.nativeRunGpuHighlightBoostStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.EXPOSURE_LOG -> NativeGpuProbeBridge.nativeRunGpuExposureLogStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
@@ -162,6 +177,13 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.PRINT_DIFFUSION -> NativeGpuProbeBridge.nativeRunGpuPrintDiffusionStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.SCAN_TAIL -> NativeGpuProbeBridge.nativeRunGpuScanTailStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
         GpuRenderOperation.FINISH_TAIL -> NativeGpuProbeBridge.nativeRunGpuFinishTailStage(directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.FILM_OPTICS_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.FILM_GRAIN_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.FILM_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.EXPOSURE_LOG_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.SCAN_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.FINISH_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
+        GpuRenderOperation.HIGHLIGHT_STREAM_V1 -> NativeGpuProbeBridge.nativeRunGpuStreamingStage(plan.operation.wire, directory, plan.combinedPeakBytes, plan.token, plan.digest)
     }
     fun nativeCancel(operation: GpuRenderOperation, token: Long) = when (operation) {
         GpuRenderOperation.CAMERA_DIFFUSION -> NativeGpuProbeBridge.nativeCancelGpuOpticalStage(token)
@@ -169,6 +191,7 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.FILM_OPTICS -> NativeGpuProbeBridge.nativeCancelGpuFilmOpticsStage(token)
         GpuRenderOperation.FILM_EXPOSURE -> NativeGpuProbeBridge.nativeCancelGpuFilmExposureStage(token)
         GpuRenderOperation.FILM_DIR -> NativeGpuProbeBridge.nativeCancelGpuFilmDirStage(token)
+        GpuRenderOperation.EXPOSURE_LOG_DIR -> NativeGpuProbeBridge.nativeCancelGpuExposureLogDirStage(token)
         GpuRenderOperation.AUTO_EXPOSURE -> NativeGpuProbeBridge.nativeCancelGpuAutoExposureStage(token)
         GpuRenderOperation.HIGHLIGHT_BOOST -> NativeGpuProbeBridge.nativeCancelGpuHighlightBoostStage(token)
         GpuRenderOperation.EXPOSURE_LOG -> NativeGpuProbeBridge.nativeCancelGpuExposureLogStage(token)
@@ -177,6 +200,13 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.PRINT_DIFFUSION -> NativeGpuProbeBridge.nativeCancelGpuPrintDiffusionStage(token)
         GpuRenderOperation.SCAN_TAIL -> NativeGpuProbeBridge.nativeCancelGpuScanTailStage(token)
         GpuRenderOperation.FINISH_TAIL -> NativeGpuProbeBridge.nativeCancelGpuFinishTailStage(token)
+        GpuRenderOperation.FILM_OPTICS_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.FILM_GRAIN_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.FILM_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.EXPOSURE_LOG_DIR_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.SCAN_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.FINISH_TAIL_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
+        GpuRenderOperation.HIGHLIGHT_STREAM_V1 -> NativeGpuProbeBridge.nativeCancelGpuStreamingStage(token)
     }
     fun parseStagePlan(raw: String, token: Long, operation: GpuRenderOperation): GpuStagePlan = when (operation) {
         GpuRenderOperation.CAMERA_DIFFUSION, GpuRenderOperation.PRINT_DIFFUSION -> parsePlan(raw, token, operation)
@@ -184,10 +214,13 @@ internal object GpuRenderProtocol {
         GpuRenderOperation.FILM_OPTICS -> GpuFilmOpticsProtocol.parsePlan(raw, token)
         GpuRenderOperation.FILM_EXPOSURE -> GpuFilmExposureProtocol.parsePlan(raw, token)
         GpuRenderOperation.FILM_DIR -> GpuFilmDirProtocol.parsePlan(raw, token)
+        GpuRenderOperation.EXPOSURE_LOG_DIR -> GpuExposureLogDirProtocol.parsePlan(raw, token)
         GpuRenderOperation.FILM_GRAIN -> GpuFilmGrainProtocol.parsePlan(raw, token)
         GpuRenderOperation.SCAN_TAIL -> GpuScanTailProtocol.parsePlan(raw, token)
         GpuRenderOperation.FINISH_TAIL -> GpuFinishTailProtocol.parsePlan(raw, token)
         GpuRenderOperation.AUTO_EXPOSURE, GpuRenderOperation.HIGHLIGHT_BOOST, GpuRenderOperation.EXPOSURE_LOG -> GpuGlobalProtocol.parsePlan(raw, token, operation)
+        GpuRenderOperation.FILM_OPTICS_STREAM_V1, GpuRenderOperation.FILM_GRAIN_STREAM_V1, GpuRenderOperation.FILM_DIR_STREAM_V1, GpuRenderOperation.EXPOSURE_LOG_DIR_STREAM_V1, GpuRenderOperation.SCAN_TAIL_STREAM_V1, GpuRenderOperation.FINISH_TAIL_STREAM_V1, GpuRenderOperation.HIGHLIGHT_STREAM_V1 ->
+            GpuStreamingProtocol.parsePlan(raw, token, operation)
     }
     fun parseStageNativeResult(raw: String, plan: GpuStagePlan): Pair<GpuRenderCode, GpuStageSummary?> = when (plan) {
         is GpuRenderPlan -> parseNativeResult(raw, plan)
@@ -195,10 +228,12 @@ internal object GpuRenderProtocol {
         is GpuFilmOpticsPlan -> GpuFilmOpticsProtocol.parseNativeResult(raw, plan)
         is GpuFilmExposurePlan -> GpuFilmExposureProtocol.parseNativeResult(raw, plan)
         is GpuFilmDirPlan -> GpuFilmDirProtocol.parseNativeResult(raw, plan)
+        is GpuExposureLogDirPlan -> GpuExposureLogDirProtocol.parseNativeResult(raw, plan)
         is GpuFilmGrainPlan -> GpuFilmGrainProtocol.parseNativeResult(raw, plan)
         is GpuScanTailPlan -> GpuScanTailProtocol.parseNativeResult(raw, plan)
         is GpuFinishTailPlan -> GpuFinishTailProtocol.parseNativeResult(raw, plan)
         is GpuGlobalPlan -> GpuGlobalProtocol.parseNativeResult(raw, plan)
+        is GpuStreamingPlan -> GpuStreamingProtocol.parseNativeResult(raw, plan)
     }
     fun parseStageResult(raw: String, plan: GpuStagePlan): Pair<GpuRenderCode, GpuStageSummary?> = when (plan) {
         is GpuRenderPlan -> parseResult(raw, plan)
@@ -206,10 +241,12 @@ internal object GpuRenderProtocol {
         is GpuFilmOpticsPlan -> GpuFilmOpticsProtocol.parseResult(raw, plan)
         is GpuFilmExposurePlan -> GpuFilmExposureProtocol.parseResult(raw, plan)
         is GpuFilmDirPlan -> GpuFilmDirProtocol.parseResult(raw, plan)
+        is GpuExposureLogDirPlan -> GpuExposureLogDirProtocol.parseResult(raw, plan)
         is GpuFilmGrainPlan -> GpuFilmGrainProtocol.parseResult(raw, plan)
         is GpuScanTailPlan -> GpuScanTailProtocol.parseResult(raw, plan)
         is GpuFinishTailPlan -> GpuFinishTailProtocol.parseResult(raw, plan)
         is GpuGlobalPlan -> GpuGlobalProtocol.parseResult(raw, plan)
+        is GpuStreamingPlan -> GpuStreamingProtocol.parseResult(raw, plan)
     }
     fun parsePlan(raw: String, token: Long, operation: GpuRenderOperation = GpuRenderOperation.CAMERA_DIFFUSION): GpuRenderPlan {
         require(operation in setOf(GpuRenderOperation.CAMERA_DIFFUSION, GpuRenderOperation.PRINT_DIFFUSION))

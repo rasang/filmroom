@@ -1,6 +1,7 @@
 package dev.filmroom.engine
 
 import android.app.Application
+import dev.filmroom.diagnostics.GpuLifecyclePhase
 import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
@@ -155,6 +156,43 @@ class GpuRenderDelegateTest {
         assertTrue(delegate.awaitSafeTermination())
         Shadows.shadowOf(Looper.getMainLooper()).idle()
         assertEquals(0, context.starts); assertEquals(0, closes.get())
+    }
+
+    @Test fun durableBreadcrumbPrecedesPlanAndAdmissionAndCancelIsRecordedAtRequest() = runBlocking {
+        val context = context(); val closes = AtomicInteger()
+        val events = java.util.Collections.synchronizedList(mutableListOf<Pair<GpuLifecyclePhase, Boolean>>())
+        val original = hooks(closes)
+        val delegate = GpuRenderDelegate.forTesting(context, original.copy(
+            lifecycle = { token, phase, _, durable -> assertEquals(91L, token); events.add(phase to durable) },
+            plan = { path, token ->
+                assertEquals(GpuLifecyclePhase.PLAN_ENTER to true, events.last())
+                original.plan(path, token)
+            },
+            reserve = { bytes, pressure ->
+                assertEquals(GpuLifecyclePhase.RESERVE_ENTER to true, events.last())
+                original.reserve(bytes, pressure)
+            }))
+        try {
+            assertEquals(1, withContext(Dispatchers.IO) { delegate.begin(GpuRenderFixtures.request(context)) })
+            delegate.cancel(91)
+            assertEquals(1, events.count { it.first == GpuLifecyclePhase.CANCEL_REQUEST })
+            assertEquals(1, events.count { it.first == GpuLifecyclePhase.STAGE_END })
+            delegate.cancel(91)
+            assertEquals(1, events.count { it.first == GpuLifecyclePhase.CANCEL_REQUEST })
+        } finally { delegate.awaitSafeTermination() }
+        assertTrue(events.indexOfFirst { it.first == GpuLifecyclePhase.CANCEL_REQUEST } < events.indexOfFirst { it.first == GpuLifecyclePhase.STAGE_END })
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+    }
+    @Test fun telemetryFailureCannotSkipLeaseCleanup() = runBlocking {
+        val context = context(); val closes = AtomicInteger()
+        val delegate = GpuRenderDelegate.forTesting(context, hooks(closes).copy(lifecycle = { _, _, _, _ -> error("diagnostics unavailable") }))
+        try {
+            assertEquals(1, withContext(Dispatchers.IO) { delegate.begin(GpuRenderFixtures.request(context)) })
+            delegate.cancel(91)
+            assertEquals(1, closes.get())
+            assertEquals("cancelled_stopped", JSONObject(delegate.poll(91)).getString("status"))
+        } finally { delegate.awaitSafeTermination() }
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
 }

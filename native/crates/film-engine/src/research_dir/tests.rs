@@ -361,6 +361,8 @@ fn emit_dir_plan_contract_when_requested() {
         || false,
     )
     .unwrap();
+    assert_eq!(stage.driver_allowance_bytes,104*crate::research_spatial::MIB);
+    assert_eq!(stage.combined_peak_bytes,stage.device_bytes+stage.host_bytes+stage.driver_allowance_bytes+stage.helper_allowance_bytes);
     let envelope = serde_json::json!({"ok":true,"schemaVersion":1,"operation":"planGpuFilmDirStage","plan":stage});
     let destination = PathBuf::from(destination);
     fs::create_dir_all(&destination).unwrap();

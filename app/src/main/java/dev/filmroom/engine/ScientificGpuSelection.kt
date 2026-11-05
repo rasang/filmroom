@@ -16,7 +16,7 @@ internal data class ScientificGpuSelection(
         if(enabled)put("previewBrightnessReuse",false)
         if(perfBuild)put("useGpu",false).put("gpuResourceReuse",false)
     }
-    fun router(context:Context)=GpuExportRouter(context,camera,scanner,optical,exposure,dir,science)
+    fun router(context:Context,parentToken:Long?=null)=GpuExportRouter(context,camera,scanner,optical,exposure,dir,science,parentToken)
     companion object {
         fun from(snapshot:OptimizationSnapshot,perfBuild:Boolean,mode:String)=ScientificGpuSelection(
             snapshot.experimentalDiffusionEnabled(perfBuild,mode),snapshot.experimentalScannerEnabled(perfBuild,mode),

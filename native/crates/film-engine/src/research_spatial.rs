@@ -12,6 +12,9 @@ pub const FIT: [(f64, f64); 3] = [(0.1633, 0.5360), (0.6496, 1.5236), (0.1870, 2
 pub type R<T> = Result<T, String>;
 pub mod full_stage;
 mod guarded;
+pub(crate) mod families;
+/// Four cached opcode pipelines: conservative admission allowance, not a measured driver cap.
+pub const PIPELINE_RESERVATION_BYTES: u64 = 40 * MIB;
 #[cfg(feature = "gpu-diffusion-research")]
 pub mod gpu;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

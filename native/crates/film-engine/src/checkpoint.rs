@@ -130,13 +130,13 @@ pub enum FilmExposureBackend {CpuF64,GpuExposureF32V1}
 impl FilmExposureBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuExposureF32V1=>"gpu_exposure_f32_v1"}}}
 #[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
 #[serde(rename_all="snake_case")]
-pub enum FilmDirBackend {CpuF64,GpuDirF32V1}
-impl FilmDirBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuDirF32V1=>"gpu_dir_f32_v1"}}}
+pub enum FilmDirBackend {CpuF64,GpuDirF32V1,GpuExposureLogDirV1,GpuDirStreamF32V1,GpuExposureLogDirStreamF32V1}
+impl FilmDirBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuDirF32V1=>"gpu_dir_f32_v1",Self::GpuExposureLogDirV1=>"gpu_exposure_log_dir_v1",Self::GpuDirStreamF32V1=>"gpu_dir_stream_f32_v1",Self::GpuExposureLogDirStreamF32V1=>"gpu_exposure_log_dir_stream_f32_v1"}}}
 /// Actual complete camera-lens/scatter/halation backend, independent of camera FFT.
 #[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
 #[serde(rename_all="snake_case")]
-pub enum FilmOpticalBackend {CpuF64,GpuSpatialF32V1}
-impl FilmOpticalBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuSpatialF32V1=>"gpu_spatial_f32_v1"}}}
+pub enum FilmOpticalBackend {CpuF64,GpuSpatialF32V1,GpuSpatialStreamF32V1}
+impl FilmOpticalBackend {pub fn as_str(self)->&'static str {match self {Self::CpuF64=>"cpu_f64",Self::GpuSpatialF32V1=>"gpu_spatial_f32_v1",Self::GpuSpatialStreamF32V1=>"gpu_spatial_stream_f32_v1"}}}
 /// Actual stage-6 pointwise backend. The scanner f64 tail and spatial effects
 /// stay on CPU even when the experimental PCHIP chain ran on GPU.
 #[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq,Eq)]
@@ -148,6 +148,8 @@ impl PrintingScanningBackend {pub fn as_str(self)->&'static str {match self {Sel
 struct Manifest {
     #[serde(default,skip_serializing_if="std::collections::BTreeMap::is_empty")]
     science_backends:std::collections::BTreeMap<crate::streamed::ScienceKind,bool>,
+    #[serde(default,skip_serializing_if="std::collections::BTreeMap::is_empty")]
+    science_backend_names:std::collections::BTreeMap<crate::streamed::ScienceKind,String>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     camera_diffusion_backend:Option<CameraDiffusionBackend>,
     #[serde(default,skip_serializing_if="Option::is_none")]
@@ -165,6 +167,7 @@ struct Manifest {
 }
 pub struct Checkpoints {
     science_backends:std::collections::BTreeMap<crate::streamed::ScienceKind,bool>,
+    science_backend_names:std::collections::BTreeMap<crate::streamed::ScienceKind,String>,
     accelerated: bool,
     root: PathBuf,
     identity: Identity,
@@ -203,6 +206,7 @@ impl Checkpoints {
                 || (manifest.stage<2&&manifest.film_exposure_backend.is_some())
                 || (manifest.stage<4&&manifest.film_dir_backend.is_some())
                 || manifest.science_backends.keys().any(|kind|kind.checkpoint_stage()>manifest.stage)
+                || manifest.science_backend_names.iter().any(|(kind,name)| kind.backend_name(name).is_none() || manifest.science_backends.get(kind).copied() != Some(name != "cpu_f64"))
                 || manifest.identity != identity
                 || !(2..=6).contains(&manifest.stage)
                 || manifest.metered_ev.is_some_and(|x| !x.is_finite())
@@ -244,6 +248,7 @@ impl Checkpoints {
             film_exposure_backend:manifest.as_ref().and_then(|m|m.film_exposure_backend),
             film_dir_backend:manifest.as_ref().and_then(|m|m.film_dir_backend),
             science_backends:manifest.as_ref().map(|m|m.science_backends.clone()).unwrap_or_default(),
+            science_backend_names:manifest.as_ref().map(|m|m.science_backend_names.clone()).unwrap_or_default(),
             manifest,
             commit_failed: false,
         };
@@ -281,7 +286,13 @@ impl Checkpoints {
         self.film_exposure_backend=Some(backend);Ok(())
     }
     pub(crate) fn science_backends(&self)->&std::collections::BTreeMap<crate::streamed::ScienceKind,bool>{&self.science_backends}
-    pub(crate) fn set_science_backend(&mut self,kind:crate::streamed::ScienceKind,gpu:bool)->io::Result<()>{if self.stage()>=kind.checkpoint_stage()||self.commit_failed{return Err(invalid());}self.science_backends.insert(kind,gpu);Ok(())}
+    pub(crate) fn science_backend_names(&self)->&std::collections::BTreeMap<crate::streamed::ScienceKind,String>{&self.science_backend_names}
+    pub(crate) fn set_science_backend_named(&mut self,kind:crate::streamed::ScienceKind,name:&str)->io::Result<()> {
+        let name=kind.backend_name(name).ok_or_else(invalid)?;
+        self.set_science_backend(kind,name!="cpu_f64")?;
+        self.science_backend_names.insert(kind,name.into());Ok(())
+    }
+    pub(crate) fn set_science_backend(&mut self,kind:crate::streamed::ScienceKind,gpu:bool)->io::Result<()>{if self.stage()>=kind.checkpoint_stage()||self.commit_failed{return Err(invalid());}self.science_backends.insert(kind,gpu);self.science_backend_names.remove(&kind);Ok(())}
     pub fn film_dir_backend_metadata(&self)->Option<FilmDirBackend> {self.film_dir_backend}
     pub fn film_dir_backend(&self)->FilmDirBackend {self.film_dir_backend.unwrap_or(FilmDirBackend::CpuF64)}
     pub fn set_film_dir_backend(&mut self,backend:FilmDirBackend)->io::Result<()> {
@@ -382,6 +393,7 @@ impl Checkpoints {
         cancelled(c)?;
         let manifest = Manifest {
             science_backends:self.science_backends.iter().filter(|(k,_)|k.checkpoint_stage()<=stage).map(|(&k,&v)|(k,v)).collect(),
+            science_backend_names:self.science_backend_names.iter().filter(|(k,_)|k.checkpoint_stage()<=stage).map(|(&k,v)|(k,v.clone())).collect(),
             camera_diffusion_backend:if stage>=3 {self.camera_diffusion_backend}else{None},
             printing_scanning_backend:if stage==6 {self.printing_scanning_backend}else{None},
             film_optical_backend:if stage>=3 {self.film_optical_backend}else{None},

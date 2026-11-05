@@ -101,6 +101,15 @@ fn whole_graph_all_modes_edges_hdr_and_cancellation(){
     for ch in 0..3{assert_eq!(fs::read(&inputs[ch]).unwrap(),before[ch]);}
     OpenOptions::new().write(true).open(&outputs[2]).unwrap().write_all(&f64::NAN.to_le_bytes()).unwrap();assert!(full_stage::validate_outputs(&dir,9,&stage.manifest_sha256,||false).is_err());
 }
+#[test]fn pipeline_family_driver_allowance_is_separate_from_batch_payload(){
+ let root=Root::new();let p=fixture(17,11,true,false,false);let sources=write_inputs(&root,&input(17,11));let dir=root.0.join("gpu-stage-99");
+ let plan=full_stage::prepare_stage(sources.each_ref().map(|p|p.as_path()),&dir,99,17,11,&p,||false).unwrap();
+ assert_eq!(guarded_graph::PIPELINE_RESERVATION_BYTES,64*MIB);
+ assert_eq!(plan.driver_allowance_bytes,128*MIB);
+ assert_eq!(plan.host_bytes,20*MIB+guarded_graph::CODE_HOST_RESERVATION_BYTES);
+ assert_eq!(plan.device_bytes,p.spatial_plan().unwrap().device_bytes+guarded_graph::scratch_bytes(p.rng_mode).unwrap());
+ assert_eq!(plan.combined_peak_bytes,plan.device_bytes+plan.host_bytes+plan.driver_allowance_bytes+plan.helper_allowance_bytes);
+}
 #[test]fn production_grain_plan_contract_for_android(){
     let Some(path)=std::env::var_os("FILM_GPU_CONTRACT_RESULTS")else{return;};let root=Root::new();let p=fixture(17,11,true,false,false);let sources=write_inputs(&root,&input(17,11));
     let plan=full_stage::prepare_stage(sources.each_ref().map(|p|p.as_path()),&root.0.join("gpu-stage-42"),42,17,11,&p,||false).unwrap();let path=PathBuf::from(path);fs::create_dir_all(&path).unwrap();
@@ -177,7 +186,7 @@ fn whole_graph_all_modes_edges_hdr_and_cancellation(){
 #[test]fn guarded_actual_summary_validator_accepts_v2_and_rejects_old_counters(){
  // Unit contract values only. This is explicitly not an actual GPU execution.
  for mode in[RngMode::CoordinateSplitMix64,RngMode::SequentialMt19937]{let mut p=fixture(71,37,true,false,true);p.rng_mode=mode;let e=guarded_graph::execution_contract(&p);
-  let mut value=serde_json::json!({"passCount":p.pass_count(),"sampleCount":e.spatial_samples,"samplerSampleCount":3152,"exactRngWordsChecked":98304,"softwareArithmeticChecks":1280,"dispatches":e.dispatches,"numericFlagReads":e.numeric_flag_reads,"readbackBytes":e.readback_bytes,"poissonCountMismatches":0,"binomialCountMismatches":0,"randomWordCountMismatches":0,"samplerTupleMismatches":0,"layerCount":p.layer_count(),"chunkCount":p.chunk_count(),"grainActive":p.active,"sublayers":p.sublayers,"microActive":p.micro_active,"finalBlurActive":true,"amountBlendActive":true,"rngMode":mode,"distributionArithmetic":"guardedSoftwareBinary64","stochasticScope":"fixed_synthetic_reference_tuple_census","microstructureArithmetic":"original_words_guarded_f32_box_muller","samplerMaxAbs":0.,"samplerRms":0.});
+  let mut value=serde_json::json!({"passCount":p.pass_count(),"sampleCount":e.spatial_samples,"samplerSampleCount":3280,"exactRngWordsChecked":98304,"softwareArithmeticChecks":1280,"dispatches":e.dispatches,"numericFlagReads":e.numeric_flag_reads,"readbackBytes":e.readback_bytes,"poissonCountMismatches":0,"binomialCountMismatches":0,"randomWordCountMismatches":0,"samplerTupleMismatches":0,"layerCount":p.layer_count(),"chunkCount":p.chunk_count(),"grainActive":p.active,"sublayers":p.sublayers,"microActive":p.micro_active,"finalBlurActive":true,"amountBlendActive":true,"rngMode":mode,"distributionArithmetic":"guardedSoftwareBinary64","stochasticScope":"fixed_synthetic_reference_tuple_census","microstructureArithmetic":"original_words_guarded_f32_box_muller","samplerMaxAbs":0.,"samplerRms":0.});
   full_stage::validate_run_summary(&p,&value).unwrap();let saved=value.clone();for key in["samplerSampleCount","exactRngWordsChecked","softwareArithmeticChecks","dispatches","numericFlagReads","readbackBytes","samplerTupleMismatches"]{value=saved.clone();value[key]=serde_json::json!(value[key].as_u64().unwrap()+1);assert_eq!(full_stage::validate_run_summary(&p,&value).unwrap_err(),"GPU_GRAIN_NUMERIC_CHECK");}value=saved;value["exactRngWordsChecked"]=serde_json::json!(49152);assert!(full_stage::validate_run_summary(&p,&value).is_err());
  }
 }

@@ -1,0 +1,985 @@
+{
+  "schemaVersion": 1,
+  "failureCodes": [
+    {
+      "code": 0,
+      "name": "NONE"
+    },
+    {
+      "code": 1,
+      "name": "UNCLASSIFIED"
+    },
+    {
+      "code": 2,
+      "name": "CANCELLED"
+    },
+    {
+      "code": 3,
+      "name": "GPU_DEVICE_FAILED"
+    },
+    {
+      "code": 4,
+      "name": "GPU_DIR_IO"
+    },
+    {
+      "code": 5,
+      "name": "GPU_DIR_MEMORY_LIMIT"
+    },
+    {
+      "code": 6,
+      "name": "GPU_DIR_NUMERIC_CHECK"
+    },
+    {
+      "code": 7,
+      "name": "GPU_DIR_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 8,
+      "name": "GPU_DIR_UNSUPPORTED"
+    },
+    {
+      "code": 9,
+      "name": "GPU_EXECUTION_FAILED"
+    },
+    {
+      "code": 10,
+      "name": "GPU_EXPOSURE_HASH_MISMATCH"
+    },
+    {
+      "code": 11,
+      "name": "GPU_EXPOSURE_INVALID_TABLE"
+    },
+    {
+      "code": 12,
+      "name": "GPU_EXPOSURE_IO"
+    },
+    {
+      "code": 13,
+      "name": "GPU_EXPOSURE_MEMORY_LIMIT"
+    },
+    {
+      "code": 14,
+      "name": "GPU_EXPOSURE_NONFINITE"
+    },
+    {
+      "code": 15,
+      "name": "GPU_EXPOSURE_NUMERIC_CHECK"
+    },
+    {
+      "code": 16,
+      "name": "GPU_EXPOSURE_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 17,
+      "name": "GPU_EXPOSURE_OUTPUT_COLLISION"
+    },
+    {
+      "code": 18,
+      "name": "GPU_EXPOSURE_READBACK_FAILED"
+    },
+    {
+      "code": 19,
+      "name": "GPU_EXPOSURE_TIMEOUT"
+    },
+    {
+      "code": 20,
+      "name": "GPU_EXPOSURE_UNSUPPORTED"
+    },
+    {
+      "code": 21,
+      "name": "GPU_FINISH_IO"
+    },
+    {
+      "code": 22,
+      "name": "GPU_FINISH_MEMORY_LIMIT"
+    },
+    {
+      "code": 23,
+      "name": "GPU_FINISH_NUMERIC_CHECK"
+    },
+    {
+      "code": 24,
+      "name": "GPU_FINISH_READBACK_FAILED"
+    },
+    {
+      "code": 25,
+      "name": "GPU_FINISH_TIMEOUT"
+    },
+    {
+      "code": 26,
+      "name": "GPU_FINISH_UNSUPPORTED"
+    },
+    {
+      "code": 27,
+      "name": "GPU_FUSION_MEMORY_LIMIT"
+    },
+    {
+      "code": 28,
+      "name": "GPU_FUSION_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 29,
+      "name": "GPU_FUSION_PREFIX_NUMERIC_CHECK"
+    },
+    {
+      "code": 30,
+      "name": "GPU_FUSION_SHADER_VERSION"
+    },
+    {
+      "code": 31,
+      "name": "GPU_FUSION_UNSUPPORTED"
+    },
+    {
+      "code": 32,
+      "name": "GPU_GLOBAL_IO"
+    },
+    {
+      "code": 33,
+      "name": "GPU_GLOBAL_MEMORY_LIMIT"
+    },
+    {
+      "code": 34,
+      "name": "GPU_GLOBAL_NUMERIC_CHECK"
+    },
+    {
+      "code": 35,
+      "name": "GPU_GLOBAL_REPORT"
+    },
+    {
+      "code": 36,
+      "name": "GPU_GLOBAL_UNSUPPORTED"
+    },
+    {
+      "code": 37,
+      "name": "GPU_GRAIN_COUNT_LIMIT"
+    },
+    {
+      "code": 38,
+      "name": "GPU_GRAIN_GUARDED_PENDING"
+    },
+    {
+      "code": 39,
+      "name": "GPU_GRAIN_GUARDED_REJECTION"
+    },
+    {
+      "code": 40,
+      "name": "GPU_GRAIN_INTEGER_RNG_CHECK"
+    },
+    {
+      "code": 41,
+      "name": "GPU_GRAIN_IO"
+    },
+    {
+      "code": 42,
+      "name": "GPU_GRAIN_LAYER_LIMIT"
+    },
+    {
+      "code": 43,
+      "name": "GPU_GRAIN_MEMORY_LIMIT"
+    },
+    {
+      "code": 44,
+      "name": "GPU_GRAIN_MT_RNG_CHECK"
+    },
+    {
+      "code": 45,
+      "name": "GPU_GRAIN_NUMERIC_CHECK"
+    },
+    {
+      "code": 46,
+      "name": "GPU_GRAIN_PREPASS_BITS_CHECK"
+    },
+    {
+      "code": 47,
+      "name": "GPU_GRAIN_SAMPLER_LIMIT"
+    },
+    {
+      "code": 48,
+      "name": "GPU_GRAIN_SAMPLER_TUPLE_CHECK"
+    },
+    {
+      "code": 49,
+      "name": "GPU_GRAIN_SEQUENTIAL_PENDING"
+    },
+    {
+      "code": 50,
+      "name": "GPU_GRAIN_SHADER_VERSION"
+    },
+    {
+      "code": 51,
+      "name": "GPU_GRAIN_SOFTWARE64_CHECK"
+    },
+    {
+      "code": 52,
+      "name": "GPU_GRAIN_UNSUPPORTED"
+    },
+    {
+      "code": 53,
+      "name": "GPU_GRAIN_UNSUPPORTED_CURVES"
+    },
+    {
+      "code": 54,
+      "name": "GPU_OPTICS_BATCH_LIMIT"
+    },
+    {
+      "code": 55,
+      "name": "GPU_OPTICS_ERROR_ABI"
+    },
+    {
+      "code": 56,
+      "name": "GPU_OPTICS_IO"
+    },
+    {
+      "code": 57,
+      "name": "GPU_OPTICS_MEMORY_LIMIT"
+    },
+    {
+      "code": 58,
+      "name": "GPU_OPTICS_NUMERIC_CHECK"
+    },
+    {
+      "code": 59,
+      "name": "GPU_OPTICS_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 60,
+      "name": "GPU_OPTICS_READBACK_FAILED"
+    },
+    {
+      "code": 61,
+      "name": "GPU_OPTICS_SHADER_VERSION"
+    },
+    {
+      "code": 62,
+      "name": "GPU_OPTICS_TABLES"
+    },
+    {
+      "code": 63,
+      "name": "GPU_OPTICS_TIMEOUT"
+    },
+    {
+      "code": 64,
+      "name": "GPU_OPTICS_UNSUPPORTED"
+    },
+    {
+      "code": 65,
+      "name": "GPU_PREPARE_"
+    },
+    {
+      "code": 66,
+      "name": "GPU_PREPARE_COPY_CREATE_EACCES"
+    },
+    {
+      "code": 67,
+      "name": "GPU_PREPARE_COPY_HASH"
+    },
+    {
+      "code": 68,
+      "name": "GPU_PREPARE_COPY_RESERVE"
+    },
+    {
+      "code": 69,
+      "name": "GPU_PREPARE_COPY_VERIFY_EACCES"
+    },
+    {
+      "code": 70,
+      "name": "GPU_PREPARE_COPY_WRITE_ENOSPC"
+    },
+    {
+      "code": 71,
+      "name": "GPU_PREPARE_SOURCE_IDENTITY"
+    },
+    {
+      "code": 72,
+      "name": "GPU_PREPARE_SOURCE_LINK_DESTINATION"
+    },
+    {
+      "code": 73,
+      "name": "GPU_PREPARE_SOURCE_LINK_ENOSPC"
+    },
+    {
+      "code": 74,
+      "name": "GPU_PREPARE_SOURCE_LINK_EXDEV"
+    },
+    {
+      "code": 75,
+      "name": "GPU_PREPARE_SOURCE_NONFINITE"
+    },
+    {
+      "code": 76,
+      "name": "GPU_PREPARE_SOURCE_OPEN_EACCES"
+    },
+    {
+      "code": 77,
+      "name": "GPU_PREPARE_SOURCE_OPEN_ELOOP"
+    },
+    {
+      "code": 78,
+      "name": "GPU_PREPARE_SOURCE_READ_EOF"
+    },
+    {
+      "code": 79,
+      "name": "GPU_PREPARE_SOURCE_SHAPE"
+    },
+    {
+      "code": 80,
+      "name": "GPU_PREPARE_STAGE_MKDIR_EEXIST"
+    },
+    {
+      "code": 81,
+      "name": "GPU_PREPARE_STAGE_PATH"
+    },
+    {
+      "code": 82,
+      "name": "GPU_STAGE_HASH_MISMATCH"
+    },
+    {
+      "code": 83,
+      "name": "GPU_STAGE_IO"
+    },
+    {
+      "code": 84,
+      "name": "GPU_STAGE_KERNEL_HASH"
+    },
+    {
+      "code": 85,
+      "name": "GPU_STAGE_MEMORY_LIMIT"
+    },
+    {
+      "code": 86,
+      "name": "GPU_STAGE_NUMERIC_CHECK"
+    },
+    {
+      "code": 87,
+      "name": "GPU_STAGE_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 88,
+      "name": "GPU_STAGE_PANIC"
+    },
+    {
+      "code": 89,
+      "name": "GPU_STAGE_READBACK_FAILED"
+    },
+    {
+      "code": 90,
+      "name": "GPU_STAGE_RESULT_FAILED"
+    },
+    {
+      "code": 91,
+      "name": "GPU_STAGE_TIMEOUT"
+    },
+    {
+      "code": 92,
+      "name": "GPU_TAIL_GLARE_AMBIGUOUS"
+    },
+    {
+      "code": 93,
+      "name": "GPU_TAIL_GLARE_ITERATIONS"
+    },
+    {
+      "code": 94,
+      "name": "GPU_TAIL_GLARE_LIMIT"
+    },
+    {
+      "code": 95,
+      "name": "GPU_TAIL_GLARE_STATE"
+    },
+    {
+      "code": 96,
+      "name": "GPU_TAIL_IO"
+    },
+    {
+      "code": 97,
+      "name": "GPU_TAIL_MEMORY_LIMIT"
+    },
+    {
+      "code": 98,
+      "name": "GPU_TAIL_NUMERIC_CHECK"
+    },
+    {
+      "code": 99,
+      "name": "GPU_TAIL_NUMERIC_DOMAIN"
+    },
+    {
+      "code": 100,
+      "name": "GPU_TAIL_REPORT"
+    },
+    {
+      "code": 101,
+      "name": "GPU_TAIL_SHADER_VERSION"
+    },
+    {
+      "code": 102,
+      "name": "GPU_TAIL_STATE"
+    },
+    {
+      "code": 103,
+      "name": "GPU_TAIL_UNSUPPORTED"
+    },
+    {
+      "code": 104,
+      "name": "GPU_TILE_COUNT_LIMIT"
+    },
+    {
+      "code": 105,
+      "name": "GPU_UNAVAILABLE_OR_LIMITS"
+    },
+    {
+      "code": 106,
+      "name": "INSUFFICIENT_GPU_DIR_MEMORY"
+    },
+    {
+      "code": 107,
+      "name": "INSUFFICIENT_GPU_EXPOSURE_MEMORY"
+    },
+    {
+      "code": 108,
+      "name": "INSUFFICIENT_GPU_FINISH_MEMORY"
+    },
+    {
+      "code": 109,
+      "name": "INSUFFICIENT_GPU_FUSION_MEMORY"
+    },
+    {
+      "code": 110,
+      "name": "INSUFFICIENT_GPU_GLOBAL_MEMORY"
+    },
+    {
+      "code": 111,
+      "name": "INSUFFICIENT_GPU_GRAIN_MEMORY"
+    },
+    {
+      "code": 112,
+      "name": "INSUFFICIENT_GPU_OPTICS_MEMORY"
+    },
+    {
+      "code": 113,
+      "name": "INSUFFICIENT_GPU_STAGE_MEMORY"
+    },
+    {
+      "code": 114,
+      "name": "INSUFFICIENT_GPU_TAIL_MEMORY"
+    },
+    {
+      "code": 115,
+      "name": "INSUFFICIENT_PROBE_MEMORY"
+    },
+    {
+      "code": 116,
+      "name": "INVALID_ARGUMENT"
+    },
+    {
+      "code": 117,
+      "name": "INVALID_CAPTURE_IDENTITY"
+    },
+    {
+      "code": 118,
+      "name": "INVALID_DIR_COMPLETE"
+    },
+    {
+      "code": 119,
+      "name": "INVALID_DIR_FILE"
+    },
+    {
+      "code": 120,
+      "name": "INVALID_DIR_MANIFEST"
+    },
+    {
+      "code": 121,
+      "name": "INVALID_DIR_OWNER"
+    },
+    {
+      "code": 122,
+      "name": "INVALID_DIR_PLAN"
+    },
+    {
+      "code": 123,
+      "name": "INVALID_DIR_RESULT"
+    },
+    {
+      "code": 124,
+      "name": "INVALID_DIR_TABLE"
+    },
+    {
+      "code": 125,
+      "name": "INVALID_EXPOSURE_CHUNK"
+    },
+    {
+      "code": 126,
+      "name": "INVALID_EXPOSURE_FILE"
+    },
+    {
+      "code": 127,
+      "name": "INVALID_EXPOSURE_FILES"
+    },
+    {
+      "code": 128,
+      "name": "INVALID_EXPOSURE_MANIFEST"
+    },
+    {
+      "code": 129,
+      "name": "INVALID_EXPOSURE_OUTPUT"
+    },
+    {
+      "code": 130,
+      "name": "INVALID_EXPOSURE_OWNER"
+    },
+    {
+      "code": 131,
+      "name": "INVALID_FINISH_BOUNDS"
+    },
+    {
+      "code": 132,
+      "name": "INVALID_FINISH_CHUNK"
+    },
+    {
+      "code": 133,
+      "name": "INVALID_FINISH_CURVE"
+    },
+    {
+      "code": 134,
+      "name": "INVALID_FINISH_FILE"
+    },
+    {
+      "code": 135,
+      "name": "INVALID_FINISH_FILES"
+    },
+    {
+      "code": 136,
+      "name": "INVALID_FINISH_IDENTITY"
+    },
+    {
+      "code": 137,
+      "name": "INVALID_FINISH_MANIFEST"
+    },
+    {
+      "code": 138,
+      "name": "INVALID_FINISH_OUTPUT"
+    },
+    {
+      "code": 139,
+      "name": "INVALID_FINISH_OUTPUT_HASH"
+    },
+    {
+      "code": 140,
+      "name": "INVALID_FINISH_OWNER"
+    },
+    {
+      "code": 141,
+      "name": "INVALID_FINISH_TABLE"
+    },
+    {
+      "code": 142,
+      "name": "INVALID_FINISH_TABLE_HASH"
+    },
+    {
+      "code": 143,
+      "name": "INVALID_FUSION_CHUNK"
+    },
+    {
+      "code": 144,
+      "name": "INVALID_FUSION_IDENTITY"
+    },
+    {
+      "code": 145,
+      "name": "INVALID_FUSION_LENGTH"
+    },
+    {
+      "code": 146,
+      "name": "INVALID_FUSION_MANIFEST"
+    },
+    {
+      "code": 147,
+      "name": "INVALID_FUSION_OUTPUT"
+    },
+    {
+      "code": 148,
+      "name": "INVALID_FUSION_OWNER"
+    },
+    {
+      "code": 149,
+      "name": "INVALID_FUSION_REPORT"
+    },
+    {
+      "code": 150,
+      "name": "INVALID_GLOBAL_DIMENSIONS"
+    },
+    {
+      "code": 151,
+      "name": "INVALID_GLOBAL_FILE"
+    },
+    {
+      "code": 152,
+      "name": "INVALID_GLOBAL_IDENTITY"
+    },
+    {
+      "code": 153,
+      "name": "INVALID_GLOBAL_INPUT"
+    },
+    {
+      "code": 154,
+      "name": "INVALID_GLOBAL_KIND"
+    },
+    {
+      "code": 155,
+      "name": "INVALID_GLOBAL_MANIFEST"
+    },
+    {
+      "code": 156,
+      "name": "INVALID_GLOBAL_OUTPUT"
+    },
+    {
+      "code": 157,
+      "name": "INVALID_GLOBAL_OWNER"
+    },
+    {
+      "code": 158,
+      "name": "INVALID_GLOBAL_PARAMETERS"
+    },
+    {
+      "code": 159,
+      "name": "INVALID_GLOBAL_PEAK"
+    },
+    {
+      "code": 160,
+      "name": "INVALID_GLOBAL_PLAN"
+    },
+    {
+      "code": 161,
+      "name": "INVALID_GLOBAL_SOURCE_HASH"
+    },
+    {
+      "code": 162,
+      "name": "INVALID_GRAIN_COMPLETE"
+    },
+    {
+      "code": 163,
+      "name": "INVALID_GRAIN_CURVE"
+    },
+    {
+      "code": 164,
+      "name": "INVALID_GRAIN_FILE"
+    },
+    {
+      "code": 165,
+      "name": "INVALID_GRAIN_INPUT"
+    },
+    {
+      "code": 166,
+      "name": "INVALID_GRAIN_MANIFEST"
+    },
+    {
+      "code": 167,
+      "name": "INVALID_GRAIN_OWNER"
+    },
+    {
+      "code": 168,
+      "name": "INVALID_GRAIN_PLAN"
+    },
+    {
+      "code": 169,
+      "name": "INVALID_GRAIN_RESULT"
+    },
+    {
+      "code": 170,
+      "name": "INVALID_GRAIN_RNG_MODE"
+    },
+    {
+      "code": 171,
+      "name": "INVALID_MANIFEST"
+    },
+    {
+      "code": 172,
+      "name": "INVALID_OPTICS_COMPLETE"
+    },
+    {
+      "code": 173,
+      "name": "INVALID_OPTICS_FILE"
+    },
+    {
+      "code": 174,
+      "name": "INVALID_OPTICS_MANIFEST"
+    },
+    {
+      "code": 175,
+      "name": "INVALID_OPTICS_OWNER"
+    },
+    {
+      "code": 176,
+      "name": "INVALID_OPTICS_PLAN"
+    },
+    {
+      "code": 177,
+      "name": "INVALID_PREVIEW_MT_STATE"
+    },
+    {
+      "code": 178,
+      "name": "INVALID_PROBE_PLAN"
+    },
+    {
+      "code": 179,
+      "name": "INVALID_SCIENCE_OPERATION"
+    },
+    {
+      "code": 180,
+      "name": "INVALID_SNAPSHOT_DIRECTORY"
+    },
+    {
+      "code": 181,
+      "name": "INVALID_SNAPSHOT_FILE"
+    },
+    {
+      "code": 182,
+      "name": "INVALID_SNAPSHOT_FILES"
+    },
+    {
+      "code": 183,
+      "name": "INVALID_SNAPSHOT_OWNER"
+    },
+    {
+      "code": 184,
+      "name": "INVALID_STAGE_CHUNK"
+    },
+    {
+      "code": 185,
+      "name": "INVALID_STAGE_FILE"
+    },
+    {
+      "code": 186,
+      "name": "INVALID_STAGE_FILES"
+    },
+    {
+      "code": 187,
+      "name": "INVALID_STAGE_KERNEL"
+    },
+    {
+      "code": 188,
+      "name": "INVALID_STAGE_MANIFEST"
+    },
+    {
+      "code": 189,
+      "name": "INVALID_STAGE_OUTPUT"
+    },
+    {
+      "code": 190,
+      "name": "INVALID_STAGE_OWNER"
+    },
+    {
+      "code": 191,
+      "name": "INVALID_STAGE_ROW"
+    },
+    {
+      "code": 192,
+      "name": "INVALID_TAIL_FILE"
+    },
+    {
+      "code": 193,
+      "name": "INVALID_TAIL_GAMUT"
+    },
+    {
+      "code": 194,
+      "name": "INVALID_TAIL_GLARE"
+    },
+    {
+      "code": 195,
+      "name": "INVALID_TAIL_IDENTITY"
+    },
+    {
+      "code": 196,
+      "name": "INVALID_TAIL_INPUT"
+    },
+    {
+      "code": 197,
+      "name": "INVALID_TAIL_MANIFEST"
+    },
+    {
+      "code": 198,
+      "name": "INVALID_TAIL_OUTPUT"
+    },
+    {
+      "code": 199,
+      "name": "INVALID_TAIL_OWNER"
+    },
+    {
+      "code": 200,
+      "name": "INVALID_TAIL_PLAN"
+    },
+    {
+      "code": 201,
+      "name": "INVALID_TOKEN"
+    },
+    {
+      "code": 202,
+      "name": "NONFINITE_DIR_INPUT"
+    },
+    {
+      "code": 203,
+      "name": "NONFINITE_DIR_OUTPUT"
+    },
+    {
+      "code": 204,
+      "name": "NONFINITE_FINISH_INPUT"
+    },
+    {
+      "code": 205,
+      "name": "NONFINITE_FINISH_OUTPUT"
+    },
+    {
+      "code": 206,
+      "name": "NONFINITE_FINISH_TABLE"
+    },
+    {
+      "code": 207,
+      "name": "NONFINITE_FUSION_INPUT"
+    },
+    {
+      "code": 208,
+      "name": "NONFINITE_FUSION_OUTPUT"
+    },
+    {
+      "code": 209,
+      "name": "NONFINITE_GLOBAL_INPUT"
+    },
+    {
+      "code": 210,
+      "name": "NONFINITE_GLOBAL_INTERMEDIATE"
+    },
+    {
+      "code": 211,
+      "name": "NONFINITE_GLOBAL_OUTPUT"
+    },
+    {
+      "code": 212,
+      "name": "NONFINITE_GLOBAL_PARAMETERS"
+    },
+    {
+      "code": 213,
+      "name": "NONFINITE_GPU_OUTPUT"
+    },
+    {
+      "code": 214,
+      "name": "NONFINITE_GRAIN_INPUT"
+    },
+    {
+      "code": 215,
+      "name": "NONFINITE_GRAIN_OUTPUT"
+    },
+    {
+      "code": 216,
+      "name": "NONFINITE_MANIFEST"
+    },
+    {
+      "code": 217,
+      "name": "NONFINITE_OPTICS_INPUT"
+    },
+    {
+      "code": 218,
+      "name": "NONFINITE_OPTICS_OUTPUT"
+    },
+    {
+      "code": 219,
+      "name": "NONFINITE_SNAPSHOT"
+    },
+    {
+      "code": 220,
+      "name": "NONFINITE_STAGE_INPUT"
+    },
+    {
+      "code": 221,
+      "name": "NONFINITE_STAGE_OUTPUT"
+    },
+    {
+      "code": 222,
+      "name": "NONFINITE_TAIL_GLARE"
+    },
+    {
+      "code": 223,
+      "name": "NONFINITE_TAIL_INPUT"
+    },
+    {
+      "code": 224,
+      "name": "NONFINITE_TAIL_OUTPUT"
+    },
+    {
+      "code": 225,
+      "name": "STALE_EXPOSURE_OUTPUT"
+    },
+    {
+      "code": 226,
+      "name": "STALE_EXPOSURE_PLAN"
+    },
+    {
+      "code": 227,
+      "name": "STALE_PROBE_PLAN"
+    },
+    {
+      "code": 228,
+      "name": "STALE_STAGE_OUTPUT"
+    },
+    {
+      "code": 229,
+      "name": "STALE_STAGE_PLAN"
+    },
+    {
+      "code": 230,
+      "name": "GPU_GLOBAL_STREAM_MEMORY_LIMIT"
+    },
+    {
+      "code": 231,
+      "name": "GPU_GLOBAL_STREAM_PENDING"
+    },
+    {
+      "code": 232,
+      "name": "GPU_GLOBAL_STREAM_REPORT"
+    },
+    {
+      "code": 233,
+      "name": "GPU_GLOBAL_STREAM_SHADER_VERSION"
+    },
+    {
+      "code": 234,
+      "name": "INSUFFICIENT_GPU_GLOBAL_STREAM_MEMORY"
+    },
+    {
+      "code": 235,
+      "name": "INVALID_GLOBAL_STREAM_CHUNK"
+    },
+    {
+      "code": 236,
+      "name": "INVALID_GLOBAL_STREAM_IDENTITY"
+    },
+    {
+      "code": 237,
+      "name": "INVALID_GLOBAL_STREAM_MANIFEST"
+    },
+    {
+      "code": 238,
+      "name": "INVALID_GLOBAL_STREAM_OUTPUT"
+    },
+    {
+      "code": 239,
+      "name": "INVALID_GLOBAL_STREAM_OWNER"
+    },
+    {
+      "code": 240,
+      "name": "INVALID_GLOBAL_STREAM_PLAN"
+    },
+    {
+      "code": 241,
+      "name": "INVALID_GLOBAL_STREAM_SOURCE"
+    },
+    {
+      "code": 242,
+      "name": "INVALID_GLOBAL_STREAM_SOURCE_DIGEST"
+    },
+    {
+      "code": 243,
+      "name": "INVALID_GLOBAL_STREAM_SOURCE_IDENTITY"
+    },
+    {
+      "code": 244,
+      "name": "INVALID_GLOBAL_STREAM_SOURCE_RANGE"
+    }
+  ]
+}

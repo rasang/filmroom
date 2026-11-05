@@ -27,11 +27,12 @@ internal object GpuScienceFields {
             it.long("width", 1, 40000); it.long("height", 1, 40000)
         }
     }
-    fun validateMemory(p: GpuStagePlan, devicePixels: Long, hostMiB: Long, disk: Long) {
+    fun validateMemory(p: GpuStagePlan, devicePixels: Long, hostMiB: Long, disk: Long, driverMiB: Long = 64, extraDeviceBytes: Long = 0, extraHostBytes: Long = 0) {
         require(p.token > 0 && p.width in 1..40000 && p.height in 1..40000 && p.digest.matches(Regex("[0-9a-f]{64}")))
         require(devicePixels in 1..(128 * GpuRenderProtocol.MIB / 4))
-        require(p.deviceBytes == 20 * devicePixels + 8 * GpuRenderProtocol.MIB + 65536)
-        require(p.hostBytes == hostMiB * GpuRenderProtocol.MIB && p.driverAllowanceBytes == 64 * GpuRenderProtocol.MIB && p.helperAllowanceBytes == 64 * GpuRenderProtocol.MIB)
+        require(extraDeviceBytes >= 0 && extraHostBytes >= 0)
+        require(p.deviceBytes == Math.addExact(20 * devicePixels + 8 * GpuRenderProtocol.MIB + 65536, extraDeviceBytes))
+        require(p.hostBytes == Math.addExact(hostMiB * GpuRenderProtocol.MIB, extraHostBytes) && p.driverAllowanceBytes == driverMiB * GpuRenderProtocol.MIB && p.helperAllowanceBytes == 64 * GpuRenderProtocol.MIB)
         val combined = Math.addExact(Math.addExact(p.deviceBytes, p.hostBytes), Math.addExact(p.driverAllowanceBytes, p.helperAllowanceBytes))
         require(p.combinedPeakBytes == combined && combined <= GpuRenderProtocol.HARD_CAP && p.diskBytes == disk)
     }

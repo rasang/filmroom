@@ -11,6 +11,8 @@ import android.os.Message
 import android.os.Messenger
 import android.os.Process
 import dev.filmroom.BuildConfig
+import dev.filmroom.diagnostics.GpuLifecycleRecorder
+import dev.filmroom.diagnostics.GpuLifecyclePhase
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -40,19 +42,40 @@ class GpuRenderService : Service() {
     }
     private val handler = Handler(Looper.getMainLooper()) { message -> handle(message); true }
     private val messenger = Messenger(handler)
-    private var activeToken = 0L
-    private var activeOperation: GpuRenderOperation? = null
-    private var startupToken = 0L
+    @Volatile private var activeToken = 0L
+    @Volatile private var activeOperation: GpuRenderOperation? = null
+    @Volatile private var startupToken = 0L
     private var startupReady = false
     private val parentWatch = GpuHelperParentWatch { watchdog.execute { terminateOwnProcess() } }
     private var pendingHello: Pair<Long, Messenger>? = null
     private fun helperIdentity(): Boolean = GpuProbeProcess.isRenderHelper(packageName, Application.getProcessName())
 
+    // Never put telemetry IO/JNI on the independent hard-kill watchdog.
+    private val telemetry = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "gpu-render-telemetry").apply { isDaemon = true }
+    }
+    private var telemetrySamples = 0
+    private fun trace(phase: GpuLifecyclePhase, code: GpuRenderCode? = null, durable: Boolean = false) {
+        runCatching {
+            val token = activeToken.takeIf { it > 0 } ?: startupToken
+            if (durable) GpuLifecycleRecorder.recordBeforeBlocking(this, token, activeOperation, phase, code)
+            else GpuLifecycleRecorder.record(this, token, activeOperation, phase, code)
+        }
+    }
+    private fun sampleNativeWait() {
+        if (++telemetrySamples > 60) return
+        val token = activeToken
+        if (token <= 0) return
+        trace(GpuLifecyclePhase.WAIT)
+        runCatching { GpuLifecycleRecorder.recordNative(NativeGpuProbeBridge.nativeGpuPhaseSnapshot(token)) }
+    }
     override fun onCreate() {
         super.onCreate()
         if (!BuildConfig.PERF_BUILD || !helperIdentity()) { stopSelf(); return }
         // This thread never calls native code or waits for a driver/worker/main looper.
         watchdog.schedule({ terminateOwnProcess() }, GpuRenderIpc.HELPER_DEADLINE_MS, TimeUnit.MILLISECONDS)
+        trace(GpuLifecyclePhase.SERVICE_CREATED)
+        telemetry.scheduleWithFixedDelay({ sampleNativeWait() }, 2_000, 2_000, TimeUnit.MILLISECONDS)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val token = runCatching {
@@ -64,6 +87,7 @@ class GpuRenderService : Service() {
             watchdog.schedule({ terminateOwnProcess() }, 0, TimeUnit.MILLISECONDS)
         } else {
             startupToken = token
+            trace(GpuLifecyclePhase.START_RECEIVED)
             // Run after onStartCommand returns and Android processes START_NOT_STICKY.
             handler.post {
                 startupReady = true
@@ -78,13 +102,14 @@ class GpuRenderService : Service() {
         val response = Message.obtain(null, GpuRenderIpc.READY)
         response.replyTo = messenger
         response.data = Bundle().apply { putLong(GpuRenderIpc.TOKEN, token) }
-        runCatching { reply.send(response) }
+        runCatching { reply.send(response); trace(GpuLifecyclePhase.READY_SENT) }
     }
     override fun onBind(intent: Intent?): IBinder? =
         if (BuildConfig.PERF_BUILD && helperIdentity()) messenger.binder else null
     override fun onUnbind(intent: Intent?): Boolean { terminateOwnProcess(); return false }
     override fun onDestroy() {
         if (helperIdentity()) terminateOwnProcess()
+        telemetry.shutdownNow()
         worker.shutdownNow()
         watchdog.shutdownNow()
         super.onDestroy()
@@ -103,6 +128,7 @@ class GpuRenderService : Service() {
                 if (data.keySet() != setOf(GpuRenderIpc.TOKEN)) return
                 val reply = message.replyTo ?: return
                 if (!parentWatch.attach(reply.binder)) return
+                trace(GpuLifecyclePhase.HELLO_RECEIVED)
                 if (startupReady) sendReady(token, reply)
                 else if (pendingHello == null) pendingHello = token to reply
             }
@@ -117,14 +143,21 @@ class GpuRenderService : Service() {
                 if (!processGate.claim(token)) return
                 activeToken = token
                 activeOperation = operation
+                trace(GpuLifecyclePhase.RUN_RECEIVED)
                 worker.execute {
                     val result = try {
+                        trace(GpuLifecyclePhase.LOCK_ENTER, durable = true)
                         check(parentWatch.claimNative { GpuHelperProcessLock.acquire(this) })
+                        trace(GpuLifecyclePhase.LOCK_ACQUIRED)
                         val dir = GpuRenderProtocol.stageDirectory(this, token)
+                        trace(GpuLifecyclePhase.PLAN_ENTER, durable = true)
                         val plan = GpuRenderProtocol.parseStagePlan(GpuRenderProtocol.nativePlan(operation, dir.path, token), token, operation)
                         require(plan.digest == digest && plan.combinedPeakBytes == budget)
+                        trace(GpuLifecyclePhase.PLAN_EXIT)
                         check(parentWatch.isAlive())
+                        trace(GpuLifecyclePhase.NATIVE_ENTER, durable = true)
                         val raw = GpuRenderProtocol.nativeRun(plan, dir.path)
+                        trace(GpuLifecyclePhase.NATIVE_RETURN)
                         GpuRenderProtocol.parseStageNativeResult(raw, plan)
                     } catch (_: LinkageError) {
                         GpuRenderCode.NATIVE_UNAVAILABLE to null
@@ -139,10 +172,12 @@ class GpuRenderService : Service() {
                             putString(GpuRenderIpc.SUMMARY, GpuRenderProtocol.encodeResult(result.first, result.second))
                         }
                         reply.send(response)
+                        trace(GpuLifecyclePhase.RESULT_SENT, result.first)
                     } catch (_: Exception) {
                         // Main-process Binder death is not a reason to keep a GPU helper alive.
                     } finally {
                         watchdog.schedule({ terminateOwnProcess() }, 250, TimeUnit.MILLISECONDS)
+                        trace(GpuLifecyclePhase.HARD_STOP_ARMED)
                     }
                 }
             }
@@ -152,6 +187,8 @@ class GpuRenderService : Service() {
                     // Arm the hard stop before cooperative native cancellation, which itself
                     // must never be able to hold up the watchdog.
                     watchdog.schedule({ terminateOwnProcess() }, 100, TimeUnit.MILLISECONDS)
+                    trace(GpuLifecyclePhase.CANCEL_RECEIVED)
+                    trace(GpuLifecyclePhase.HARD_STOP_ARMED)
                     if (activeToken != 0L) Thread({
                         runCatching { activeOperation?.let { GpuRenderProtocol.nativeCancel(it, token) } }
                     }, "gpu-render-cancel").apply { isDaemon = true; start() }

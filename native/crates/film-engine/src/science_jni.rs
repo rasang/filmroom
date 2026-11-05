@@ -75,7 +75,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,2);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -86,6 +89,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_global::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -95,7 +99,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -129,7 +133,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,3);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -140,6 +147,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_global::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -149,7 +157,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -183,7 +191,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,7);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -194,6 +205,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_global::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -203,7 +215,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -237,7 +249,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,8);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -248,6 +263,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_grain::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -257,7 +273,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -291,7 +307,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,9);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -302,6 +321,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_finish::run_stage(
             Path::new(&dir),
             token as u64,
@@ -311,7 +331,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -345,7 +365,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,10);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -357,6 +380,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_diffusion::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -366,7 +390,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -400,7 +424,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,12);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -412,6 +439,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_finish_tail::full_stage::run_stage(
             Path::new(&dir),
             token as u64,
@@ -421,7 +449,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
-    reply(&mut env, r)
+    telemetry.finish(&r);reply(&mut env, r)
 }
 
 #[unsafe(no_mangle)]
@@ -455,7 +483,10 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
     token: jlong,
     sha: JString<'_>,
 ) -> jstring {
+ let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,13);
+
     let r = catch_unwind(AssertUnwindSafe(|| {
+ let prepare_phase=crate::gpu_phase_diagnostics::PhaseGuard::begin(crate::gpu_phase_diagnostics::Phase::Prepare);
         if token <= 0 || budget <= 0 {
             return Err("INVALID_ARGUMENT".into());
         }
@@ -467,6 +498,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
             return Err("INVALID_SCIENCE_OPERATION".into());
         }
         GATE.claim(token as u64)?;
+        prepare_phase.finish();
         crate::research_finish::fused::run_stage(
             Path::new(&dir),
             token as u64,
@@ -476,5 +508,43 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGp
         )
     }))
     .unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
+    telemetry.finish(&r);reply(&mut env, r)
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativePlanGpuStreamingStage(
+    mut env: JNIEnv<'_>, _: JObject<'_>, operation: JString<'_>, dir: JString<'_>, token: jlong,
+) -> jstring {
+    let r = catch_unwind(AssertUnwindSafe(|| {
+        if token <= 0 { return Err("INVALID_TOKEN".into()); }
+        let operation = text(&mut env, &operation)?;
+        let dir = text(&mut env, &dir)?;
+        let plan = crate::research_streaming_route::plan(&operation, Path::new(&dir), token as u64)?;
+        crate::research_streaming_route::plan_envelope(&plan)
+    })).unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
+    reply(&mut env, r)
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeCancelGpuStreamingStage(
+    _: JNIEnv<'_>, _: JObject<'_>, token: jlong,
+) { let _ = catch_unwind(AssertUnwindSafe(|| { if token > 0 { GATE.cancel(token as u64); } })); }
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeGpuProbeBridge_nativeRunGpuStreamingStage(
+    mut env: JNIEnv<'_>, _: JObject<'_>, operation: JString<'_>, dir: JString<'_>, budget: jlong, token: jlong, sha: JString<'_>,
+) -> jstring {
+    let r = catch_unwind(AssertUnwindSafe(|| {
+        if token <= 0 || budget <= 0 { return Err("INVALID_ARGUMENT".into()); }
+        let operation = text(&mut env, &operation)?;
+        let mut telemetry=crate::gpu_phase_diagnostics::TaskScope::jni(&mut env,token,crate::research_streaming_route::stage_code(&operation));
+        let dir = text(&mut env, &dir)?;
+        let sha = text(&mut env, &sha)?;
+        let p = crate::research_streaming_route::plan(&operation, Path::new(&dir), token as u64)?;
+        if p["manifestSha256"].as_str() != Some(sha.as_str()) { return Err("INVALID_STREAM_IDENTITY".into()); }
+        GATE.claim(token as u64)?;
+        let result=crate::research_streaming_route::run(&operation, Path::new(&dir), token as u64, budget as u64, &sha, || GATE.is_cancelled(token as u64));
+        telemetry.finish(&result);result
+    })).unwrap_or_else(|_| Err("GPU_STAGE_PANIC".into()));
+    if r.is_err() { crate::gpu_session::retire_current(); }
     reply(&mut env, r)
 }

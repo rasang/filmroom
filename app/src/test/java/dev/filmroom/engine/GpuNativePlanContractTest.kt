@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[29])
 class GpuNativePlanContractTest {
-    private val fixtures=listOf("camera.json","scanner.json","optical.json","exposure.json","dir.json","grain.json","auto-exposure.json","highlight-boost.json","exposure-log.json","print-exposure.json","print-diffusion.json","scan-tail.json","finish-tail.json")
+    private val fixtures=listOf("camera.json","scanner.json","optical.json","exposure.json","dir.json","exposure_log_dir.json","grain.json","auto-exposure.json","highlight-boost.json","exposure-log.json","print-exposure.json","print-diffusion.json","scan-tail.json","finish-tail.json", "optical-stream-v1.json", "grain-stream-v1.json", "dir-stream-v1.json", "exposure-log-dir-stream-v1.json", "scan-tail-stream-v1.json", "finish-tail-stream-v1.json", "highlight-stream-v1.json")
     private fun envelope(name:String):String = requireNotNull(javaClass.classLoader!!.getResourceAsStream("gpu-contracts/$name")){"Missing executed native plan fixture: $name"}.bufferedReader().use{it.readText()}
     @Test fun everyExecutedNativePlanPassesActualAndroidValidator(){
         val operations=mutableSetOf<GpuRenderOperation>()

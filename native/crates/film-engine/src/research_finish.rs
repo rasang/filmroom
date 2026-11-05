@@ -1,4 +1,5 @@
 //! Opt-in print/scanner resident f32 core. Original f64 scanner finish stays in main.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spektrafilm_core::pipeline::{GpuFinishDescriptor, GpuFinishInput};
@@ -12,9 +13,16 @@ use std::{
 #[cfg(feature = "gpu-diffusion-research")]
 mod gpu;
 pub mod fused;
+pub mod streaming;
 type R<T> = Result<T, String>;
 const MIB: u64 = 1024 * 1024;
 const CAP: u64 = 384 * MIB;
+// Replace the previous 64 KiB BufWriter/BufReader, rather than adding a second
+// table-sized allocation. The explicit buffer remains in the 2 MiB host reserve.
+const TABLE_IO_BYTES: usize = 64 * 1024;
+const TABLE_IO_SCALARS: usize = TABLE_IO_BYTES / 8;
+const HOST_MISC_BYTES: u64 = 2 * MIB;
+const _: () = assert!(TABLE_IO_BYTES as u64 <= HOST_MISC_BYTES);
 const OP: &str = "fullPrintScanLogXyz";
 pub const SHADER: &str = include_str!("shaders/research_finish.wgsl");
 fn err<T>(s: &str) -> R<T> {
@@ -45,7 +53,10 @@ struct Owned(PathBuf, bool);
 impl Drop for Owned {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -276,7 +287,10 @@ fn make_plan(m: &Manifest, hash: String) -> R<FinishPlan> {
     let c = n.min(65536);
     let t = m.table_scalars;
     let device = 4 * t + 36 * c + 4096;
-    let host = 16 * t + 128 * c + 2 * MIB;
+    // The 64 KiB table buffer replaces the old buffered file adapter. Keep the
+    // same admission total while accounting for that allocation explicitly.
+    let host = 16 * t + 128 * c + TABLE_IO_BYTES as u64
+        + (HOST_MISC_BYTES - TABLE_IO_BYTES as u64);
     let combined = device + host + 128 * MIB;
     if combined > CAP {
         return err("GPU_FINISH_MEMORY_LIMIT");
@@ -303,6 +317,103 @@ fn make_plan(m: &Manifest, hash: String) -> R<FinishPlan> {
 pub fn estimated_disk_bytes(w: u32, h: u32, d: &GpuFinishDescriptor) -> R<u64> {
     Ok(make_plan(&descriptor_manifest(d, w, h, 1)?, String::new())?.disk_bytes)
 }
+// The serialized packet is unchanged: original f64 values, original ordering,
+// explicit little endian, and SHA-256 over precisely the bytes written. Hash and
+// file calls operate on bounded chunks instead of once per eight-byte scalar.
+fn write_table_values<W: Write>(
+    out: &mut W,
+    hash: &mut Sha256,
+    buffer: &mut Vec<u8>,
+    values: impl IntoIterator<Item = R<f64>>,
+    cancel: &mut impl FnMut() -> bool,
+) -> R<()> {
+    use crate::gpu_stage_staging::{io_at, Phase};
+    buffer.clear();
+    for value in values {
+        if buffer.is_empty() {
+            check(cancel)?;
+        }
+        let value = value?;
+        if !value.is_finite() || !(value as f32).is_finite() {
+            return err("NONFINITE_FINISH_TABLE");
+        }
+        buffer.extend_from_slice(&value.to_le_bytes());
+        if buffer.len() == TABLE_IO_BYTES {
+            io_at(Phase::TableWrite, out.write_all(buffer))?;
+            hash.update(&*buffer);
+            buffer.clear();
+        }
+    }
+    if !buffer.is_empty() {
+        io_at(Phase::TableWrite, out.write_all(buffer))?;
+        hash.update(&*buffer);
+    }
+    Ok(())
+}
+fn write_tables<W: Write>(
+    out: &mut W,
+    descriptor: &GpuFinishDescriptor,
+    include_printing: bool,
+    cancel: &mut impl FnMut() -> bool,
+) -> R<String> {
+    use crate::gpu_stage_staging::{io_at, Phase};
+    let mut buffer = Vec::with_capacity(TABLE_IO_BYTES);
+    let mut hash = Sha256::new();
+    if include_printing {
+        for values in arrays(descriptor.printing.as_ref().unwrap().lut) {
+            check(cancel)?;
+            write_table_values(out, &mut hash, &mut buffer, values.iter().copied().map(Ok), cancel)?;
+        }
+    }
+    for values in arrays(descriptor.scanner) {
+        check(cancel)?;
+        write_table_values(out, &mut hash, &mut buffer, values.iter().copied().map(Ok), cancel)?;
+    }
+    if let Some(printing) = &descriptor.printing {
+        let mut last = f64::NEG_INFINITY;
+        let mut last32 = f32::NEG_INFINITY;
+        let axis = printing.log_exposure.iter().map(|&x| {
+            let x = if (printing.gamma - 1.).abs() < 1e-12 { x } else { x / printing.gamma };
+            if x <= last || (x as f32) <= last32 {
+                return err("GPU_FINISH_UNSUPPORTED");
+            }
+            last = x;
+            last32 = x as f32;
+            Ok(x)
+        });
+        write_table_values(out, &mut hash, &mut buffer, axis, cancel)?;
+        write_table_values(
+            out, &mut hash, &mut buffer,
+            printing.curves.iter().flat_map(|row| row.iter().copied()).map(Ok), cancel,
+        )?;
+    }
+    io_at(Phase::TableWrite, out.flush())?;
+    Ok(hex(&hash.finalize()))
+}
+fn read_table_values<Rd: Read>(
+    input: &mut Rd,
+    count: usize,
+    buffer: &mut [u8],
+    hash: &mut Sha256,
+    cancel: &mut impl FnMut() -> bool,
+) -> R<Vec<f64>> {
+    debug_assert_eq!(buffer.len(), TABLE_IO_BYTES);
+    let mut values = Vec::with_capacity(count);
+    while values.len() < count {
+        check(cancel)?;
+        let len = (count - values.len()).min(TABLE_IO_SCALARS) * 8;
+        io(input.read_exact(&mut buffer[..len]))?;
+        hash.update(&buffer[..len]);
+        for bytes in buffer[..len].chunks_exact(8) {
+            let value = f64::from_le_bytes(bytes.try_into().unwrap());
+            if !value.is_finite() || !(value as f32).is_finite() {
+                return err("NONFINITE_FINISH_TABLE");
+            }
+            values.push(value);
+        }
+    }
+    Ok(values)
+}
 pub fn prepare_stage(
     sources: [&Path; 3],
     dir: &Path,
@@ -325,66 +436,16 @@ pub fn prepare_stage(
         24 * w as u64 * h as u64,
         &mut cancel,
     )?;
-    let mut out = std::io::BufWriter::with_capacity(
-        65536,
-        io_at(
-            Phase::TableCreate,
-            OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(dir.join("tables.f64le")),
-        )?,
-    );
-    let mut hash = Sha256::new();
-    let mut put = |v: f64| -> R<()> {
-        if !v.is_finite() || !(v as f32).is_finite() {
-            return err("NONFINITE_FINISH_TABLE");
-        };
-        let b = v.to_le_bytes();
-        io_at(Phase::TableWrite, out.write_all(&b))?;
-        hash.update(b);
-        Ok(())
-    };
-    if m.printing.is_some() {
-        for a in arrays(d.printing.as_ref().unwrap().lut) {
-            check(&mut cancel)?;
-            for &v in a {
-                put(v)?
-            }
-        }
-    }
-    for a in arrays(d.scanner) {
-        check(&mut cancel)?;
-        for &v in a {
-            put(v)?
-        }
-    }
-    if let Some(p) = &d.printing {
-        let mut last = f64::NEG_INFINITY;
-        let mut last32 = f32::NEG_INFINITY;
-        for &x in p.log_exposure {
-            let x = if (p.gamma - 1.).abs() < 1e-12 {
-                x
-            } else {
-                x / p.gamma
-            };
-            if x <= last || (x as f32) <= last32 {
-                return err("GPU_FINISH_UNSUPPORTED");
-            };
-            put(x)?;
-            last = x;
-            last32 = x as f32;
-        }
-        for row in p.curves {
-            for &v in row {
-                put(v)?
-            }
-        }
-    }
-    drop(put);
-    io_at(Phase::TableWrite, out.flush())?;
-    io_at(Phase::TableSync, out.get_ref().sync_all())?;
-    m.table_sha256 = hex(&hash.finalize());
+    let mut out = io_at(
+        Phase::TableCreate,
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(dir.join("tables.f64le")),
+    )?;
+    let table_sha256 = write_tables(&mut out, d, m.printing.is_some(), &mut cancel)?;
+    io_at(Phase::TableSync, out.sync_all())?;
+    m.table_sha256 = table_sha256;
     let b = serde_json::to_vec(&m).map_err(|_| "INVALID_FINISH_MANIFEST")?;
     let p = make_plan(&m, hex(&Sha256::digest(&b)))?;
     check(&mut cancel)?;
@@ -411,6 +472,7 @@ fn owner(dir: &Path, token: u64) -> R<()> {
     Ok(())
 }
 fn load(dir: &Path, token: u64) -> R<(Manifest, FinishPlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     owner(dir, token)?;
     let meta = io(fs::symlink_metadata(dir))?;
     if !meta.is_dir() || meta.file_type().is_symlink() {
@@ -460,7 +522,9 @@ fn load(dir: &Path, token: u64) -> R<(Manifest, FinishPlan)> {
     }
     regular(&dir.join("tables.f64le"), m.table_scalars * 8)?;
     Ok((m, p))
-}
+
+        })
+    }
 pub fn plan_stage(dir: &Path, token: u64) -> R<FinishPlan> {
     load(dir, token).map(|(_, p)| p)
 }
@@ -472,25 +536,11 @@ struct Tables {
 }
 impl Tables {
     fn load(dir: &Path, m: &Manifest, cancel: &mut impl FnMut() -> bool) -> R<Self> {
-        let mut f =
-            std::io::BufReader::with_capacity(65536, io(File::open(dir.join("tables.f64le")))?);
+        let mut f = io(File::open(dir.join("tables.f64le")))?;
+        let mut buffer = vec![0u8; TABLE_IO_BYTES];
         let mut hash = Sha256::new();
         let mut read = |n: usize| -> R<Vec<f64>> {
-            let mut v = Vec::with_capacity(n);
-            for i in 0..n {
-                if i % 8192 == 0 {
-                    check(cancel)?
-                }
-                let mut b = [0; 8];
-                io(f.read_exact(&mut b))?;
-                hash.update(b);
-                let x = f64::from_le_bytes(b);
-                if !x.is_finite() || !(x as f32).is_finite() {
-                    return err("NONFINITE_FINISH_TABLE");
-                };
-                v.push(x)
-            }
-            Ok(v)
+            read_table_values(&mut f, n, &mut buffer, &mut hash, cancel)
         };
         let mut lut = |n: usize| -> R<PreparedPchip3d> {
             let a = 3 * n * n * n;
@@ -863,6 +913,7 @@ fn run_inner(
         if output.len() != n * 3 || output.iter().any(|v| !v.is_finite()) {
             return err("NONFINITE_FINISH_OUTPUT");
         }
+        let guard_phase=PhaseGuard::begin(GpuPhase::Guard);
         let samples = n.min(8);
         for j in 0..samples {
             let i = if samples == 1 {
@@ -882,6 +933,7 @@ fn run_inner(
                 square += e * e;
             }
         }
+        guard_phase.finish();
         for v in output {
             let b = (v as f64).to_le_bytes();
             io(out.write_all(&b))?;
@@ -890,6 +942,7 @@ fn run_inner(
         remaining -= n as u64;
         chunks += 1;
     }
+    let commit_phase=PhaseGuard::begin(GpuPhase::Commit);
     io(out.flush())?;
     io(out.get_ref().sync_all())?;
     check(&mut cancel)?;
@@ -913,6 +966,7 @@ fn run_inner(
         candidate.join(".complete.partial"),
         candidate.join("complete.json"),
     ))?;
+    commit_phase.finish();
     guard.1 = true;
     #[allow(unused_mut)]
     let (mut adapter, mut vendor, mut f64cap) = ("host_f32_mirror".to_string(), 0u32, false);
@@ -947,3 +1001,309 @@ pub(crate) fn run_stage_cpu_mirror_for_test(
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod table_io_tests {
+    use super::*;
+    use std::io::{self as stdio, BufReader, BufWriter, Cursor};
+    use spektrafilm_core::pipeline::GpuPrintingDescriptor;
+    use spektrafilm_math::pchip3d::prepare_pchip_3d;
+
+    // Frozen scalar implementation from the delivered packet writer. Kept only
+    // in tests to establish byte/digest parity and matched host timings.
+    fn scalar_write_tables<W: Write>(out: &mut W, d: &GpuFinishDescriptor, printing: bool) -> R<String> {
+        let mut hash = Sha256::new();
+        let mut put = |v: f64| -> R<()> {
+            if !v.is_finite() || !(v as f32).is_finite() { return err("NONFINITE_FINISH_TABLE"); }
+            let bytes = v.to_le_bytes();
+            io(out.write_all(&bytes))?;
+            hash.update(bytes);
+            Ok(())
+        };
+        if printing {
+            for array in arrays(d.printing.as_ref().unwrap().lut) { for &v in array { put(v)?; } }
+        }
+        for array in arrays(d.scanner) { for &v in array { put(v)?; } }
+        if let Some(p) = &d.printing {
+            let mut last = f64::NEG_INFINITY;
+            let mut last32 = f32::NEG_INFINITY;
+            for &x in p.log_exposure {
+                let x = if (p.gamma - 1.).abs() < 1e-12 { x } else { x / p.gamma };
+                if x <= last || (x as f32) <= last32 { return err("GPU_FINISH_UNSUPPORTED"); }
+                put(x)?;
+                last = x;
+                last32 = x as f32;
+            }
+            for row in p.curves { for &v in row { put(v)?; } }
+        }
+        drop(put);
+        io(out.flush())?;
+        Ok(hex(&hash.finalize()))
+    }
+    fn scalar_read_values<Rd: Read>(reader: &mut Rd, n: usize, hash: &mut Sha256, c: &mut impl FnMut() -> bool) -> R<Vec<f64>> {
+        let mut result = Vec::with_capacity(n);
+        for i in 0..n {
+            if i % 8192 == 0 { check(c)?; }
+            let mut bytes = [0; 8];
+            io(reader.read_exact(&mut bytes))?;
+            hash.update(bytes);
+            let v = f64::from_le_bytes(bytes);
+            if !v.is_finite() || !(v as f32).is_finite() { return err("NONFINITE_FINISH_TABLE"); }
+            result.push(v);
+        }
+        Ok(result)
+    }
+    fn values(n: usize) -> Vec<f64> {
+        let cases = [0., -0., f64::from_bits(1), -f64::from_bits(1), f32::MIN_POSITIVE as f64,
+            f32::from_bits(1) as f64, 1e20, -1e20, f32::MAX as f64, -1.25];
+        (0..n).map(|i| cases[i % cases.len()]).collect()
+    }
+    fn bits(v: &[f64]) -> Vec<u64> { v.iter().map(|x| x.to_bits()).collect() }
+    fn encode(values: &[f64]) -> R<(Vec<u8>, String)> {
+        let mut out = Vec::new();
+        let mut hash = Sha256::new();
+        let mut buffer = Vec::with_capacity(TABLE_IO_BYTES);
+        write_table_values(&mut out, &mut hash, &mut buffer, values.iter().copied().map(Ok), &mut || false)?;
+        assert_eq!(buffer.capacity(), TABLE_IO_BYTES);
+        Ok((out, hex(&hash.finalize())))
+    }
+    #[test]
+    fn exact_scalar_bytes_digest_and_decode_across_partial_chunks() {
+        for n in [0, 1, TABLE_IO_SCALARS - 1, TABLE_IO_SCALARS, TABLE_IO_SCALARS + 1, TABLE_IO_SCALARS * 2 + 7] {
+            let expected = values(n);
+            let scalar_bytes: Vec<u8> = expected.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let (bytes, digest) = encode(&expected).unwrap();
+            assert_eq!(bytes, scalar_bytes);
+            assert_eq!(digest, hex(&Sha256::digest(&scalar_bytes)));
+            let mut hash = Sha256::new();
+            let mut buffer = vec![0; TABLE_IO_BYTES];
+            let actual = read_table_values(&mut Cursor::new(&bytes), n, &mut buffer, &mut hash, &mut || false).unwrap();
+            let mut old_hash = Sha256::new();
+            let old = scalar_read_values(&mut Cursor::new(&bytes), n, &mut old_hash, &mut || false).unwrap();
+            assert_eq!(bits(&actual), bits(&expected));
+            assert_eq!(bits(&actual), bits(&old));
+            assert_eq!(hex(&hash.finalize()), digest);
+            assert_eq!(hex(&old_hash.finalize()), digest);
+        }
+    }
+    #[test]
+    fn nonfinite_and_f32_overflow_are_rejected_in_every_chunk() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, f64::MAX] {
+            for index in [0, TABLE_IO_SCALARS - 1, TABLE_IO_SCALARS] {
+                let mut data = values(TABLE_IO_SCALARS + 2);
+                data[index] = bad;
+                assert_eq!(encode(&data).unwrap_err(), "NONFINITE_FINISH_TABLE");
+                let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
+                let new = read_table_values(&mut Cursor::new(&bytes), data.len(), &mut vec![0; TABLE_IO_BYTES], &mut Sha256::new(), &mut || false);
+                let old = scalar_read_values(&mut Cursor::new(&bytes), data.len(), &mut Sha256::new(), &mut || false);
+                assert_eq!(new.unwrap_err(), old.unwrap_err());
+            }
+        }
+    }
+    #[test]
+    fn cancellation_is_checked_at_most_8192_scalars_apart() {
+        let data = values(TABLE_IO_SCALARS * 3);
+        let mut calls = 0;
+        let mut out = Vec::new();
+        let result = write_table_values(&mut out, &mut Sha256::new(), &mut Vec::with_capacity(TABLE_IO_BYTES), data.iter().copied().map(Ok), &mut || { calls += 1; calls == 2 });
+        assert_eq!(result.unwrap_err(), "CANCELLED");
+        assert_eq!(out.len(), TABLE_IO_BYTES);
+        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut cursor = Cursor::new(bytes);
+        let mut calls = 0;
+        let result = read_table_values(&mut cursor, data.len(), &mut vec![0; TABLE_IO_BYTES], &mut Sha256::new(), &mut || { calls += 1; calls == 2 });
+        assert_eq!(result.unwrap_err(), "CANCELLED");
+        assert_eq!(cursor.position(), TABLE_IO_BYTES as u64);
+    }
+    struct ShortWriter { bytes: Vec<u8>, fail_at: Option<usize> }
+    impl Write for ShortWriter {
+        fn write(&mut self, bytes: &[u8]) -> stdio::Result<usize> {
+            if self.fail_at == Some(self.bytes.len()) { return Err(stdio::Error::from_raw_os_error(28)); }
+            let count = bytes.len().min(17).min(self.fail_at.map_or(usize::MAX, |n| n - self.bytes.len()));
+            self.bytes.extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+        fn flush(&mut self) -> stdio::Result<()> { Ok(()) }
+    }
+    struct ShortReader { cursor: Cursor<Vec<u8>>, fail_at: Option<u64> }
+    impl Read for ShortReader {
+        fn read(&mut self, bytes: &mut [u8]) -> stdio::Result<usize> {
+            if self.fail_at == Some(self.cursor.position()) { return Err(stdio::Error::from_raw_os_error(5)); }
+            let count = bytes.len().min(19).min(self.fail_at.map_or(usize::MAX, |n| (n - self.cursor.position()) as usize));
+            self.cursor.read(&mut bytes[..count])
+        }
+    }
+    #[test]
+    fn partial_io_faults_and_truncation_fail_closed() {
+        let data = values(TABLE_IO_SCALARS + 31);
+        let (bytes, digest) = encode(&data).unwrap();
+        let mut writer = ShortWriter { bytes: Vec::new(), fail_at: None };
+        let mut hash = Sha256::new();
+        write_table_values(&mut writer, &mut hash, &mut Vec::with_capacity(TABLE_IO_BYTES), data.iter().copied().map(Ok), &mut || false).unwrap();
+        assert_eq!(writer.bytes, bytes);
+        assert_eq!(hex(&hash.finalize()), digest);
+        let mut reader = ShortReader { cursor: Cursor::new(bytes.clone()), fail_at: None };
+        let actual = read_table_values(&mut reader, data.len(), &mut vec![0; TABLE_IO_BYTES], &mut Sha256::new(), &mut || false).unwrap();
+        assert_eq!(bits(&actual), bits(&data));
+        for failure in [0, TABLE_IO_BYTES + 31] {
+            let mut writer = ShortWriter { bytes: Vec::new(), fail_at: Some(failure) };
+            let error = write_table_values(&mut writer, &mut Sha256::new(), &mut Vec::with_capacity(TABLE_IO_BYTES), data.iter().copied().map(Ok), &mut || false).unwrap_err();
+            assert_eq!(error, "GPU_PREPARE_TABLE_WRITE_ENOSPC");
+            let mut reader = ShortReader { cursor: Cursor::new(bytes.clone()), fail_at: Some(failure as u64) };
+            assert_eq!(read_table_values(&mut reader, data.len(), &mut vec![0; TABLE_IO_BYTES], &mut Sha256::new(), &mut || false).unwrap_err(), "GPU_FINISH_IO");
+        }
+        for removed in [1, 8, 31 * 8 + 1] {
+            assert_eq!(read_table_values(&mut Cursor::new(&bytes[..bytes.len() - removed]), data.len(), &mut vec![0; TABLE_IO_BYTES], &mut Sha256::new(), &mut || false).unwrap_err(), "GPU_FINISH_IO");
+        }
+    }
+    fn fixture_lut(n: usize) -> PreparedPchip3d {
+        let mut data = Vec::with_capacity(3 * n.pow(3));
+        for x in 0..n { for y in 0..n { for z in 0..n {
+            data.extend([x as f64 / (n - 1) as f64, y as f64 / (n - 1) as f64, z as f64 / (n - 1) as f64]);
+        } } }
+        prepare_pchip_3d(data, n)
+    }
+    fn descriptor<'a>(lut: &'a PreparedPchip3d, axis: &'a [f64], curves: &'a [[f64; 3]], mode: GpuFinishInput, gamma: f64) -> GpuFinishDescriptor<'a> {
+        GpuFinishDescriptor {
+            input: mode,
+            printing: Some(GpuPrintingDescriptor { lut, data_min: [0.; 3], data_max: [1.; 3], print_exposure: 0.75, bw: 1.2, log_exposure: axis, curves, gamma, external_diffusion_required: false }),
+            scanner: lut, scanner_min: [0.; 3], scanner_max: [1.; 3],
+        }
+    }
+    #[test]
+    fn complete_packets_match_scalar_reference_for_all_finish_modes() {
+        let lut = fixture_lut(17);
+        let axis = [-10., -1., -0., 1., 10.];
+        let curves = [[-0.; 3], [f64::from_bits(1); 3], [0.5; 3], [1e20; 3], [f32::MAX as f64; 3]];
+        for mode in [GpuFinishInput::FilmDensity, GpuFinishInput::PrintRaw, GpuFinishInput::PrintExposure] {
+            for gamma in [1., 1.1] {
+                let d = descriptor(&lut, &axis, &curves, mode, gamma);
+                let m = descriptor_manifest(&d, 512, 384, 7).unwrap();
+                let mut old = Vec::new();
+                let old_hash = scalar_write_tables(&mut old, &d, m.printing.is_some()).unwrap();
+                let mut new = Vec::new();
+                let new_hash = write_tables(&mut new, &d, m.printing.is_some(), &mut || false).unwrap();
+                assert_eq!(new, old);
+                assert_eq!(new_hash, old_hash);
+                assert_eq!(new.len() as u64, m.table_scalars * 8);
+                let plan = make_plan(&m, "0".repeat(64)).unwrap();
+                assert_eq!(plan.host_bytes, 16 * m.table_scalars + 128 * 65536 + 2 * MIB);
+            }
+        }
+        let d = GpuFinishDescriptor { input: GpuFinishInput::FilmDensity, printing: None, scanner: &lut, scanner_min: [0.; 3], scanner_max: [1.; 3] };
+        let mut old = Vec::new();
+        let expected_hash = scalar_write_tables(&mut old, &d, false).unwrap();
+        let mut new = Vec::new();
+        assert_eq!(write_tables(&mut new, &d, false, &mut || false).unwrap(), expected_hash);
+        assert_eq!(new, old);
+    }
+    #[test]
+    fn packet_loader_keeps_hash_axis_bounds_and_cancellation_guards() {
+        let root = super::tests::temp();
+        let (src, _) = super::tests::fixture(&root, 5, 2);
+        let lut = fixture_lut(17);
+        let axis = [-10., -1., 0., 1., 10.];
+        let curves = [[0.; 3], [0.2; 3], [0.5; 3], [0.7; 3], [1.; 3]];
+        let d = descriptor(&lut, &axis, &curves, GpuFinishInput::FilmDensity, 1.1);
+        let dir = root.join("gpu-stage-7");
+        let table_path = dir.join("tables.f64le");
+        assert_eq!(prepare_stage([&src[0], &src[1], &src[2]], &dir, 7, 5, 2, &d, || fs::metadata(&table_path).is_ok_and(|m| m.len() >= TABLE_IO_BYTES as u64)).unwrap_err(), "CANCELLED");
+        assert!(!dir.exists());
+        assert!(src.iter().all(|p| p.exists()));
+        prepare_stage([&src[0], &src[1], &src[2]], &dir, 7, 5, 2, &d, || false).unwrap();
+        let (m, _) = load(&dir, 7).unwrap();
+        let tables = Tables::load(&dir, &m, &mut || false).unwrap();
+        for (actual, expected) in arrays(&tables.scanner).into_iter().zip(arrays(&lut)) { assert_eq!(bits(actual), bits(expected)); }
+        assert_eq!(bits(&tables.axis), bits(&axis.map(|x| x / 1.1)));
+        assert_eq!(tables.curves, curves);
+        let original = fs::read(&table_path).unwrap();
+        let mut corrupt = original.clone();
+        corrupt[..8].copy_from_slice(&0.25f64.to_le_bytes());
+        fs::write(&table_path, &corrupt).unwrap();
+        assert_eq!(Tables::load(&dir, &m, &mut || false).err().unwrap(), "INVALID_FINISH_TABLE_HASH");
+        fs::write(&table_path, &original[..original.len() - 1]).unwrap();
+        assert_eq!(Tables::load(&dir, &m, &mut || false).err().unwrap(), "GPU_FINISH_IO");
+        fs::write(&table_path, &original).unwrap();
+        assert_eq!(Tables::load(&dir, &m, &mut || true).err().unwrap(), "CANCELLED");
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn gamma_and_axis_rejection_matches_scalar_reference() {
+        let lut = fixture_lut(2);
+        let curves = [[0.; 3]; 3];
+        for axis in [[0., -0., 1.], [0., 1., 0.5], [0., f64::NAN, 1.], [0., 1e-300, 1.]] {
+            let d = descriptor(&lut, &axis, &curves, GpuFinishInput::FilmDensity, 1.1);
+            assert_eq!(write_tables(&mut Vec::new(), &d, true, &mut || false).unwrap_err(), scalar_write_tables(&mut Vec::new(), &d, true).unwrap_err());
+        }
+    }
+    fn packet_counts(m: &Manifest) -> Vec<usize> {
+        let mut counts = Vec::new();
+        for lut in m.printing.iter().chain(std::iter::once(&m.scanner)) {
+            let n = lut.size as usize;
+            counts.extend([3 * n.pow(3); 4]);
+            counts.extend([3 * (n - 1).pow(3); 2]);
+        }
+        counts.extend([m.curve_count as usize, m.curve_count as usize * 3]);
+        counts
+    }
+    fn bench_read(path: &Path, counts: &[usize], scalar: bool) -> String {
+        let mut hash = Sha256::new();
+        if scalar {
+            let mut reader = BufReader::with_capacity(TABLE_IO_BYTES, File::open(path).unwrap());
+            let data: Vec<_> = counts.iter().map(|&n| scalar_read_values(&mut reader, n, &mut hash, &mut || false).unwrap()).collect();
+            std::hint::black_box(data);
+        } else {
+            let mut reader = File::open(path).unwrap();
+            let mut buffer = vec![0; TABLE_IO_BYTES];
+            let data: Vec<_> = counts.iter().map(|&n| read_table_values(&mut reader, n, &mut buffer, &mut hash, &mut || false).unwrap()).collect();
+            std::hint::black_box(data);
+        }
+        hex(&hash.finalize())
+    }
+    #[test]
+    #[ignore = "Explicit serial host table I/O benchmark; not a phone or GPU timing"]
+    fn benchmark_full_33_lut_packet_io() {
+        let root = super::tests::temp();
+        let lut = fixture_lut(33);
+        let axis: Vec<_> = (0..256).map(|i| -10. + i as f64 / 16.).collect();
+        let curves: Vec<_> = (0..256).map(|i| [i as f64 / 255.; 3]).collect();
+        let d = descriptor(&lut, &axis, &curves, GpuFinishInput::FilmDensity, 1.1);
+        let m = descriptor_manifest(&d, 512, 384, 7).unwrap();
+        let counts = packet_counts(&m);
+        assert_eq!(m.table_scalars * 8, 10_053_824);
+        let mut write_ms: [Vec<f64>; 2] = std::array::from_fn(|_| Vec::new());
+        let mut read_ms: [Vec<f64>; 2] = std::array::from_fn(|_| Vec::new());
+        let paths = [root.join("old-tables.f64le"), root.join("new-tables.f64le")];
+        let mut expected_hash = None;
+        for round in 0..9 {
+            for implementation in if round % 2 == 0 { [0, 1] } else { [1, 0] } {
+                let at = Instant::now();
+                let hash = if implementation == 0 {
+                    let mut writer = BufWriter::with_capacity(TABLE_IO_BYTES, File::create(&paths[0]).unwrap());
+                    let hash = scalar_write_tables(&mut writer, &d, true).unwrap();
+                    writer.get_ref().sync_all().unwrap();
+                    hash
+                } else {
+                    let mut writer = File::create(&paths[1]).unwrap();
+                    let hash = write_tables(&mut writer, &d, true, &mut || false).unwrap();
+                    writer.sync_all().unwrap();
+                    hash
+                };
+                let elapsed = at.elapsed().as_secs_f64() * 1000.;
+                if round > 0 { write_ms[implementation].push(elapsed); }
+                if let Some(expected) = &expected_hash { assert_eq!(&hash, expected); } else { expected_hash = Some(hash.clone()); }
+                let at = Instant::now();
+                assert_eq!(bench_read(&paths[implementation], &counts, implementation == 0), hash);
+                if round > 0 { read_ms[implementation].push(at.elapsed().as_secs_f64() * 1000.); }
+            }
+        }
+        assert_eq!(fs::read(&paths[0]).unwrap(), fs::read(&paths[1]).unwrap());
+        let median = |values: &mut Vec<f64>| { values.sort_by(f64::total_cmp); (values[3] + values[4]) / 2. };
+        let old_write = median(&mut write_ms[0]);
+        let new_write = median(&mut write_ms[1]);
+        let old_read = median(&mut read_ms[0]);
+        let new_read = median(&mut read_ms[1]);
+        eprintln!("FINISH_TABLE_IO_BENCH {}", serde_json::json!({"hostOnly":true,"deviceTiming":false,"tableBytes":m.table_scalars*8,"samplesPerImplementation":8,"warmupRounds":1,"alternatingOrder":true,"includesWriteFsync":true,"byteAndDigestParity":true,"sha256":expected_hash,"oldWriteMedianMs":old_write,"newWriteMedianMs":new_write,"oldReadMedianMs":old_read,"newReadMedianMs":new_read,"oldWriteMs":write_ms[0],"newWriteMs":write_ms[1],"oldReadMs":read_ms[0],"newReadMs":read_ms[1]}));
+        fs::remove_dir_all(root).unwrap();
+    }
+}

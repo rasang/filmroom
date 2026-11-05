@@ -2,6 +2,7 @@
 //! LUT and two matrices stay resident; one input upload and one readback per chunk.
 use super::full_stage::*;
 use super::{ExposureDescriptor, SHADER, uniform_words};
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use std::{
     path::Path,
     sync::{
@@ -11,8 +12,9 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use wgpu::util::DeviceExt;
+
 struct Runner {
+    _cleanup_start: trace::CleanupStart,
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
@@ -24,6 +26,8 @@ struct Runner {
     numeric_error: wgpu::Buffer,
     error: Arc<AtomicBool>,
     chunk_pixels: u32,
+    _cleanup_end: trace::CleanupEnd,
+    context: crate::gpu_session::Context,
 }
 struct Metrics {
     vendor: u32,
@@ -41,122 +45,79 @@ impl Runner {
     ) -> R<(Self, Metrics)> {
         check(c)?;
         let at = Instant::now();
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .ok_or("GPU_UNAVAILABLE_OR_LIMITS")?;
-        let info = adapter.get_info();
-        if !allow_probe
-            && !crate::adreno::eligible_adapter(
-                info.vendor,
-                &info.name,
-                info.backend == wgpu::Backend::Vulkan,
-                info.device_type == wgpu::DeviceType::IntegratedGpu,
-            )
-        {
-            return err("GPU_UNAVAILABLE_OR_LIMITS");
-        }
+        let device_phase = PhaseGuard::begin(GpuPhase::Device);
+        let context = crate::gpu_session::Context::acquire(
+            (p.chunk_pixels as u64 * 12).max(p.table_scalars * 4),
+            4,
+            allow_probe,
+        )?;
+        let device = context.device.clone();
+        let queue = context.queue.clone();
+        let error = context.error.clone();
+        let info = context.info.clone();
+        let f64_cap = context.f64_cap;
+        let f64_advertised = f64_cap;
+        device_phase.finish();
+        let pipeline_phase = PhaseGuard::begin(GpuPhase::Pipeline);
+        let pipeline = context.pipelines(&[SHADER], None)?.0.remove(0);
+        pipeline_phase.finish();
+
+        let upload_phase = PhaseGuard::begin(GpuPhase::Upload);
+        device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let bytes = p.chunk_pixels as u64 * 12;
-        let largest = bytes.max(p.table_scalars * 4);
-        let l = adapter.limits();
-        if largest > l.max_storage_buffer_binding_size as u64
-            || largest > l.max_buffer_size
-            || l.max_storage_buffers_per_shader_stage < 4
-            || l.max_compute_workgroup_size_x < 64
-            || l.max_compute_invocations_per_workgroup < 64
-            || l.max_compute_workgroups_per_dimension < p.chunk_pixels.div_ceil(64)
-        {
-            return err("GPU_UNAVAILABLE_OR_LIMITS");
-        }
-        let mut limits = wgpu::Limits::downlevel_defaults();
-        limits.max_storage_buffer_binding_size = largest as u32;
-        limits.max_buffer_size = largest.max(64 * MIB);
-        limits.max_storage_buffers_per_shader_stage = 4;
-        let f64_advertised = adapter.features().contains(wgpu::Features::SHADER_F64);
-        check(c)?;
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("isolated original film exposure"),
-                required_features: wgpu::Features::empty(),
-                required_limits: limits,
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-            },
-            None,
-        ))
-        .map_err(|_| "GPU_UNAVAILABLE_OR_LIMITS")?;
-        let error = Arc::new(AtomicBool::new(false));
-        let flag = error.clone();
-        device.on_uncaptured_error(Box::new(move |_| {
-            flag.store(true, Ordering::Relaxed);
-        }));
-        device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("original two matrices and bicubic TC"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("resident film exposure"),
-            layout: None,
-            module: &shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        // Do not inspect layouts of a failed pipeline.
-        let validation = pollster::block_on(device.pop_error_scope());
-        let memory = pollster::block_on(device.pop_error_scope());
-        if validation.is_some() || memory.is_some() || error.load(Ordering::Relaxed) {
-            return err("GPU_UNAVAILABLE_OR_LIMITS");
-        }
-        device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let make = |label, size, usage| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size,
-                usage,
-                mapped_at_creation: false,
-            })
+            context.buffer(
+                &wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size,
+                    usage,
+                    mapped_at_creation: false,
+                },
+                false,
+            )
         };
         let input = make(
             "exposure input chunk",
             bytes,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        );
+        )?;
         let output = make(
             "exposure output chunk",
             bytes,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        );
+        )?;
         let readback = make(
             "exposure bounded map",
             bytes + 4,
             wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        );
-        let numeric_error = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("sticky exposure numeric error"),
-            contents: &0u32.to_le_bytes(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        });
+        )?;
+        let numeric_error = context.buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("sticky exposure numeric error"),
+                contents: &0u32.to_le_bytes(),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            },
+            false,
+        )?;
         let table: Vec<f32> = d.table.iter().map(|&v| v as f32).collect();
-        let table = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("resident original full TC table"),
-            contents: bytemuck::cast_slice(&table),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let table = context.buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("resident original full TC table"),
+                contents: bytemuck::cast_slice(&table),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+            false,
+        )?;
         let params = uniform_words(d, p.chunk_pixels);
-        let uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("resident original exposure matrices"),
-            contents: bytemuck::cast_slice(&params),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let uniform = context.buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("resident original exposure matrices"),
+                contents: bytemuck::cast_slice(&params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            },
+            false,
+        )?;
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("exposure resident bindings"),
             layout: &pipeline.get_bind_group_layout(0),
@@ -189,8 +150,12 @@ impl Runner {
             return err("GPU_UNAVAILABLE_OR_LIMITS");
         }
         check(c)?;
+        upload_phase.finish();
+        let (_cleanup_start, _cleanup_end) = trace::cleanup_bounds();
         Ok((
             Self {
+                _cleanup_start,
+                _cleanup_end,
                 device,
                 queue,
                 pipeline,
@@ -202,6 +167,7 @@ impl Runner {
                 numeric_error,
                 error,
                 chunk_pixels: p.chunk_pixels,
+                context,
             },
             Metrics {
                 vendor: info.vendor,
@@ -225,11 +191,14 @@ impl Runner {
         check(c)?;
         let at = Instant::now();
         // Update only the pixel bound. Matrices and full TC LUT stay resident.
+        let upload_phase = PhaseGuard::begin(GpuPhase::Upload);
         self.queue
             .write_buffer(&self.uniform, 0, &(pixels as u32).to_le_bytes());
         self.queue.write_buffer(&self.input, 0, source);
         m.upload_ms += at.elapsed().as_secs_f64() * 1000.;
         let at = Instant::now();
+        upload_phase.finish();
+        let compute_phase = PhaseGuard::begin(GpuPhase::Compute);
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -249,6 +218,7 @@ impl Runner {
             4,
         );
         self.queue.submit([encoder.finish()]);
+        let readback_phase = PhaseGuard::begin(GpuPhase::Readback);
         let (tx, rx) = mpsc::channel();
         self.readback
             .slice(0..source.len() as u64 + 4)
@@ -290,6 +260,10 @@ impl Runner {
         })();
         self.readback.unmap();
         m.dispatch_readback_ms += at.elapsed().as_secs_f64() * 1000.;
+        if result.is_ok() {
+            readback_phase.finish();
+            compute_phase.finish();
+        }
         result
     }
 }

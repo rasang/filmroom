@@ -33,6 +33,7 @@ pub fn shader() -> String {
     assert_eq!(spatial::SHADER.matches(needle).count(), 1);
     spatial::SHADER.replace(needle," if(op>=20u){grain_main(i);return;}\n if(op==0u || op==1u){") + SAMPLER_SHADER + GRAPH_SHADER
 }
+pub(crate) mod alu_programs;
 mod bits {
     use serde::{Deserialize,Deserializer,Serialize,Serializer};
     pub fn serialize<S:Serializer>(v:&f64,s:S)->Result<S::Ok,S::Error>{format!("{:016x}",v.to_bits()).serialize(s)}

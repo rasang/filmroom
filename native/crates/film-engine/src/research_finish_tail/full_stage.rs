@@ -1,6 +1,7 @@
 //! Owned immutable scanner-tail packets and complete candidate publication.
 //! Caller must confirm isolated helper death before adoption or whole-stage CPU fallback.
 use super::*;
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
@@ -50,7 +51,9 @@ struct Owned(PathBuf, bool);
 impl Drop for Owned {
     fn drop(&mut self) {
         if !self.1 {
-            let _ = fs::remove_dir_all(&self.0);
+            trace::phase_value(GpuPhase::Cleanup, || {
+                let _ = fs::remove_dir_all(&self.0);
+            });
         }
     }
 }
@@ -131,23 +134,25 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path, max: u64) -> R<(T, Vec
     ))
 }
 fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
-    owner(dir, token, true)?;
-    let (m, bytes): (Manifest, Vec<u8>) = read_json(&dir.join("manifest.json"), 2 * MIB)?;
-    if m.token != token {
-        return Err("INVALID_TAIL_IDENTITY".into());
-    }
-    let plan = make_plan(&m, hex(&Sha256::digest(&bytes)))?;
-    regular(
-        &dir.join("source.logxyz.f64le"),
-        m.tail.width as u64 * m.tail.height as u64 * 24,
-    )?;
-    if m.external_glare {
+    trace::phase_result(GpuPhase::Prepare, || {
+        owner(dir, token, true)?;
+        let (m, bytes): (Manifest, Vec<u8>) = read_json(&dir.join("manifest.json"), 2 * MIB)?;
+        if m.token != token {
+            return Err("INVALID_TAIL_IDENTITY".into());
+        }
+        let plan = make_plan(&m, hex(&Sha256::digest(&bytes)))?;
         regular(
-            &dir.join("source.glare.f64le"),
-            m.tail.width as u64 * m.tail.height as u64 * 8,
+            &dir.join("source.logxyz.f64le"),
+            m.tail.width as u64 * m.tail.height as u64 * 24,
         )?;
-    }
-    Ok((m, plan))
+        if m.external_glare {
+            regular(
+                &dir.join("source.glare.f64le"),
+                m.tail.width as u64 * m.tail.height as u64 * 8,
+            )?;
+        }
+        Ok((m, plan))
+    })
 }
 pub fn estimated_disk_bytes(
     w: u32,
@@ -311,6 +316,7 @@ fn run_inner(
             return Err("GPU_TAIL_UNSUPPORTED".into());
         }
     };
+    let commit_phase = PhaseGuard::begin(GpuPhase::Commit);
     let done = Complete {
         schema_version: 1,
         operation: OP.into(),
@@ -332,6 +338,7 @@ fn run_inner(
         candidate.join(".complete.partial"),
         candidate.join("complete.json"),
     ))?;
+    commit_phase.finish();
     let object = report.as_object_mut().ok_or("GPU_TAIL_REPORT")?;
     object.insert("ok".into(), true.into());
     object.insert("schemaVersion".into(), 1.into());

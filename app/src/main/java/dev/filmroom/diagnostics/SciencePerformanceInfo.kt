@@ -7,6 +7,7 @@ enum class ScienceStage(val objectKey: String, val fieldKey: String, val gpuBack
     AUTO_EXPOSURE("autoExposure", "gpuScienceAe", "gpu_meter_f32_v1", "自动测光 / Auto exposure"),
     HIGHLIGHT("highlightBoost", "gpuScienceHi", "gpu_highlight_f32_v1", "高光增强 / Highlight boost"),
     EXPOSURE_LOG("exposureLog", "gpuScienceLog", "gpu_log_f32_v1", "曝光对数 / Exposure log"),
+    EXPOSURE_LOG_DIR("logDir", "gpuLogDir", "gpu_exposure_log_dir_v1", "驻留曝光对数与显影 / Resident exposure log + DIR"),
     GRAIN("grain", "gpuScienceGrain", "gpu_grain_guarded64_spatial_f32_v2", "颗粒 / Grain"),
     PRINT_EXPOSURE("printExposure", "gpuSciencePrint", "gpu_print_exposure_f32_v1", "相纸曝光 / Print exposure"),
     PRINT_DIFFUSION("printDiffusion", "gpuScienceFft", "gpu_print_fft_f32_v1", "相纸柔光 / Print diffusion"),

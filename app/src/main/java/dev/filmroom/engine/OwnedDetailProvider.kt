@@ -2,6 +2,10 @@ package dev.filmroom.engine
 
 import android.content.Context
 import android.graphics.Bitmap
+import dev.filmroom.diagnostics.GpuLifecyclePhase
+import dev.filmroom.diagnostics.RenderLifecycleScope
+import dev.filmroom.diagnostics.RenderLifecycleVariant
+import dev.filmroom.diagnostics.RenderMemoryWaitReason
 import dev.filmroom.io.DetailSource
 import dev.filmroom.io.DetailSourceFactory
 import dev.filmroom.io.LinearRgb
@@ -41,9 +45,14 @@ class OwnedDetailProvider internal constructor(
             try{api.nativeDestroy(temporary)}catch(_:LinkageError){throw DetailUnavailable("UNAVAILABLE")}
         }
     }
-    suspend fun open(photo:PhotoSource,parameters:EditorState,maxEdge:Int=1536,preferRegion:Boolean=false):OwnedDetailSession {
+    suspend fun open(photo:PhotoSource,parameters:EditorState,maxEdge:Int=1536,preferRegion:Boolean=false):OwnedDetailSession =
+        if(gpuContext==null)openTraced(photo,parameters,maxEdge,preferRegion)
+        else RenderBoundaryTrace.run(gpuContext,RenderLifecycleScope.DETAIL,variant=RenderLifecycleVariant.OPEN){openTraced(photo,parameters,maxEdge,preferRegion)}
+    private suspend fun openTraced(photo:PhotoSource,parameters:EditorState,maxEdge:Int,preferRegion:Boolean):OwnedDetailSession {
         var owned:OwnedDetailSession?=null
         try { return withContext(Dispatchers.IO) {
+        val boundary=currentCoroutineContext()[RenderBoundaryTrace]
+        boundary?.before(GpuLifecyclePhase.PREPARE_BEGIN)
         sources.cleanupOrphans()
         val dataRoot=File(root,"files/engine-data")
         if(!dataRoot.isDirectory)throw DetailUnavailable("DATA_NOT_READY") // ordinary engine owns installing immutable bundled data
@@ -58,6 +67,7 @@ class OwnedDetailProvider internal constructor(
         }
         val dataRevision=digest.digest().joinToString(""){"%02x".format(it)}
         val source=sources.prepare(photo,maxEdge)
+        boundary?.event(GpuLifecyclePhase.PREPARE_END)
         var session:OwnedDetailSession?=null
         val pressureRequested=java.util.concurrent.atomic.AtomicBoolean(false)
         val pressureOwner=java.util.concurrent.atomic.AtomicReference<OwnedDetailSession?>()
@@ -75,15 +85,21 @@ class OwnedDetailProvider internal constructor(
                 .put("stageCacheBytes",16L*1024*1024).put("spectrumCacheBytes",32L*1024*1024)
             // Decide output strategy once, before native context construction. Only
             // explicit ROI memory-plan/admission refusal can choose legacy cells.
+            boundary?.before(GpuLifecyclePhase.ADMISSION_WAIT)
             val admission=admitDetailOutput(request,preferRegion,plan={ json ->
+                boundary?.beforeBlocking(GpuLifecyclePhase.PLAN_ENTER)
                 status(api.nativePlan(json),"plan").getJSONObject("plan").also {
+                    boundary?.event(GpuLifecyclePhase.PLAN_RETURN)
                     if(it.getLong("diskReservedBytes")>root.usableSpace-64L*1024*1024)throw DetailUnavailable("STORAGE_BUDGET")
                 }
             },retain={ bytes -> NativeWorkReservations.retainForDetail(bytes,memory){pressureRequested.set(true);pressureOwner.get()?.close()} })
+            boundary?.event(GpuLifecyclePhase.ADMITTED)
             retained=admission.reservation
+            boundary?.before(GpuLifecyclePhase.NATIVE_CREATE_ENTER)
             sessionId=positiveId(status(api.nativeCreate(root.path),"create"),"sessionId")
-            val gpuBuild=if(gpuSelection.enabled)DetailGpuBuild(gpuSelection.router(checkNotNull(gpuContext))) else null
-            session=OwnedDetailSession(api,sessionId,key,gpuSelection.enabled || JSONObject(params).getBoolean("useGpu"),retained,source,memory,regionOutput=admission.regionOutput,gpuBuild=gpuBuild)
+            boundary?.event(GpuLifecyclePhase.NATIVE_CREATE_RETURN)
+            val gpuBuild=if(gpuSelection.enabled)DetailGpuBuild(gpuSelection.router(checkNotNull(gpuContext),parentToken=boundary?.token)) else null
+            session=OwnedDetailSession(api,sessionId,key,gpuSelection.enabled || JSONObject(params).getBoolean("useGpu"),retained,source,memory,regionOutput=admission.regionOutput,gpuBuild=gpuBuild,diagnosticContext=gpuContext)
             pressureOwner.set(session)
             retained=null // ownership transferred, including failures/cancellation during build
             owned=session
@@ -113,7 +129,8 @@ class OwnedDetailSession internal constructor(
     private val source:DetailSource,private val memory:()->NativeMemorySnapshot,
     private val conversionDispatcher:CoroutineDispatcher=Dispatchers.Default,
     val regionOutput:Boolean=false,
-    private val gpuBuild:DetailGpuBuild?=null
+    private val gpuBuild:DetailGpuBuild?=null,
+    private val diagnosticContext:Context?=null
 ):AutoCloseable {
     private val lock=Any()
     @Volatile private var closed=false
@@ -126,6 +143,15 @@ class OwnedDetailSession internal constructor(
     }
     private var workers=0
     private var activeOperation:Long?=null
+    @Volatile private var activeBoundary:RenderBoundaryTrace?=null
+    @Volatile private var lastBoundary:RenderBoundaryTrace?=null
+    @Volatile private var nativeInFlight=false
+    private fun detailNativeCall(work:()->String):String {
+        nativeInFlight=true
+        try{return work().also{activeBoundary?.event(GpuLifecyclePhase.JNI_RETURN)}}
+        catch(t:Throwable){activeBoundary?.event(GpuLifecyclePhase.JNI_FAILED);throw t}
+        finally{nativeInFlight=false}
+    }
     private var destroyStarted=false
     @Volatile private var helperSafe=true
     val isQuarantined:Boolean get()=!helperSafe && closed
@@ -151,12 +177,13 @@ class OwnedDetailSession internal constructor(
         }
     }
     private fun releaseIfDone(){destroyIfReady();if(closed && destroyed && workers==0 && !released){released=true;CoroutineScope(Dispatchers.IO).launch{
-        try{runCatching{source.close()}}finally{try{runCatching{reservation.close()}}finally{quarantineOwners.remove(this@OwnedDetailSession);retirementComplete.complete(Unit)}}
+        try{runCatching{source.close()}}finally{try{runCatching{reservation.close();lastBoundary?.memory(GpuLifecyclePhase.MEMORY_RELEASED,NativeWorkReservations.diagnosticLedger(RenderMemoryWaitReason.BYTES_RELEASED))}}finally{quarantineOwners.remove(this@OwnedDetailSession);retirementComplete.complete(Unit)}}
     }}}
     override fun close(){
         var listener:(()->Unit)?=null
         val retire=synchronized(lock){if(closed)false else {closed=true;listener=retirementListener;retirementListener=null;true}}
         if(retire){
+            activeBoundary?.event(GpuLifecyclePhase.CANCEL_REQUEST,GpuRenderCode.CANCELLED)
             val active=synchronized(lock){destroyIfReady();activeOperation}
             if(gpuBuild!=null && active!=null)CoroutineScope(Dispatchers.IO).launch{runCatching{api.nativeCancel(id,active)}}
             runCatching{listener?.invoke()}
@@ -166,21 +193,23 @@ class OwnedDetailSession internal constructor(
         require(key.scienceExperimental==(gpuBuild!=null))
         val result=operation("build") { op,enter ->
             enter()
-            if(gpuBuild==null)api.nativeBuild(id,op,source.relativePath,request)
+            if(gpuBuild==null)detailNativeCall{api.nativeBuild(id,op,source.relativePath,request)}
             else {
                 helperSafe=false
-                try {api.nativeBuildWithGpuDelegate(id,op,source.relativePath,request,gpuBuild.delegate)}
+                try {detailNativeCall{api.nativeBuildWithGpuDelegate(id,op,source.relativePath,request,gpuBuild.delegate)}}
                 finally {
-                    val safe=withContext(NonCancellable){runCatching{gpuBuild.drain()}.getOrDefault(false)}
+                    val safe=withContext(NonCancellable){activeBoundary?.before(GpuLifecyclePhase.CLEANUP_BEGIN);runCatching{gpuBuild.drain()}.getOrDefault(false)}
                     if(safe){
                         val cleaned=runCatching{checkPreviewGpuCleanup(api.nativeCleanupAfterGpuDrain(id))}.isSuccess
-                        if(cleaned)helperSafe=true else {
+                        if(cleaned){helperSafe=true;activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)} else {
+                            activeBoundary?.event(GpuLifecyclePhase.CLEANUP_RETAINED)
                             reservation.quarantine();quarantineOwners[this]=this;close()
                             throw DetailUnavailable("GPU_CLEANUP_PENDING")
                         }
                     } else {
                         // Worker slot exits, but native/source/passive bytes stay owned.
                         // Callback comes only after every launched helper is proven dead.
+                        activeBoundary?.event(GpuLifecyclePhase.CLEANUP_RETAINED)
                         reservation.quarantine()
                         quarantineOwners[this]=this
                         gpuBuild.whenSafeToRelease {
@@ -218,7 +247,7 @@ class OwnedDetailSession internal constructor(
         var ownedBitmap:Bitmap?=null
         try { return operationWithResult(if(cancelled==null)"tile" else "region",cancelled,work={ op,enter ->
             output=ByteBuffer.allocateDirect(sample.width*sample.height*12).order(ByteOrder.nativeOrder())
-            enter();if(cancelled==null)api.nativeTile(id,op,core.x/256,core.y/256,output) else api.nativeRegion(id,op,core.x,core.y,core.width,core.height,output)
+            enter();detailNativeCall{if(cancelled==null)api.nativeTile(id,op,core.x/256,core.y/256,output) else api.nativeRegion(id,op,core.x,core.y,core.width,core.height,output)}
         }) { response ->
             validateIdentity(response)
             if(!response.getBoolean("outputValid") || response.getLong("bytesWritten")!=output.capacity().toLong() || rect(response.getJSONObject("coreRect"))!=core || rect(response.getJSONObject("sampleRect"))!=sample || canonical(response.getJSONObject("identity"))!=identity || canonical(response.getJSONObject("backend"))!=backendIdentity)throw DetailUnavailable("INVALID_RESULT")
@@ -264,21 +293,41 @@ class OwnedDetailSession internal constructor(
     private suspend fun operation(name:String,cancelled:(()->Boolean)?=null,work:suspend (Long,()->Unit)->String):JSONObject =
         operationWithResult(name,cancelled,work){it}
     private suspend fun <T> operationWithResult(name:String,cancelled:(()->Boolean)?=null,work:suspend (Long,()->Unit)->String,consume:suspend (JSONObject)->T):T {
+        val variant=when(name){"tile"->RenderLifecycleVariant.TILE;"region"->RenderLifecycleVariant.REGION;else->RenderLifecycleVariant.BUILD}
+        val existing=currentCoroutineContext()[RenderBoundaryTrace]
+        return if(existing!=null)existing.withVariant(variant){operationTraced(name,cancelled,work,consume)}
+        else if(diagnosticContext==null)operationTraced(name,cancelled,work,consume)
+        else RenderBoundaryTrace.run(diagnosticContext,RenderLifecycleScope.DETAIL,variant=variant){operationTraced(name,cancelled,work,consume)}
+    }
+    private suspend fun <T> operationTraced(name:String,cancelled:(()->Boolean)?,work:suspend (Long,()->Unit)->String,consume:suspend (JSONObject)->T):T {
         val caller=currentCoroutineContext();caller.ensureActive();if(cancelled?.invoke()==true)throw CancellationException("Obsolete viewport")
+        val boundary=currentCoroutineContext()[RenderBoundaryTrace]
+        boundary?.before(GpuLifecyclePhase.PREPARE_BEGIN)
         val op=synchronized(lock){if(closed)throw CancellationException("Detail retired");if(workers!=0)throw DetailUnavailable("BUSY");positiveId(status(try{api.nativeBeginOperation(id)}catch(_:LinkageError){throw DetailUnavailable("UNAVAILABLE")},"beginOperation"),"operationId").also{workers++;activeOperation=it}}
+        activeBoundary=boundary
+        lastBoundary=boundary
         var invoked=false
         val watcher=CoroutineScope(Dispatchers.Default).launch {
-            while(isActive){if(!caller.isActive || cancelled?.invoke()==true){runCatching{api.nativeCancel(id,op)};break};delay(10)}
+            var ticks=0
+            while(isActive){
+                if(!caller.isActive || cancelled?.invoke()==true){boundary?.event(GpuLifecyclePhase.CANCEL_REQUEST,GpuRenderCode.CANCELLED);runCatching{api.nativeCancel(id,op)};break}
+                if(nativeInFlight && ticks++%100==0)boundary?.event(GpuLifecyclePhase.HEARTBEAT)
+                delay(10)
+            }
         }
         try {
             return withContext(Dispatchers.IO) {
                 reservation.run({if(cancelled?.invoke()==true)throw CancellationException("Obsolete viewport");synchronized(lock){if(closed)throw CancellationException("Detail retired")};memory()}) {
+                    boundary?.before(GpuLifecyclePhase.JNI_PREPARE)
                     caller.ensureActive()
                     if(cancelled?.invoke()==true)throw CancellationException("Obsolete viewport")
-                    val response=work(op){invoked=true} // synchronous: buffer, session, reservation remain strongly owned through return
+                    val response=work(op){boundary?.event(GpuLifecyclePhase.JNI_ENTER);invoked=true}
+
                     caller.ensureActive()
                     if(cancelled?.invoke()==true)throw CancellationException("Obsolete viewport")
-                    consume(status(response,name))
+                    val parsed=try{status(response,name)}catch(t:Throwable){boundary?.event(GpuLifecyclePhase.JNI_FAILED);throw t}
+                    if(parsed.optJSONObject("backend")?.optBoolean("cpuFallback")==true)boundary?.event(GpuLifecyclePhase.FALLBACK)
+                    consume(parsed)
                 }
             }
         } catch(_:LinkageError){
@@ -286,7 +335,12 @@ class OwnedDetailSession internal constructor(
             throw DetailUnavailable("UNAVAILABLE")
         } finally {
             watcher.cancel()
-            try{if(!invoked)runCatching{api.nativeReleaseOperation(id,op)}}finally{synchronized(lock){workers--;activeOperation=null;releaseIfDone()}}
+            try {
+                if(!invoked){boundary?.event(GpuLifecyclePhase.NOT_ENTERED);boundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN);runCatching{api.nativeReleaseOperation(id,op)};boundary?.event(GpuLifecyclePhase.CLEANUP_END)}
+            } finally {
+                synchronized(lock){workers--;activeOperation=null;releaseIfDone()}
+                if(activeBoundary===boundary)activeBoundary=null
+            }
         }
     }
     private companion object {val quarantineOwners=java.util.concurrent.ConcurrentHashMap<OwnedDetailSession,OwnedDetailSession>()}

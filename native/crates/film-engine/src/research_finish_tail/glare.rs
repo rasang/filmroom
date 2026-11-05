@@ -7,13 +7,13 @@ mod tables;
 use tables::{ZIG_NORM_F as F, ZIG_NORM_R as RADIUS, ZIG_NORM_X as X};
 pub(super) const ONE: u64 = 1 << 48;
 pub(super) const GUARD: u64 = 1 << 16; // 2^-32 absolute in Q48.
-pub(super) const WORD_CAPACITY: u32 = 65536;
-pub(super) const OUTPUT_CAPACITY: u32 = 16384;
-pub(super) const TABLE_BASE: u32 = 327680;
+pub(crate) const WORD_CAPACITY: u32 = 65536;
+pub(crate) const OUTPUT_CAPACITY: u32 = 16384;
+pub(crate) const TABLE_BASE: u32 = 327680;
 pub(super) const SEED: u64 = 42;
 pub(super) const SHADER: &str = include_str!("../shaders/research_finish_glare.wgsl");
 #[derive(Clone, Debug)]
-pub(super) struct Tables {
+pub(crate) struct Tables {
     pub key: [u32; 8],
     pub x: [u64; 257],
     pub f: [u64; 257],

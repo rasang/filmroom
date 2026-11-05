@@ -126,4 +126,7 @@ fn sr_binomial(rng:ptr<function,SoftRng>,n:u32,pb:vec2<u32>)->u32{
 }
 '''
 path=pathlib.Path(__file__).resolve().parent.parent/'shaders/research_grain_guarded_sampler.wgsl'
-path.write_text(expand(source))
+from prepared_shader import shader_runtime
+expanded=expand(source)
+path.with_name('research_grain_guarded_sampler_reference.wgsl').write_text(expanded)
+path.write_text(shader_runtime(expanded))

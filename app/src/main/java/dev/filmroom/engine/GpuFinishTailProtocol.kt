@@ -34,8 +34,8 @@ internal object GpuFinishTailProtocol {
         // The resident prefix retains the original finish packet admission ceiling.
         require(20*t+164*minOf(65536,n)+4096+130*mib<=GpuPrintScanProtocol.HARD_CAP)
         require(p.deviceBytes==20*n+8*mib+65536+4*t+256)
-        require(p.hostBytes==32*mib+16*t && p.driverAllowanceBytes==64*mib && p.helperAllowanceBytes==64*mib)
-        require(p.combinedPeakBytes==p.deviceBytes+p.hostBytes+128*mib && p.combinedPeakBytes<=GpuRenderProtocol.HARD_CAP)
+        require(p.hostBytes==32*mib+16*t && p.driverAllowanceBytes in setOf(64*mib,320*mib) && p.helperAllowanceBytes==64*mib)
+        require(p.combinedPeakBytes==p.deviceBytes+p.hostBytes+p.driverAllowanceBytes+64*mib && p.combinedPeakBytes<=GpuRenderProtocol.HARD_CAP)
         require(p.diskBytes==36*n+8*t+3*mib)
         require(p.sampleCount==p.passCount*(p.width.toLong()+p.height)+6*pointSamples(p))
     }

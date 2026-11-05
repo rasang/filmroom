@@ -1,4 +1,5 @@
 //! Experimental full-image GPU optical stage. Immutable sources, whole-stage commit only.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use spektrafilm_model::diffusion::ExactDiffusionKernel;
@@ -84,7 +85,10 @@ pub(super) struct OwnedDir(pub PathBuf, pub bool);
 impl Drop for OwnedDir {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -216,6 +220,7 @@ fn read_json<T: serde::de::DeserializeOwned>(p: &Path) -> R<(T, Vec<u8>)> {
     Ok((v, b))
 }
 pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     if dir.file_name().and_then(|s| s.to_str()) != Some(format!("gpu-stage-{token}").as_str()) {
         return fail("INVALID_STAGE_OWNER");
     };
@@ -260,7 +265,9 @@ pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
         regular(&dir.join(format!("kernel-{ch}.f64le")), ks * ks * 8)?;
     }
     Ok((m, p))
-}
+
+        })
+    }
 pub fn plan_stage(dir: &Path, token: u64) -> R<StagePlan> {
     load(dir, token).map(|(_, p)| p)
 }
@@ -1026,6 +1033,7 @@ pub(super) fn publish_complete(
     hashes: [String; 3],
     cancel: &mut impl FnMut() -> bool,
 ) -> R<()> {
+        trace::phase_result(GpuPhase::Commit, || {
     let complete = Complete {
         schema_version: 1,
         token: m.token,
@@ -1047,7 +1055,9 @@ pub(super) fn publish_complete(
         candidate.join("complete.json"),
     ))?;
     Ok(())
-}
+
+        })
+    }
 /// Test-only host mirror. Never available in a release library; times are not GPU times.
 #[cfg(test)]
 pub(crate) fn run_stage_cpu_mirror_for_test(

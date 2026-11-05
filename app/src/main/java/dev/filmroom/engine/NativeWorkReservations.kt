@@ -2,6 +2,9 @@ package dev.filmroom.engine
 
 import android.app.ActivityManager
 import android.content.Context
+import dev.filmroom.diagnostics.GpuLifecyclePhase
+import dev.filmroom.diagnostics.RenderMemoryInfo
+import dev.filmroom.diagnostics.RenderMemoryWaitReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -48,6 +51,7 @@ object NativeWorkReservations {
     private val limiter=NativeWorkLimiter()
     /** Read-only retry gate; does not raise capacity or alter reservation accounting. */
     fun detailRetryIdle():Boolean=limiter.activeCount()==0
+    internal fun diagnosticLedger(reason:RenderMemoryWaitReason)=limiter.diagnosticLedger(reason)
     val unavailableMemory=NativeMemorySnapshot(0,0,true)
     fun snapshot(context:Context):NativeMemorySnapshot {
         val manager=context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -62,8 +66,11 @@ object NativeWorkReservations {
     fun previewEstimate(width:Int,height:Int):Long {
         require(width in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE && height in 1..NativeMemoryPolicy.DETAIL_PREVIEW_EDGE)
         // Matches native MEMORY_FIXED_ESTIMATE_BYTES + MEMORY_ESTIMATE_BYTES_PER_PIXEL.
-        // Include direct float input/output and displayed result, although allocated
-        // before JNI. The limiter adds another per-operation safety allowance.
+        // Conservatively retain the legacy 24 B/pixel direct input/output allowance:
+        // RGBA8 presentation now uses 12 B input + 4 B output, with no native
+        // full-image packing scratch. Keep the spare 8 B/pixel until device peak
+        // measurements; the displayed result remains 4 B/pixel. The limiter adds
+        // another per-operation safety allowance. Buffers are allocated before JNI.
         return 96L*NativeMemoryPolicy.MIB+width.toLong()*height*(512L+24L+4L)
     }
 }
@@ -78,11 +85,16 @@ internal class NativeWorkLimiter {
     private val evicting=mutableSetOf<Long>()
     internal fun activeCount():Int=synchronized(lock){count}
     internal fun reservedBytes():Long=synchronized(lock){reserved}
+    internal fun diagnosticLedger(reason:RenderMemoryWaitReason)=synchronized(lock){RenderMemoryInfo(reservedBytes=reserved,activeWorkers=count,waitReason=reason)}
     private sealed class Attempt {
         class Ready(val lease:Lease):Attempt()
-        object Wait:Attempt()
-        object Reject:Attempt()
+        class Wait(val reason:RenderMemoryWaitReason):Attempt()
+        class Reject(val reason:RenderMemoryWaitReason):Attempt()
         class Evict(val callbacks:List<()->Unit>):Attempt()
+    }
+    private fun memoryInfo(estimate:Long,snapshot:NativeMemorySnapshot?,reason:RenderMemoryWaitReason):RenderMemoryInfo=synchronized(lock){
+        RenderMemoryInfo(requestedBytes=estimate,chargedBytes=Math.addExact(estimate,16L*NativeMemoryPolicy.MIB),availableBytes=snapshot?.availableBytes?.takeIf{it in 0..(1L shl 40)},
+            reservedBytes=reserved,activeWorkers=count,waitReason=reason)
     }
     private class Lease(private val release:()->Unit, val quarantine:()->Unit = {}, val releaseWorker:()->Unit = {}):AutoCloseable {
         private var closed=false
@@ -107,6 +119,9 @@ internal class NativeWorkLimiter {
             override fun quarantine() { (reservation as Lease).quarantine() }
             override fun close(){synchronized(lock){if(!closed){closed=true;if(workers==0)reservation.close()}}}
             override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
+                val trace=currentCoroutineContext()[RenderBoundaryTrace]
+                trace?.before(GpuLifecyclePhase.MEMORY_WAIT)
+                var waits=0
                 var acquired=false
                 while(!acquired){
                     currentCoroutineContext().ensureActive()
@@ -117,13 +132,15 @@ internal class NativeWorkLimiter {
                         val capacity=(headroom-64L*NativeMemoryPolicy.MIB).coerceAtLeast(0)/2
                         // Do not add a second 16 MiB or evict our own passive owner.
                         // OS available memory is still conservative; never add RSS back.
-                        if(snapshot.lowMemory || reserved>capacity)throw NativeWorkUnavailable()
+                        if(snapshot.lowMemory || reserved>capacity){trace?.memory(GpuLifecyclePhase.MEMORY_REJECTED,memoryInfo(estimate,snapshot,if(snapshot.lowMemory)RenderMemoryWaitReason.LOW_MEMORY else RenderMemoryWaitReason.CAPACITY));throw NativeWorkUnavailable()}
                         if(count>=2 || workers!=0)false else {count++;workers++;true}
                     }
-                    if(!acquired)delay(100)
+                    if(!acquired){if(waits++%10==0)trace?.memory(GpuLifecyclePhase.MEMORY_WAIT,memoryInfo(estimate,snapshot,RenderMemoryWaitReason.WORKER_LIMIT));delay(100)}
+                    else trace?.memory(GpuLifecyclePhase.ADMITTED,memoryInfo(estimate,snapshot,RenderMemoryWaitReason.ADMITTED))
                 }
+                trace?.event(GpuLifecyclePhase.ADMITTED)
                 try {currentCoroutineContext().ensureActive();work()}
-                finally {synchronized(lock){count--;workers--;check(count>=0 && workers==0);if(closed)reservation.close()}}
+                finally {synchronized(lock){count--;workers--;check(count>=0 && workers==0);if(closed)reservation.close()};trace?.memory(GpuLifecyclePhase.WORKER_RELEASED,memoryInfo(estimate,null,RenderMemoryWaitReason.WORKER_RELEASED))}
             }
         }
     }
@@ -139,7 +156,8 @@ internal class NativeWorkLimiter {
         if(memory.lowMemory || count>=2 || charge>capacity || reserved>capacity-charge) {
             val callbacks=passive.filterKeys { it !in evicting }
             if(callbacks.isNotEmpty()){evicting.addAll(callbacks.keys);return@synchronized Attempt.Evict(callbacks.values.toList())}
-            return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait else Attempt.Reject
+            val reason=when{memory.lowMemory->RenderMemoryWaitReason.LOW_MEMORY;count>=2 && (charge>capacity || reserved>capacity-charge)->RenderMemoryWaitReason.WORKERS_AND_BYTES;count>=2->RenderMemoryWaitReason.WORKER_LIMIT;else->RenderMemoryWaitReason.CAPACITY}
+            return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait(reason) else Attempt.Reject(reason)
         }
         count++;reserved+=charge
         var workerReleased=false
@@ -148,17 +166,22 @@ internal class NativeWorkLimiter {
     }
     suspend fun <T> run(estimate:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T = runQuarantinable(estimate,memory,NativeWorkRetention(),work)
     suspend fun <T> runQuarantinable(estimate:Long,memory:()->NativeMemorySnapshot,retention:NativeWorkRetention,work:suspend ()->T):T=withContext(Dispatchers.IO) {
+        val trace=currentCoroutineContext()[RenderBoundaryTrace]
+        trace?.before(GpuLifecyclePhase.MEMORY_WAIT)
+        var waits=0
         var lease:Lease?=null
         while(lease==null) {
             currentCoroutineContext().ensureActive()
-            when(val result=acquire(estimate,memory())) {
-                is Attempt.Ready->lease=result.lease
-                Attempt.Wait->delay(100)
-                Attempt.Reject->throw NativeWorkUnavailable()
-                is Attempt.Evict->{result.callbacks.forEach{it()};delay(25)}
+            val snapshot=memory()
+            when(val result=acquire(estimate,snapshot)) {
+                is Attempt.Ready->{lease=result.lease;trace?.memory(GpuLifecyclePhase.ADMITTED,memoryInfo(estimate,snapshot,RenderMemoryWaitReason.ADMITTED))}
+                is Attempt.Wait->{if(waits++%10==0)trace?.memory(GpuLifecyclePhase.MEMORY_WAIT,memoryInfo(estimate,snapshot,result.reason));delay(100)}
+                is Attempt.Reject->{trace?.memory(GpuLifecyclePhase.MEMORY_REJECTED,memoryInfo(estimate,snapshot,result.reason));throw NativeWorkUnavailable()}
+                is Attempt.Evict->{trace?.beforeBlocking(GpuLifecyclePhase.MEMORY_EVICTION);trace?.memory(GpuLifecyclePhase.MEMORY_EVICTION,memoryInfo(estimate,snapshot,RenderMemoryWaitReason.EVICTION));result.callbacks.forEach{it()};delay(25)}
             }
         }
+        trace?.event(GpuLifecyclePhase.ADMITTED)
         val owned=checkNotNull(lease)
-        try {currentCoroutineContext().ensureActive();work()} finally {owned.releaseWorker();retention.finish { owned.close() }}
+        try {currentCoroutineContext().ensureActive();work()} finally {owned.releaseWorker();trace?.memory(GpuLifecyclePhase.WORKER_RELEASED,memoryInfo(estimate,null,RenderMemoryWaitReason.WORKER_RELEASED));retention.finish { owned.close();trace?.memory(GpuLifecyclePhase.MEMORY_RELEASED,memoryInfo(estimate,null,RenderMemoryWaitReason.BYTES_RELEASED)) }}
     }
 }

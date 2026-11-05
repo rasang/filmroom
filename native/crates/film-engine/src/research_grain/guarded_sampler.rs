@@ -3,7 +3,7 @@
 //! carry conservative comparison intervals. Ambiguity fails the entire stage.
 //! This host mirror defines the guarded experimental shader contract; actual
 //! export/preview GPU execution also requires per-request device checks.
-use super::{soft64,preview_rng::Mt19937,sampler::{Pair,MAX_STEPS}};
+use super::{guarded_graph,soft64,preview_rng::Mt19937,sampler::{Pair,MAX_STEPS}};
 pub const EXP_REL_ERROR:f64=4e-12;
 // Atanh63 truncation <3.361e-33; near1 truncation exit <2^-70.
 // 4e-14 relative leaves >128 binary64 rounding units for the bounded series,
@@ -295,3 +295,33 @@ fn rk_binomial_btpe(rng: &mut Stream, n: u64, p: f64) -> u64 {
         }}
     }
 }
+
+/// Offline-only step oracle for the fixed3120 admission fixtures. This calls
+/// original generic guarded functions, never the prepared implementation.
+pub fn particle_steps_reference(seed:u64,x:u32,y:u32,lambda:f64,p:f64,table:&spektrafilm_math::numpy_rng::PreparedPoisson)->Result<u32,Failure>{
+ let mut words=Coordinate::new(seed,x,y);let mut rng=Stream::new(&mut words,table);let n=rk_poisson(&mut rng,lambda);if let Some(e)=rng.failure{return Err(e);}rk_binomial(&mut rng,n,p);if let Some(e)=rng.failure{return Err(e);}Ok(rng.steps)
+}
+/// CPU-only admission oracle, intentionally using the original generic sampler.
+/// Failure tags and complete coordinate cursor preserve rejected-boundary tests.
+pub fn binomial_admission_reference(seed:u64,x:u32,y:u32,n:u64,p:f64,table:&spektrafilm_math::numpy_rng::PreparedPoisson)->[f32;8]{
+ let mut words=Coordinate::new(seed,x,y);
+ let (value,used,steps,failure)={let mut rng=Stream::new(&mut words,table);let value=rk_binomial(&mut rng,n,p);(value,rng.used,rng.steps,rng.failure)};
+ let failure=match failure{None=>0,Some(Failure::Domain)=>1,Some(Failure::Ambiguous)=>2,Some(Failure::Iterations)=>3};let Pair(lo,hi)=words.state;
+ [value as f32,used as f32,steps as f32,failure as f32,(lo&65535)as f32,(lo>>16)as f32,(hi&65535)as f32,(hi>>16)as f32]
+}
+/// Metadata only: actual device particle counts/RNG are never supplied by CPU.
+/// Used for64 admission cases, not the3120 original-model tuple census.
+pub fn particle_cursor_reference(seed:u64,x:u32,y:u32,density:f64,npp:f64,uniformity:f64,table:&spektrafilm_math::numpy_rng::PreparedPoisson)->Result<[f32;12],Failure>{
+ let p=density.clamp(1e-6,1.-1e-6);let sat=1.-p*uniformity*(1.-1e-6);let mut words=Coordinate::new(seed,x,y);
+ let (count,used,steps)={let mut rng=Stream::new(&mut words,table);let count=rk_poisson(&mut rng,npp/sat);if let Some(e)=rng.failure{return Err(e);}(count,rng.used,rng.steps)};
+ let first=words.state;
+ let (total,total_steps)={let mut rng=Stream::new(&mut words,table);rng.used=used;rng.steps=steps;rk_binomial(&mut rng,count,p);if let Some(e)=rng.failure{return Err(e);}(rng.used,rng.steps)};
+ let last=words.state;
+ let mut out=[0.;12];for (i,(state,used,steps)) in [(first,used,steps),(last,total,total_steps)].into_iter().enumerate(){let Pair(lo,hi)=state;out[6*i..6*i+6].copy_from_slice(&[steps as f32,used as f32,(lo&65535)as f32,(lo>>16)as f32,(hi&65535)as f32,(hi>>16)as f32]);}Ok(out)
+}
+
+#[path="prepared_sampler.rs"]
+pub mod prepared;
+#[cfg(test)]
+#[path="prepared_sampler_tests.rs"]
+mod prepared_tests;

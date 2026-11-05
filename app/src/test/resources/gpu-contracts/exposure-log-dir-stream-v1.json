@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "operation": "planGpuStreamingStage",
+  "plan": {
+    "chunkCount": 768,
+    "chunkPixels": 65536,
+    "combinedPeakBytes": 286326784,
+    "curveKnots": 6,
+    "deviceBytes": 33619968,
+    "dirActive": true,
+    "diskBytes": 3424649216,
+    "driverAllowanceBytes": 117440512,
+    "height": 6144,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 68157440,
+    "layout": "fullLineDirV1",
+    "manifestSha256": "24a9c08eb68dd0003bf23371fa058e54f83b7a8f4ba12e5cd2da1cff4bbef0c8",
+    "operation": "fullExposureLogDirStreamV1",
+    "passCount": 12,
+    "pipelineCount": 6,
+    "preCurveKnots": 6,
+    "schemaVersion": 1,
+    "token": 71,
+    "width": 8192
+  },
+  "schemaVersion": 1
+}

@@ -1,5 +1,6 @@
 //! Bounded resident GPU FFT with chunked uploads/readbacks and file-backed outputs.
 use super::{full_stage::*, gpu::Runner};
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
@@ -8,7 +9,7 @@ use std::{
     sync::{atomic::Ordering, mpsc},
     time::{Duration, Instant},
 };
-use wgpu::util::DeviceExt;
+
 type R<T> = Result<T, String>;
 fn wait(r: &Runner, c: &mut impl FnMut() -> bool) -> R<()> {
     let (tx, rx) = mpsc::channel();
@@ -23,6 +24,7 @@ fn wait(r: &Runner, c: &mut impl FnMut() -> bool) -> R<()> {
         };
         let _ = r.device.poll(wgpu::Maintain::Poll);
         if rx.try_recv().is_ok() {
+            r.context.release_transients_after_fence()?;
             return Ok(());
         }
         if at.elapsed() > Duration::from_secs(5) {
@@ -32,11 +34,13 @@ fn wait(r: &Runner, c: &mut impl FnMut() -> bool) -> R<()> {
     }
 }
 struct Buffers {
+    _cleanup_start: trace::CleanupStart,
     a: wgpu::Buffer,
     b: wgpu::Buffer,
     k: wgpu::Buffer,
     data: wgpu::Buffer,
     readback: wgpu::Buffer,
+    _cleanup_end: trace::CleanupEnd,
 }
 impl Buffers {
     fn scratch(&self, i: u32) -> &wgpu::Buffer {
@@ -50,37 +54,41 @@ fn dispatch(
     p: [u32; 16],
     count: usize,
     total: &mut u64,
-) {
-    let u = r
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("optical pass"),
-            contents: bytemuck::cast_slice(&p),
-            usage: wgpu::BufferUsages::UNIFORM,
+) -> R<()> {
+    trace::phase_value(GpuPhase::Compute, || {
+        let u = r.context.buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("optical pass"),
+                contents: bytemuck::cast_slice(&p),
+                usage: wgpu::BufferUsages::UNIFORM,
+            },
+            true,
+        )?;
+        let list = [&b.a, &b.b, &b.k, &b.data, &u];
+        let entries = list
+            .iter()
+            .enumerate()
+            .map(|(i, v)| wgpu::BindGroupEntry {
+                binding: i as u32,
+                resource: v.as_entire_binding(),
+            })
+            .collect::<Vec<_>>();
+        let group = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("optical bindings"),
+            layout: &r.pipeline.get_bind_group_layout(0),
+            entries: &entries,
         });
-    let list = [&b.a, &b.b, &b.k, &b.data, &u];
-    let entries = list
-        .iter()
-        .enumerate()
-        .map(|(i, v)| wgpu::BindGroupEntry {
-            binding: i as u32,
-            resource: v.as_entire_binding(),
-        })
-        .collect::<Vec<_>>();
-    let group = r.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("optical bindings"),
-        layout: &r.pipeline.get_bind_group_layout(0),
-        entries: &entries,
-    });
-    let mut pass = e.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        label: Some("optical FFT"),
-        timestamp_writes: None,
-    });
-    pass.set_pipeline(&r.pipeline);
-    pass.set_bind_group(0, &group, &[]);
-    let (gx, gy) = dispatch_grid(count);
-    pass.dispatch_workgroups(gx, gy, 1);
-    *total += 1;
+        let mut pass = e.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("optical FFT"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&r.pipeline);
+        pass.set_bind_group(0, &group, &[]);
+        let (gx, gy) = dispatch_grid(count);
+        pass.dispatch_workgroups(gx, gy, 1);
+        *total += 1;
+        Ok(())
+    })
 }
 fn fft(
     r: &Runner,
@@ -90,14 +98,14 @@ fn fft(
     current: &mut u32,
     inverse: bool,
     total: &mut u64,
-) {
+) -> R<()> {
     let n = p[0] as usize;
     p[9] = u32::from(inverse);
     for _ in 0..2 {
         p[7] = 2;
         p[10] = *current;
         p[11] = 1 - *current;
-        dispatch(r, b, e, *p, n * n, total);
+        dispatch(r, b, e, *p, n * n, total)?;
         *current = 1 - *current;
         let mut span = 2;
         while span <= n {
@@ -105,16 +113,17 @@ fn fft(
             p[8] = span as u32;
             p[10] = *current;
             p[11] = 1 - *current;
-            dispatch(r, b, e, *p, n * n, total);
+            dispatch(r, b, e, *p, n * n, total)?;
             *current = 1 - *current;
             span *= 2;
         }
         p[7] = 4;
         p[10] = *current;
         p[11] = 1 - *current;
-        dispatch(r, b, e, *p, n * n, total);
+        dispatch(r, b, e, *p, n * n, total)?;
         *current = 1 - *current;
     }
+    Ok(())
 }
 fn upload(
     r: &Runner,
@@ -124,12 +133,14 @@ fn upload(
     cancel: &mut impl FnMut() -> bool,
     bytes: &mut u64,
 ) -> R<()> {
-    check(cancel)?;
-    r.queue.write_buffer(buffer, offset, data);
-    r.queue.submit([]);
-    wait(r, cancel)?;
-    *bytes += data.len() as u64;
-    Ok(())
+    trace::phase_result(GpuPhase::Upload, || {
+        check(cancel)?;
+        r.queue.write_buffer(buffer, offset, data);
+        r.queue.submit([]);
+        wait(r, cancel)?;
+        *bytes += data.len() as u64;
+        Ok(())
+    })
 }
 fn upload_kernel(
     r: &Runner,
@@ -233,83 +244,106 @@ fn read_tile(
     uploads: &mut u64,
     dispatches: &mut u64,
 ) -> R<()> {
-    let rows = (CHUNK_BYTES / (ww * 8)).max(1);
-    let scatter = m.scatter()?;
-    let mut original = vec![0u8; ww * 8];
-    let mut output = vec![0u8; ww * 8];
-    for first in (0..hh).step_by(rows) {
-        check(c)?;
-        let count = rows.min(hh - first);
-        let bytes = (count * ww * 8) as u64;
-        let mut originals=Vec::<f32>::with_capacity(count*ww);
-        for dy in 0..count {
+    trace::phase_result(GpuPhase::Readback, || {
+        let rows = (CHUNK_BYTES / (ww * 8)).max(1);
+        let scatter = m.scatter()?;
+        let mut original = vec![0u8; ww * 8];
+        let mut output = vec![0u8; ww * 8];
+        for first in (0..hh).step_by(rows) {
             check(c)?;
-            let at=((oy as usize+first+dy)*m.width as usize+ox as usize) as u64*8;
-            io(source.seek(SeekFrom::Start(at)))?;io(source.read_exact(&mut original))?;
-            for bytes in original.chunks_exact(8) {
-                let v=f64::from_le_bytes(bytes.try_into().unwrap());
-                originals.push(numeric_scalar(v, FFT_SOURCE_BOUND)?);
-            }
-        }
-        let ks=2*m.radius as usize+1;let n=m.fft_side as usize;
-        upload(r,&b.data,(ks*ks*4+n*8) as u64,bytemuck::cast_slice(&originals),c,uploads)?;
-        drop(originals);
-        let mut e = r.device.create_command_encoder(&Default::default());
-        let mut params=[0u32;16];params[0]=m.fft_side;params[7]=10;params[8]=(first*ww) as u32;
-        params[10]=current;params[11]=1-current;params[12]=ww as u32;params[13]=count as u32;
-        params[14]=(ks*ks) as u32;params[15]=scatter.to_bits();
-        dispatch(r,b,&mut e,params,count*ww,dispatches);
-        e.copy_buffer_to_buffer(
-            b.scratch(1-current),
-            (first * ww * 8) as u64,
-            &b.readback,
-            0,
-            bytes,
-        );
-        r.queue.submit([e.finish()]);
-        let (tx, rx) = mpsc::channel();
-        b.readback
-            .slice(0..bytes)
-            .map_async(wgpu::MapMode::Read, move |v| {
-                let _ = tx.send(v);
-            });
-        let at = Instant::now();
-        loop {
-            check(c)?;
-            if r.error.load(Ordering::Relaxed) {
-                return fail("GPU_DEVICE_FAILED");
-            };
-            let _ = r.device.poll(wgpu::Maintain::Poll);
-            match rx.try_recv() {
-                Ok(Ok(())) => break,
-                Ok(Err(_)) => return fail("GPU_STAGE_READBACK_FAILED"),
-                Err(mpsc::TryRecvError::Disconnected) => return fail("GPU_STAGE_READBACK_FAILED"),
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-            if at.elapsed() > Duration::from_secs(5) {
-                return fail("GPU_STAGE_TIMEOUT");
-            };
-            std::thread::sleep(Duration::from_millis(1));
-        }
-        {
-            let mapped = b.readback.slice(0..bytes).get_mapped_range();
-            let values = bytemuck::cast_slice::<u8, f32>(&mapped);
+            let count = rows.min(hh - first);
+            let bytes = (count * ww * 8) as u64;
+            let mut originals = Vec::<f32>::with_capacity(count * ww);
             for dy in 0..count {
                 check(c)?;
                 let at = ((oy as usize + first + dy) * m.width as usize + ox as usize) as u64 * 8;
-                for x in 0..ww {
-                    let value=values[(dy*ww+x)*2];
-                    if !value.is_finite(){return fail("NONFINITE_STAGE_OUTPUT");}
-                    output[x*8..x*8+8].copy_from_slice(&(value as f64).to_le_bytes());
+                io(source.seek(SeekFrom::Start(at)))?;
+                io(source.read_exact(&mut original))?;
+                for bytes in original.chunks_exact(8) {
+                    let v = f64::from_le_bytes(bytes.try_into().unwrap());
+                    originals.push(numeric_scalar(v, FFT_SOURCE_BOUND)?);
                 }
-                io(out.seek(SeekFrom::Start(at)))?;
-                io(out.write_all(&output))?;
             }
+            let ks = 2 * m.radius as usize + 1;
+            let n = m.fft_side as usize;
+            upload(
+                r,
+                &b.data,
+                (ks * ks * 4 + n * 8) as u64,
+                bytemuck::cast_slice(&originals),
+                c,
+                uploads,
+            )?;
+            drop(originals);
+            let mut e = r.device.create_command_encoder(&Default::default());
+            let mut params = [0u32; 16];
+            params[0] = m.fft_side;
+            params[7] = 10;
+            params[8] = (first * ww) as u32;
+            params[10] = current;
+            params[11] = 1 - current;
+            params[12] = ww as u32;
+            params[13] = count as u32;
+            params[14] = (ks * ks) as u32;
+            params[15] = scatter.to_bits();
+            dispatch(r, b, &mut e, params, count * ww, dispatches)?;
+            e.copy_buffer_to_buffer(
+                b.scratch(1 - current),
+                (first * ww * 8) as u64,
+                &b.readback,
+                0,
+                bytes,
+            );
+            r.queue.submit([e.finish()]);
+            let (tx, rx) = mpsc::channel();
+            b.readback
+                .slice(0..bytes)
+                .map_async(wgpu::MapMode::Read, move |v| {
+                    let _ = tx.send(v);
+                });
+            let at = Instant::now();
+            loop {
+                check(c)?;
+                if r.error.load(Ordering::Relaxed) {
+                    return fail("GPU_DEVICE_FAILED");
+                };
+                let _ = r.device.poll(wgpu::Maintain::Poll);
+                match rx.try_recv() {
+                    Ok(Ok(())) => break,
+                    Ok(Err(_)) => return fail("GPU_STAGE_READBACK_FAILED"),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        return fail("GPU_STAGE_READBACK_FAILED");
+                    }
+                    Err(mpsc::TryRecvError::Empty) => {}
+                }
+                if at.elapsed() > Duration::from_secs(5) {
+                    return fail("GPU_STAGE_TIMEOUT");
+                };
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            {
+                let mapped = b.readback.slice(0..bytes).get_mapped_range();
+                let values = bytemuck::cast_slice::<u8, f32>(&mapped);
+                for dy in 0..count {
+                    check(c)?;
+                    let at =
+                        ((oy as usize + first + dy) * m.width as usize + ox as usize) as u64 * 8;
+                    for x in 0..ww {
+                        let value = values[(dy * ww + x) * 2];
+                        if !value.is_finite() {
+                            return fail("NONFINITE_STAGE_OUTPUT");
+                        }
+                        output[x * 8..x * 8 + 8].copy_from_slice(&(value as f64).to_le_bytes());
+                    }
+                    io(out.seek(SeekFrom::Start(at)))?;
+                    io(out.write_all(&output))?;
+                }
+            }
+            b.readback.unmap();
+            *total += bytes;
         }
-        b.readback.unmap();
-        *total += bytes;
-    }
-    Ok(())
+        Ok(())
+    })
 }
 pub(super) fn run(
     dir: &Path,
@@ -339,35 +373,43 @@ pub(super) fn run(
     )
     .map_err(|_| "GPU_UNAVAILABLE_OR_LIMITS")?;
     check(c)?;
+    let upload_phase = PhaseGuard::begin(GpuPhase::Upload);
     let mk = |label, size, usage| {
-        r.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some(label),
-            size,
-            usage,
-            mapped_at_creation: false,
-        })
+        r.context.buffer(
+            &wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage,
+                mapped_at_creation: false,
+            },
+            false,
+        )
     };
     let usage =
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
+    let (_cleanup_start, _cleanup_end) = trace::cleanup_bounds();
     let b = Buffers {
-        a: mk("optical A", (n * n * 8) as u64, usage),
-        b: mk("optical B", (n * n * 8) as u64, usage),
+        _cleanup_start,
+        _cleanup_end,
+        a: mk("optical A", (n * n * 8) as u64, usage)?,
+        b: mk("optical B", (n * n * 8) as u64, usage)?,
         k: mk(
             "optical spectrum",
             (n * n * 8) as u64,
             wgpu::BufferUsages::STORAGE,
-        ),
+        )?,
         data: mk(
             "optical PSF",
             (ks * ks * 4 + n * 8 + CHUNK_BYTES) as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        ),
+        )?,
         readback: mk(
             "optical bounded readback",
             (CHUNK_BYTES as u64).min(core as u64 * core as u64 * 8),
             wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        ),
+        )?,
     };
+    upload_phase.finish();
     let candidate = dir.join("candidate");
     io(fs::create_dir(&candidate))?;
     let mut guard = OwnedDir(candidate.clone(), false);
@@ -398,7 +440,7 @@ pub(super) fn run(
         let mut e = r.device.create_command_encoder(&Default::default());
         params[7] = 9;
         params[11] = 0;
-        dispatch(&r, &b, &mut e, params, n * n, &mut dispatches);
+        dispatch(&r, &b, &mut e, params, n * n, &mut dispatches)?;
         let mut current = 0;
         fft(
             &r,
@@ -408,12 +450,14 @@ pub(super) fn run(
             &mut current,
             false,
             &mut dispatches,
-        );
+        )?;
         params[7] = 5;
         params[10] = current;
-        dispatch(&r, &b, &mut e, params, n * n, &mut dispatches);
-        r.queue.submit([e.finish()]);
-        wait(&r, c)?;
+        dispatch(&r, &b, &mut e, params, n * n, &mut dispatches)?;
+        trace::phase_result(GpuPhase::Compute, || {
+            r.queue.submit([e.finish()]);
+            wait(&r, c)
+        })?;
         let mut source = io(File::open(dir.join(format!("source-{ch}.f64le"))))?;
         let output_path = candidate.join(format!("plane-{ch}.f64le"));
         let mut output = io(OpenOptions::new()
@@ -448,11 +492,11 @@ pub(super) fn run(
                     &mut current,
                     false,
                     &mut dispatches,
-                );
+                )?;
                 params[7] = 6;
                 params[10] = current;
                 params[11] = 1 - current;
-                dispatch(&r, &b, &mut e, params, n * n, &mut dispatches);
+                dispatch(&r, &b, &mut e, params, n * n, &mut dispatches)?;
                 current = 1 - current;
                 fft(
                     &r,
@@ -462,16 +506,18 @@ pub(super) fn run(
                     &mut current,
                     true,
                     &mut dispatches,
-                );
+                )?;
                 params[7] = 8;
                 params[10] = current;
                 params[11] = 1 - current;
                 params[12] = ww as u32;
                 params[13] = hh as u32;
-                dispatch(&r, &b, &mut e, params, ww * hh, &mut dispatches);
+                dispatch(&r, &b, &mut e, params, ww * hh, &mut dispatches)?;
                 current = 1 - current;
-                r.queue.submit([e.finish()]);
-                wait(&r, c)?;
+                trace::phase_result(GpuPhase::Compute, || {
+                    r.queue.submit([e.finish()]);
+                    wait(&r, c)
+                })?;
                 read_tile(
                     &r,
                     &b,
@@ -488,6 +534,7 @@ pub(super) fn run(
                     &mut upload_bytes,
                     &mut dispatches,
                 )?;
+                let guard_phase = PhaseGuard::begin(GpuPhase::Guard);
                 let sx = ox as u32 + (ww / 2) as u32;
                 let sy = oy as u32 + (hh / 2) as u32;
                 let expected = direct_sample(
@@ -514,6 +561,7 @@ pub(super) fn run(
                 sample_count += 1;
                 sample_max_abs = sample_max_abs.max(error);
                 sample_sum_squared += error * error;
+                guard_phase.finish();
             }
         }
         io(output.sync_all())?;

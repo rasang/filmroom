@@ -23,7 +23,8 @@ internal object GpuScanTailProtocol {
     }
     fun validatePlan(p: GpuScanTailPlan) {
         val n = p.width.toLong() * p.height
-        GpuScienceFields.validateMemory(p, n, 24, 44 * n + 2 * GpuRenderProtocol.MIB)
+        require(p.driverAllowanceBytes in setOf(64 * GpuRenderProtocol.MIB, 320 * GpuRenderProtocol.MIB))
+        GpuScienceFields.validateMemory(p, n, 24, 44 * n + 2 * GpuRenderProtocol.MIB, driverMiB = p.driverAllowanceBytes / GpuRenderProtocol.MIB)
         val chunks = (n + 32767) / 32768
         require(p.passCount in 0..7 && p.sampleCount == p.passCount * (p.width.toLong() + p.height) + 3 * (8 * (chunks - 1) + minOf(8, n - (chunks - 1) * 32768)))
     }

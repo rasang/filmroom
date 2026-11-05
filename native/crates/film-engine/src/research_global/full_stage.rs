@@ -1,5 +1,6 @@
 //! Immutable, token-bound global-science packets. Whole-stage candidates are
 //! adopted only after the existing helper lifecycle proves the worker stopped.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use super::*;
 use sha2::{Digest, Sha256};
 use std::{
@@ -55,7 +56,10 @@ struct Owned(PathBuf, bool);
 impl Drop for Owned {
     fn drop(&mut self) {
         if !self.1 {
+            trace::phase_value(GpuPhase::Cleanup, || {
             let _ = fs::remove_dir_all(&self.0);
+
+            });
         }
     }
 }
@@ -145,6 +149,7 @@ fn read_json<T: serde::de::DeserializeOwned>(p: &Path) -> R<(T, Vec<u8>)> {
     ))
 }
 fn load(dir: &Path, token: u64, c: &mut impl FnMut() -> bool) -> R<(Manifest, StagePlan)> {
+        trace::phase_result(GpuPhase::Prepare, || {
     check(c)?;
     owner(dir, token, true)?;
     let (m, b): (Manifest, Vec<u8>) = read_json(&dir.join("manifest.json"))?;
@@ -166,7 +171,9 @@ fn load(dir: &Path, token: u64, c: &mut impl FnMut() -> bool) -> R<(Manifest, St
         }
     }
     Ok((m, plan))
-}
+
+        })
+    }
 fn pixel_sample_bytes(p: &GlobalPlan) -> u64 {
     p.sample_width as u64 * p.sample_height as u64 * 28
 }
@@ -389,6 +396,7 @@ fn run_inner(
             return Err("GPU_GLOBAL_UNSUPPORTED".into());
         }
     };
+    let commit_phase=PhaseGuard::begin(GpuPhase::Commit);
     let mut hashes = Vec::new();
     for (name, bytes, scalar) in output_specs(&m.global) {
         hashes.push(hash_output(&candidate.join(name), bytes, scalar, &mut c)?);
@@ -414,6 +422,7 @@ fn run_inner(
         candidate.join(".complete.partial"),
         candidate.join("complete.json"),
     ))?;
+    commit_phase.finish();
     let o = report.as_object_mut().ok_or("GPU_GLOBAL_REPORT")?;
     o.insert("ok".into(), true.into());
     o.insert("schemaVersion".into(), 1.into());

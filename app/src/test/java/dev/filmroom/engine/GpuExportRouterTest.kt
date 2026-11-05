@@ -9,6 +9,10 @@ import android.content.ServiceConnection
 import android.os.Binder
 import android.os.Looper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -42,6 +46,8 @@ class GpuExportRouterTest {
             GpuRenderOperation.FILM_OPTICS -> GpuFilmOpticsFixtures.envelope(GpuFilmOpticsFixtures.plan(token))
             GpuRenderOperation.FILM_EXPOSURE -> GpuFilmExposureFixtures.envelope(GpuFilmExposureFixtures.plan(token))
             GpuRenderOperation.FILM_DIR -> GpuFilmDirFixtures.envelope(GpuFilmDirFixtures.plan(token))
+            GpuRenderOperation.EXPOSURE_LOG_DIR -> GpuExposureLogDirFixtures.envelope(GpuExposureLogDirFixtures.plan(token))
+            in GpuStreamingProtocol.operations -> GpuStreamingFixtures.envelope(GpuStreamingFixtures.plan(operation, token))
             else -> GpuScienceFixtures.envelope(operation,token)
         } },
         reserve = { _, _ -> object : RetainedNativeWork {
@@ -54,9 +60,11 @@ class GpuExportRouterTest {
         GpuRenderOperation.CAMERA_DIFFUSION to (91L to GpuRenderFixtures.request(context)),
         GpuRenderOperation.FILM_OPTICS to (94L to GpuFilmOpticsFixtures.request(context)),
         GpuRenderOperation.FILM_DIR to (96L to GpuFilmDirFixtures.request(context)),
+        GpuRenderOperation.EXPOSURE_LOG_DIR to (97L to GpuExposureLogDirFixtures.request(context)),
         GpuRenderOperation.PRINT_SCAN to (92L to GpuPrintScanFixtures.request(context)),
     ).apply {
         for(operation in GpuScienceFixtures.files.keys){val token=100+operation.ordinal.toLong();put(operation,token to GpuScienceFixtures.request(context,operation,token))}
+        for (operation in GpuStreamingProtocol.operations) { val token = 500 + operation.ordinal.toLong(); put(operation, token to GpuStreamingFixtures.request(context, operation, token)) }
     }
     @Test fun sequentialStagesUseIndependentOneShotOwnersAndStaleCameraCallbackCannotTouchScanner() = runBlocking {
         val context = FakeContext(RuntimeEnvironment.getApplication())
@@ -177,6 +185,37 @@ class GpuExportRouterTest {
         assertEquals(0L, withContext(Dispatchers.IO) { router.availableDiskBytes() })
         Shadows.shadowOf(Looper.getMainLooper()).idle(); assertEquals(0, context.starts)
     }
+    @Test fun compoundRouteOwnsIndependentTokenAndCannotRestartOrBorrowDirOwner() = runBlocking {
+        val context = FakeContext(RuntimeEnvironment.getApplication())
+        val compound = AtomicInteger(); val dir = AtomicInteger()
+        val router = GpuExportRouter.forTesting(context, mapOf(
+            GpuRenderOperation.EXPOSURE_LOG_DIR to hooks(GpuRenderOperation.EXPOSURE_LOG_DIR, compound),
+            GpuRenderOperation.FILM_DIR to hooks(GpuRenderOperation.FILM_DIR, dir)))
+        try {
+            assertEquals(1, withContext(Dispatchers.IO) { router.begin(GpuExposureLogDirFixtures.request(context)) })
+            router.cancel(96) // A stale standalone DIR token must not cancel the resident owner.
+            assertEquals("pending", JSONObject(router.poll(97)).getString("status"))
+            assertEquals("NO_JOB", JSONObject(router.poll(96)).getString("code"))
+            assertEquals(0, withContext(Dispatchers.IO) { router.begin(GpuExposureLogDirFixtures.request(context, 98)) })
+            router.cancel(97)
+            assertEquals("cancelled_stopped", JSONObject(router.poll(97)).getString("status"))
+            assertEquals(1, compound.get()); assertEquals(0, dir.get())
+        } finally { router.awaitSafeTermination() }
+        assertEquals(0, withContext(Dispatchers.IO) { router.begin(GpuFilmDirFixtures.request(context)) })
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(0, context.starts)
+    }
+    @Test fun compoundIsUnavailableUnlessBothExistingFlagsAreEnabled() = runBlocking {
+        for ((science, dir) in listOf(false to false, true to false, false to true)) {
+            val context = FakeContext(RuntimeEnvironment.getApplication())
+            val router = GpuExportRouter(context, false, false, dirEnabled = dir, scienceEnabled = science)
+            try {
+                assertEquals(0, withContext(Dispatchers.IO) { router.begin(GpuExposureLogDirFixtures.request(context)) })
+                assertEquals("NO_JOB", JSONObject(router.poll(97)).getString("code"))
+                assertEquals(0, context.starts)
+            } finally { router.awaitSafeTermination() }
+        }
+    }
     @Test fun thrownAfterSessionPublicationStillDrainsThroughExportRouterFinally() = runBlocking {
         val context = FakeContext(RuntimeEnvironment.getApplication()); val closes = AtomicInteger()
         val router = GpuExportRouter.forTesting(context, mapOf(GpuRenderOperation.PRINT_SCAN to
@@ -232,6 +271,10 @@ class GpuExportRouterTest {
             assertEquals(1, context.starts) // Stage two expired before main could launch it.
         } finally { router.awaitSafeTermination() }
     }
+    @Test fun productionPreviewFactoryDoesNotEnableUnmeasuredShortBudget() {
+        val router = GpuExportRouter.forPreview(FakeContext(RuntimeEnvironment.getApplication()), false, false)
+        assertFalse(router.hasPreviewOpportunityBudget)
+    }
     @Test fun defaultExportRouterHasNoPreviewBudget() = runBlocking {
         val context = FakeContext(RuntimeEnvironment.getApplication()); val closes = AtomicInteger()
         val router = GpuExportRouter.forTesting(context, mapOf(GpuRenderOperation.CAMERA_DIFFUSION to hooks(GpuRenderOperation.CAMERA_DIFFUSION, closes)))
@@ -244,4 +287,64 @@ class GpuExportRouterTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle()
     }
 
+    @Test fun durableBeginNeverHoldsRouterLockAndClosingWaitsForPublication() = runBlocking {
+        val context = FakeContext(RuntimeEnvironment.getApplication()); val closes = AtomicInteger()
+        val entered = CompletableDeferred<Unit>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val configured = hooks(GpuRenderOperation.CAMERA_DIFFUSION, closes).copy(plan = { _, _ ->
+            entered.complete(Unit)
+            check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            GpuRenderFixtures.envelope()
+        })
+        val router = GpuExportRouter.forTesting(context, mapOf(GpuRenderOperation.CAMERA_DIFFUSION to configured))
+        val begin = async(Dispatchers.IO) { router.begin(GpuRenderFixtures.request(context)) }
+        try {
+            withTimeout(5_000) { entered.await() }
+            val closing = async(start = CoroutineStart.UNDISPATCHED) { router.awaitSafeTermination() }
+            assertFalse(closing.isCompleted)
+            // This access and route rejection must remain nonblocking while plan/IO waits.
+            assertEquals("not_started", JSONObject(router.poll(91)).getString("status"))
+            assertEquals(0, withContext(Dispatchers.IO) { router.begin(GpuRenderFixtures.request(context)) })
+            assertEquals(0, closes.get())
+            release.countDown()
+            assertEquals(0, withTimeout(5_000) { begin.await() })
+            assertTrue(withTimeout(5_000) { closing.await() })
+            assertEquals(0, closes.get())
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0, context.starts)
+        } finally { release.countDown(); begin.await(); router.awaitSafeTermination() }
+    }
+
+    @Test fun cancelDuringPlanIsStickyAndNeverLaunches() = runBlocking {
+        val context = FakeContext(RuntimeEnvironment.getApplication()); val closes = AtomicInteger()
+        val entered = CompletableDeferred<Unit>(); val release = java.util.concurrent.CountDownLatch(1)
+        val configured = hooks(GpuRenderOperation.CAMERA_DIFFUSION, closes).copy(plan = { _, _ ->
+            entered.complete(Unit); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS)); GpuRenderFixtures.envelope()
+        })
+        val router = GpuExportRouter.forTesting(context, mapOf(GpuRenderOperation.CAMERA_DIFFUSION to configured))
+        val begin = async(Dispatchers.IO) { router.begin(GpuRenderFixtures.request(context)) }
+        try {
+            withTimeout(5_000) { entered.await() }; router.cancel(91); release.countDown()
+            assertEquals(0, withTimeout(5_000) { begin.await() })
+            assertEquals("CANCELLED", JSONObject(router.poll(91)).getString("code"))
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0, context.starts); assertEquals(0, closes.get())
+        } finally { release.countDown(); begin.await(); router.awaitSafeTermination() }
+    }
+    @Test fun cancelDuringSessionPublicationReleasesReservedLeaseWithoutLaunch() = runBlocking {
+        val context = FakeContext(RuntimeEnvironment.getApplication()); val closes = AtomicInteger()
+        val entered = CompletableDeferred<Unit>(); val release = java.util.concurrent.CountDownLatch(1)
+        val configured = hooks(GpuRenderOperation.CAMERA_DIFFUSION, closes).copy(beforeSession = {
+            entered.complete(Unit); check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        })
+        val router = GpuExportRouter.forTesting(context, mapOf(GpuRenderOperation.CAMERA_DIFFUSION to configured))
+        val begin = async(Dispatchers.IO) { router.begin(GpuRenderFixtures.request(context)) }
+        try {
+            withTimeout(5_000) { entered.await() }; router.cancel(91); release.countDown()
+            assertEquals(1, withTimeout(5_000) { begin.await() })
+            assertEquals("CANCELLED", JSONObject(router.poll(91)).getString("code"))
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0, context.starts); assertEquals(1, closes.get())
+        } finally { release.countDown(); begin.await(); router.awaitSafeTermination() }
+    }
 }

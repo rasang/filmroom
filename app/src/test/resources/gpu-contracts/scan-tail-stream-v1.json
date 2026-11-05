@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "operation": "planGpuStreamingStage",
+  "plan": {
+    "combinedPeakBytes": 545325056,
+    "deviceBytes": 33619968,
+    "diskBytes": 2419064832,
+    "driverAllowanceBytes": 377487360,
+    "externalGlare": false,
+    "glareActive": true,
+    "height": 6144,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 67108864,
+    "layout": "fullLineFileBackedFinishV1",
+    "manifestSha256": "d26098568391764725b59a4c42f9d68c29cd6a351f8bc6763b0bc6b45ac6dcba",
+    "mode": "standaloneScan",
+    "operation": "fullScanTailStreamV1",
+    "passCount": 7,
+    "sampleCount": 137216,
+    "schemaVersion": 1,
+    "tableScalars": 0,
+    "token": 72,
+    "width": 8192
+  },
+  "schemaVersion": 1
+}

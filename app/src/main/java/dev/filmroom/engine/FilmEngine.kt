@@ -22,6 +22,8 @@ object NativeFilmBridge {
     external fun nativeCreate(dataDirectory: String): Long
     external fun nativeRender(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String): String
     external fun nativeRenderWithGpuDelegate(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String, delegate: Any): String
+    external fun nativeRenderRgba8(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String): String
+    external fun nativeRenderWithGpuDelegateRgba8(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String, delegate: Any): String
     external fun nativeCleanupPreviewAfterGpuDrain(handle: Long): String
     external fun nativeCleanupExportAfterGpuDrain(handle: Long): String
     external fun nativeExportFile(handle: Long, inputPath: String, outputPath: String, width: Int, height: Int, paramsJson: String): String
@@ -52,6 +54,22 @@ private fun engineFailureMessage(failure:EngineFailure):dev.filmroom.i18n.UiMess
 class FilmEngine(private val context: Context) {
     val unavailable: String? get() = NativeFilmBridge.loadError?.let { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0a9765e80ef5) }
     private val renderMutex=Mutex()
+    @Volatile private var activeBoundary:RenderBoundaryTrace?=null
+    private suspend fun <T> withRenderLock(scope:RenderLifecycleScope,operationId:Long,work:suspend ()->T):T {
+        val variant=if(scope==RenderLifecycleScope.EXPORT)RenderLifecycleVariant.EXPORT else when(currentCoroutineContext()[PreviewDiagnosticContext]?.kind){
+            PreviewFrameKind.QUICK->RenderLifecycleVariant.QUICK
+            PreviewFrameKind.REFINED->RenderLifecycleVariant.STABLE
+            else->RenderLifecycleVariant.PREVIEW
+        }
+        return RenderBoundaryTrace.run(context,scope,operationId,variant) { boundary ->
+        boundary.before(GpuLifecyclePhase.MUTEX_WAIT)
+        renderMutex.withLock {
+            activeBoundary=boundary
+            try { boundary.before(GpuLifecyclePhase.PREPARE_BEGIN);work() }
+            finally { activeBoundary=null }
+        }
+        }
+    }
     private val optimizationPreferences=OptimizationPreferences(context)
     // Only read/write while renderMutex is held; plan and execution share this snapshot.
     private var operationOptimization=OptimizationSnapshot()
@@ -96,28 +114,47 @@ class FilmEngine(private val context: Context) {
         operationGpuScienceDispatchEnabled=operationGpuScience
         if(operationGpuDiffusion || operationGpuScanner || operationGpuOptical || operationGpuExposure || operationGpuDir || operationGpuScience) { operationOptimization=operationOptimization.copy(gpuResourceReuse=false) }
     }
-    private fun createGpuRouter(preview:Boolean=false):GpuExportRouter? {
+    private var lastGpuFrame:GpuScienceFrameDelegate?=null
+    private fun createGpuRouter(preview:Boolean=false):GpuScienceFrameDelegate? {
         if(!(operationGpuDispatchEnabled || operationGpuScannerDispatchEnabled || operationGpuOpticalDispatchEnabled || operationGpuExposureDispatchEnabled || operationGpuDirDispatchEnabled || operationGpuScienceDispatchEnabled))return null
-        return if(preview)GpuExportRouter.forPreview(context.applicationContext,cameraEnabled=operationGpuDispatchEnabled,scannerEnabled=operationGpuScannerDispatchEnabled,opticalEnabled=operationGpuOpticalDispatchEnabled,exposureEnabled=operationGpuExposureDispatchEnabled,dirEnabled=operationGpuDirDispatchEnabled,scienceEnabled=operationGpuScienceDispatchEnabled)
-        else GpuExportRouter(context.applicationContext,cameraEnabled=operationGpuDispatchEnabled,scannerEnabled=operationGpuScannerDispatchEnabled,opticalEnabled=operationGpuOpticalDispatchEnabled,exposureEnabled=operationGpuExposureDispatchEnabled,dirEnabled=operationGpuDirDispatchEnabled,scienceEnabled=operationGpuScienceDispatchEnabled)
+        // Creating the frame does not acquire memory or bind. First JNI stage
+        // admission occurs only while the parent native reservation is held.
+        val operations=GpuExportRouter.operations(operationGpuDispatchEnabled,operationGpuScannerDispatchEnabled,operationGpuOpticalDispatchEnabled,operationGpuExposureDispatchEnabled,operationGpuDirDispatchEnabled,operationGpuScienceDispatchEnabled)
+        return GpuScienceSessionPool.openFrame(context.applicationContext,operations,activeBoundary?.token,preview).also{lastGpuFrame=it}
+    }
+
+    private fun withGpuSessionDiagnostics(raw:String,frame:GpuScienceFrameDelegate?):String {
+        if(frame==null)return raw
+        // Observed, validated counter deltas only. Diagnostics never change rendering success.
+        return runCatching{JSONObject(raw).put("gpuSession",frame.sessionDiagnostics()).toString()}.getOrDefault(raw)
     }
     private fun optimizationSelection()=PerformanceInfo.selection(operationOptimization.exportMask,operationOptimization.cpuComparison,operationOptimization.previewBrightnessReuse,operationOptimization.gpuResourceReuse)
     private fun performanceInfo(result:JSONObject)=PerformanceInfo.fromNative(result,optimizationSelection())
     private fun recordOptimization(operation:String,result:JSONObject){optimizationPreferences.record(operation,operationOptimization,result,(System.nanoTime()-operationStartedNanos)/1_000_000.0)}
     @Volatile private var handle = 0L
     private val handleLock = Any()
-    fun cancel() { synchronized(handleLock) { if(handle != 0L) NativeFilmBridge.nativeCancel(handle) } }
+    fun cancel() {
+        activeBoundary?.event(GpuLifecyclePhase.CANCEL_REQUEST,GpuRenderCode.CANCELLED)
+        synchronized(handleLock) { if(handle != 0L) NativeFilmBridge.nativeCancel(handle) }
+    }
     private class PreviewOwner(val id:Long,lease:AutoCloseable,val source:Any) {
         val lifetime=PreviewCacheLease{try{NativeFilmBridge.nativeDestroy(id)}finally{lease.close()}}
     }
     private var previewOwner:PreviewOwner?=null
     private val optimizationObserver=optimizationPreferences.observeChoices{clearPreviewReuse()}
-    fun close(){cancel();clearPreviewReuse();optimizationObserver.close()}
+    fun close(){cancel();lastGpuFrame?.retireOwnedSession();clearPreviewReuse();optimizationObserver.close()}
     /** Lifecycle/pressure eviction never frees a native buffer while JNI still borrows it. */
     fun clearPreviewReuse() {synchronized(handleLock){previewOwner?.let { owner ->
         owner.lifetime.retire()
         if(owner.lifetime.isReleased()){previewOwner=null;if(handle==owner.id)handle=0L}
     }}}
+    private fun createNativeHandle(data:File):Long {
+        // Preview cache ownership holds handleLock; never add a disk wait to
+        // that cancellation-critical section. PREPARE_BEGIN was durable outside it.
+        if(Thread.holdsLock(handleLock))activeBoundary?.event(GpuLifecyclePhase.NATIVE_CREATE_ENTER)
+        else activeBoundary?.beforeBlocking(GpuLifecyclePhase.NATIVE_CREATE_ENTER)
+        return NativeFilmBridge.nativeCreate(data.absolutePath).also{activeBoundary?.event(GpuLifecyclePhase.NATIVE_CREATE_RETURN)}
+    }
     private fun previewHandle(data:File,source:Any,enabled:Boolean):Long = synchronized(handleLock) {
         if(!enabled || previewOwner?.source?.let{it!==source}==true)clearPreviewReuse()
         previewOwner?.takeIf{!it.lifetime.isRetired()}?.let{check(handle==0L);handle=it.id;return@synchronized it.id}
@@ -127,21 +164,25 @@ class FilmEngine(private val context: Context) {
             if(lease!=null){
                 try {
                     if(!pressure.get()){
-                        val id=NativeFilmBridge.nativeCreate(data.absolutePath)
+                        val id=createNativeHandle(data)
                         if(id!=0L){previewOwner=PreviewOwner(id,lease,source);if(!pressure.get()){check(handle==0L);handle=id;return@synchronized id};clearPreviewReuse()}
                     }
                 }catch(t:Throwable){lease.close();throw t}
                 lease.close()
             }
         }
-        NativeFilmBridge.nativeCreate(data.absolutePath).also{check(handle==0L);handle=it}
+        createNativeHandle(data).also{check(handle==0L);handle=it}
     }
-    private fun finishPreview(id:Long,success:Boolean) {synchronized(handleLock){
+    private fun finishPreview(id:Long,success:Boolean) {
+        activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN)
+        synchronized(handleLock){
         val owner=previewOwner?.takeIf{it.id==id}
         handle=0L
         if(owner==null)NativeFilmBridge.nativeDestroy(id)
         else {owner.lifetime.finish(success);if(owner.lifetime.isReleased())previewOwner=null}
-    }}
+        }
+        activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)
+    }
 
     private suspend fun copyData(): File {
         val copyJob = currentCoroutineContext()
@@ -163,11 +204,13 @@ class FilmEngine(private val context: Context) {
                 }
             }
         }
+        activeBoundary?.before(GpuLifecyclePhase.PREPARE_BEGIN)
         copy("engine-data",root)
+        activeBoundary?.event(GpuLifecyclePhase.PREPARE_END)
         return root
     }
     internal fun previewEdge(settled:Boolean)=NativeMemoryPolicy.previewEdge(memoryBudgetMiB(),settled)
-    suspend fun render(source: Bitmap, parameters: EditorState, mode: String, photo:PhotoSource?=null,settled:Boolean=false): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.PREVIEW_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> renderMutex.withLock { withContext(Dispatchers.Default) {
+    suspend fun render(source: Bitmap, parameters: EditorState, mode: String, photo:PhotoSource?=null,settled:Boolean=false): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.PREVIEW_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> withRenderLock(RenderLifecycleScope.PREVIEW,trace.id.value) { withContext(Dispatchers.Default) {
         beginOptimizationOperation(parameters.useGpu)
         selectScientificGpuOperations(mode)
         check(unavailable == null) { unavailable!! }
@@ -183,7 +226,7 @@ class FilmEngine(private val context: Context) {
         val count=Math.multiplyExact(width,height)
         require(count <= NativeMemoryPolicy.DETAIL_PREVIEW_EDGE*NativeMemoryPolicy.DETAIL_PREVIEW_EDGE) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c7b93a82c0c6) }
         val input=raw?.buffer() ?: ByteBuffer.allocateDirect(count*12).order(ByteOrder.nativeOrder())
-        val output=ByteBuffer.allocateDirect(count*12).order(ByteOrder.nativeOrder())
+        val output=ByteBuffer.allocateDirect(count*4).order(ByteOrder.nativeOrder())
         val ints=IntArray(width)
         val linear=FloatArray(256) { i -> val v=i/255.0; (if(v<=0.04045) v/12.92 else ((v+0.055)/1.055).pow(2.4)).toFloat() }
         try {if(raw==null)for(y in 0 until height) {
@@ -207,38 +250,47 @@ class FilmEngine(private val context: Context) {
             val quarantine=GpuResourceQuarantine()
             try {
                 contextJob.ensureActive()
+                activeBoundary?.before(GpuLifecyclePhase.ADMISSION_WAIT)
                 trace.mark(Stage.PREVIEW_ADMISSION_WAIT)
                 result=withNativeReservation(NativeWorkReservations.previewEstimate(width,height),quarantine.retention){
+                    activeBoundary?.event(GpuLifecyclePhase.ADMITTED)
                     trace.mark(Stage.PREVIEW_ADMITTED)
                     // A passive owner may be evicted while waiting for active admission.
                     // Only actual JNI borrowing defers destruction, never the wait itself.
                     val useCache=synchronized(handleLock){
                         val owner=previewOwner?.takeIf{it.id==created && !it.lifetime.isRetired()}
                         if(owner!=null && owner.lifetime.borrow()){true}else{
-                            if(admittedReuse || handle!=created){created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L);handle=created}
+                            if(admittedReuse || handle!=created){created=createNativeHandle(data);check(created!=0L);handle=created}
                             false
                         }
                     }
                     val params=JSONObject(nativeParameters(parameters,mode,budget)).put("previewBrightnessReuse",useCache).toString()
                     try {
                         previewNativeBoundary(
-                            mark={ stage -> trace.mark(stage,if(stage==Stage.NATIVE_ENTER)SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection())else SafeInfo()) },
+                            mark={ stage -> trace.mark(stage,if(stage==Stage.NATIVE_PREPARE)SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection())else SafeInfo()) },
                             readProgress={ progress(created) },
                             recordProgress={ value -> trace.mark(Stage.NATIVE_PROGRESS,SafeInfo(nativePhase=value.phase,nativePass=value.passId,nativeUpdateSerial=value.updateSerial,completedUnits=value.done,totalUnits=value.total)) },
                             now={ android.os.SystemClock.elapsedRealtime() },
                         ) {
-                            if(gpuPreview==null)NativeFilmBridge.nativeRender(created,input,output,width,height,params)
-                            else NativeFilmBridge.nativeRenderWithGpuDelegate(created,input,output,width,height,params,gpuPreview)
+                            if(gpuPreview==null)NativeFilmBridge.nativeRenderRgba8(created,input,output,width,height,params)
+                            else NativeFilmBridge.nativeRenderWithGpuDelegateRgba8(created,input,output,width,height,params,gpuPreview)
+                        }.let { value ->
+                            if(gpuPreview!=null && JSONObject(value).optBoolean("ok"))gpuPreview.finishFrame()
+                            withGpuSessionDiagnostics(value,gpuPreview)
                         }
                     } finally {
                         // Polling has joined before helper drain or handle destruction. The
-                        // parent admission and buffers remain owned until every helper is dead.
+                        // parent buffers remain owned until the frame is sealed or helper death is proven.
+                        // A sealed live session keeps its separate prepaid cache lease.
                         if(gpuPreview!=null)withContext(NonCancellable){
+                            activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN)
                             runCatching{trace.mark(Stage.GPU_DRAIN_START)}
                             if(gpuPreview.awaitSafeTermination()){
                                 checkPreviewGpuCleanup(NativeFilmBridge.nativeCleanupPreviewAfterGpuDrain(created))
+                                activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)
                                 runCatching{trace.mark(Stage.GPU_DRAIN_END)}
                             } else {
+                                activeBoundary?.event(GpuLifecyclePhase.CLEANUP_RETAINED)
                                 val retainedHandle=created
                                 quarantine.retain(gpuPreview,listOf(input,output,photo ?: source)) {
                                     checkPreviewGpuCleanup(NativeFilmBridge.nativeCleanupPreviewAfterGpuDrain(retainedHandle))
@@ -252,7 +304,7 @@ class FilmEngine(private val context: Context) {
                 }
                 contextJob.ensureActive();nativeSuccess=JSONObject(result).optBoolean("ok")
             } catch(e:EngineException){
-                if(e.failure==EngineFailure.BUDGET && admittedReuse && attempt==0){retryUncached=true;result=""}else throw e
+                if(e.failure==EngineFailure.BUDGET && admittedReuse && attempt==0){activeBoundary?.event(GpuLifecyclePhase.FALLBACK,GpuRenderCode.MEMORY_UNAVAILABLE);retryUncached=true;result=""}else throw e
             } finally {if(!quarantine.retained)finishPreview(created,nativeSuccess)}
             if(!retryUncached)break
             // Pressure may revoke a passive cache while the active render is waiting.
@@ -261,38 +313,36 @@ class FilmEngine(private val context: Context) {
         }
         contextJob.ensureActive()
         val metadata=JSONObject(result)
+        recordBoundaryResult(metadata)
         recordOptimization("preview",metadata)
         trace.mark(Stage.NATIVE_EXIT,GpuRuntimeInfo.fromNativeResult(metadata).copy(performance=performanceInfo(metadata)))
         checkNativeResult(metadata)
         val rendered=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
         try {
-            output.rewind()
-            fun encode(v: Float): Int { check(v.isFinite()) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1c50d5872b77) }; val x=v.coerceIn(0f,1f).toDouble(); return ((if(x<=0.0031308) x*12.92 else 1.055*x.pow(1.0/2.4)-0.055)*255.0+0.5).toInt().coerceIn(0,255) }
-            for(y in 0 until height) {
-                contextJob.ensureActive()
-                for(x in 0 until width) { val r=encode(output.float); val g=encode(output.float); val b=encode(output.float); ints[x]=(0xff shl 24) or (r shl 16) or (g shl 8) or b }
-                rendered.setPixels(ints,0,width,0,y,width,1)
-            }
+            check(metadata.getString("outputFormat")=="srgb-rgba8")
+            PreviewDisplay.copyRgba8(rendered,output) { contextJob.ensureActive() }
             rendered.also(capture)
         } catch(t: Throwable) { rendered.recycle(); throw t }
         } finally {if(effective!==source&&!effective.isRecycled)effective.recycle()}
     } } } }
     suspend fun planExport(width:Int,height:Int,parameters:EditorState):NativeExportPlan = OperationTrace.run(Operation.EXPORT_PLAN,parameters.safeInfo(width,height)) { trace ->
-        renderMutex.withLock { withContext(Dispatchers.IO) {
+        withRenderLock(RenderLifecycleScope.EXPORT,trace.id.value) { withContext(Dispatchers.IO) {
         beginOptimizationOperation(parameters.useGpu);clearPreviewReuse()
             if(unavailable!=null)throw EngineException(EngineFailure.UNAVAILABLE)
             val job=currentCoroutineContext();val budget=memoryBudgetMiB();val data=copyData();job.ensureActive()
-            val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
+            val created=createNativeHandle(data);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
             synchronized(handleLock){check(handle==0L);handle=created}
             try {
                 job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget)
                 trace.mark(Stage.NATIVE_EXIT,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,estimatedWorkingBytes=plan.workingBytes))
                 plan
-            } finally {synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L}}
+            } finally {activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN);synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L};activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)}
         } }
     }
     private fun planForHandle(created:Long,width:Int,height:Int,parameters:EditorState,budget:Int):NativeExportPlan {
+        activeBoundary?.beforeBlocking(GpuLifecyclePhase.PLAN_ENTER)
         val raw=JSONObject(try{NativeFilmBridge.nativePlanExport(created,width,height,nativeParameters(parameters,"export",budget))}catch(_:LinkageError){throw EngineException(EngineFailure.UNAVAILABLE)})
+        activeBoundary?.event(GpuLifecyclePhase.PLAN_RETURN)
         checkNativeResult(raw);val plan=raw.getJSONObject("plan")
         check(plan.getInt("width")==width && plan.getInt("height")==height)
         return NativeExportPlan(width,height,plan.getLong("inputBytes"),plan.getLong("outputBytes"),plan.getLong("estimatedScratchBytes"),plan.getLong("estimatedTotalLocalBytes"),plan.getLong("estimatedNativeWorkingBytes"),plan.getLong("checkpointReserveBytes"))
@@ -317,25 +367,39 @@ class FilmEngine(private val context: Context) {
         var latest:EngineProgress?=null
         val polling=launch(Dispatchers.IO) {
             val gate=NativeProgressLogGate()
+            var previousSerial:Long?=null
             while(isActive) {
                 delay(400)
-                val value=(progress(created)?:continue).let{it.copy(scanPreview=scanPreview?.takeIf{file->file.isFile&&file.length()>0})}
+                val nativeProgress=progress(created)
+                if(nativeProgress==null){activeBoundary?.event(GpuLifecyclePhase.HEARTBEAT);continue}
+                val value=nativeProgress.let{it.copy(scanPreview=scanPreview?.takeIf{file->file.isFile&&file.length()>0})}
                 latest=value
                 if(gate.shouldLog(value,android.os.SystemClock.elapsedRealtime())){
                     trace.mark(Stage.NATIVE_PROGRESS,SafeInfo(nativePhase=value.phase,nativePass=value.passId,nativeUpdateSerial=value.updateSerial,completedUnits=value.done,totalUnits=value.total))
                 }
+                activeBoundary?.event(if(previousSerial==value.updateSerial)GpuLifecyclePhase.PROGRESS_WAIT else GpuLifecyclePhase.HEARTBEAT)
+                previousSerial=value.updateSerial
                 if(onProgress!=null){if(progressOnMain)withContext(Dispatchers.Main.immediate){onProgress(value)}else onProgress(value)}
             }
         }
         val gpuDelegate=createGpuRouter()
+        var nativeEntered=false
+        var nativeReturned=false
         val result=try {
             currentCoroutineContext().ensureActive()
             val params=JSONObject(nativeParameters(parameters,"export",budget)).apply{workspace?.let{put("checkpointDirectory",File(it,"checkpoint").absolutePath)}}.toString()
+            activeBoundary?.before(GpuLifecyclePhase.JNI_PREPARE)
+            currentCoroutineContext().ensureActive()
+            activeBoundary?.event(GpuLifecyclePhase.JNI_ENTER)
+            nativeEntered=true
             (if(gpuDelegate!=null)NativeFilmBridge.nativeExportFileWithGpuDelegate(created,input.absolutePath,output.absolutePath,width,height,params,gpuDelegate)
-             else NativeFilmBridge.nativeExportFile(created,input.absolutePath,output.absolutePath,width,height,params)).also{value->onNativeResult?.invoke(value)}
-        } finally {withContext(NonCancellable){
+             else NativeFilmBridge.nativeExportFile(created,input.absolutePath,output.absolutePath,width,height,params)).let{value->nativeReturned=true;activeBoundary?.event(GpuLifecyclePhase.JNI_RETURN);if(gpuDelegate!=null && JSONObject(value).optBoolean("ok"))gpuDelegate.finishFrame();withGpuSessionDiagnostics(value,gpuDelegate).also{onNativeResult?.invoke(it)}}
+        } catch(t:Throwable){activeBoundary?.event(if(nativeReturned)GpuLifecyclePhase.OPERATION_FAILED else if(nativeEntered)GpuLifecyclePhase.JNI_FAILED else GpuLifecyclePhase.NOT_ENTERED);throw t}
+        finally {withContext(NonCancellable){
+            activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN)
             try {
                 if(gpuDelegate!=null && !gpuDelegate.awaitSafeTermination()){
+                    activeBoundary?.event(GpuLifecyclePhase.CLEANUP_RETAINED)
                     quarantine.retain(gpuDelegate,listOf(input,output)) {
                         checkPreviewGpuCleanup(NativeFilmBridge.nativeCleanupExportAfterGpuDrain(created))
                         NativeFilmBridge.nativeDestroy(created)
@@ -344,6 +408,7 @@ class FilmEngine(private val context: Context) {
                     synchronized(handleLock){if(handle==created)handle=0L}
                     throw EngineException(EngineFailure.INCOMPLETE)
                 } else if(gpuDelegate!=null)checkPreviewGpuCleanup(NativeFilmBridge.nativeCleanupExportAfterGpuDrain(created))
+                activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)
             } finally {polling.cancelAndJoin()}
         }}
         // A short stage or checkpoint restore can finish between400ms polls. No new render.
@@ -354,7 +419,7 @@ class FilmEngine(private val context: Context) {
         result
     }
     /** Consumes an export-only decoded bitmap; never pass the displayed preview. */
-    suspend fun renderFile(source: Bitmap, parameters: EditorState, onProgress:((EngineProgress)->Unit)?=null): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.EXPORT_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> renderMutex.withLock { withContext(Dispatchers.IO) {
+    suspend fun renderFile(source: Bitmap, parameters: EditorState, onProgress:((EngineProgress)->Unit)?=null): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.EXPORT_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> withRenderLock(RenderLifecycleScope.EXPORT,trace.id.value) { withContext(Dispatchers.IO) {
         beginOptimizationOperation(parameters.useGpu);clearPreviewReuse()
         selectScientificGpuOperations("export")
         requireBitmapOutputColor(parameters.outputColorSpace)
@@ -381,14 +446,15 @@ class FilmEngine(private val context: Context) {
             }
             source.recycle()
             val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
-            trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection()))
-            val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
+            trace.mark(Stage.NATIVE_PREPARE,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection()))
+            val created=createNativeHandle(data);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
             synchronized(handleLock){check(handle==0L);handle=created}
             val result:String
             try {job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget);requireExportSpace(plan,true);result=withExportReservation(plan.workingBytes,quarantine.retention){exportWithProgress(created,input,output,width,height,parameters,budget,trace,onProgress,quarantine=quarantine)}}
-            finally { if(!quarantine.retained)synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L} }
+            finally { if(!quarantine.retained){activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN);synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L};activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)} }
             job.ensureActive()
             val metadata=JSONObject(result)
+        recordBoundaryResult(metadata)
             recordOptimization("export",metadata)
             trace.mark(Stage.NATIVE_EXIT,ExportExecutionInfo.fromNativeResult(metadata).copy(performance=performanceInfo(metadata)))
             checkNativeResult(metadata)
@@ -419,7 +485,7 @@ class FilmEngine(private val context: Context) {
         var probeRequest:ProbeCaptureRequestStore.Request?=null;var probeResult:JSONObject?=null;var probeSuccess=false
         val quarantine=GpuResourceQuarantine()
         try {
-            val file=renderMutex.withLock { withContext(Dispatchers.IO) {
+            val file=withRenderLock(RenderLifecycleScope.EXPORT,trace.id.value) { withContext(Dispatchers.IO) {
                 beginOptimizationOperation(parameters.useGpu);clearPreviewReuse()
                 probeRequest=ProbeCaptureRequestStore.consume(context);operationProbeCapture=probeRequest
                 selectScientificGpuOperations("export",operationProbeCapture!=null)
@@ -430,8 +496,8 @@ class FilmEngine(private val context: Context) {
                 val output=File(workspace?:context.cacheDir,"film-result-${java.util.UUID.randomUUID()}.rgb")
                 produced=output
                 val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
-                trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection()))
-                val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
+                trace.mark(Stage.NATIVE_PREPARE,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,performance=optimizationSelection()))
+                val created=createNativeHandle(data);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
                 synchronized(handleLock){check(handle==0L);handle=created}
                 val raw:String
                 try {
@@ -443,12 +509,13 @@ class FilmEngine(private val context: Context) {
                     val gpuPrepBytes=if(operationGpuDispatchEnabled || operationGpuScannerDispatchEnabled || operationGpuOpticalDispatchEnabled || operationGpuExposureDispatchEnabled || operationGpuDirDispatchEnabled || operationGpuScienceDispatchEnabled)2L*1024*1024 else 0L
                     raw=try {withExportReservation(Math.addExact(plan.workingBytes,Math.addExact(if(operationProbeCapture!=null)ProbeCaptureRequestStore.MEMORY_BYTES else 0L,gpuPrepBytes)),quarantine.retention){render()}}
                     catch(e:EngineException){
-                        if(!nativeStarted && (operationProbeCapture!=null || operationGpuDiffusion || operationGpuScanner || operationGpuOptical || operationGpuExposure || operationGpuDir || operationGpuScience) && e.failure==EngineFailure.BUDGET){operationGpuPreflightFallback=operationGpuDiffusion;operationGpuScannerPreflightFallback=operationGpuScanner;operationGpuOpticalPreflightFallback=operationGpuOptical;operationGpuExposurePreflightFallback=operationGpuExposure;operationGpuDirPreflightFallback=operationGpuDir;operationGpuSciencePreflightFallback=operationGpuScience;operationProbeCapture=null;operationGpuDispatchEnabled=false;operationGpuScannerDispatchEnabled=false;operationGpuOpticalDispatchEnabled=false;operationGpuExposureDispatchEnabled=false;operationGpuDirDispatchEnabled=false;operationGpuScienceDispatchEnabled=false;withExportReservation(plan.workingBytes,quarantine.retention){render()}}else throw e
+                        if(!nativeStarted && (operationProbeCapture!=null || operationGpuDiffusion || operationGpuScanner || operationGpuOptical || operationGpuExposure || operationGpuDir || operationGpuScience) && e.failure==EngineFailure.BUDGET){activeBoundary?.event(GpuLifecyclePhase.FALLBACK,GpuRenderCode.MEMORY_UNAVAILABLE);operationGpuPreflightFallback=operationGpuDiffusion;operationGpuScannerPreflightFallback=operationGpuScanner;operationGpuOpticalPreflightFallback=operationGpuOptical;operationGpuExposurePreflightFallback=operationGpuExposure;operationGpuDirPreflightFallback=operationGpuDir;operationGpuSciencePreflightFallback=operationGpuScience;operationProbeCapture=null;operationGpuDispatchEnabled=false;operationGpuScannerDispatchEnabled=false;operationGpuOpticalDispatchEnabled=false;operationGpuExposureDispatchEnabled=false;operationGpuDirDispatchEnabled=false;operationGpuScienceDispatchEnabled=false;withExportReservation(plan.workingBytes,quarantine.retention){render()}}else throw e
                     }
                 }
-                finally {operationProbeCapture=null;if(!quarantine.retained)synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L}}
+                finally {operationProbeCapture=null;if(!quarantine.retained){withContext(NonCancellable){activeBoundary?.beforeBlocking(GpuLifecyclePhase.CLEANUP_BEGIN)};synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L};activeBoundary?.event(GpuLifecyclePhase.CLEANUP_END)}}
                 job.ensureActive()
                 val result=JSONObject(raw)
+                recordBoundaryResult(result)
                 if(operationGpuPreflightFallback)annotateGpuPreflightFallback(result)
                 if(operationGpuScannerPreflightFallback)annotateGpuScannerPreflightFallback(result)
                 if(operationGpuOpticalPreflightFallback)annotateGpuOpticalPreflightFallback(result)
@@ -471,6 +538,10 @@ class FilmEngine(private val context: Context) {
         try {val result=work{produced=it};handedOff=true;return result}
         finally {if(!handedOff)produced?.delete()}
     }
+    private fun recordBoundaryResult(result:JSONObject) {
+        if(!result.optBoolean("ok"))activeBoundary?.event(GpuLifecyclePhase.JNI_FAILED)
+        else if(result.optString("backend")=="cpu" && (operationGpuScience || operationGpuDiffusion || operationGpuScanner || operationGpuOptical || operationGpuExposure || operationGpuDir))activeBoundary?.event(GpuLifecyclePhase.FALLBACK)
+    }
     internal fun checkNativeResult(result:JSONObject) {
         if(result.optBoolean("ok"))return
         throw EngineException(when(result.optString("code")){
@@ -491,7 +562,10 @@ class FilmEngine(private val context: Context) {
         },NativeEngineCode.fromId(result.optString("code")),NativeEngineStage.fromId(result.optString("stage")))
     }
     private suspend fun <T> withExportReservation(bytes:Long,retention:NativeWorkRetention?=null,work:suspend ()->T):T =
-        ExportWorkAdmissions.run { withNativeReservation(bytes,retention,work) }
+        run {
+            activeBoundary?.before(GpuLifecyclePhase.ADMISSION_WAIT)
+            ExportWorkAdmissions.run { withNativeReservation(bytes,retention,work) }
+        }
     private suspend fun <T> withNativeReservation(bytes:Long,retention:NativeWorkRetention?=null,work:suspend ()->T):T =
         try {if(retention==null)NativeWorkReservations.run(bytes,{NativeWorkReservations.snapshot(context)},work)
             else NativeWorkReservations.runQuarantinable(bytes,{NativeWorkReservations.snapshot(context)},retention,work)}

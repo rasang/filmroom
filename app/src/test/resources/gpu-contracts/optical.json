@@ -2,10 +2,10 @@
   "ok": true,
   "operation": "planGpuFilmOpticsStage",
   "plan": {
-    "combinedPeakBytes": 159452828,
+    "combinedPeakBytes": 201395868,
     "deviceBytes": 8457884,
     "diskBytes": 74512,
-    "driverAllowanceBytes": 67108864,
+    "driverAllowanceBytes": 109051904,
     "height": 11,
     "helperAllowanceBytes": 67108864,
     "hostBytes": 16777216,

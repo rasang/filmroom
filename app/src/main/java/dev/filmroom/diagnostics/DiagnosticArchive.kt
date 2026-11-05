@@ -29,7 +29,8 @@ internal object DiagnosticArchive {
                 }
                 section(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_71fcada1d005))
                 section(summary + dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7af205e83135))
-                section(snapshot.text(metadata.text()) + "\n\n=== BEGIN DIAGNOSTICS JSON V1 ===\n")
+                section(snapshot.text(metadata.text()))
+                section(snapshot.renderLifecycle.text() + "\n\n=== BEGIN DIAGNOSTICS JSON V1 ===\n")
                 section(ChineseDiagnostics.json(snapshot, metadata))
                 section("\n=== END DIAGNOSTICS JSON V1 ===\n")
                 raw.flush()

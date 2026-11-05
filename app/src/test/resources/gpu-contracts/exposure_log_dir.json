@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "operation": "planGpuExposureLogDirStage",
+  "plan": {
+    "chunkCount": 1,
+    "chunkPixels": 77,
+    "combinedPeakBytes": 210830852,
+    "curveKnots": 5,
+    "deviceBytes": 8455684,
+    "dirActive": true,
+    "diskBytes": 2100848,
+    "driverAllowanceBytes": 117440512,
+    "height": 7,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 17825792,
+    "manifestSha256": "dda1b51db3153fc01c6d9890b4db6959daf469d616dda61868e6c90414fc5d53",
+    "operation": "fullExposureLogDir",
+    "passCount": 12,
+    "preCurveKnots": 5,
+    "schemaVersion": 1,
+    "token": 84,
+    "width": 11
+  },
+  "schemaVersion": 1
+}

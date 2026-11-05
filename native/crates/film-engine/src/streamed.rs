@@ -22,7 +22,7 @@ const BLOCK_PIXELS:usize=32768;
 pub struct StageMetrics {pub stage:&'static str,pub elapsed_ms:f64}
 #[derive(Debug,Serialize)]
 #[serde(rename_all="camelCase")]
-pub struct StreamedMetrics {pub gpu_science:std::collections::BTreeMap<ScienceKind,GpuOpticalMetrics>,pub gpu_dir:GpuOpticalMetrics,pub gpu_exposure:GpuScannerMetrics,pub gpu_optical:GpuOpticalMetrics,pub gpu_scanner:GpuScannerMetrics,pub gpu_diffusion:GpuDiffusionMetrics,pub gpu_probe_capture:GpuProbeCaptureMetrics,pub wall_elapsed_ms:f64,pub checkpoint_commit_ms:f64,pub checkpoint_identity_ms:f64,pub checkpoint_resume_stage:u8,pub export_optimization_mask:u32,pub gpu_resource_reuse:bool,pub export_execution:Option<crate::export_execution::ExportExecutionMetrics>,pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub width:u32,pub height:u32,pub pixel_count:u64,pub memory_budget_mi_b:u32,pub elapsed_ms:f64,pub setup_ms:f64,pub estimated_scratch_bytes:u64,pub peak_logical_scratch_bytes:u64,pub spatial_peak_explicit_buffer_bytes:u64,pub spatial_bytes_read:u64,pub spatial_bytes_written:u64,pub spatial_pass_count:u64,pub pointwise_chunk_rows:u32,pub lut_storage_bytes:usize,pub stages:Vec<StageMetrics>,pub algorithm:&'static str,pub grain_mode:&'static str,pub memory_policy:&'static str}
+pub struct StreamedMetrics {pub gpu_log_dir:GpuOpticalMetrics,pub gpu_science:std::collections::BTreeMap<ScienceKind,GpuOpticalMetrics>,pub gpu_dir:GpuOpticalMetrics,pub gpu_exposure:GpuScannerMetrics,pub gpu_optical:GpuOpticalMetrics,pub gpu_scanner:GpuScannerMetrics,pub gpu_diffusion:GpuDiffusionMetrics,pub gpu_probe_capture:GpuProbeCaptureMetrics,pub wall_elapsed_ms:f64,pub checkpoint_commit_ms:f64,pub checkpoint_identity_ms:f64,pub checkpoint_resume_stage:u8,pub export_optimization_mask:u32,pub gpu_resource_reuse:bool,pub export_execution:Option<crate::export_execution::ExportExecutionMetrics>,pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub width:u32,pub height:u32,pub pixel_count:u64,pub memory_budget_mi_b:u32,pub elapsed_ms:f64,pub setup_ms:f64,pub estimated_scratch_bytes:u64,pub peak_logical_scratch_bytes:u64,pub spatial_peak_explicit_buffer_bytes:u64,pub spatial_bytes_read:u64,pub spatial_bytes_written:u64,pub spatial_pass_count:u64,pub pointwise_chunk_rows:u32,pub lut_storage_bytes:usize,pub stages:Vec<StageMetrics>,pub algorithm:&'static str,pub grain_mode:&'static str,pub memory_policy:&'static str}
 
 /// Safe public summary. Snapshot paths, tokens, manifests and samples stay private.
 #[derive(Clone,Debug,Serialize)]
@@ -81,7 +81,12 @@ pub(crate) trait GpuDiffusionDelegate:Send {
  fn begin(&mut self,request:&str)->Option<bool>;
  fn poll(&mut self,token:u64)->Option<String>;
  fn cancel(&mut self,token:u64);
+ /// Only a separately bound session handshake permits an alive stage seal.
+ fn session_ticket(&self)->Option<GpuSessionTicket>{None}
+ fn permits_no_route_proof(&self)->bool{false}
 }
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub(crate) struct GpuSessionTicket {pub epoch:u64,pub generation:u64,pub sequence:u64,pub token:u64}
 pub(crate) struct GpuDiffusionRequest {pub parent_handle:i64,pub token:u64,pub stage_dir:Option<PathBuf>,pub delegate:Option<Box<dyn GpuDiffusionDelegate>>}
 /// Named stage bundles keep additions from changing every export ABI/call site.
 #[derive(Default)]
@@ -173,9 +178,30 @@ impl GpuExposure {
 #[derive(Clone,Copy,Debug,PartialEq)]
 enum GpuTerminal {Success,Failed,Cancelled,NotStarted}
 struct GpuPoll {terminal:Option<GpuTerminal>,completed:u64,code:String,summary:Option<serde_json::Value>}
+/// Only the new session callback can certify an unknown token was never sent.
+/// Normalize its intentionally unknown total without inventing completion/death.
+fn normalize_session_no_route(raw:&str,token:u64,total:u64)->Option<String>{
+ if raw.len()>16*1024{return None;}let mut v:serde_json::Value=serde_json::from_str(raw).ok()?;let m=v.as_object()?;
+ if m.len()!=6||m.keys().any(|k|!["schemaVersion","token","status","completedPixels","totalPixels","code"].contains(&k.as_str()))||v["schemaVersion"]!=1||v["token"].as_u64()!=Some(token)||v["status"]!="not_started"||v["code"]!="NO_JOB"||v["completedPixels"]!=0||v["totalPixels"]!=0{return None;}
+ v["totalPixels"]=total.into();Some(v.to_string())
+}
 fn parse_gpu_poll(raw:&str,token:u64,total:u64)->Option<GpuPoll> {
+ parse_gpu_poll_with_ticket(raw,token,total,None)
+}
+fn parse_gpu_poll_with_ticket(raw:&str,token:u64,total:u64,ticket:Option<GpuSessionTicket>)->Option<GpuPoll> {
  if raw.len()>16*1024 {return None;}
  let v:serde_json::Value=serde_json::from_str(raw).ok()?;let map=v.as_object()?;
+ if v["schemaVersion"].as_u64()==Some(2) {
+  let t=ticket?;
+  if t.token!=token||map.len()<9||map.len()>10||map.keys().any(|k|!["schemaVersion","epoch","frameGeneration","sequence","token","status","completedPixels","totalPixels","code","summary"].contains(&k.as_str())) {return None;}
+  if v["epoch"].as_u64()!=Some(t.epoch)||v["frameGeneration"].as_u64()!=Some(t.generation)||v["sequence"].as_u64()!=Some(t.sequence)||v["token"].as_u64()!=Some(token)||v["totalPixels"].as_u64()!=Some(total){return None;}
+  let completed=v["completedPixels"].as_u64()?;if completed>total{return None;}
+  let code=v["code"].as_str()?;if code.len()>96{return None;}
+  let terminal=match v["status"].as_str()? {"pending"|"running"|"stopping"=>None,"success_sealed" if completed==total && code=="OK" && v.get("summary").is_some_and(serde_json::Value::is_object)=>Some(GpuTerminal::Success),"failed_dead" if !code.is_empty() && code!="OK" && code!="CANCELLED"=>Some(GpuTerminal::Failed),"cancelled_dead" if code=="CANCELLED"=>Some(GpuTerminal::Cancelled),_=>return None};
+  if terminal!=Some(GpuTerminal::Success)&&map.contains_key("summary"){return None;}
+  return Some(GpuPoll{terminal,completed,code:code.into(),summary:v.get("summary").cloned()});
+ }
+ if ticket.is_some(){return None;}
  if map.len()<6||map.len()>7||map.keys().any(|k|!["schemaVersion","token","status","completedPixels","totalPixels","code","summary"].contains(&k.as_str())) {return None;}
  if v["schemaVersion"].as_u64()!=Some(1)||v["token"].as_u64()!=Some(token)||v["totalPixels"].as_u64()!=Some(total) {return None;}
  let completed=v["completedPixels"].as_u64()?;if completed>total {return None;}
@@ -192,11 +218,12 @@ fn gpu_fallback_reason(code:&str,default:&'static str)->&'static str {
  match code {
   "PREVIEW_BUDGET_EXHAUSTED"=>"preview_budget",
   "TIMED_OUT"|"TIMEOUT"|"GPU_STAGE_TIMEOUT"=>"helper_timeout",
-  "MEMORY_UNAVAILABLE"|"PROBE_BUDGET_EXCEEDED"|"BUDGET_EXCEEDED"|"GPU_STAGE_MEMORY_LIMIT"|"GPU_OPTICS_MEMORY_LIMIT"|"GPU_DIR_MEMORY_LIMIT"|"GPU_EXPOSURE_MEMORY_LIMIT"|"GPU_FINISH_MEMORY_LIMIT"|"INSUFFICIENT_GPU_STAGE_MEMORY"=>"helper_memory",
-  "NUMERIC_REJECTED"|"GPU_STAGE_NUMERIC_CHECK"|"SAMPLE_GUARD_FAILED"|"QUALITY_GUARD_FAILED"|"GPU_OPTICS_NUMERIC_CHECK"|"GPU_DIR_NUMERIC_CHECK"|"GPU_EXPOSURE_NUMERIC_CHECK"|"GPU_FINISH_NUMERIC_CHECK"=>"quality_guard",
+  "GPU_GLOBAL_STREAM_MEMORY_LIMIT"|"INSUFFICIENT_GPU_GLOBAL_STREAM_MEMORY"|"MEMORY_UNAVAILABLE"|"PROBE_BUDGET_EXCEEDED"|"BUDGET_EXCEEDED"|"GPU_STAGE_MEMORY_LIMIT"|"GPU_OPTICS_MEMORY_LIMIT"|"GPU_DIR_MEMORY_LIMIT"|"GPU_LOG_DIR_MEMORY_LIMIT"|"INSUFFICIENT_GPU_LOG_DIR_MEMORY"|"GPU_EXPOSURE_MEMORY_LIMIT"|"GPU_FINISH_MEMORY_LIMIT"|"INSUFFICIENT_GPU_STAGE_MEMORY"=>"helper_memory",
+  "GPU_GLOBAL_NUMERIC_CHECK"|"NUMERIC_REJECTED"|"GPU_STAGE_NUMERIC_CHECK"|"SAMPLE_GUARD_FAILED"|"QUALITY_GUARD_FAILED"|"GPU_OPTICS_NUMERIC_CHECK"|"GPU_DIR_NUMERIC_CHECK"|"GPU_LOG_DIR_NUMERIC_CHECK"|"GPU_EXPOSURE_NUMERIC_CHECK"|"GPU_FINISH_NUMERIC_CHECK"=>"quality_guard",
   "GPU_UNAVAILABLE_OR_LIMITS"|"GPU_DEVICE_FAILED"|"GPU_STAGE_READBACK_FAILED"|"GPU_ERROR"|"DRIVER_ERROR"|"DEVICE_LOST"=>"driver_error",
   "ORIGINAL_PSF_EXCEEDS_GPU_LIMIT"|"GPU_TILE_COUNT_LIMIT"=>"geometry_limit",
-  "UNSUPPORTED"|"GPU_FINISH_UNSUPPORTED"|"GPU_EXPOSURE_UNSUPPORTED"|"GPU_OPTICS_UNSUPPORTED"|"GPU_DIR_UNSUPPORTED"=>"unsupported_configuration",
+  "GPU_GLOBAL_STREAM_PENDING"|"GPU_GLOBAL_UNSUPPORTED"|"UNSUPPORTED"|"GPU_FINISH_UNSUPPORTED"|"GPU_EXPOSURE_UNSUPPORTED"|"GPU_OPTICS_UNSUPPORTED"|"GPU_DIR_UNSUPPORTED"|"GPU_LOG_DIR_UNSUPPORTED"=>"unsupported_configuration",
+  "GPU_GLOBAL_STREAM_REPORT"|"INVALID_GLOBAL_STREAM_IDENTITY"|"INVALID_GLOBAL_STREAM_MANIFEST"|"INVALID_GLOBAL_STREAM_OUTPUT"|"INVALID_GLOBAL_STREAM_OWNER"|"INVALID_GLOBAL_STREAM_SOURCE"|"INVALID_GLOBAL_STREAM_SOURCE_DIGEST"|"INVALID_GLOBAL_STREAM_SOURCE_IDENTITY"|"INVALID_GLOBAL_STREAM_SOURCE_RANGE"=>"invalid_output",
   "NATIVE_UNAVAILABLE"=>"delegate_unavailable",_=>default,
  }
 }
@@ -212,7 +239,7 @@ impl<'a> GpuHelperOwner<'a> {
   if self.delegate.begin(request)==Some(false) {self.terminal=true;self.may_run.store(false,std::sync::atomic::Ordering::Release);false}else{true}
  }
  fn cancel_once(&mut self) {if !self.cancel_sent {self.cancel_sent=true;self.delegate.cancel(self.token);}}
- fn poll(&mut self)->Option<GpuPoll> {let parsed=parse_gpu_poll(&self.delegate.poll(self.token)?,self.token,self.total)?;if parsed.terminal.is_some(){self.terminal=true;self.may_run.store(false,std::sync::atomic::Ordering::Release);}Some(parsed)}
+ fn poll(&mut self)->Option<GpuPoll> {let raw=self.delegate.poll(self.token)?;let raw=if self.delegate.permits_no_route_proof(){normalize_session_no_route(&raw,self.token,self.total).unwrap_or(raw)}else{raw};let parsed=parse_gpu_poll_with_ticket(&raw,self.token,self.total,self.delegate.session_ticket())?;if parsed.terminal.is_some(){self.terminal=true;self.may_run.store(false,std::sync::atomic::Ordering::Release);}Some(parsed)}
 }
 impl Drop for GpuHelperOwner<'_> {
  fn drop(&mut self) {
@@ -380,6 +407,11 @@ impl GpuOptical {
  #[allow(clippy::too_many_arguments)]
  fn optical_stage(&mut self,sources:&[PathBuf;3],params:&RuntimeParams,pitch:f32,scratch:&mut Scratch,width:u32,height:u32,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
   if self.request.is_none(){return Ok(None);}
+  #[cfg(feature="diffusion-research")]
+  if crate::research_streaming_route::ROUTING_ADMITTED {
+    let decision=crate::research_spatial::FilmOpticsPlan::new(params,pitch,1,1).and_then(|semantic|crate::research_streaming_route::needs_streaming_optics(&semantic,width,height));
+    match decision {Ok(true)=>return self.optical_stream_stage(sources,params,pitch,scratch,width,height,cancelled,progress),Ok(false)=>{},Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}}
+   }
   #[cfg(not(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research"))))]
   {let _=(sources,params,pitch,scratch,width,height,&mut cancelled,&mut progress);self.metrics.fallback_reason="unsupported_build";Ok(None)}
   #[cfg(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research")))]
@@ -446,6 +478,78 @@ impl GpuOptical {
   }
  }
 }
+impl GpuOptical {
+ #[allow(clippy::too_many_arguments)]
+ fn optical_stream_stage(&mut self,sources:&[PathBuf;3],params:&RuntimeParams,pitch:f32,scratch:&mut Scratch,width:u32,height:u32,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
+  if self.request.is_none(){return Ok(None);}
+  #[cfg(not(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research"))))]
+  {let _=(sources,params,pitch,scratch,width,height,&mut cancelled,&mut progress);self.metrics.fallback_reason="unsupported_build";Ok(None)}
+  #[cfg(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research")))]
+  {
+   use crate::research_streaming_spatial::{StreamPlan, full_stage};
+   let request=self.request.as_mut().unwrap();
+   let Some(delegate)=request.delegate.as_deref_mut() else {self.metrics.fallback_reason="delegate_unavailable";return Ok(None);};
+   let Some(dir)=request.stage_dir.as_ref() else {self.metrics.fallback_reason="path_unavailable";return Ok(None);};
+   let descriptor=match StreamPlan::new(params,pitch,width,height) {Ok(v)=>v,Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}};
+   if !descriptor.channels.iter().any(|channel| channel.lens_sigma > 0. || channel.scatter.is_some() || !channel.bounce_sigmas.is_empty() || channel.divisor != 1.){self.metrics.fallback_reason="inactive";return Ok(None);}
+   let required=match full_stage::estimated_disk_bytes(width,height,&descriptor){Ok(v)=>v,Err(_)=>{self.metrics.fallback_reason="geometry_limit";return Ok(None);}};
+   if required>delegate.available_disk_bytes().unwrap_or(0) {self.metrics.fallback_reason="disk_unavailable";return Ok(None);}
+   if !dir.parent().is_some_and(|root|fs::symlink_metadata(root).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())&&root.canonicalize().ok().as_deref()==Some(root)) {self.metrics.fallback_reason="path_unavailable";return Ok(None);}
+   // This stage has an independent one-shot helper owner, after the camera
+   // helper is proved dead and before the CPU film density/DIR/grain run.
+   cancel(&mut cancelled)?;let setup=Instant::now();
+   let planned=full_stage::prepare_stage([sources[0].as_path(),sources[1].as_path(),sources[2].as_path()],dir,request.token,width,height,&descriptor,&mut cancelled);
+   self.metrics.setup_ms=Some(setup.elapsed().as_secs_f64()*1000.);
+   let plan=match planned {Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU optical preparation cancelled"));}self.metrics.prepare_error_code=crate::gpu_stage_staging::diagnostic_code(&code);self.metrics.fallback_reason=gpu_fallback_reason(&code,"prepare_failed");return Ok(None);}};
+   let may_run=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+   let _directory=GpuStageDirectory::new(dir.clone(),may_run.clone(),request.parent_handle)?;
+   scratch.gpu_may_run=Some(may_run.clone());
+   self.metrics.passes=Some(plan.pass_count);self.metrics.combined_peak_bytes=Some(plan.combined_peak_bytes);
+   scratch.peak=scratch.peak.max(scratch.live()?.saturating_add(plan.disk_bytes));
+   let total=width as u64*height as u64*3;
+   let wire=serde_json::json!({"schemaVersion":1,"operation":full_stage::OPERATION,"token":request.token,"parentHandle":request.parent_handle,"jobDir":dir,"manifestSha256":plan.manifest_sha256,"budgetBytes":plan.combined_peak_bytes,"width":width,"height":height,"totalPixels":total}).to_string();
+   let mut helper=GpuHelperOwner::new(delegate,request.token,total,may_run);let started=Instant::now();
+   if !helper.begin(&wire) {self.metrics.fallback_reason=helper.poll().map_or("not_started",|p|gpu_fallback_reason(&p.code,"not_started"));return Ok(None);}
+   self.metrics.attempted=true;let mut was_cancelled=false;let mut completed=0;let mut transport_errors=0;
+   let terminal=loop {
+    if cancelled(){was_cancelled=true;helper.cancel_once();}
+    if let Some(poll)=helper.poll() {
+     transport_errors=0;completed=completed.max(poll.completed);progress(completed,total);
+     if poll.terminal.is_some(){break poll;}
+    } else {
+     transport_errors+=1;
+     if transport_errors>=GPU_TRANSPORT_ERROR_LIMIT {helper.cancel_once();return Err(error(if was_cancelled{"CANCELLED"}else{"GPU_CALLBACK_UNAVAILABLE"},"GPU optical callback unavailable; helper ownership retained"));}
+    }
+    std::thread::sleep(Duration::from_millis(50));
+   };
+   self.metrics.helper_total_ms=Some(started.elapsed().as_secs_f64()*1000.);
+   if was_cancelled||terminal.terminal==Some(GpuTerminal::Cancelled)||terminal.code=="CANCELLED"||cancelled(){return Err(error("CANCELLED","GPU optical cancelled"));}
+   if terminal.terminal!=Some(GpuTerminal::Success) {
+    self.metrics.fallback_reason=gpu_fallback_reason(&terminal.code,if terminal.terminal==Some(GpuTerminal::NotStarted){"not_started"}else{"helper_failed"});return Ok(None);
+   }
+   let Some(summary)=terminal.summary.as_ref() else {self.metrics.fallback_reason="invalid_output";return Ok(None);};
+   if !crate::research_streaming_route::valid_summary_identity(&summary,full_stage::OPERATION,request.token,&plan.manifest_sha256,width,height) {self.metrics.fallback_reason="invalid_output";return Ok(None);}
+   if let Some(summary)=terminal.summary.as_ref() {
+    (self.metrics.upload_bytes,self.metrics.readback_bytes,self.metrics.dispatches)=gpu_transfer_counters(summary);
+    if summary["testOnly"]!=true&&summary["hostArithmeticMirror"]!=true&&summary["gpuUsed"]!=false {self.metrics.gpu_stage_ms=summary["elapsedMs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);}
+    self.metrics.sample_count=summary["sampleCount"].as_u64().filter(|v|*v<=plan.pass_count.saturating_mul(width as u64+height as u64));
+    self.metrics.sample_max_abs=summary["sampleMaxAbs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    self.metrics.sample_rms=summary["sampleRms"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+   }
+   let candidates=match full_stage::validate_outputs(dir,request.token,&plan.manifest_sha256,&mut cancelled) {
+    Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU optical output validation cancelled"));}self.metrics.fallback_reason="invalid_output";return Ok(None);}
+   };
+   // Stage originals survive until all channels validate and are moved into
+   // scratch. No downstream consumer can observe a partial channel set.
+   let mut adopted=GpuStageOutputs{paths:std::array::from_fn(|_|scratch.path("gpu-film-optics")),keep:false};
+   for ch in 0..3 {
+    if candidates[ch]!=dir.join("candidate").join(format!("plane-{ch}.f64le"))||fs::rename(&candidates[ch],&adopted.paths[ch]).is_err() {self.metrics.fallback_reason="commit_failed";return Ok(None);}
+   }
+   cancel(&mut cancelled)?;self.metrics.backend=full_stage::BACKEND;self.metrics.fallback_reason="none";
+   adopted.keep=true;progress(total,total);Ok(Some(adopted.paths.clone()))
+  }
+ }
+}
 impl GpuDir {
  #[allow(clippy::too_many_arguments)]
  fn density_stage(&mut self,sources:&[PathBuf;3],pipe:&Pipeline,pitch:f32,scratch:&mut Scratch,width:u32,height:u32,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
@@ -454,6 +558,10 @@ impl GpuDir {
   {let _=(sources,pipe,pitch,scratch,width,height,&mut cancelled,&mut progress);self.metrics.fallback_reason="unsupported_build";Ok(None)}
   #[cfg(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research")))]
   {
+   if crate::research_streaming_route::ROUTING_ADMITTED {
+    let decision=crate::research_dir::DirPlan::new(pipe,pitch,1,1).and_then(|semantic|crate::research_streaming_route::needs_streaming_dir(&semantic,width,height,None));
+    match decision {Ok(true)=>return self.streamed_density_stage(sources,pipe,pitch,None,None,scratch,width,height,cancelled,progress),Ok(false)=>{},Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}}
+   }
    use crate::research_dir::{DirPlan,full_stage};
    let request=self.request.as_mut().unwrap();
    let Some(delegate)=request.delegate.as_deref_mut() else {self.metrics.fallback_reason="delegate_unavailable";return Ok(None);};
@@ -513,6 +621,162 @@ impl GpuDir {
     if candidates[ch]!=dir.join("candidate").join(format!("plane-{ch}.f64le"))||fs::rename(&candidates[ch],&adopted.paths[ch]).is_err() {self.metrics.fallback_reason="commit_failed";return Ok(None);}
    }
    cancel(&mut cancelled)?;self.metrics.backend="gpu_dir_f32_v1";self.metrics.fallback_reason="none";
+   adopted.keep=true;progress(total,total);Ok(Some(adopted.paths.clone()))
+  }
+ }
+}
+impl GpuDir {
+ #[allow(clippy::too_many_arguments)]
+ fn streamed_density_stage(&mut self,sources:&[PathBuf;3],pipe:&Pipeline,pitch:f32,correction:Option<f64>,mut log_metrics:Option<&mut GpuOpticalMetrics>,scratch:&mut Scratch,width:u32,height:u32,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
+  if self.request.is_none(){return Ok(None);}
+  #[cfg(not(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research"))))]
+  {let _=(sources,pipe,pitch,scratch,width,height,&mut cancelled,&mut progress);self.metrics.fallback_reason="unsupported_build";Ok(None)}
+  #[cfg(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research")))]
+  {
+   use crate::research_streaming_dir::{StreamDirPlan,full_stage};
+   let request=self.request.as_mut().unwrap();
+   let Some(delegate)=request.delegate.as_deref_mut() else {self.metrics.fallback_reason="delegate_unavailable";return Ok(None);};
+   let Some(dir)=request.stage_dir.as_ref() else {self.metrics.fallback_reason="path_unavailable";return Ok(None);};
+   let descriptor=match StreamDirPlan::new(pipe,pitch,width,height,correction) {Ok(v)=>v,Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}};
+   let required=match full_stage::estimated_disk_bytes(width,height,&descriptor){Ok(v)=>v,Err(_)=>{self.metrics.fallback_reason="geometry_limit";return Ok(None);}};
+   if required>delegate.available_disk_bytes().unwrap_or(0) {self.metrics.fallback_reason="disk_unavailable";return Ok(None);}
+   if !dir.parent().is_some_and(|root|fs::symlink_metadata(root).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())&&root.canonicalize().ok().as_deref()==Some(root)) {self.metrics.fallback_reason="path_unavailable";return Ok(None);}
+   // Original full-frame CPU film-log planes stay immutable throughout this
+   // complete initial-density, DIR diffusion and redevelopment helper.
+   cancel(&mut cancelled)?;let setup=Instant::now();
+   let planned=full_stage::prepare_stage([sources[0].as_path(),sources[1].as_path(),sources[2].as_path()],dir,request.token,width,height,&descriptor,&mut cancelled);
+   self.metrics.setup_ms=Some(setup.elapsed().as_secs_f64()*1000.);
+   let plan=match planned {Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU DIR preparation cancelled"));}self.metrics.prepare_error_code=crate::gpu_stage_staging::diagnostic_code(&code);self.metrics.fallback_reason=gpu_fallback_reason(&code,"prepare_failed");return Ok(None);}};
+   let may_run=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+   let _directory=GpuStageDirectory::new(dir.clone(),may_run.clone(),request.parent_handle)?;
+   scratch.gpu_may_run=Some(may_run.clone());
+   self.metrics.chunks=Some(plan.chunk_count);self.metrics.passes=Some(plan.pass_count);self.metrics.combined_peak_bytes=Some(plan.combined_peak_bytes);
+   scratch.peak=scratch.peak.max(scratch.live()?.saturating_add(plan.disk_bytes));
+   let total=width as u64*height as u64*3;
+   let wire=serde_json::json!({"schemaVersion":1,"operation":plan.operation,"token":request.token,"parentHandle":request.parent_handle,"jobDir":dir,"manifestSha256":plan.manifest_sha256,"budgetBytes":plan.combined_peak_bytes,"width":width,"height":height,"totalPixels":total}).to_string();
+   let mut helper=GpuHelperOwner::new(delegate,request.token,total,may_run);let started=Instant::now();
+   if !helper.begin(&wire) {self.metrics.fallback_reason=helper.poll().map_or("not_started",|p|gpu_fallback_reason(&p.code,"not_started"));return Ok(None);}
+   self.metrics.attempted=true;let mut was_cancelled=false;let mut completed=0;let mut transport_errors=0;
+   let terminal=loop {
+    if cancelled(){was_cancelled=true;helper.cancel_once();}
+    if let Some(poll)=helper.poll() {
+     transport_errors=0;completed=completed.max(poll.completed);progress(completed,total);
+     if poll.terminal.is_some(){break poll;}
+    } else {
+     transport_errors+=1;
+     if transport_errors>=GPU_TRANSPORT_ERROR_LIMIT {helper.cancel_once();return Err(error(if was_cancelled{"CANCELLED"}else{"GPU_CALLBACK_UNAVAILABLE"},"GPU DIR callback unavailable; helper ownership retained"));}
+    }
+    std::thread::sleep(Duration::from_millis(50));
+   };
+   self.metrics.helper_total_ms=Some(started.elapsed().as_secs_f64()*1000.);
+   if was_cancelled||terminal.terminal==Some(GpuTerminal::Cancelled)||terminal.code=="CANCELLED"||cancelled(){return Err(error("CANCELLED","GPU DIR cancelled"));}
+   if terminal.terminal!=Some(GpuTerminal::Success) {
+    self.metrics.fallback_reason=gpu_fallback_reason(&terminal.code,if terminal.terminal==Some(GpuTerminal::NotStarted){"not_started"}else{"helper_failed"});return Ok(None);
+   }
+   if !terminal.summary.as_ref().is_some_and(|summary| crate::research_streaming_route::valid_summary_identity(summary,&plan.operation,request.token,&plan.manifest_sha256,width,height)) {self.metrics.fallback_reason="invalid_output";return Ok(None);}
+   if let Some(summary)=terminal.summary.as_ref() {
+    if let Some(metrics)=log_metrics.as_deref_mut() {
+     metrics.sample_count=summary["logSampleCount"].as_u64();
+     metrics.sample_max_abs=summary["logSampleMaxAbs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+     metrics.sample_rms=summary["logSampleRms"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    }
+    (self.metrics.upload_bytes,self.metrics.readback_bytes,self.metrics.dispatches)=gpu_transfer_counters(summary);
+    if summary["testOnly"]!=true&&summary["hostArithmeticMirror"]!=true&&summary["gpuUsed"]!=false {self.metrics.gpu_stage_ms=summary["elapsedMs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);}
+    let point_samples=8*(plan.chunk_count-1)+(width as u64*height as u64-(plan.chunk_count-1)*plan.chunk_pixels as u64).min(8);
+    let expected_samples=plan.pass_count*(width as u64+height as u64)+if plan.dir_active{6*point_samples}else{3*point_samples};
+    self.metrics.sample_count=summary["sampleCount"].as_u64().filter(|v|*v==expected_samples);
+    self.metrics.sample_max_abs=summary["sampleMaxAbs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    self.metrics.sample_rms=summary["sampleRms"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+   }
+   let candidates=match full_stage::validate_outputs(dir,request.token,&plan.manifest_sha256,&mut cancelled) {
+    Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU DIR output validation cancelled"));}self.metrics.fallback_reason="invalid_output";return Ok(None);}
+   };
+   // Stage originals survive until all channels validate and are moved into
+   // scratch. No downstream consumer can observe a partial channel set.
+   let mut adopted=GpuStageOutputs{paths:std::array::from_fn(|_|scratch.path("gpu-film-dir")),keep:false};
+   for ch in 0..3 {
+    if candidates[ch]!=dir.join("candidate").join(format!("plane-{ch}.f64le"))||fs::rename(&candidates[ch],&adopted.paths[ch]).is_err() {self.metrics.fallback_reason="commit_failed";return Ok(None);}
+   }
+   cancel(&mut cancelled)?;self.metrics.backend=if correction.is_some(){"gpu_exposure_log_dir_stream_f32_v1"}else{"gpu_dir_stream_f32_v1"};self.metrics.fallback_reason="none";
+   adopted.keep=true;progress(total,total);Ok(Some(adopted.paths.clone()))
+  }
+ }
+}
+impl GpuDir {
+ #[allow(clippy::too_many_arguments)]
+ fn exposure_log_dir_stage(&mut self,sources:&[PathBuf;3],pipe:&Pipeline,pitch:f32,correction:f64,log_metrics:&mut GpuOpticalMetrics,scratch:&mut Scratch,width:u32,height:u32,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
+  if self.request.is_none(){return Ok(None);}
+  #[cfg(not(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research"))))]
+  {let _=(sources,pipe,pitch,correction,log_metrics,scratch,width,height,&mut cancelled,&mut progress);self.metrics.fallback_reason="unsupported_build";Ok(None)}
+  #[cfg(any(feature="gpu-diffusion-research",all(test,feature="diffusion-research")))]
+  {
+   if crate::research_streaming_route::ROUTING_ADMITTED {
+    let decision=crate::research_dir::DirPlan::new(pipe,pitch,1,1).and_then(|semantic|crate::research_streaming_route::needs_streaming_dir(&semantic,width,height,Some(correction)));
+    match decision {Ok(true)=>return self.streamed_density_stage(sources,pipe,pitch,Some(correction),Some(log_metrics),scratch,width,height,cancelled,progress),Ok(false)=>{},Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}}
+   }
+   use crate::research_dir::DirPlan;
+   use crate::research_log_dir as full_stage;
+   let request=self.request.as_mut().unwrap();
+   let Some(delegate)=request.delegate.as_deref_mut() else {self.metrics.fallback_reason="delegate_unavailable";return Ok(None);};
+   let Some(dir)=request.stage_dir.as_ref() else {self.metrics.fallback_reason="path_unavailable";return Ok(None);};
+   let descriptor=match DirPlan::new(pipe,pitch,width,height) {Ok(v)=>v,Err(code)=>{self.metrics.fallback_reason=gpu_fallback_reason(&code,"unsupported_model");return Ok(None);}};
+   let required=match full_stage::estimated_disk_bytes(width,height,&descriptor,correction){Ok(v)=>v,Err(_)=>{self.metrics.fallback_reason="geometry_limit";return Ok(None);}};
+   if required>delegate.available_disk_bytes().unwrap_or(0) {self.metrics.fallback_reason="disk_unavailable";return Ok(None);}
+   if !dir.parent().is_some_and(|root|fs::symlink_metadata(root).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())&&root.canonicalize().ok().as_deref()==Some(root)) {self.metrics.fallback_reason="path_unavailable";return Ok(None);}
+   // Original pre-log exposure planes remain immutable until this entire
+   // coupled logarithm, initial density, diffusion and redevelopment succeeds.
+   cancel(&mut cancelled)?;let setup=Instant::now();
+   let planned=full_stage::prepare_stage([sources[0].as_path(),sources[1].as_path(),sources[2].as_path()],dir,request.token,width,height,&descriptor,correction,&mut cancelled);
+   self.metrics.setup_ms=Some(setup.elapsed().as_secs_f64()*1000.);
+   let plan=match planned {Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU exposure-log/DIR preparation cancelled"));}self.metrics.prepare_error_code=crate::gpu_stage_staging::diagnostic_code(&code);self.metrics.fallback_reason=gpu_fallback_reason(&code,"prepare_failed");return Ok(None);}};
+   let may_run=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+   let _directory=GpuStageDirectory::new(dir.clone(),may_run.clone(),request.parent_handle)?;
+   scratch.gpu_may_run=Some(may_run.clone());
+   self.metrics.chunks=Some(plan.chunk_count);self.metrics.passes=Some(plan.pass_count);self.metrics.combined_peak_bytes=Some(plan.combined_peak_bytes);
+   scratch.peak=scratch.peak.max(scratch.live()?.saturating_add(plan.disk_bytes));
+   let total=width as u64*height as u64*3;
+   let wire=serde_json::json!({"schemaVersion":1,"operation":"fullExposureLogDir","token":request.token,"parentHandle":request.parent_handle,"jobDir":dir,"manifestSha256":plan.manifest_sha256,"budgetBytes":plan.combined_peak_bytes,"width":width,"height":height,"totalPixels":total}).to_string();
+   let mut helper=GpuHelperOwner::new(delegate,request.token,total,may_run);let started=Instant::now();
+   if !helper.begin(&wire) {self.metrics.fallback_reason=helper.poll().map_or("not_started",|p|gpu_fallback_reason(&p.code,"not_started"));return Ok(None);}
+   self.metrics.attempted=true;let mut was_cancelled=false;let mut completed=0;let mut transport_errors=0;
+   let terminal=loop {
+    if cancelled(){was_cancelled=true;helper.cancel_once();}
+    if let Some(poll)=helper.poll() {
+     transport_errors=0;completed=completed.max(poll.completed);progress(completed,total);
+     if poll.terminal.is_some(){break poll;}
+    } else {
+     transport_errors+=1;
+     if transport_errors>=GPU_TRANSPORT_ERROR_LIMIT {helper.cancel_once();return Err(error(if was_cancelled{"CANCELLED"}else{"GPU_CALLBACK_UNAVAILABLE"},"GPU exposure-log/DIR callback unavailable; helper ownership retained"));}
+    }
+    std::thread::sleep(Duration::from_millis(50));
+   };
+   self.metrics.helper_total_ms=Some(started.elapsed().as_secs_f64()*1000.);
+   if was_cancelled||terminal.terminal==Some(GpuTerminal::Cancelled)||terminal.code=="CANCELLED"||cancelled(){return Err(error("CANCELLED","GPU exposure-log/DIR cancelled"));}
+   if terminal.terminal!=Some(GpuTerminal::Success) {
+    self.metrics.fallback_reason=gpu_fallback_reason(&terminal.code,if terminal.terminal==Some(GpuTerminal::NotStarted){"not_started"}else{"helper_failed"});return Ok(None);
+   }
+   if let Some(summary)=terminal.summary.as_ref() {
+    log_metrics.sample_count=summary["logSampleCount"].as_u64();
+    log_metrics.sample_max_abs=summary["logSampleMaxAbs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    log_metrics.sample_rms=summary["logSampleRms"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    (self.metrics.upload_bytes,self.metrics.readback_bytes,self.metrics.dispatches)=gpu_transfer_counters(summary);
+    if summary["testOnly"]!=true&&summary["hostArithmeticMirror"]!=true&&summary["gpuUsed"]!=false {self.metrics.gpu_stage_ms=summary["elapsedMs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);}
+    let point_samples=8*(plan.chunk_count-1)+(width as u64*height as u64-(plan.chunk_count-1)*plan.chunk_pixels as u64).min(8);
+    let expected_samples=plan.pass_count*(width as u64+height as u64)+if plan.dir_active{6*point_samples}else{3*point_samples};
+    self.metrics.sample_count=summary["sampleCount"].as_u64().filter(|v|*v==expected_samples);
+    self.metrics.sample_max_abs=summary["sampleMaxAbs"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+    self.metrics.sample_rms=summary["sampleRms"].as_f64().filter(|v|v.is_finite()&&*v>=0.);
+   }
+   let candidates=match full_stage::validate_outputs(dir,request.token,&plan.manifest_sha256,&mut cancelled) {
+    Ok(v)=>v,Err(code)=>{cancel(&mut cancelled)?;if code=="CANCELLED"{return Err(error("CANCELLED","GPU exposure-log/DIR output validation cancelled"));}self.metrics.fallback_reason="invalid_output";return Ok(None);}
+   };
+   // Stage originals survive until all channels validate and are moved into
+   // scratch. No downstream consumer can observe a partial channel set.
+   let mut adopted=GpuStageOutputs{paths:std::array::from_fn(|_|scratch.path("gpu-exposure-log-dir")),keep:false};
+   for ch in 0..3 {
+    if candidates[ch]!=dir.join("candidate").join(format!("plane-{ch}.f64le"))||fs::rename(&candidates[ch],&adopted.paths[ch]).is_err() {self.metrics.fallback_reason="commit_failed";return Ok(None);}
+   }
+   cancel(&mut cancelled)?;self.metrics.backend="gpu_exposure_log_dir_v1";self.metrics.fallback_reason="none";
    adopted.keep=true;progress(total,total);Ok(Some(adopted.paths.clone()))
   }
  }
@@ -887,6 +1151,7 @@ pub(crate) fn render_scientific_detail_file(data_dir:&Path,film_stock:&str,paper
 
 fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::ExportPermit>,data_dir:&Path,film_stock:&str,paper_stock:&str,mut params:RuntimeParams,input_path:&Path,output_path:&Path,scratch_dir:&Path,checkpoint_dir:Option<&Path>,width:u32,height:u32,memory_budget_mib:u32,brightness_ev:f64,use_gpu:bool,optimizations:ExportOptimizations,gpu_probe_capture:Option<GpuProbeCaptureRequest>,gpu_stages:GpuStageRequests,mut cancelled:impl FnMut()->bool,progress:impl FnMut(ExportProgress))->Result<StreamedMetrics> {
  let GpuStageRequests{diffusion:gpu_diffusion,scanner:gpu_scanner,optical:gpu_optical,exposure:gpu_exposure,dir:gpu_dir,science:science_requests,route:science_route}=gpu_stages;
+ let compound_requested=gpu_dir.is_some()&&science_requests.contains_key(&ScienceKind::ExposureLog);
  let retained_handle=gpu_diffusion.as_ref().or(gpu_scanner.as_ref()).or(gpu_optical.as_ref()).or(gpu_exposure.as_ref()).or(gpu_dir.as_ref()).or_else(||science_requests.values().next()).map_or(0,|r|r.parent_handle);
  // Isolated numeric stages never overlap the old in-process density delegate,
  // including direct native callers that bypass the app's JSON normalization.
@@ -914,6 +1179,10 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let mut checkpoints=if let Some(root)=checkpoint_dir {
    let config=checkpoint_configuration(film_stock,paper_stock,&params,brightness_ev,use_gpu,gpu_diffusion.is_some(),gpu_scanner.is_some(),gpu_optical.is_some(),gpu_exposure.is_some(),gpu_dir.is_some())?;
    let config=if science_requests.is_empty(){config}else{serde_json::to_string(&(config,"gpu-complete-science-guarded64-rng-resident-finish-v2",science_route,science_requests.keys().collect::<Vec<_>>())).map_err(|_|error("INVALID_PARAMETERS","Science identity serialization failed"))?};
+   let config=if compound_requested{serde_json::to_string(&(config,"gpu-exposure-log-dir-resident-v1",["exposure_log_guarded_f32_boundary_v1","dir_f32_v1"])).map_err(|_|error("INVALID_PARAMETERS","Compound identity serialization failed"))?}else{config};
+   let config=if crate::research_streaming_route::ROUTING_ADMITTED&&(gpu_optical.is_some()||gpu_dir.is_some()||!science_requests.is_empty()){serde_json::to_string(&(config,"full-line-file-backed-routes-v1")).map_err(|_|error("INVALID_PARAMETERS","Stream identity serialization failed"))?}else{config};
+   #[cfg(feature="diffusion-research")]
+   let config=if crate::research_streaming_highlight::routing_admitted()&&science_requests.contains_key(&ScienceKind::HighlightBoost){serde_json::to_string(&(config,"two-pass-file-backed-highlight-v1")).map_err(|_|error("INVALID_PARAMETERS","Highlight identity serialization failed"))?}else{config};
    let identity=crate::checkpoint::Identity::new_with_hash(data_dir,input_path,width,height,config,optimizations.accelerated_checkpoint_sha,&mut cancelled).map_err(checkpoint_error)?;
    Some(crate::checkpoint::Checkpoints::open_with_hash(root,identity,optimizations.accelerated_checkpoint_sha,&mut cancelled).map_err(checkpoint_error)?)
  }else{None};
@@ -922,6 +1191,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let science_backends=checkpoints.as_ref().map(|c|c.science_backends().clone()).unwrap_or_default();
  for kind in ScienceKind::ALL {if (science_requests.contains_key(&kind)&&resume_stage>=kind.checkpoint_stage()&&!science_backends.contains_key(&kind))||(!science_requests.contains_key(&kind)&&science_backends.get(&kind)==Some(&true)){return Err(error("CHECKPOINT_INVALID","Scientific GPU checkpoint policy differs"));}}
  let mut gpu_science=GpuScience::new(science_requests,resume_stage,&science_backends);gpu_science.route=science_route;
+ if let Some(c)=&checkpoints {gpu_science.restore_backend_names(c.science_backend_names(),crate::research_streaming_route::ROUTING_ADMITTED)?;}
 
  let backend=checkpoints.as_ref().map_or(crate::checkpoint::CameraDiffusionBackend::CpuF64,|c|c.camera_diffusion_backend());
  if (gpu_diffusion.is_some()&&resume_stage>=3&&checkpoints.as_ref().is_some_and(|c|c.camera_diffusion_backend_metadata().is_none()))||(gpu_diffusion.is_none()&&backend!=crate::checkpoint::CameraDiffusionBackend::CpuF64) {return Err(error("CHECKPOINT_INVALID","Checkpoint execution policy differs"));}
@@ -936,7 +1206,13 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let mut gpu_exposure=GpuExposure::new(gpu_exposure,resume_stage,exposure_backend);
  let dir_backend=checkpoints.as_ref().map_or(crate::checkpoint::FilmDirBackend::CpuF64,|c|c.film_dir_backend());
  if (gpu_dir.is_some()&&resume_stage>=4&&checkpoints.as_ref().is_some_and(|c|c.film_dir_backend_metadata().is_none()))||(gpu_dir.is_none()&&dir_backend!=crate::checkpoint::FilmDirBackend::CpuF64) {return Err(error("CHECKPOINT_INVALID","Checkpoint DIR execution policy differs"));}
+ if resume_stage>=4&&compound_requested {
+  let coupled_gpu=matches!(dir_backend,crate::checkpoint::FilmDirBackend::GpuExposureLogDirV1|crate::checkpoint::FilmDirBackend::GpuExposureLogDirStreamF32V1);
+  if (!coupled_gpu&&dir_backend!=crate::checkpoint::FilmDirBackend::CpuF64)||science_backends.get(&ScienceKind::ExposureLog)!=Some(&coupled_gpu){return Err(error("CHECKPOINT_INVALID","Compound log/DIR checkpoint components differ"));}
+ }else if !compound_requested&&matches!(dir_backend,crate::checkpoint::FilmDirBackend::GpuExposureLogDirV1|crate::checkpoint::FilmDirBackend::GpuExposureLogDirStreamF32V1){return Err(error("CHECKPOINT_INVALID","Compound log/DIR checkpoint policy differs"));}
  let mut gpu_dir=GpuDir::new(gpu_dir,resume_stage,dir_backend);
+ let mut gpu_log_dir=GpuDir::new(if compound_requested{gpu_dir.request.take()}else{None},resume_stage,if compound_requested{dir_backend}else{crate::checkpoint::FilmDirBackend::CpuF64});
+ if compound_requested&&matches!(dir_backend,crate::checkpoint::FilmDirBackend::GpuExposureLogDirV1|crate::checkpoint::FilmDirBackend::GpuExposureLogDirStreamF32V1){gpu_dir.metrics.backend=if dir_backend==crate::checkpoint::FilmDirBackend::GpuExposureLogDirStreamF32V1{"gpu_dir_stream_f32_v1"}else{"gpu_dir_f32_v1"};gpu_dir.metrics.fallback_reason="included_in_resident";gpu_science.metrics.get_mut(&ScienceKind::ExposureLog).unwrap().fallback_reason="included_in_resident";}
  let gpu_probe_capture=if gpu_diffusion.is_some(){None}else{gpu_probe_capture};
  let mut gpu_diffusion=GpuDiffusion::new(gpu_diffusion,resume_stage,backend);
  let mut gpu_probe_capture=GpuProbeCapture::new(gpu_probe_capture,resume_stage,params.camera.diffusion_filter.active);
@@ -961,7 +1237,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let light_work=light_work_count(&pipe.params,pitch)+u64::from(gpu_optical.metrics.requested);
  if light_work>0 {progress.begin_stage(3,light_work,"film_scatter_halation");}
  if pipe.params.film_render.halation.boost_ev>0. {let at=Instant::now();let v=&pipe.params.film_render.halation;progress.begin_work("highlight_boost");let candidate={
- #[cfg(feature="diffusion-research")]{gpu_science.global(ScienceKind::HighlightBoost,None,Some(&logs),crate::research_global::GlobalPlan::highlight(width,height,v.boost_ev,v.boost_range,v.protect_ev),&mut scratch,width,height,&mut cancelled,|done,total|progress.pass("highlight_boost",done,total))?}
+ #[cfg(feature="diffusion-research")]{gpu_science.highlight(&logs,v.boost_ev,v.boost_range,v.protect_ev,&mut scratch,width,height,&mut cancelled,|done,total|progress.pass("highlight_boost",done,total))?}
  #[cfg(not(feature="diffusion-research"))]{None::<ScienceCandidate>}
  };if let Some(ScienceCandidate::Files(paths))=candidate {let paths:[PathBuf;3]=paths.try_into().map_err(|_|error("INTERNAL_ERROR","Invalid highlight candidate"))?;for old in std::mem::replace(&mut logs,paths){scratch.remove(&old)?;}}else{crate::streamed_global::boost_planes(&logs,n,v.boost_ev as f64,v.boost_range as f64,v.protect_ev as f64,&mut cancelled,|done,total|progress.pass("highlight_boost",done,total)).map_err(io)?;}progress.end_work();stages.push(StageMetrics{stage:"highlight_boost",elapsed_ms:at.elapsed().as_secs_f64()*1000.});}
  if pipe.params.film_render.halation.boost_ev<=0. {gpu_science.inactive(ScienceKind::HighlightBoost);}
@@ -1017,7 +1293,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let at=Instant::now();halation(&mut logs,&pipe.params,pitch,width,height,&mut scratch,&mut cancelled,&mut progress)?;stages.push(StageMetrics{stage:"film_scatter_halation",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
  }
  if let Some(c)=checkpoints.as_mut(){
-  if gpu_optical.metrics.requested {c.set_film_optical_backend(if gpu_optical.metrics.backend=="gpu_spatial_f32_v1"{crate::checkpoint::FilmOpticalBackend::GpuSpatialF32V1}else{crate::checkpoint::FilmOpticalBackend::CpuF64}).map_err(checkpoint_error)?;}
+  if gpu_optical.metrics.requested {c.set_film_optical_backend(if gpu_optical.metrics.backend=="gpu_spatial_stream_f32_v1"{crate::checkpoint::FilmOpticalBackend::GpuSpatialStreamF32V1}else if gpu_optical.metrics.backend=="gpu_spatial_f32_v1"{crate::checkpoint::FilmOpticalBackend::GpuSpatialF32V1}else{crate::checkpoint::FilmOpticalBackend::CpuF64}).map_err(checkpoint_error)?;}
   if gpu_diffusion.metrics.requested {c.set_camera_diffusion_backend(if gpu_diffusion.metrics.backend=="gpu_f32_v1"{crate::checkpoint::CameraDiffusionBackend::GpuF32V1}else{crate::checkpoint::CameraDiffusionBackend::CpuF64}).map_err(checkpoint_error)?;}
   gpu_science.record_checkpoint(c,3).map_err(checkpoint_error)?;let at=Instant::now();c.commit(3,&logs,metered_ev,&mut cancelled).map_err(checkpoint_error)?;checkpoint_commit_ms+=at.elapsed().as_secs_f64()*1000.;}
  if light_work>0 {progress.finish_stage();}
@@ -1025,6 +1301,30 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let density=if resume_stage>=4 {let paths=std::array::from_fn(|_|scratch.path("restored-density"));checkpoints.as_ref().unwrap().restore(&paths,&mut cancelled).map_err(checkpoint_error)?;scratch.observe()?;paths}else{
  let density_work=1+if pipe.params.film_render.dir_couplers.active {3+if pipe.params.film_render.dir_couplers.diffusion_size_um>0. {12}else{0}}else{0};
  progress.begin_stage(4,1+density_work+u64::from(gpu_dir.metrics.requested),"film_log");
+ let density=if compound_requested {
+  let at=Instant::now();progress.begin_work("film_exposure_log_dir");
+  let candidate=gpu_log_dir.exposure_log_dir_stage(&logs,&pipe,pitch,prepared.filming_exposure_correction,gpu_science.metrics.get_mut(&ScienceKind::ExposureLog).unwrap(),&mut scratch,width,height,&mut cancelled,|done,total|progress.pass("film_exposure_log_dir",done,total))?;
+  progress.end_work();
+  let used=candidate.is_some();
+  let reason=if used{"included_in_resident"}else{gpu_log_dir.metrics.fallback_reason};
+  gpu_dir.metrics.backend=if used{if gpu_log_dir.metrics.backend=="gpu_exposure_log_dir_stream_f32_v1"{"gpu_dir_stream_f32_v1"}else{"gpu_dir_f32_v1"}}else{"cpu_f64"};gpu_dir.metrics.fallback_reason=reason;
+  let log_metrics=gpu_science.metrics.get_mut(&ScienceKind::ExposureLog).unwrap();log_metrics.backend=if used{ScienceKind::ExposureLog.backend()}else{"cpu_f64"};log_metrics.fallback_reason=reason;
+  // Only the compound metrics own attempt/timing/transfer counters. Components
+  // were included, not separately invoked or separately timed.
+  let density=if let Some(density)=candidate {
+   for source in &logs{scratch.remove(source)?;}
+   for _ in 0..1+density_work{progress.begin_work("film_exposure_log_dir");progress.end_work();}density
+  }else{
+   // The helper never altered these inputs. Recompute BOTH stages using the
+   // original CPU equations. A rejected compound must not retry either GPU.
+   progress.begin_work("film_log");
+   for source in &logs{inplace_with(source,&[],n,&mut cancelled,|a,_|((a*prepared.filming_exposure_correction).max(0.)+1e-10).log10())?;}
+   progress.pass("film_log",1,1);progress.end_work();
+   let density=density_initial(&logs,&pipe,&backend,width,height,&mut scratch,&mut cancelled,&mut progress)?;
+   dir_density(logs,density,&pipe,&backend,pitch,width,height,&mut scratch,&mut cancelled,&mut progress)?
+  };
+  stages.push(StageMetrics{stage:"film_exposure_log_dir",elapsed_ms:at.elapsed().as_secs_f64()*1000.});density
+ }else{
  progress.begin_work("film_log");
  let log_candidate={
  #[cfg(feature="diffusion-research")]{gpu_science.global(ScienceKind::ExposureLog,None,Some(&logs),crate::research_global::GlobalPlan::log_exposure(width,height,prepared.filming_exposure_correction),&mut scratch,width,height,&mut cancelled,|done,total|progress.pass("film_log",done,total))?}
@@ -1041,8 +1341,10 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
   for _ in 0..density_work {progress.begin_work("film_density_dir");progress.end_work();}density
  }else{let density=density_initial(&logs,&pipe,&backend,width,height,&mut scratch,&mut cancelled,&mut progress)?;dir_density(logs,density,&pipe,&backend,pitch,width,height,&mut scratch,&mut cancelled,&mut progress)?};
  stages.push(StageMetrics{stage:"film_density_dir",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
+ density
+ };
  if let Some(c)=checkpoints.as_mut(){
-  if gpu_dir.metrics.requested {c.set_film_dir_backend(if gpu_dir.metrics.backend=="gpu_dir_f32_v1"{crate::checkpoint::FilmDirBackend::GpuDirF32V1}else{crate::checkpoint::FilmDirBackend::CpuF64}).map_err(checkpoint_error)?;}
+  if gpu_dir.metrics.requested {c.set_film_dir_backend(if gpu_log_dir.metrics.backend=="gpu_exposure_log_dir_stream_f32_v1"{crate::checkpoint::FilmDirBackend::GpuExposureLogDirStreamF32V1}else if gpu_dir.metrics.backend=="gpu_dir_stream_f32_v1"{crate::checkpoint::FilmDirBackend::GpuDirStreamF32V1}else if gpu_log_dir.metrics.backend=="gpu_exposure_log_dir_v1"{crate::checkpoint::FilmDirBackend::GpuExposureLogDirV1}else if gpu_dir.metrics.backend=="gpu_dir_f32_v1"{crate::checkpoint::FilmDirBackend::GpuDirF32V1}else{crate::checkpoint::FilmDirBackend::CpuF64}).map_err(checkpoint_error)?;}
   gpu_science.record_checkpoint(c,4).map_err(checkpoint_error)?;let at=Instant::now();c.commit(4,&density,metered_ev,&mut cancelled).map_err(checkpoint_error)?;checkpoint_commit_ms+=at.elapsed().as_secs_f64()*1000.;}
  progress.finish_stage();density
  };
@@ -1118,7 +1420,8 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
   if science_route==ScienceRoute::Export {if let Err(e)=crate::scan_preview::publish_restored(output_path,width,height,&pipe.params.io.output_color_space,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}}
   for q in &density{scratch.remove(q)?;}
   gpu_scanner.metrics.backend="gpu_pchip_f32_v1";gpu_scanner.metrics.attempted=true;gpu_scanner.metrics.fallback_reason="included_in_resident";
-  if let Some(m)=gpu_science.metrics.get_mut(&ScienceKind::ScanTail){m.backend="gpu_scan_tail_f32_v1";m.attempted=true;m.fallback_reason="included_in_resident";}
+  let streamed_finish=gpu_science.metrics[&ScienceKind::FinishTail].backend=="gpu_finish_tail_stream_f32_v1";
+  if let Some(m)=gpu_science.metrics.get_mut(&ScienceKind::ScanTail){m.backend=if streamed_finish{"gpu_scan_tail_stream_f32_v1"}else{"gpu_scan_tail_f32_v1"};m.attempted=true;m.fallback_reason="included_in_resident";}
   progress.begin_work("printing_scanning");progress.pass("printing_scanning",n,n);progress.end_work();
   stages.push(StageMetrics{stage:"printing_scanning",elapsed_ms:resident_at.elapsed().as_secs_f64()*1000.});
  }else{
@@ -1206,7 +1509,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
    if science_route==ScienceRoute::Export {if let Err(e)=crate::scan_preview::publish_restored(output_path,width,height,&pipe.params.io.output_color_space,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}}
  }
  scratch.observe()?;let wall_elapsed_ms=start.elapsed().as_secs_f64()*1000.;
- let metrics=StreamedMetrics{gpu_science:gpu_science.metrics,gpu_dir:gpu_dir.metrics,gpu_exposure:gpu_exposure.metrics,gpu_optical:gpu_optical.metrics,gpu_scanner:gpu_scanner.metrics,gpu_diffusion:gpu_diffusion.metrics,gpu_probe_capture:gpu_probe_capture.metrics.clone(),wall_elapsed_ms,checkpoint_commit_ms,checkpoint_identity_ms,checkpoint_resume_stage:resume_stage,export_optimization_mask:optimizations.bits(),gpu_resource_reuse:optimizations.gpu_resource_reuse,export_execution:None,metered_ev,gpu:backend.diagnostics(),width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:(wall_elapsed_ms-gpu_probe_capture.metrics.capture_ms).max(0.),setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:if science_route==ScienceRoute::Preview{"Whole-image sequential MT19937 Poisson-binomial with original blur"}else{"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur"},memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
+ let metrics=StreamedMetrics{gpu_log_dir:gpu_log_dir.metrics,gpu_science:gpu_science.metrics,gpu_dir:gpu_dir.metrics,gpu_exposure:gpu_exposure.metrics,gpu_optical:gpu_optical.metrics,gpu_scanner:gpu_scanner.metrics,gpu_diffusion:gpu_diffusion.metrics,gpu_probe_capture:gpu_probe_capture.metrics.clone(),wall_elapsed_ms,checkpoint_commit_ms,checkpoint_identity_ms,checkpoint_resume_stage:resume_stage,export_optimization_mask:optimizations.bits(),gpu_resource_reuse:optimizations.gpu_resource_reuse,export_execution:None,metered_ev,gpu:backend.diagnostics(),width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:(wall_elapsed_ms-gpu_probe_capture.metrics.capture_ms).max(0.),setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:if science_route==ScienceRoute::Preview{"Whole-image sequential MT19937 Poisson-binomial with original blur"}else{"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur"},memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
  fs::remove_dir_all(&scratch.dir).map_err(io)?;drop(scratch);output_guard.keep=true;progress.pass("complete",n,n);progress.finish_stage();gpu_probe_capture.keep=true;Ok(metrics)
 }
 
@@ -1532,6 +1835,7 @@ mod gpu_full_stage_hook_tests {
 
 #[cfg(all(test,feature="precision-f64",feature="diffusion-research"))]
 mod gpu_numeric_stage_hook_tests {
+ include!("gpu_session_chain_tests.rs");
  use super::*;
  use std::sync::{Arc,atomic::{AtomicBool,AtomicUsize,Ordering}};
  #[derive(Clone,Copy)] enum Mode {Mirror,Reject,InvalidOutput,CancelReady,Uncertain,Broken}
@@ -1548,6 +1852,7 @@ mod gpu_numeric_stage_hook_tests {
     "fullPrintScanLogXyz"=>crate::research_finish::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
     "fullFilmOptics"=>crate::research_spatial::full_stage::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
     "fullFilmExposure"=>crate::research_exposure::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
+    "fullExposureLogDir"=>crate::research_log_dir::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
     "fullFilmDirDensity"=>crate::research_dir::full_stage::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
     "fullAutoExposure"|"fullHighlightBoost"|"fullExposureLog"=>crate::research_global::full_stage::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
     "fullFilmGrain"=>crate::research_grain::full_stage::run_stage_cpu_mirror_for_test(dir,self.token,sha,||false).unwrap(),
@@ -1558,7 +1863,7 @@ mod gpu_numeric_stage_hook_tests {
     other=>panic!("Unexpected numeric operation {other}"),
    });
    if matches!(self.mode,Mode::InvalidOutput){
-    let path=match v["operation"].as_str().unwrap_or("fullCameraDiffusion"){"fullCameraDiffusion"=>crate::research_diffusion::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullPrintScanLogXyz"=>crate::research_finish::validate_output(dir,self.token,sha,||false).unwrap(),"fullFilmOptics"=>crate::research_spatial::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullFilmExposure"=>crate::research_exposure::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullFilmDirDensity"=>crate::research_dir::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),_=>unreachable!()};
+    let path=match v["operation"].as_str().unwrap_or("fullCameraDiffusion"){"fullCameraDiffusion"=>crate::research_diffusion::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullPrintScanLogXyz"=>crate::research_finish::validate_output(dir,self.token,sha,||false).unwrap(),"fullFilmOptics"=>crate::research_spatial::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullFilmExposure"=>crate::research_exposure::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullExposureLogDir"=>crate::research_log_dir::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),"fullFilmDirDensity"=>crate::research_dir::full_stage::validate_outputs(dir,self.token,sha,||false).unwrap()[2].clone(),_=>unreachable!()};
     fs::write(path,[0u8;8]).unwrap();
    }
    if matches!(self.mode,Mode::CancelReady){self.stop.store(true,Ordering::Release);}
@@ -1597,6 +1902,81 @@ mod gpu_numeric_stage_hook_tests {
  }
  impl Drop for Fixture{fn drop(&mut self){let _=fs::remove_dir_all(&self.root);}}
  fn flags()->(Arc<AtomicBool>,Arc<AtomicUsize>){(Arc::new(AtomicBool::new(false)),Arc::new(AtomicUsize::new(0)))}
+ // This audit fails immediately if the coupled path launches either superseded
+ // standalone operation, including after rejection or validation failure.
+ struct CompoundAudit {inner:Box<dyn GpuDiffusionDelegate>,begins:Arc<AtomicUsize>,allowed:&'static str}
+ impl GpuDiffusionDelegate for CompoundAudit {
+  fn available_disk_bytes(&mut self)->Option<u64>{self.inner.available_disk_bytes()}
+  fn begin(&mut self,wire:&str)->Option<bool>{let v:serde_json::Value=serde_json::from_str(wire).unwrap();assert_eq!(v["operation"],self.allowed);self.begins.fetch_add(1,Ordering::Relaxed);self.inner.begin(wire)}
+  fn poll(&mut self,token:u64)->Option<String>{self.inner.poll(token)}
+  fn cancel(&mut self,token:u64){self.inner.cancel(token)}
+ }
+ fn compound_requests(f:&Fixture,token:u64,mode:Mode,stop:&Arc<AtomicBool>,cancels:&Arc<AtomicUsize>,begins:&Arc<AtomicUsize>)->GpuStageRequests{
+  let mut dir=f.request(token,Some(mode),stop.clone(),cancels.clone());
+  dir.delegate=Some(Box::new(CompoundAudit{inner:dir.delegate.take().unwrap(),begins:begins.clone(),allowed:"fullExposureLogDir"}));
+  let mut log=f.request(token+1,Some(Mode::Mirror),stop.clone(),cancels.clone());
+  log.delegate=Some(Box::new(CompoundAudit{inner:log.delegate.take().unwrap(),begins:begins.clone(),allowed:"standalone_log_must_never_be_started"}));
+  GpuStageRequests{dir:Some(dir),science:[(ScienceKind::ExposureLog,log)].into_iter().collect(),..GpuStageRequests::default()}
+ }
+ #[test] fn compound_log_dir_rejects_partial_output_and_replays_both_cpu_stages_exactly(){
+  let f=Fixture::new();let(stop,cancels)=flags();let begins=Arc::new(AtomicUsize::new(0));
+  f.run_requests("compound-cpu",f.params.clone(),None,GpuStageRequests::default(),stop.clone()).unwrap();let baseline=fs::read(f.root.join("compound-cpu")).unwrap();let source=fs::read(&f.input).unwrap();
+  for (i,mode,reason) in [(0,Mode::Reject,"not_started"),(1,Mode::InvalidOutput,"invalid_output")] {
+   let token=600+2*i;let name=format!("compound-fallback-{i}");let request=compound_requests(&f,token,mode,&stop,&cancels,&begins);
+   let m=f.run_requests(&name,f.params.clone(),None,request,stop.clone()).unwrap();
+   assert_eq!(begins.load(Ordering::Relaxed),i as usize+1);assert_eq!(m.gpu_log_dir.backend,"cpu_f64");assert_eq!(m.gpu_log_dir.fallback_reason,reason);
+   assert_eq!(m.gpu_dir.backend,"cpu_f64");assert_eq!(m.gpu_science[&ScienceKind::ExposureLog].backend,"cpu_f64");
+   assert!(!m.gpu_dir.attempted&&!m.gpu_science[&ScienceKind::ExposureLog].attempted);
+   assert_eq!(fs::read(f.root.join(&name)).unwrap(),baseline);assert_eq!(fs::read(&f.input).unwrap(),source);
+   assert!(!f.root.join(format!("gpu-stage-{token}")).exists());assert!(!f.root.join(format!("gpu-stage-{}",token+1)).exists());
+  }
+ }
+ #[test] fn compound_log_dir_cancellation_after_ready_does_not_publish_or_fallback(){
+  let f=Fixture::new();let(stop,cancels)=flags();let begins=Arc::new(AtomicUsize::new(0));let source=fs::read(&f.input).unwrap();
+  let request=compound_requests(&f,610,Mode::CancelReady,&stop,&cancels,&begins);
+  let e=f.run_requests("compound-cancel",f.params.clone(),None,request,stop).unwrap_err();
+  assert_eq!(e.code,"CANCELLED");assert_eq!(begins.load(Ordering::Relaxed),1);assert_eq!(cancels.load(Ordering::Relaxed),1);
+  for name in ["compound-cancel","work-compound-cancel","gpu-stage-610","gpu-stage-611"]{assert!(!f.root.join(name).exists());}
+  assert_eq!(fs::read(&f.input).unwrap(),source);
+ }
+ #[test] fn compound_log_dir_uncertain_helper_ownership_never_runs_cpu_fallback(){
+  let f=Fixture::new();let(stop,cancels)=flags();let begins=Arc::new(AtomicUsize::new(0));
+  let request=compound_requests(&f,612,Mode::Broken,&stop,&cancels,&begins);
+  let e=f.run_requests("compound-broken",f.params.clone(),None,request,stop).unwrap_err();
+  assert_eq!(e.code,"GPU_CALLBACK_UNAVAILABLE");assert_eq!(begins.load(Ordering::Relaxed),1);assert_eq!(cancels.load(Ordering::Relaxed),1);
+  assert!(!f.root.join("compound-broken").exists());assert!(f.root.join("work-compound-broken").is_dir());
+  for ch in 0..3{assert_eq!(fs::metadata(f.root.join("gpu-stage-612").join(format!("source-{ch}.f64le"))).unwrap().len(),f.width as u64*f.height as u64*8);}
+  // The fake has ceased here; real uncertain owners keep files until the
+  // independent platform helper-death drain confirms it is safe to clean up.
+ }
+ #[test] fn compound_log_dir_checkpoint_records_coupled_backend_and_exact_whole_output(){
+  let f=Fixture::new();let(stop,cancels)=flags();let begins=Arc::new(AtomicUsize::new(0));let checkpoint=f.root.join("compound-checkpoint");
+  let request=compound_requests(&f,620,Mode::Mirror,&stop,&cancels,&begins);
+  let first=f.run_requests("compound-first",f.params.clone(),Some(&checkpoint),request,stop.clone()).unwrap();
+  assert_eq!(begins.load(Ordering::Relaxed),1);assert_eq!(first.gpu_log_dir.backend,"gpu_exposure_log_dir_v1");assert!(first.gpu_log_dir.attempted);assert!(first.gpu_log_dir.gpu_stage_ms.is_none());
+  assert_eq!(first.gpu_dir.fallback_reason,"included_in_resident");assert_eq!(first.gpu_science[&ScienceKind::ExposureLog].fallback_reason,"included_in_resident");
+  assert!(!first.gpu_dir.attempted&&!first.gpu_science[&ScienceKind::ExposureLog].attempted);assert!(first.gpu_dir.helper_total_ms.is_none()&&first.gpu_science[&ScienceKind::ExposureLog].helper_total_ms.is_none());
+  assert!(first.stages.iter().any(|s|s.stage=="film_exposure_log_dir"));assert!(!first.stages.iter().any(|s|s.stage=="film_density_dir"));
+  let request=compound_requests(&f,622,Mode::Mirror,&stop,&cancels,&begins);
+  let resumed=f.run_requests("compound-resumed",f.params.clone(),Some(&checkpoint),request,stop.clone()).unwrap();
+  assert_eq!(begins.load(Ordering::Relaxed),1);assert!(resumed.gpu_log_dir.resumed&&!resumed.gpu_log_dir.attempted);assert_eq!(resumed.gpu_log_dir.backend,first.gpu_log_dir.backend);
+  assert_eq!(fs::read(f.root.join("compound-first")).unwrap(),fs::read(f.root.join("compound-resumed")).unwrap());
+  let standalone=GpuStageRequests{dir:Some(f.request(624,Some(Mode::Mirror),stop.clone(),cancels.clone())),..GpuStageRequests::default()};
+  assert_eq!(f.run_requests("compound-policy-mismatch",f.params.clone(),Some(&checkpoint),standalone,stop.clone()).unwrap_err().code,"CHECKPOINT_INVALID");
+  let manifest_path=checkpoint.join("manifest.json");let mut manifest:serde_json::Value=serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+  assert_eq!(manifest["film_dir_backend"],"gpu_exposure_log_dir_v1");manifest["science_backends"]["exposureLog"]=serde_json::json!(false);fs::write(&manifest_path,serde_json::to_vec(&manifest).unwrap()).unwrap();
+  let request=compound_requests(&f,626,Mode::Mirror,&stop,&cancels,&begins);
+  assert_eq!(f.run_requests("compound-component-mismatch",f.params.clone(),Some(&checkpoint),request,stop).unwrap_err().code,"CHECKPOINT_INVALID");
+ }
+ #[test] fn compound_log_dir_cpu_fallback_checkpoint_resumes_as_cpu(){
+  let f=Fixture::new();let(stop,cancels)=flags();let begins=Arc::new(AtomicUsize::new(0));let checkpoint=f.root.join("compound-fallback-checkpoint");
+  let request=compound_requests(&f,630,Mode::Reject,&stop,&cancels,&begins);
+  let first=f.run_requests("compound-cpu-first",f.params.clone(),Some(&checkpoint),request,stop.clone()).unwrap();assert_eq!(first.gpu_log_dir.backend,"cpu_f64");
+  let request=compound_requests(&f,632,Mode::Mirror,&stop,&cancels,&begins);
+  let resumed=f.run_requests("compound-cpu-resumed",f.params.clone(),Some(&checkpoint),request,stop).unwrap();
+  assert_eq!(begins.load(Ordering::Relaxed),1);assert_eq!(resumed.gpu_log_dir.backend,"cpu_f64");assert_eq!(resumed.gpu_dir.backend,"cpu_f64");assert_eq!(resumed.gpu_science[&ScienceKind::ExposureLog].backend,"cpu_f64");assert!(resumed.gpu_log_dir.resumed&&!resumed.gpu_log_dir.attempted);
+  assert_eq!(fs::read(f.root.join("compound-cpu-first")).unwrap(),fs::read(f.root.join("compound-cpu-resumed")).unwrap());
+ }
  #[test] fn numeric_helpers_reject_partial_output_and_preserve_exact_cpu_fallback() {
   let f=Fixture::new();let(stop,cancels)=flags();f.run("baseline",f.params.clone(),None,None,None,stop.clone()).unwrap();let baseline=fs::read(f.root.join("baseline")).unwrap();
   for scanner in [true,false]{for (i,mode,reason) in [(1,Mode::Reject,"not_started"),(2,Mode::InvalidOutput,"invalid_output")] {
@@ -1688,11 +2068,12 @@ mod gpu_numeric_stage_hook_tests {
    let m=f.run_requests("science-mirror",params,None,req,stop.clone()).unwrap();
    for k in [ScienceKind::AutoExposure,ScienceKind::ExposureLog,ScienceKind::Grain,ScienceKind::FinishTail]{let v=&m.gpu_science[&k];assert_eq!(v.backend,k.backend(),"case {case}, {k:?}: {}",v.fallback_reason);}
    assert_eq!(m.gpu_scanner.fallback_reason,"included_in_resident");assert_eq!(m.gpu_science[&ScienceKind::ScanTail].fallback_reason,"included_in_resident");
+   assert_eq!(m.gpu_log_dir.backend,"gpu_exposure_log_dir_v1");assert!(m.gpu_log_dir.attempted&&m.gpu_log_dir.gpu_stage_ms.is_none());assert_eq!(m.gpu_dir.fallback_reason,"included_in_resident");assert_eq!(m.gpu_science[&ScienceKind::ExposureLog].fallback_reason,"included_in_resident");assert!(!m.gpu_dir.attempted&&!m.gpu_science[&ScienceKind::ExposureLog].attempted);
    assert_eq!(m.grain_mode,baseline.grain_mode);assert_eq!(fs::read(&f.input).unwrap(),original);
    let a=fs::read(f.root.join("science-cpu")).unwrap();let b=fs::read(f.root.join("science-mirror")).unwrap();assert_eq!(a.len(),b.len());
    let(mut max,mut square)=(0f64,0f64);for(x,y)in a.chunks_exact(4).zip(b.chunks_exact(4)){let x=f32::from_le_bytes(x.try_into().unwrap())as f64;let y=f32::from_le_bytes(y.try_into().unwrap())as f64;assert!(x.is_finite()&&y.is_finite());let e=(x-y).abs();max=max.max(e);square+=e*e;}
    let rms=(square/(a.len()/4)as f64).sqrt();assert!(max<=0.01&&rms<=0.002,"case {case}: max {max}, rms {rms}");
-   records.push(serde_json::json!({"case":case,"route":format!("{route:?}"),"hostMirrorOnly":true,"actualGpuExecuted":false,"maxAbs":max,"rms":rms,"cpuSha256":format!("{:x}",Sha256::digest(&a)),"candidateSha256":format!("{:x}",Sha256::digest(&b)),"science":m.gpu_science}));
+   records.push(serde_json::json!({"case":case,"route":format!("{route:?}"),"hostMirrorOnly":true,"actualGpuExecuted":false,"maxAbs":max,"rms":rms,"cpuSha256":format!("{:x}",Sha256::digest(&a)),"candidateSha256":format!("{:x}",Sha256::digest(&b)),"science":m.gpu_science,"exposureLogDir":m.gpu_log_dir}));
   }
   fs::write(out.join("combined-science-final-images.json"),serde_json::to_vec_pretty(&records).unwrap()).unwrap();
  }
@@ -1769,4 +2150,31 @@ mod gpu_numeric_stage_hook_tests {
   fs::write(results.join("final-image-quality.json"),serde_json::to_vec_pretty(&reports).unwrap()).unwrap();
  }
 
+}
+
+#[cfg(test)]
+mod gpu_session_seal_tests {
+ use super::*;
+ fn packet()->serde_json::Value{serde_json::json!({"schemaVersion":2,"epoch":3,"frameGeneration":7,"sequence":11,"token":19,"status":"success_sealed","completedPixels":99,"totalPixels":99,"code":"OK","summary":{}})}
+ fn ticket()->GpuSessionTicket{GpuSessionTicket{epoch:3,generation:7,sequence:11,token:19}}
+ #[test]fn alive_seal_requires_exact_bound_session_ticket(){let p=packet();assert!(parse_gpu_poll(&p.to_string(),19,99).is_none());assert_eq!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).unwrap().terminal,Some(GpuTerminal::Success));for field in ["epoch","frameGeneration","sequence","token"]{let mut p=packet();p[field]=serde_json::json!(999);assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}}
+ #[test]fn incomplete_or_failure_alive_never_releases_packet(){for status in ["success","success_stopped","failed_sealed","cancelled_sealed"]{let mut p=packet();p["status"]=status.into();assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}let mut p=packet();p["completedPixels"]=98.into();assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}
+ #[test]fn session_success_requires_ok_object_and_failure_forbids_payload(){
+  for code in ["CANCELLED","NATIVE_FAILED","COMPLETE",""]{let mut p=packet();p["code"]=code.into();assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}
+  for summary in [serde_json::Value::Null,serde_json::json!(false),serde_json::json!([])]{let mut p=packet();p["summary"]=summary;assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}
+  for(status,code)in[("failed_dead","NATIVE_FAILED"),("cancelled_dead","CANCELLED"),("running","OK")]{let mut p=packet();p["status"]=status.into();p["code"]=code.into();assert!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).is_none());}
+ }
+ #[test]fn dead_failure_distinct_from_stage_success(){for(status,expected)in[("failed_dead",GpuTerminal::Failed),("cancelled_dead",GpuTerminal::Cancelled)]{let mut p=packet();p["status"]=status.into();p["completedPixels"]=0.into();p["code"]=if expected==GpuTerminal::Cancelled{"CANCELLED"}else{"NATIVE_FAILED"}.into();p.as_object_mut().unwrap().remove("summary");assert_eq!(parse_gpu_poll_with_ticket(&p.to_string(),19,99,Some(ticket())).unwrap().terminal,Some(expected));}}
+}
+#[cfg(test)] mod gpu_session_no_route_tests {
+ use super::*;
+ #[test]fn only_exact_session_no_job_is_normalized(){let p=serde_json::json!({"schemaVersion":1,"token":9,"status":"not_started","completedPixels":0,"totalPixels":0,"code":"NO_JOB"});let raw=normalize_session_no_route(&p.to_string(),9,77).unwrap();assert_eq!(parse_gpu_poll(&raw,9,77).unwrap().terminal,Some(GpuTerminal::NotStarted));for(field,value)in[("status",serde_json::json!("success_stopped")),("code",serde_json::json!("COMPLETE")),("completedPixels",serde_json::json!(1)),("token",serde_json::json!(10))]{let mut bad=p.clone();bad[field]=value;assert!(normalize_session_no_route(&bad.to_string(),9,77).is_none());}}
+}
+
+/// Cross-language tests consume the real poll parser, not a rewritten success predicate.
+#[cfg(test)]
+pub(crate) fn session_success_summary_for_test(raw:&str,epoch:u64,generation:u64,sequence:u64,token:u64,total:u64)->Option<serde_json::Value> {
+    let p=parse_gpu_poll_with_ticket(raw,token,total,Some(GpuSessionTicket{epoch,generation,sequence,token}))?;
+    if p.terminal!=Some(GpuTerminal::Success)||p.code!="OK" {return None;}
+    p.summary
 }

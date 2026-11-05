@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "operation": "planGpuStreamingStage",
+  "plan": {
+    "amountBlendActive": true,
+    "chunkCount": 3072,
+    "chunkPixels": 16384,
+    "combinedPeakBytes": 310982720,
+    "deviceBytes": 42537664,
+    "diskBytes": 3424714752,
+    "distributionArithmetic": "guardedSoftwareBinary64",
+    "driverAllowanceBytes": 134217728,
+    "finalBlurActive": true,
+    "grainActive": true,
+    "height": 6144,
+    "helperAllowanceBytes": 67108864,
+    "hostBytes": 67118464,
+    "layerCount": 1,
+    "layout": "fullLineCoordinateGrainV1",
+    "manifestSha256": "f324c26eef47b8139ce56b9ececbadd7846e827fa09cd6724f905108ec514794",
+    "microActive": false,
+    "operation": "fullFilmGrainStreamV1",
+    "passCount": 3,
+    "rngMode": "coordinateSplitMix64",
+    "schemaVersion": 1,
+    "sublayers": false,
+    "token": 17,
+    "width": 8192
+  },
+  "schemaVersion": 1
+}

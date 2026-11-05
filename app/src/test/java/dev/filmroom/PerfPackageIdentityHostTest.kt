@@ -21,8 +21,8 @@ class PerfPackageIdentityHostTest {
     @Test fun applicationProviderLabelAndServiceActionUseSelectedPackage(){
         val context=RuntimeEnvironment.getApplication()
         val expected=if(BuildConfig.PERF_BUILD)"dev.filmroom.perf" else "dev.filmroom"
-        assertEquals(if(BuildConfig.PERF_BUILD)37 else 28,BuildConfig.VERSION_CODE)
-        assertEquals(if(BuildConfig.PERF_BUILD)"0.1.19-opt.7.1" else "0.1.19",BuildConfig.VERSION_NAME)
+        assertEquals(if(BuildConfig.PERF_BUILD)38 else 28,BuildConfig.VERSION_CODE)
+        assertEquals(if(BuildConfig.PERF_BUILD)"0.1.19-opt.7.2" else "0.1.19",BuildConfig.VERSION_NAME)
         val installed=context.packageManager.getPackageInfo(expected,0)
         assertEquals(BuildConfig.VERSION_CODE.toLong(),installed.longVersionCode)
         assertEquals(BuildConfig.VERSION_NAME,installed.versionName)

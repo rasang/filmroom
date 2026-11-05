@@ -1,4 +1,5 @@
 //! Shared bounded file loop. Tests exercise the production atomic publication path.
+use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase, PhaseGuard};
 use super::full_stage::*;
 use super::{ExposureDescriptor, NUMERIC_TOLERANCE};
 use sha2::{Digest, Sha256};
@@ -42,6 +43,7 @@ pub(super) fn guard_chunk(
     output: &[f32],
     stats: &mut Samples,
 ) -> R<()> {
+        trace::phase_result(GpuPhase::Guard, || {
     if source.len() % 12 != 0
         || output.len() * 4 != source.len()
         || output.iter().any(|x| !x.is_finite())
@@ -65,7 +67,9 @@ pub(super) fn guard_chunk(
     }
     stats.guard_ms += at.elapsed().as_secs_f64() * 1000.;
     Ok(())
-}
+
+        })
+    }
 pub(super) fn write_candidate<C: FnMut() -> bool>(
     dir: &Path,
     p: &ExposurePlan,
@@ -128,6 +132,7 @@ pub(super) fn write_candidate<C: FnMut() -> bool>(
     if io(input.read(&mut extra))? != 0 {
         return err("INVALID_EXPOSURE_FILE");
     }
+    let commit_phase=PhaseGuard::begin(GpuPhase::Commit);
     for out in &mut outs {
         check(c)?;
         io(out.flush())?;
@@ -152,6 +157,7 @@ pub(super) fn write_candidate<C: FnMut() -> bool>(
     io(out.sync_all())?;
     check(c)?;
     io(fs::rename(&partial, &candidate))?;
+    commit_phase.finish();
     owned.1 = true;
     Ok(stats)
 }

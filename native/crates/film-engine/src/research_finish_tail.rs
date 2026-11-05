@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use spektrafilm_core::{params::RuntimeParams, pipeline::GpuScanTailDescriptor};
 pub mod full_stage;
 mod gamut;
-mod glare;
+pub(crate) mod glare;
 #[cfg(feature = "gpu-diffusion-research")]
 pub(crate) mod gpu;
 pub const SHADER_APPEND: &str = include_str!("shaders/research_finish_tail.wgsl");
-const SHADER_GUARD: &str = include_str!("shaders/research_finish_tail_guard.wgsl");
+pub(crate) const SHADER_GUARD: &str = include_str!("shaders/research_finish_tail_guard.wgsl");
 pub const TABLE_BASE: u32 = 262144;
 pub const CHUNK_BASE: u32 = 524288;
 pub const CHUNK_PIXELS: usize = 32768;
@@ -19,7 +19,7 @@ pub const POINT_TOLERANCE: f64 = 1e-3;
 pub fn shader() -> String {
     shader_checked(research_spatial::SHADER).expect("GPU_TAIL_SHADER_VERSION")
 }
-fn shader_checked(source: &str) -> R<String> {
+pub(crate) fn shader_checked(source: &str) -> R<String> {
     let marker = " if(op==0u || op==1u){";
     if source.matches(marker).count() != 1 {
         return Err("GPU_TAIL_SHADER_VERSION".into());
@@ -177,6 +177,16 @@ impl TailPlan {
             n_h: g.n_h,
             cmax: g.cmax.to_vec(),
         });
+        // Full guarded FIR/IIR/glare shaders have a larger compiler working set.
+        // This is a conservative admission allowance, not a driver hard bound.
+        let driver = if options.glare.is_some()
+            || options.lens_sigma > 0.
+            || (options.sharp_radius > 0. && options.sharp_amount > 0.)
+        {
+            320 * MIB
+        } else {
+            64 * MIB
+        };
         let result = Self {
             width,
             height,
@@ -190,14 +200,24 @@ impl TailPlan {
             options,
             device_bytes: s.device_bytes,
             host_bytes: 24 * MIB,
-            driver_allowance_bytes: 64 * MIB,
+            driver_allowance_bytes: driver,
             helper_allowance_bytes: 64 * MIB,
-            combined_peak_bytes: s.device_bytes + 152 * MIB,
+            combined_peak_bytes: s.device_bytes + 88 * MIB + driver,
             // source snapshot + raw glare snapshot + output + conservative manifest allowance.
             disk_bytes: width as u64 * height as u64 * 44 + 2 * MIB,
         };
         result.validate()?;
         Ok(result)
+    }
+    pub fn expected_driver_allowance(&self) -> u64 {
+        if self.options.glare.is_some()
+            || self.options.lens_sigma > 0.
+            || (self.options.sharp_radius > 0. && self.options.sharp_amount > 0.)
+        {
+            320 * MIB
+        } else {
+            64 * MIB
+        }
     }
     pub fn pass_count(&self) -> u64 {
         u64::from(self.options.glare.as_ref().is_some_and(|g| g.blur > 0.))
@@ -228,9 +248,10 @@ impl TailPlan {
         let o = &self.options;
         if self.device_bytes != s.device_bytes
             || self.host_bytes != 24 * MIB
-            || self.driver_allowance_bytes != 64 * MIB
+            || self.driver_allowance_bytes != self.expected_driver_allowance()
             || self.helper_allowance_bytes != 64 * MIB
-            || self.combined_peak_bytes != self.device_bytes + 152 * MIB
+            || self.combined_peak_bytes
+                != self.device_bytes + 88 * MIB + self.expected_driver_allowance()
             || self.combined_peak_bytes > research_spatial::MEMORY_CAP
             || self.disk_bytes != self.width as u64 * self.height as u64 * 44 + 2 * MIB
         {

@@ -406,6 +406,8 @@ fn emit_optical_plan_contract_when_requested() {
         || false,
     )
     .unwrap();
+    assert_eq!(staged.driver_allowance_bytes,104*MIB);
+    assert_eq!(staged.combined_peak_bytes,staged.device_bytes+staged.host_bytes+staged.driver_allowance_bytes+staged.helper_allowance_bytes);
     let envelope = serde_json::json!({"ok":true,"schemaVersion":1,"operation":"planGpuFilmOpticsStage","plan":staged});
     let destination = PathBuf::from(destination);
     fs::create_dir_all(&destination).unwrap();

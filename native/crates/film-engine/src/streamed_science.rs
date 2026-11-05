@@ -51,6 +51,17 @@ impl ScienceKind {
             Self::FinishTail => "gpu_finish_tail_resident_f32_v1",
         }
     }
+    pub(crate) fn backend_name(self, name: &str) -> Option<&'static str> {
+        if name == "cpu_f64" { return Some("cpu_f64"); }
+        if name == self.backend() { return Some(self.backend()); }
+        match (self, name) {
+            (Self::HighlightBoost, "gpu_global_highlight_stream_f32_v1") => Some("gpu_global_highlight_stream_f32_v1"),
+            (Self::Grain, "gpu_grain_stream_guarded64_spatial_f32_v1") => Some("gpu_grain_stream_guarded64_spatial_f32_v1"),
+            (Self::ScanTail, "gpu_scan_tail_stream_f32_v1") => Some("gpu_scan_tail_stream_f32_v1"),
+            (Self::FinishTail, "gpu_finish_tail_stream_f32_v1") => Some("gpu_finish_tail_stream_f32_v1"),
+            _ => None,
+        }
+    }
     pub const ALL: [Self; 8] = [
         Self::AutoExposure,
         Self::HighlightBoost,
@@ -69,6 +80,8 @@ pub(crate) type ScienceDelegates = BTreeMap<ScienceKind, Box<dyn GpuDiffusionDel
 
 /// A projection of an already validated typed native plan, never an IPC plan.
 pub(super) struct PlanMeta {
+    pub operation: String,
+    pub backend: &'static str,
     pub digest: String,
     pub memory: u64,
     pub disk: u64,
@@ -78,6 +91,8 @@ pub(super) struct PlanMeta {
 impl PlanMeta {
     pub fn from_plan(p: &impl Serialize) -> std::result::Result<Self, String> {
         let v = serde_json::to_value(p).map_err(|_| "GPU_SCIENCE_PLAN")?;
+        let operation = v["operation"].as_str().ok_or("GPU_SCIENCE_PLAN")?.to_owned();
+        let backend = crate::research_streaming_route::backend(&operation).or_else(|| ScienceKind::ALL.into_iter().find(|k| k.operation() == operation).map(|k| k.backend())).ok_or("GPU_SCIENCE_PLAN")?;
         let digest = v["manifestSha256"]
             .as_str()
             .filter(|s| {
@@ -93,7 +108,7 @@ impl PlanMeta {
             .ok_or("GPU_SCIENCE_PLAN")?;
         let disk = v["diskBytes"].as_u64().ok_or("GPU_SCIENCE_PLAN")?;
         Ok(Self {
-            digest,
+            operation, backend, digest,
             memory,
             disk,
             chunks: v["chunkCount"].as_u64(),
@@ -147,11 +162,25 @@ impl GpuScience {
             .collect();
         Self { route:ScienceRoute::Export, requests, metrics }
     }
+    pub(crate) fn restore_backend_names(&mut self, names: &BTreeMap<ScienceKind,String>, streamed_identity:bool) -> Result<()> {
+        if streamed_identity {
+            for kind in [ScienceKind::HighlightBoost,ScienceKind::Grain,ScienceKind::ScanTail,ScienceKind::FinishTail] {
+                if self.metrics[&kind].backend!="cpu_f64" && !names.contains_key(&kind) {return Err(error("CHECKPOINT_INVALID","Missing streamed scientific backend identity"));}
+            }
+        }
+        for (&kind, name) in names {
+            let backend = kind.backend_name(name).ok_or_else(|| error("CHECKPOINT_INVALID", "Unknown scientific backend"))?;
+            let metrics = self.metrics.get_mut(&kind).ok_or_else(|| error("CHECKPOINT_INVALID", "Unknown scientific kind"))?;
+            if (metrics.backend != "cpu_f64") != (backend != "cpu_f64") { return Err(error("CHECKPOINT_INVALID", "Scientific backend identity differs")); }
+            metrics.backend = backend;
+        }
+        Ok(())
+    }
     pub fn requested(&self, k: ScienceKind) -> bool {
         self.requests.contains_key(&k)
     }
     pub fn gpu_used(&self, k: ScienceKind) -> bool {
-        self.metrics[&k].backend == k.backend()
+        self.metrics[&k].backend != "cpu_f64"
     }
     pub fn inactive(&mut self, k: ScienceKind) {
         if let Some(m) = self.metrics.get_mut(&k) {
@@ -220,6 +249,10 @@ impl GpuScience {
                 return Ok(None);
             }
         };
+        let expected_stream = match k { ScienceKind::HighlightBoost => Some("fullStreamingHighlightBoost"), ScienceKind::Grain => Some("fullFilmGrainStreamV1"), ScienceKind::ScanTail => Some("fullScanTailStreamV1"), ScienceKind::FinishTail => Some("fullFinishTailStreamV1"), _ => None };
+        if plan.operation != k.operation() && expected_stream != Some(plan.operation.as_str()) {
+            return Err(error("INTERNAL_ERROR", "Scientific typed operation differs"));
+        }
         let may_run = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let _directory = GpuStageDirectory::new(dir.clone(),may_run.clone(),request.parent_handle)?;
         scratch.gpu_may_run = Some(may_run.clone());
@@ -232,7 +265,7 @@ impl GpuScience {
         metrics.combined_peak_bytes = Some(plan.memory);
         scratch.peak = scratch.peak.max(scratch.live()?.saturating_add(plan.disk));
         let total = width as u64 * height as u64 * 3;
-        let wire=serde_json::json!({"schemaVersion":1,"operation":k.operation(),"token":request.token,"parentHandle":request.parent_handle,"jobDir":dir,"manifestSha256":plan.digest,"budgetBytes":plan.memory,"width":width,"height":height,"totalPixels":total}).to_string();
+        let wire=serde_json::json!({"schemaVersion":1,"operation":plan.operation,"token":request.token,"parentHandle":request.parent_handle,"jobDir":dir,"manifestSha256":plan.digest,"budgetBytes":plan.memory,"width":width,"height":height,"totalPixels":total}).to_string();
         let mut helper = GpuHelperOwner::new(delegate, request.token, total, may_run);
         let started = Instant::now();
         if !helper.begin(&wire) {
@@ -293,6 +326,9 @@ impl GpuScience {
             return Ok(None);
         }
         let summary = terminal.summary.unwrap_or(serde_json::Value::Null);
+        if crate::research_streaming_route::backend(&plan.operation).is_some() && !crate::research_streaming_route::valid_summary_identity(&summary,&plan.operation,request.token,&plan.digest,width,height) {
+            metrics.fallback_reason="invalid_output"; return Ok(None);
+        }
         (
             metrics.upload_bytes,
             metrics.readback_bytes,
@@ -362,7 +398,7 @@ impl GpuScience {
         // Scratch owns moved files even if cancellation arrives here. No scientific
         // consumer receives a partially adopted candidate.
         cancel(cancelled)?;
-        metrics.backend = k.backend();
+        metrics.backend = plan.backend;
         metrics.fallback_reason = "none";
         progress(total, total);
         Ok(Some(adopted))
@@ -372,6 +408,21 @@ impl GpuScience {
 #[cfg(feature="diffusion-research")]
 impl GpuScience {
  fn rejected(&mut self,k:ScienceKind,code:&str){self.metrics.get_mut(&k).unwrap().fallback_reason=gpu_fallback_reason(code,"unsupported_model");}
+ pub fn highlight(&mut self,source:&[PathBuf;3],boost_ev:f32,boost_range:f32,protect_ev:f32,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<Candidate>> {
+  let k=ScienceKind::HighlightBoost;if !self.requested(k){return Ok(None);}
+  use crate::research_global::{GlobalPlan,streaming::{StreamHighlightPlan,full_stage as stage}};
+  // Validate science independently at real, legal semantic geometry before
+  // considering allocation. Never reinterpret a numeric/parameter error as OOM.
+  let semantic=match GlobalPlan::highlight(1,1,boost_ev,boost_range,protect_ev){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  let stream=match crate::research_streaming_highlight::selected(&semantic,w,h){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  if !stream {return self.global(k,None,Some(source),GlobalPlan::highlight(w,h,boost_ev,boost_range,protect_ev),scratch,w,h,c,p);}
+  let plan=match StreamHighlightPlan::from_semantic_plan(semantic,w,h){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  let required=match stage::estimated_disk_bytes(&plan){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage(source.each_ref().map(|v|v.as_path()),dir,token,&plan,||cancelled())?),|dir,token,digest,summary,cancelled|{
+   crate::research_streaming_highlight::validate_summary_metrics(summary,w,h)?;
+   Ok(Candidate::Files(stage::validate_outputs(dir,token,digest,||cancelled())?.into()))
+  })
+ }
  pub fn global(&mut self,k:ScienceKind,input:Option<&Path>,planes:Option<&[PathBuf;3]>,plan:std::result::Result<crate::research_global::GlobalPlan,String>,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<Candidate>> {
   if !self.requested(k){return Ok(None);}let plan=match plan{Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
   if plan.kind.operation()!=k.operation(){return Err(error("INTERNAL_ERROR","Scientific operation contract mismatch"));}
@@ -382,6 +433,19 @@ impl GpuScience {
  }
  pub fn grain(&mut self,source:&[PathBuf;3],pipe:&Pipeline,pitch:f32,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<[PathBuf;3]>> {
   let k=ScienceKind::Grain;if !self.requested(k){return Ok(None);}
+  let stream_grain=if self.route==ScienceRoute::Export && crate::research_streaming_route::ROUTING_ADMITTED {
+   match crate::research_grain::GrainPlan::new_guarded(pipe,pitch,1,1).and_then(|semantic|crate::research_streaming_route::needs_streaming_grain(&semantic,w,h)){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}}
+  }else{false};
+  if stream_grain {
+   use crate::research_streaming_grain::{StreamGrainPlan,full_stage as stage};
+   let plan=match StreamGrainPlan::new(pipe,pitch,w,h){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+   let required=match stage::estimated_disk_bytes(w,h,&plan){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+   let value=self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage([&source[0],&source[1],&source[2]],dir,token,w,h,&plan,||cancelled())?),|dir,token,digest,summary,cancelled|{
+    if summary["gpuUsed"]!=true || summary["hostArithmeticMirror"]==true || summary["testOnly"]==true || summary["operation"]!=stage::OPERATION || summary["layout"]!=stage::LAYOUT || summary["backend"]!=stage::BACKEND || summary["token"].as_u64()!=Some(token) || summary["manifestSha256"].as_str()!=Some(digest) || summary["width"].as_u64()!=Some(w as u64) || summary["height"].as_u64()!=Some(h as u64) { return Err("INVALID_GRAIN_COMPLETE".into()); }
+    Ok(Candidate::Files(stage::validate_outputs(dir,token,digest,||cancelled())?.into()))
+   })?;
+   return match value{None=>Ok(None),Some(Candidate::Files(paths))=>Ok(Some(paths.try_into().map_err(|_|error("INTERNAL_ERROR","Invalid streamed grain candidate count"))?)),_=>Err(error("INTERNAL_ERROR","Invalid streamed grain candidate kind"))};
+  }
   // The guarded plan preserves preview MT versus export coordinate streams.
   // Runtime admission remains fail-closed in guarded_gpu until validation.
   use crate::research_grain::{GrainPlan,full_stage as stage};
@@ -408,6 +472,16 @@ impl GpuScience {
   let mode=if print_raw{spektrafilm_core::pipeline::GpuFinishInput::PrintRaw}else{spektrafilm_core::pipeline::GpuFinishInput::FilmDensity};
   let finish=match prepared.gpu_finish_descriptor(mode){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
   let tail=prepared.gpu_scan_tail_descriptor();let options=if self.route==ScienceRoute::Export{crate::research_finish_tail::TailOptions::from_params(params,brightness)}else{crate::research_finish_tail::TailOptions::for_preview(params,brightness)};
+  if crate::research_streaming_route::ROUTING_ADMITTED {match crate::research_finish::streaming::requires_streaming(w,h,&finish,&tail,options.clone()) {Ok(true)=>return self.streamed_finish_tail(source,prepared,params,print_raw,brightness,scratch,w,h,c,p),Ok(false)=>{},Err(e)=>{self.rejected(k,&e);return Ok(None);}}}
+  let required=match stage::estimated_disk_bytes(w,h,&finish,&tail,options.clone()){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  let result=self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage([&source[0],&source[1],&source[2]],dir,token,w,h,&finish,&tail,options,||cancelled())?),|dir,token,digest,_,cancelled|Ok(Candidate::Files(vec![stage::validate_output(dir,token,digest,||cancelled())?])))?;
+  match result{None=>Ok(None),Some(Candidate::Files(mut paths))if paths.len()==1=>Ok(paths.pop()),_=>Err(error("INTERNAL_ERROR","Invalid resident finish candidate"))}
+ }
+ pub fn streamed_finish_tail(&mut self,source:&[PathBuf;3],prepared:&spektrafilm_core::pipeline::PreparedStreamedFinish,params:&RuntimeParams,print_raw:bool,brightness:f64,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<PathBuf>> {
+  let k=ScienceKind::FinishTail;if !self.requested(k){return Ok(None);}use crate::research_finish::streaming as stage;
+  let mode=if print_raw{spektrafilm_core::pipeline::GpuFinishInput::PrintRaw}else{spektrafilm_core::pipeline::GpuFinishInput::FilmDensity};
+  let finish=match prepared.gpu_finish_descriptor(mode){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  let tail=prepared.gpu_scan_tail_descriptor();let options=if self.route==ScienceRoute::Export{crate::research_finish_tail::TailOptions::from_params(params,brightness)}else{crate::research_finish_tail::TailOptions::for_preview(params,brightness)};
   let required=match stage::estimated_disk_bytes(w,h,&finish,&tail,options.clone()){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
   let result=self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage([&source[0],&source[1],&source[2]],dir,token,w,h,&finish,&tail,options,||cancelled())?),|dir,token,digest,_,cancelled|Ok(Candidate::Files(vec![stage::validate_output(dir,token,digest,||cancelled())?])))?;
   match result{None=>Ok(None),Some(Candidate::Files(mut paths))if paths.len()==1=>Ok(paths.pop()),_=>Err(error("INTERNAL_ERROR","Invalid resident finish candidate"))}
@@ -415,10 +489,52 @@ impl GpuScience {
  pub fn tail(&mut self,source:&Path,prepared:&spektrafilm_core::pipeline::PreparedStreamedFinish,params:&RuntimeParams,brightness:f64,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<PathBuf>> {
   let k=ScienceKind::ScanTail;if !self.requested(k){return Ok(None);}use crate::research_finish_tail::{TailOptions,full_stage as stage};
   let descriptor=prepared.gpu_scan_tail_descriptor();let options=if self.route==ScienceRoute::Export{TailOptions::from_params(params,brightness)}else{TailOptions::for_preview(params,brightness)};
+  if crate::research_streaming_route::ROUTING_ADMITTED {match crate::research_finish_tail::TailPlan::new(&descriptor,1,1,options.clone()).and_then(|semantic|crate::research_streaming_route::needs_streaming_finish(&semantic,w,h,None)) {Ok(true)=>return self.streamed_tail(source,prepared,params,brightness,scratch,w,h,c,p),Ok(false)=>{},Err(e)=>{self.rejected(k,&e);return Ok(None);}}}
   let required=match stage::estimated_disk_bytes(w,h,&descriptor,options.clone()){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
+  let result=self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage(source,None,dir,token,w,h,&descriptor,options,||cancelled())?),|dir,token,digest,_,cancelled|Ok(Candidate::Files(vec![stage::validate_output(dir,token,digest,||cancelled())?])))?;
+  match result{None=>Ok(None),Some(Candidate::Files(mut paths))if paths.len()==1=>Ok(paths.pop()),_=>Err(error("INTERNAL_ERROR","Invalid scan tail candidate"))}
+ }
+ pub fn streamed_tail(&mut self,source:&Path,prepared:&spektrafilm_core::pipeline::PreparedStreamedFinish,params:&RuntimeParams,brightness:f64,scratch:&mut Scratch,w:u32,h:u32,c:&mut impl FnMut()->bool,p:impl FnMut(u64,u64))->Result<Option<PathBuf>> {
+  let k=ScienceKind::ScanTail;if !self.requested(k){return Ok(None);}use crate::research_finish_tail::TailOptions;use crate::research_streaming_finish::full_stage as stage;
+  let descriptor=prepared.gpu_scan_tail_descriptor();let options=if self.route==ScienceRoute::Export{TailOptions::from_params(params,brightness)}else{TailOptions::for_preview(params,brightness)};
+  let required=match stage::estimated_disk_bytes(w,h,&descriptor,options.clone(),false){Ok(v)=>v,Err(e)=>{self.rejected(k,&e);return Ok(None);}};
   let result=self.execute(k,required,scratch,w,h,c,p,|dir,token,cancelled|PlanMeta::from_plan(&stage::prepare_stage(source,None,dir,token,w,h,&descriptor,options,||cancelled())?),|dir,token,digest,_,cancelled|Ok(Candidate::Files(vec![stage::validate_output(dir,token,digest,||cancelled())?])))?;
   match result{None=>Ok(None),Some(Candidate::Files(mut paths))if paths.len()==1=>Ok(paths.pop()),_=>Err(error("INTERNAL_ERROR","Invalid scan tail candidate"))}
  }
 }
 
-impl GpuScience {pub fn record_checkpoint(&self,c:&mut crate::checkpoint::Checkpoints,stage:u8)->std::io::Result<()>{for k in ScienceKind::ALL{if k.checkpoint_stage()==stage&&self.requested(k){c.set_science_backend(k,self.gpu_used(k))?;}}Ok(())}}
+impl GpuScience {pub fn record_checkpoint(&self,c:&mut crate::checkpoint::Checkpoints,stage:u8)->std::io::Result<()>{for k in ScienceKind::ALL{if k.checkpoint_stage()==stage&&self.requested(k){c.set_science_backend_named(k,self.metrics[&k].backend)?;}}Ok(())}}
+
+#[cfg(test)]
+mod streaming_backend_tests {
+    use super::*;
+    #[test] fn checkpoint_restores_actual_backend_and_rejects_missing_wrong_kind_or_bool() {
+        let bools=BTreeMap::from([(ScienceKind::FinishTail,true)]);
+        let mut g=GpuScience::new(BTreeMap::new(),6,&bools);
+        assert!(g.restore_backend_names(&BTreeMap::new(),true).is_err());
+        assert!(g.restore_backend_names(&BTreeMap::from([(ScienceKind::FinishTail,"gpu_grain_stream_guarded64_spatial_f32_v1".into())]),true).is_err());
+        assert!(g.restore_backend_names(&BTreeMap::from([(ScienceKind::FinishTail,"cpu_f64".into())]),true).is_err());
+        g.restore_backend_names(&BTreeMap::from([(ScienceKind::FinishTail,"gpu_finish_tail_stream_f32_v1".into())]),true).unwrap();
+        assert_eq!(g.metrics[&ScienceKind::FinishTail].backend,"gpu_finish_tail_stream_f32_v1");assert!(g.gpu_used(ScienceKind::FinishTail));
+        let mut legacy=GpuScience::new(BTreeMap::new(),6,&bools);legacy.restore_backend_names(&BTreeMap::new(),false).unwrap();assert_eq!(legacy.metrics[&ScienceKind::FinishTail].backend,ScienceKind::FinishTail.backend());
+    }
+    #[test] fn highlight_checkpoint_keeps_stream_backend_and_rejects_cross_kind_or_missing_name() {
+        let bools=BTreeMap::from([(ScienceKind::HighlightBoost,true)]);
+        let mut g=GpuScience::new(BTreeMap::new(),3,&bools);
+        assert!(g.restore_backend_names(&BTreeMap::new(),true).is_err());
+        assert!(g.restore_backend_names(&BTreeMap::from([(ScienceKind::HighlightBoost,"gpu_finish_tail_stream_f32_v1".into())]),true).is_err());
+        assert!(g.restore_backend_names(&BTreeMap::from([(ScienceKind::HighlightBoost,"cpu_f64".into())]),true).is_err());
+        g.restore_backend_names(&BTreeMap::from([(ScienceKind::HighlightBoost,"gpu_global_highlight_stream_f32_v1".into())]),true).unwrap();
+        assert_eq!(g.metrics[&ScienceKind::HighlightBoost].backend,"gpu_global_highlight_stream_f32_v1");
+        let mut legacy=GpuScience::new(BTreeMap::new(),3,&bools);legacy.restore_backend_names(&BTreeMap::new(),false).unwrap();
+        assert_eq!(legacy.metrics[&ScienceKind::HighlightBoost].backend,"gpu_highlight_f32_v1");
+        assert!(ScienceKind::AutoExposure.backend_name("gpu_global_highlight_stream_f32_v1").is_none());
+        let p=serde_json::json!({"operation":"fullStreamingHighlightBoost","manifestSha256":"a".repeat(64),"combinedPeakBytes":276889600,"diskBytes":456});
+        let plan=PlanMeta::from_plan(&p).unwrap();assert_eq!(plan.backend,"gpu_global_highlight_stream_f32_v1");
+    }
+    #[test] fn plan_meta_binds_new_operation_and_backend() {
+        let p=serde_json::json!({"operation":"fullFinishTailStreamV1","manifestSha256":"a".repeat(64),"combinedPeakBytes":123,"diskBytes":456});
+        let meta=PlanMeta::from_plan(&p).unwrap();assert_eq!(meta.operation,"fullFinishTailStreamV1");assert_eq!(meta.backend,"gpu_finish_tail_stream_f32_v1");
+        let mut bad=p;bad["operation"]="fullFinishTailStreamV2".into();assert!(PlanMeta::from_plan(&bad).is_err());
+    }
+}

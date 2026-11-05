@@ -470,6 +470,9 @@ pub(crate) fn gpu_stage_requests(cache:&Path,parent_handle:i64,params:&MobilePar
         let stage_dir=if token>0&&std::fs::symlink_metadata(&root).is_ok_and(|m|m.is_dir()&&!m.file_type().is_symlink())&&root.canonicalize().ok().as_ref()==Some(&root){Some(root.join(format!("gpu-stage-{token}")))}else{None};
         Some(crate::streamed::GpuDiffusionRequest{parent_handle,token,stage_dir,delegate})
     };
+    // Keep the existing public opt-ins. Streamed stage 4 couples ExposureLog
+    // with DIR only when both requests exist, using the DIR request token and
+    // the generic router; no extra mode or second helper is introduced.
     let mut science_delegates=delegates.science;
     crate::streamed::GpuStageRequests {
         route:crate::streamed::ScienceRoute::Export,

@@ -62,7 +62,7 @@ internal object GpuFilmOpticsProtocol {
         require(4 * pixels <= 128 * GpuRenderProtocol.MIB)
         require(p.deviceBytes == 20 * pixels + 8 * GpuRenderProtocol.MIB + 65536)
         require(p.hostBytes == 16 * GpuRenderProtocol.MIB)
-        require(p.driverAllowanceBytes == 64 * GpuRenderProtocol.MIB && p.helperAllowanceBytes == 64 * GpuRenderProtocol.MIB)
+        require(p.driverAllowanceBytes == 104 * GpuRenderProtocol.MIB && p.helperAllowanceBytes == 64 * GpuRenderProtocol.MIB)
         val combined = Math.addExact(Math.addExact(p.deviceBytes, p.hostBytes), Math.addExact(p.driverAllowanceBytes, p.helperAllowanceBytes))
         require(combined == p.combinedPeakBytes && combined <= GpuRenderProtocol.HARD_CAP)
         require(p.diskBytes == 48 * pixels + 65536)

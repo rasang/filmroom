@@ -29,6 +29,7 @@ internal object ChineseDiagnostics {
         Stage.PREVIEW_PREPARE -> "预览准备"
         Stage.PREVIEW_ADMISSION_WAIT -> "预览等待内存准入"
         Stage.PREVIEW_ADMITTED -> "预览已获内存准入"
+        Stage.NATIVE_PREPARE -> "准备原生调用"
         Stage.NATIVE_RETURN -> "原生调用已返回"
         Stage.GPU_DRAIN_START -> "等待 GPU 清理"
         Stage.GPU_DRAIN_END -> "GPU 清理完成"
@@ -54,6 +55,11 @@ internal object ChineseDiagnostics {
         if (snapshot.events.isEmpty()) append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7d01902a70ae))
         if (snapshot.crossRunCount > 0) append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_aebe06f7e024))
         if (!snapshot.storageHealthy) append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a89d10b60775))
+        if (snapshot.renderLifecycle.events.isNotEmpty()) {
+            append("渲染生命周期记录 / Render lifecycle: ").append(snapshot.renderLifecycle.events.size).append('\n')
+            if (snapshot.renderLifecycle.unfinishedInactiveTokens > 0) append("存在未完成的已退出进程记录；不能据此确认崩溃或 ANR。 / Inactive unfinished records are not proof of a crash or ANR.\n")
+        }
+        if (!snapshot.renderLifecycle.storageHealthy) append("渲染生命周期记录可能不完整。 / Render lifecycle records may be incomplete.\n")
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a6a08f5857fd))
     }
     fun json(snapshot: DiagnosticSnapshot, metadata: DiagnosticMetadata): String = buildString {
@@ -85,7 +91,7 @@ internal object ChineseDiagnostics {
             }
             append("}}")
         }
-        append("]}")
+        append("],\"renderLifecycle\":").append(snapshot.renderLifecycle.json()).append('}')
     }
 }
 

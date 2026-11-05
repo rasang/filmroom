@@ -1,6 +1,7 @@
 package dev.filmroom.engine
 
 import android.app.Application
+import dev.filmroom.diagnostics.GpuLifecyclePhase
 import android.content.*
 import android.os.*
 import kotlinx.coroutines.*
@@ -42,6 +43,7 @@ class GpuDrainQuarantineTest {
     private class Setup(budget: PreviewGpuBudget? = null) {
         val context = ContextFake(RuntimeEnvironment.getApplication())
         val closed = AtomicInteger()
+        val events = java.util.Collections.synchronizedList(mutableListOf<Pair<GpuLifecyclePhase, GpuRenderCode?>>())
         val quarantined = AtomicInteger()
         val remote = Remote(Messenger(Handler(Looper.getMainLooper()) { true }).binder)
         val delegate = GpuRenderDelegate.forTesting(context, GpuRenderTestHooks(
@@ -50,7 +52,7 @@ class GpuDrainQuarantineTest {
                 override fun close() { closed.incrementAndGet() }
                 override fun quarantine() { quarantined.incrementAndGet() }
                 override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T = error("nested worker")
-            }},drainMillis=30), previewBudget=budget)
+            }},drainMillis=30, lifecycle={_, phase, code, _ -> events.add(phase to code)}), previewBudget=budget)
         suspend fun bind() {
             assertEquals(1, withContext(Dispatchers.IO){delegate.begin(GpuRenderFixtures.request(context))})
             Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -150,6 +152,48 @@ class GpuDrainQuarantineTest {
             s.ready()
             assertEquals("not_started", JSONObject(s.delegate.poll(91)).getString("status"))
         } finally { s.remote.die(); s.delegate.awaitSafeTermination() }
+    }
+
+    @Test fun missingReadyAndLateReadyRecordCancellationWithoutAnyRun() = runBlocking {
+        val s = Setup(); s.bind()
+        s.delegate.cancel(91)
+        s.ready()
+        val phases = s.events.map { it.first }
+        assertTrue(phases.indexOf(GpuLifecyclePhase.CONNECTED) < phases.indexOf(GpuLifecyclePhase.CANCEL_REQUEST))
+        assertTrue(phases.indexOf(GpuLifecyclePhase.CANCEL_REQUEST) < phases.indexOf(GpuLifecyclePhase.STAGE_END))
+        assertFalse(phases.contains(GpuLifecyclePhase.RUN_SEND_REQUEST))
+        assertFalse(phases.contains(GpuLifecyclePhase.RUN_SENT))
+        assertEquals(1, s.closed.get())
+        assertEquals(GpuRenderCode.CANCELLED, s.events.last { it.first == GpuLifecyclePhase.STAGE_END }.second)
+        s.delegate.awaitSafeTermination()
+        Unit
+    }
+    @Test fun runningCancellationRecordPrecedesDeathDrainAndTerminal() = runBlocking {
+        val s = Setup(); s.bind(); s.ready()
+        try {
+            s.delegate.cancel(91)
+            assertEquals(0, s.closed.get())
+            assertFalse(s.events.any { it.first == GpuLifecyclePhase.STAGE_END })
+            s.remote.die()
+            assertTrue(s.delegate.awaitSafeTermination())
+            val phases = s.events.map { it.first }
+            assertTrue(phases.indexOf(GpuLifecyclePhase.RUN_SENT) < phases.indexOf(GpuLifecyclePhase.CANCEL_REQUEST))
+            assertTrue(phases.indexOf(GpuLifecyclePhase.CANCEL_REQUEST) < phases.indexOf(GpuLifecyclePhase.DEATH_OBSERVED))
+            assertTrue(phases.indexOf(GpuLifecyclePhase.DEATH_OBSERVED) < phases.indexOf(GpuLifecyclePhase.STAGE_END))
+            assertTrue(phases.indexOf(GpuLifecyclePhase.DRAIN_START) < phases.indexOf(GpuLifecyclePhase.DRAIN_END))
+            assertEquals(GpuRenderCode.CANCELLED, s.events.last { it.first == GpuLifecyclePhase.STAGE_END }.second)
+        } finally { s.remote.die(); s.delegate.awaitSafeTermination() }
+    }
+    @Test fun deathWithoutResultRecordsFailureNotSuccess() = runBlocking {
+        val s = Setup(); s.bind(); s.ready()
+        s.remote.die()
+        assertTrue(s.delegate.awaitSafeTermination())
+        val phases = s.events.map { it.first }
+        assertFalse(phases.contains(GpuLifecyclePhase.RESULT_RECEIVED))
+        assertTrue(phases.indexOf(GpuLifecyclePhase.DEATH_OBSERVED) < phases.indexOf(GpuLifecyclePhase.STAGE_END))
+        assertEquals(GpuRenderCode.HELPER_DIED, s.events.last { it.first == GpuLifecyclePhase.STAGE_END }.second)
+        assertEquals("failed_stopped", JSONObject(s.delegate.poll(91)).getString("status"))
+        assertEquals(1, s.closed.get())
     }
 
 }

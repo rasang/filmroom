@@ -2,7 +2,8 @@ package dev.filmroom.engine
 
 import android.os.SystemClock
 
-/** One preview's shared GPU opportunity window, not a deadline for CPU rendering.
+/** Optional internal/test GPU opportunity window; production preview does not enable it.
+ * This is not a deadline for CPU rendering.
  * Starts at the first eligible begin; construction and parent admission do not spend it.
  * Expiry never proves helper death or authorizes releasing memory/files.
  */

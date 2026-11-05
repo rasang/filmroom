@@ -1,85 +1,82 @@
-# Exact preview grain: bounded submissions and parallel parameters
+# Exact grain GPU implementation and verification status
 
-This change preserves the sequential MT19937 state, seeds, 256-pixel sampler
-kernels, Poisson-all then binomial-all ordering, distribution expressions, and
-layer accumulation order. It does not substitute a coordinate RNG, omit grain,
-or make a mobile speed claim.
+This path retains the original distribution formulas, sequential MT19937 preview
+streams, coordinate SplitMix64 export streams, seeds, random-word order, software
+binary64 operations and layer accumulation. It does not use Gaussian distribution
+approximations, change the image size, or omit dye-cloud/microstructure effects.
 
-## Queue ordering
+## Ordered bounded execution
 
-Each `DispatchBatch::submit_chunk` optionally calls `write_buffer`, then
-immediately submits the consuming dispatch. A subsequent write is not recorded
-until that submit has happened. Prepared chunks use upload/prepare submission,
-then sampler submission, then the next chunk. Uniform buffers are distinct
-immutable snapshots for every dispatch. Dependencies use wgpu's ordered queue
-resource transitions, not CPU waiting or unsafe raw Vulkan operations.
+A `DispatchBatch` owns an immutable upload arena and one command encoder.
+Upload-to-working-buffer copies are interleaved with their consuming dispatches;
+uniforms remain distinct until the GPU fence. Sixteen sequential chunks form a
+batch with one queue submission. Repeated queue writes into a shared slot before
+submission are not equivalent and are not used. Cancellation before submission
+drops the encoder; submitted work retains its resources until a completed fence
+or confirmed helper termination. Numeric failure is sticky for the request.
 
-Pinned wgpu 24.0.5 `src/api/queue.rs` documents that write_buffer copies host data
-immediately to staging and schedules the transfer on the next submit. Official
-reference: https://wgpu.rs/doc/wgpu/struct.Queue.html#method.write_buffer .
-Do not rewrite this as several writes into one shared slot followed by a single
-submission containing all consumers: all consumers could see the last write.
+Sequential preview executes the whole Poisson image pass before the binomial
+image pass. Each chunk contains at most 256 pixels. Coordinate export uses at
+most 16384 pixels per chunk. Preparation and sampling are separate entry points:
+63 prepares Poisson, 52/65 samples it, 66 prepares binomial using the actual Poisson
+result, 53/64 samples it. The old combined 51/61 giant entry points are not compiled
+into the new production families. No RNG restart occurs between phases.
 
-Sixteen chunks form one batch, at most32 submissions with the prepass. The batch
-wait retains the existing5-second timeout and cancellation polling. The sticky
-numeric flag is read after the batch and never reset. Any failure discards the
-whole stage's outputs through existing ownership/publication guards. Cancellation
-is also checked before each submit; there is no cancellation exit between a write
-and its consumer submit. Dropped/failed batches do not publish partial output.
+## Bounded ALU representation
 
-## Parallel deterministic preparation
+Only selected deterministic arithmetic regions of the original rejection code
+are encoded as typed software-binary64 instructions. Original branching,
+comparisons, rejection loops, random sampling and expression ordering remain.
+The unchanged original generic sampler is the offline oracle.
 
-The existing `gg_parameters` expression runs once per invocation in op63,
-then stores probability, saturation and lambda as three exact64-bit values.
-The serial op52/op53 uses those stored bits, with unchanged MT consumption.
-This moves interpolation and parameter divisions off the single sampler lane.
-It still computes parameters twice across the full Poisson and binomial passes;
-image-sized caching and independent-stream concurrency are deliberately absent.
+Binding 8 contains a 4800-byte immutable code prefix (93 Poisson and 207 binomial
+instructions, 16 bytes each) followed by 544 bytes per frame: 72 prepared f32 lanes
+holding encoded exact values, plus 32 software-binary64 registers. This is 144064
+bytes for preview/admission capacity 256 and 8917696 bytes for coordinate capacity
+16384. Sequential sampling uses one live register frame while retaining each
+pixel's prepared fields. Coordinate invocations own distinct frames. Diagnostic
+frames never index the image-sized buffers, including 1×1 images. The host plan
+also reserves 9600 bytes for the code copies/staging. Shader/source hashes and
+closed layout/version checks reject drift before allocation.
 
-Scratch occupies float lanes979712..982016, immediately after the sequential
-input slot and below parameter storage1028096. It is9KiB, independent of image
-size, and does not overlap sequential input, MT state or calibration tables.
-Coordinate production does not use it. Prepass invalid arithmetic is ORed into
-the sticky flag, and serial sampling exits if that flag is already set.
+## Unchanged admission and counters
 
-Every device admission additionally runs actual op63 then op64 on32 synthetic
-pixels, comparing all9 encoded parameter lanes and particle/developed counts,
-word consumption and sampled output against the original host model. Existing
-3120 sampler cases are retained, giving3152 total. Arithmetic admission also
-checks the same store/load bit transport. These gates run on each device request;
-host/Naga tests do not claim that they have passed on a mobile GPU.
+The full gate retains 3120 original particle tuples, 96 binomial boundaries,
+64 stored-prepass tuples, 96 independent zero-rate checks, 98304 random words,
+and 1280 arithmetic checks. The reported sample census is 3280; density RMS uses
+3184, excluding the fixed-n boundary tuples. All sample values, random-word
+consumption, steps, failure transport and state/cursor checks remain required.
 
-## Bounded resources and accounting
+Diagnostic dispatches are 25+4*ceil(3120/capacity), hence 77 sequential or 29
+coordinate. Production layers use 4*C+1+S dispatches. Readback census remains
+1269184 bytes and the existing flag-read formula remains unchanged. Native plan
+JSON and strict Android validators must agree; old memory/dispatch fixtures are
+not accepted as evidence for this layout.
 
-At most32 uniform/command submissions are pending. Explicit sequential payload
-is16*3072=49,152 bytes plus32*160=5,120 bytes of uniforms. The internal budget
-reserves64KiB per submitted command plus payload, under a4MiB admission envelope.
-The grain stage plan explicitly adds4MiB to hostBytes (16→20MiB) and to
-combinedPeakBytes; admission rejects plans exceeding the unchanged768MiB hard cap (and the caller's unchanged request budget).
-The existing64MiB unknown-driver and64MiB helper allowances are NOT consumed or
-reduced. This conservative extra logical reservation is not a measured or
-enforceable bound on opaque driver allocation. Fixed device planes and transfer
-buffers do not grow. Coordinate mode uses one chunk/batch but reserves the same
-extra4MiB, keeping the admission contract simple and conservative.
+## Evidence and remaining gates
 
-Final readback uses at most262,144 pixels, separately from the256-pixel MT chunk:
-1MiB raw bytes,1MiB float conversion and2MiB encoded output, at most4MiB of
-transient host data. No sampling batch is pending at readout. All byte/dispatch
-metrics count actual operations; dispatchWaitMs includes encoding/submission and
-batch completion, uploadMs covers enqueue work, readbackMs covers map completion.
-No speculative wait-count field is added to closed summary schemas.
+The standalone observed/plain dual-ALU software-Vulkan harness passed 34981
+observed samples, 559696 observer fields, 163 full MT snapshots, 24 negative cases
+and 2 cancellation cases. Whole-image sampling fixtures preserved the original
+CPU tuple/output/random-state results. This is genuine Vulkan execution on
+SwiftShader, a software CPU backend, not an Adreno device or a speed result.
 
-For a sequential plan, C=chunkCount and B=ceil(C/16). Numeric flag reads are
-1+3*(layers*2*B+micro*B+1). Dispatches include2*C/layer additional preparation
-passes and2 additional admission dispatches. Admission readback adds1792 bytes.
-Native and Android strict expected-count validators must change together.
+The combined production layout and complete grain graph have separate tests for
+all retained admission checks, 1×1 images, 65×65 sequential images crossing 17
+chunks, 129×129 coordinate images crossing 16384 and wrapping origins, padded
+lanes, malformed descriptors, original effects, cancellation and atomic output
+cleanup. All seven explicit production-graph Vulkan gates passed on 2026-11-04,
+alongside 57 host tests and ARM type checking. The source-admission flag is now
+enabled for the existing experimental route; the complete per-device runtime
+census is still mandatory. Evidence is recorded in
+`results/preview-stall-opt72/grain-phased-integrated/integrated-gates-summary.json`
+in the development workspace. The 65×65 sequential output maximum absolute
+error was 8.620e-6 and the 129×129 coordinate output maximum was 9.470e-6 versus
+the original CPU result, because the retained spatial stages use f32. Sampler
+and RNG checks are exact. These results do not establish physical Adreno speed,
+new persistent-context behavior, or the full Android preview/export chain.
 
-## Validation and remaining risk
-
-Tests cover batch resource rejection, partial batches, nine seed/layer streams
-with4097 pixels crossing chunk/batch/twist boundaries, exact parameter transport,
-sampler tuples/output/consumed words, and scratch nonoverlap. Existing shader
-Naga and full-image oracle tests remain relevant. No physical GPU is available
-in this environment. Millions of distribution calls still run serially per MT
-stream using software binary64; reduced synchronization and parallel preparation
-are substantive improvements but do not establish a particular preview latency.
+Persistent GPU sessions are a separate change. Reused buffers require fresh
+initialization and exclusive occupied slots; transient slots are returned only
+after queue completion. A stage seal proves packet access ended, not process
+death. Session memory reservations remain held until helper termination.

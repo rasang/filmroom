@@ -50,6 +50,7 @@ internal data class DiagnosticSnapshot(
     val events: List<DiagnosticEvent>, val effectiveWallTimes: List<Long>,
     val crossRunCount: Int, val recoveredIncomplete: Boolean, val storageHealthy: Boolean,
     val expiredDiscarded: Long = 0, val capacityDiscarded: Long = 0, val malformedDiscarded: Long = 0, val futureDiscarded: Long = 0,
+    val renderLifecycle: RenderLifecycleSnapshot = RenderLifecycleSnapshot(),
 ) {
     fun text(metadata: String): String = buildString {
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1c751a529433)).append(minutes).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5b3a75c53bbd))
