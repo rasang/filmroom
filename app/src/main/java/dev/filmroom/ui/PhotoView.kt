@@ -21,6 +21,36 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         if(detail==null)viewport.restore(previous[0].toDouble(),previous[1].toDouble(),previous[2].toDouble())
         invalidate()
     }
+    private var imprintPlan:dev.filmroom.imprint.ImprintPlan?=null
+    private var imprintOverlayUnavailable=false
+    private var imprintOverlays:List<Pair<dev.filmroom.imprint.ImprintPlan.Stamp,Bitmap>> = emptyList()
+    fun bindImprint(plan:dev.filmroom.imprint.ImprintPlan?){
+        if(imprintPlan===plan)return
+        imprintOverlays.forEach{it.second.recycle()};imprintOverlays=emptyList();imprintPlan=plan;imprintOverlayUnavailable=false
+        invalidate()
+    }
+    /** Transient drag uses Canvas like the existing photo/frame interaction. Settled output uses linear rows. */
+    private fun drawLiveImprint(canvas:Canvas):Boolean{
+        val plan=imprintPlan ?: return true
+        if(imprintOverlayUnavailable)return false
+        if(imprintOverlays.isEmpty() && !plan.isEmpty){
+            val created=mutableListOf<Pair<dev.filmroom.imprint.ImprintPlan.Stamp,Bitmap>>()
+            try {
+                for(stamp in plan.stamps){
+                    val r=stamp.raster;val b=Bitmap.createBitmap(r.width,r.height,Bitmap.Config.ARGB_8888)
+                    try {val pixels=IntArray(r.width);for(y in 0 until r.height){r.writeArgbRow(y,pixels);b.setPixels(pixels,0,r.width,0,y,r.width,1)}}catch(t:Throwable){b.recycle();throw t}
+                    created+=stamp to b
+                }
+                imprintOverlays=created
+            }catch(_:OutOfMemoryError){created.forEach{it.second.recycle()};imprintOverlayUnavailable=true;return false}
+        }
+        for((stamp,b) in imprintOverlays){
+            val rect=RectF((viewport.left+stamp.left*viewport.imageWidth/plan.width).toFloat(),(viewport.top+stamp.top*viewport.imageHeight/plan.height).toFloat(),
+                (viewport.left+stamp.right*viewport.imageWidth/plan.width).toFloat(),(viewport.top+stamp.bottom*viewport.imageHeight/plan.height).toFloat())
+            canvas.drawBitmap(b,null,rect,paint)
+        }
+        return true
+    }
     private var presentation: BorderSnapshot? = null
     private var cropPresentation: CropSnapshot? = null
     private var freeCropping=false
@@ -262,6 +292,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
             }
             canvas.restoreToCount(save)
             interactiveFrame?.takeUnless{it.isRecycled}?.let{canvas.drawBitmap(it,null,target,paint)}
+            if(!drawLiveImprint(canvas))canvas.drawBitmap(b,null,target,paint) // Preserve exact settled glyphs under low memory.
         }
         // Canvas is a transient interaction approximation. Exact shared-renderer output is canonical
         // after matching crop/source/asset handoff; detail uses the currently visible photo mapping.
@@ -270,6 +301,10 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         if(key==null){if(freeEdit)drawCropHandles(canvas);return}
         val save=canvas.save()
         canvas.clipRect(0,0,width,height);canvas.clipRect(target)
+        imprintPlan?.let{plan->for(stamp in plan.stamps){
+            canvas.clipOutRect((viewport.left+stamp.left*viewport.imageWidth/plan.width).toFloat(),(viewport.top+stamp.top*viewport.imageHeight/plan.height).toFloat(),
+                (viewport.left+stamp.right*viewport.imageWidth/plan.width).toFloat(),(viewport.top+stamp.bottom*viewport.imageHeight/plan.height).toFloat())
+        }}
         val sourceBounds=if(aperture!=null && photoRect!=null)photoRect else target
         if(aperture!=null && presentation!=null){
             // Detail cells must never overwrite the final compositor's aperture feather band.
@@ -353,6 +388,6 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     }
     override fun onDetachedFromWindow(){finishCompositionGesture();detail?.foreground(false);super.onDetachedFromWindow()}
     override fun onAttachedToWindow(){super.onAttachedToWindow();if(!disposed)detail?.foreground(foreground)}
-    override fun close(){if(disposed)return;finishCompositionGesture();disposed=true;compositionChanged=null;compositionSource=null;interactiveFrame=null;liveComposition=false;detail?.close();detail=null;bitmap=null}
+    override fun close(){if(disposed)return;finishCompositionGesture();disposed=true;bindImprint(null);compositionChanged=null;compositionSource=null;interactiveFrame=null;liveComposition=false;detail?.close();detail=null;bitmap=null}
     override fun performClick():Boolean {super.performClick();return true}
 }

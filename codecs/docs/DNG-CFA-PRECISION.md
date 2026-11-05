@@ -100,3 +100,20 @@ color matching. Six existing Ricoh/Pentax/Sigma DNG controls remain exact.
 The real Linux JNI regression additionally covers import, JPEG export,
 metadata/orientation and input preservation for byte-LUT and large-strip DNG.
 No physical Android device execution is claimed by these host checks.
+
+### Identity look-table metadata
+
+The legacy matrix developer now admits an IFD0 ProfileLookTable only when the
+whole table is a verified no-op: LONG/count3 dimensions (hue>=1, saturation>=2,
+value>=1), FLOAT data with the exact bounded dimensions product, and every triple
+exactly finite `[0, 1, 1]`. The existing 64 KiB per-tag / 512 KiB total metadata
+bounds remain unchanged. ProfileLookTableEncoding must be absent (DNG linear
+default) or LONG/count1 value0; other encodings remain unverified and rejected.
+Partial metadata, a raw-IFD override, malformed payload or a nonidentity table is
+rejected, including nonidentity tables without an explicit encoding tag. This
+is not implementation of arbitrary DNG look transforms or a model whitelist.
+
+Public Leica M10-R sample7853 was previously rejected solely for explicit
+ProfileLookTableEncoding0 despite its identity table. Its 7872x5208 sensor is
+below52MP; its 16-bit-container/14-bit-SOF3 large strip uses the existing bounded
+CFA spool route. No pixel, memory or disk limits were raised.

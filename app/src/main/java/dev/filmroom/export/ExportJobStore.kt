@@ -52,6 +52,7 @@ data class ExportJob(
     val outputWidth get()=border?.outputWidth ?: crop?.outputWidth ?: width
     val outputHeight get()=border?.outputHeight ?: crop?.outputHeight ?: height
     init {
+        require(!parameters.imprint.enabled || border!=null || crop!=null){"Imprint requires frozen output geometry"}
         val frozen2302=border?.let{dev.filmroom.border.BorderCatalog.isFrozen2302Frame(it,parameters.filmStock,parameters.paperStock,parameters.outputRoute)}==true
         require(crop==null || (border==null && !parameters.filmBorder && crop.sourceWidth==width && crop.sourceHeight==height &&
             crop.canonicalWidth==sourceWidth && crop.canonicalHeight==sourceHeight && crop.settings==parameters.crop)) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_101df955ba5b) }
@@ -176,18 +177,22 @@ class ExportJobStore(val root:File) {
         private fun validId(id:String)=runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)
         private fun encode(j:ExportJob)=JSONObject().apply {
             put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
-            put("completionViewed",j.completionViewed);put("version",if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
+            put("completionViewed",j.completionViewed);put("version",if(j.parameters.imprint.enabled)7 else if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
             put("format",j.format.name);put("quality",j.quality);put("state",j.state.name);put("stage",j.progress.stage);put("done",j.progress.done);put("total",j.progress.total)
             put("mediaUri",j.mediaUri);put("message",j.message);put("messageUi",j.messageUi?.toJson());put("inputReady",j.inputReady);put("inputKind",j.inputKind);put("sourceWidth",j.sourceWidth);put("sourceHeight",j.sourceHeight);put("maxEdge",j.maxEdge);put("requestGeneration",j.requestGeneration);put("failure",j.failure.name)
         }.toString()
         private fun decode(text:String)=JSONObject(text).let { j ->
             val version=j.getInt("version")
-            require(version in 1..6)
+            require(version in 1..7)
             // A legacy app must reject framed jobs rather than silently export without their border.
             val border=j.optString("border").takeIf{it.isNotEmpty()}?.let(BorderSnapshot::fromJson)
             val crop=j.optString("crop").takeIf{it.isNotEmpty()}?.let(CropSnapshot::fromJson)
             require(version>=5 || border?.appearance==null)
-            if(version==6){
+            val parameters=EditorState.fromJson(j.getString("parameters"))
+            require((version==7)==parameters.imprint.enabled){"Imprint queue version mismatch"}
+            if(version==7){
+                require((border!=null) xor (crop!=null))
+            }else if(version==6){
                 require(border?.appearance!=null && border.geometryVersion==5 && border.mediumFormat!=null && crop==null)
             }else if(version==5){
                 require(border?.appearance!=null && border.geometryVersion in 2..4 && crop==null)
@@ -196,7 +201,7 @@ class ExportJobStore(val root:File) {
                 require(border==null || border.geometryVersion==version-1)
             }else require((border?.geometryVersion==3 && crop==null) || (border==null && crop!=null)) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_83b39ce89c4f) }
             require(validId(j.getString("id")));require(j.getInt("width") in 1..30000 && j.getInt("height") in 1..30000 && j.getInt("width").toLong()*j.getInt("height")<=150_000_000L);require(j.getInt("quality") in 1..100)
-            ExportJob(j.getString("id"),j.getLong("createdAt"),EditorState.fromJson(j.getString("parameters")),j.getInt("width"),j.getInt("height"),ExportFormat.valueOf(j.getString("format")),j.getInt("quality"),ExportJobState.valueOf(j.getString("state")),ExportDisplayProgress(j.getInt("stage"),j.getLong("done"),j.getLong("total")),j.optString("mediaUri").takeIf{it.isNotEmpty()},j.optString("message").takeIf{it.isNotEmpty()},j.optBoolean("inputReady",true),j.optString("inputKind","LINEAR"),j.optInt("sourceWidth",j.getInt("width")),j.optInt("sourceHeight",j.getInt("height")),if(j.has("maxEdge"))j.getInt("maxEdge")else null,j.optLong("requestGeneration",0),ExportJobFailure.valueOf(j.optString("failure","NONE")),j.optBoolean("completionViewed",false),
+            ExportJob(j.getString("id"),j.getLong("createdAt"),parameters,j.getInt("width"),j.getInt("height"),ExportFormat.valueOf(j.getString("format")),j.getInt("quality"),ExportJobState.valueOf(j.getString("state")),ExportDisplayProgress(j.getInt("stage"),j.getLong("done"),j.getLong("total")),j.optString("mediaUri").takeIf{it.isNotEmpty()},j.optString("message").takeIf{it.isNotEmpty()},j.optBoolean("inputReady",true),j.optString("inputKind","LINEAR"),j.optInt("sourceWidth",j.getInt("width")),j.optInt("sourceHeight",j.getInt("height")),if(j.has("maxEdge"))j.getInt("maxEdge")else null,j.optLong("requestGeneration",0),ExportJobFailure.valueOf(j.optString("failure","NONE")),j.optBoolean("completionViewed",false),
                 j.optString("photoMetadata").takeIf{it.isNotEmpty()}?.let{dev.filmroom.io.PhotoMetadata.fromJson(it).toJson()},
                 if(j.has("exportMillis"))j.getLong("exportMillis").takeIf{it>0}else null,
                 j.optString("metadataWarning").takeIf{it.isNotEmpty()}?.take(256),

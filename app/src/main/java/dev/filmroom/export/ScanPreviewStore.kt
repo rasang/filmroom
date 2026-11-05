@@ -46,8 +46,13 @@ internal object ScanPreviewStore {
                         frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,checkNotNull(frozen.mediumFormat),frozen.mediumPortrait,
                         checkNotNull(frozen.stripCenterMm),frozen.featherTotalAt3072)
                     else BorderSnapshot.authored(frozen.stock,frozen.assetVersion,original.width,original.height,frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,frozen.featherTotalAt3072)).copy(appearance=frozen.appearance)
-                BorderPreview.compose(original,snapshot,raster,checkActive)
-            } ?: job.crop?.takeUnless{it.isIdentity}?.let{crop->CropPreview.compose(original,CropSnapshot.create(original.width,original.height,crop.canonicalWidth,crop.canonicalHeight,crop.settings),checkActive)} ?: original
+                val imprint=dev.filmroom.imprint.ImprintPlan.create(job.parameters.imprint,job.photoMetadata?.let(dev.filmroom.io.PhotoMetadata::fromJson) ?: dev.filmroom.io.PhotoMetadata.unavailable(),snapshot.outputWidth,snapshot.outputHeight,snapshot)
+                BorderPreview.compose(original,snapshot,raster,imprint,checkActive)
+            } ?: job.crop?.takeUnless{it.isIdentity && !job.parameters.imprint.enabled}?.let{crop->
+                val snapshot=CropSnapshot.create(original.width,original.height,crop.canonicalWidth,crop.canonicalHeight,crop.settings)
+                val imprint=dev.filmroom.imprint.ImprintPlan.create(job.parameters.imprint,job.photoMetadata?.let(dev.filmroom.io.PhotoMetadata::fromJson) ?: dev.filmroom.io.PhotoMetadata.unavailable(),snapshot.outputWidth,snapshot.outputHeight)
+                CropPreview.compose(original,snapshot,imprint,checkActive)
+            } ?: original
             val image=checkNotNull(composed);val scale=minOf(1.0,256.0/maxOf(image.width,image.height))
             small=if(scale==1.0)image else Bitmap.createScaledBitmap(image,(image.width*scale).toInt().coerceAtLeast(1),(image.height*scale).toInt().coerceAtLeast(1),true)
             FileOutputStream(part).use{check(checkNotNull(small).compress(Bitmap.CompressFormat.JPEG,88,it));it.fd.sync()}

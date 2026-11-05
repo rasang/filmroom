@@ -1,0 +1,333 @@
+{
+  "kodak_portra_160": {
+    "645": {
+      "targets_mm": [
+        8.206,
+        37.11975
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        11.83335,
+        48.0
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        15.33335,
+        58.5
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        13.0,
+        23.83335,
+        64.0,
+        74.83335
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        21.83335,
+        39.0,
+        57.83335,
+        114.0,
+        132.83335,
+        150.0
+      ],
+      "adjusted": false
+    }
+  },
+  "kodak_portra_400": {
+    "645": {
+      "targets_mm": [
+        37.5273
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        10.35,
+        48.4
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        13.85,
+        55.066667,
+        61.683333
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        17.35,
+        64.4,
+        73.35
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        27.4,
+        50.35,
+        114.4,
+        131.35,
+        150.4
+      ],
+      "adjusted": false
+    }
+  },
+  "kodak_portra_800": {
+    "645": {
+      "targets_mm": [
+        37.22795
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        11.85,
+        48.1
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        15.35,
+        54.766667,
+        63.183333
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        18.85,
+        64.1,
+        74.85
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        27.05,
+        51.85,
+        114.1,
+        132.85,
+        150.05
+      ],
+      "adjusted": false
+    }
+  },
+  "kodak_gold_200": {
+    "645": {
+      "targets_mm": [
+        7.9769,
+        36.97845
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        11.6,
+        47.85
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        15.1,
+        58.35
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        17.85,
+        64.6,
+        73.85
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        21.6,
+        38.85,
+        57.6,
+        113.85,
+        132.6,
+        149.8
+      ],
+      "adjusted": false
+    }
+  },
+  "kodak_ektar_100": {
+    "645": {
+      "targets_mm": [
+        36.4795
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        11.5,
+        47.35
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        15.0,
+        54.016667,
+        62.833333
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        18.5,
+        63.35,
+        74.5
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        26.35,
+        51.5,
+        113.35,
+        132.5,
+        149.4
+      ],
+      "adjusted": false
+    }
+  },
+  "kodak_ektachrome_100": {
+    "645": {
+      "targets_mm": [
+        7.72745,
+        36.37975
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        11.35,
+        47.25
+      ],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [
+        14.85,
+        57.75
+      ],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [
+        18.35,
+        68.25
+      ],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [
+        21.35,
+        38.25,
+        57.35,
+        113.25,
+        132.35,
+        149.25
+      ],
+      "adjusted": false
+    }
+  },
+  "fujifilm_provia_100f": {
+    "645": {
+      "targets_mm": [
+        36.3797
+      ],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [
+        5.9,
+        48.6
+      ],
+      "adjusted": true
+    },
+    "67": {
+      "targets_mm": [
+        12.9,
+        54.6
+      ],
+      "adjusted": true
+    },
+    "69": {
+      "targets_mm": [
+        17.25,
+        74.0
+      ],
+      "adjusted": true
+    },
+    "617": {
+      "targets_mm": [
+        21.2,
+        50.25,
+        119.25,
+        143.3
+      ],
+      "adjusted": true
+    }
+  },
+  "fujifilm_velvia_100": {
+    "645": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [],
+      "adjusted": false
+    }
+  },
+  "fujifilm_pro_400h": {
+    "645": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "66": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "67": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "69": {
+      "targets_mm": [],
+      "adjusted": false
+    },
+    "617": {
+      "targets_mm": [],
+      "adjusted": false
+    }
+  }
+}

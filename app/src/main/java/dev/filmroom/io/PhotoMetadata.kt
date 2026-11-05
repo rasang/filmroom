@@ -20,6 +20,12 @@ import java.util.Locale
 /** A bounded, typed capture snapshot, never a copy of source offsets or opaque MakerNotes. */
 @ConsistentCopyVisibility
 data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false) {
+    /** Validated source facts only; no edit timestamps, equivalent focal length or identity data. */
+    internal fun imprintAttributes():Map<String,String> = attributes.filterKeys { it in setOf(
+        "DateTimeOriginal","ExposureTime","ShutterSpeedValue","FNumber","ApertureValue",
+        "MeteringMode","ExposureBiasValue","FocalLength","PhotographicSensitivity",
+        "SensitivityType","StandardOutputSensitivity","RecommendedExposureIndex","ISOSpeed") }
+
     fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).toString()
 
     /** A timestamp without its original offset is a local wall time, not an invented UTC instant. */

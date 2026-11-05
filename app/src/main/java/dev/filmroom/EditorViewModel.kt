@@ -26,6 +26,7 @@ data class EditorUiState(
     val compositionEditing:Boolean=false, val presentation:dev.filmroom.border.BorderSnapshot?=null,
     val compositionSource:Bitmap?=null, val interactiveBorder:Bitmap?=null,
     val cropPresentation:dev.filmroom.crop.CropSnapshot?=null,
+    val imprintPlan:dev.filmroom.imprint.ImprintPlan?=null,
     val busy: String?=null, val busyUi:dev.filmroom.i18n.UiMessage?=null, val updating: Boolean=false, val previewRefining:Boolean=false, val message: String?=null, val messageUi:dev.filmroom.i18n.UiMessage?=null, val messageIsDiagnostic:Boolean=false,
     val messageAttempt:Long=0,
     val engineUnavailable: String?=null, val compare: Boolean=false,
@@ -109,7 +110,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         val previousParameters=mutable.value.parameters
         // A fresh photo with reset enabled also starts without a border. Toolbar preset restore
         // intentionally keeps its existing presentation policy; do not change processingPreset.
-        val importParameters=(if(EditorPreferences(getApplication()).resetOnImport)processingPreset(previousParameters).copy(filmBorder=false) else previousParameters)
+        val importParameters=(if(EditorPreferences(getApplication()).resetOnImport)processingPreset(previousParameters).copy(filmBorder=false) else previousParameters).let{it.copy(imprint=it.imprint.forNewPhoto())}
             .copy(composition=CompositionTransform(),crop=CropSettings())
         operationJob=viewModelScope.launch {
             mutable.value=mutable.value.copy(busyUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_1663134e88db),busy=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1663134e88db),messageUi=null,messageIsDiagnostic=false,message=null,compare=false,messageAttempt=mutable.value.messageAttempt+1)
@@ -352,6 +353,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                     var newInteractive:Bitmap?=null
                     var layer:Bitmap?=null
                     var layerKey:String?=null
+                    var imprintPlan:dev.filmroom.imprint.ImprintPlan?=null
                     try {
                         ensureActive()
                         val newest=mutable.value.parameters
@@ -363,21 +365,23 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                         val coroutine=currentCoroutineContext()
                         rendered=if(border!=null)dev.filmroom.border.BorderPreview.owned {
                             val raster=borderProvider.resolve(border){coroutine.ensureActive()}
-                            layerKey=dev.filmroom.border.InteractiveBorderPreview.key(border)
+                            layerKey=dev.filmroom.border.InteractiveBorderPreview.key(border)+"/imprint-layout-"+if(params.imprint.enabled)params.imprint.layoutVersion else 0
                             layer=interactiveBorderCache?.takeIf{interactiveBorderKey==layerKey && !it.isRecycled}
-                            val bytes=dev.filmroom.border.BorderCompositor.workingBytes(border,raster)+border.outputWidth.toLong()*border.outputHeight*(if(layer==null)8L else 4L)
+                            val bytes=(if(params.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L)+dev.filmroom.border.BorderCompositor.workingBytes(border,raster)+border.outputWidth.toLong()*border.outputHeight*(if(layer==null)8L else 4L)
                             dev.filmroom.border.BorderMemoryAdmission.withBudget(bytes,borderMemorySnapshot) {
                                 if(layer==null){
-                                    newInteractive=dev.filmroom.border.InteractiveBorderPreview.create(border,raster){coroutine.ensureActive()}
+                                    newInteractive=dev.filmroom.border.InteractiveBorderPreview.create(border,if(params.imprint.enabled)dev.filmroom.border.MediumImprintMarks.wrap(border,raster)else raster){coroutine.ensureActive()}
                                     layer=newInteractive;interactiveBorderBuildCalls++
                                 }
+                                imprintPlan=dev.filmroom.imprint.ImprintPlan.create(params.imprint,photo.photoMetadata,border.outputWidth,border.outputHeight,border)
                                 exactBorderCompositionCalls++
-                                dev.filmroom.border.BorderPreview.compose(filmResult,border,raster){coroutine.ensureActive()}
+                                dev.filmroom.border.BorderPreview.compose(filmResult,border,raster,imprintPlan){coroutine.ensureActive()}
                             }
-                        } else if(crop!=null && !crop.isIdentity)dev.filmroom.border.BorderPreview.owned {
-                            val bytes=dev.filmroom.crop.CropCompositor.workingBytes(crop)+crop.outputWidth.toLong()*crop.outputHeight*4L
+                        } else if(crop!=null && (!crop.isIdentity || params.imprint.enabled))dev.filmroom.border.BorderPreview.owned {
+                            val bytes=(if(params.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L)+dev.filmroom.crop.CropCompositor.workingBytes(crop)+crop.outputWidth.toLong()*crop.outputHeight*4L
                             dev.filmroom.border.BorderMemoryAdmission.withBudget(bytes,borderMemorySnapshot){
-                                dev.filmroom.crop.CropPreview.compose(filmResult,crop){coroutine.ensureActive()}
+                                imprintPlan=dev.filmroom.imprint.ImprintPlan.create(params.imprint,photo.photoMetadata,crop.outputWidth,crop.outputHeight)
+                                dev.filmroom.crop.CropPreview.compose(filmResult,crop,imprintPlan){coroutine.ensureActive()}
                             }
                         } else filmResult
                         ensureActive()
@@ -390,7 +394,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                             if(mutable.value.parameters==params && !compositionGestureActive){
                                 interactiveBorderKey=layerKey;interactiveBorderCache=layer
                                 mutable.value=mutable.value.copy(rendered=rendered,renderedParameters=params,renderedDiagnosticContext=diagnostic,
-                                    compositionSource=filmResult,presentation=border,cropPresentation=crop,interactiveBorder=layer,updating=false)
+                                    compositionSource=filmResult,presentation=border,cropPresentation=crop,imprintPlan=imprintPlan,interactiveBorder=layer,updating=false)
                                 disposition=PreviewDisposition.ADOPTED
                             }else{
                                 // The live view owns the gesture until UP. Never replace it with a late

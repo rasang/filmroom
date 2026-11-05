@@ -213,7 +213,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 dir.listFiles()?.filter{it.isFile && it.name.matches(Regex("film-result-[0-9a-f-]{36}\\.rgb(\\.part)?"))}?.forEach{check(it.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_29367795aabb) }}
                 storageLock.withLock {
                     val plan=processing.plan(initial.width,initial.height,initial.parameters)
-                    val required=(if(input.length()==initial.width.toLong()*initial.height*12)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan))+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it)} ?: 0L)
+                    val required=(if(input.length()==initial.width.toLong()*initial.height*12)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan))+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it,initial.parameters.imprint.enabled)} ?: 0L)
                     if(!ExportStoragePolicy.hasSpace(android.os.StatFs(dir.path).availableBytes,required))throw EngineException(EngineFailure.STORAGE)
                     reservedBytes.set(required)
                 }
@@ -248,27 +248,30 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 val captureMetadata=store.get(id)?.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
                 update{it.copy(exportMillis=System.currentTimeMillis(),metadataWarning=captureMetadata.warning)}
                 val exportRecord=checkNotNull(store.get(id))
+                val imprintBudget=if(initial.parameters.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L
                 val encodingInput=initial.border?.let{border->
                     // Decode only after scientific rendering, never pin an atlas through the film pipeline.
                     val borderContext=currentCoroutineContext()
                     val asset=withContext(Dispatchers.IO){borderProvider.resolve(border){borderContext.ensureActive()}}
                     val memory=android.app.ActivityManager.MemoryInfo().also{(context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(it)}
-                    if(memory.lowMemory || memory.availMem-memory.threshold<BorderCompositor.workingBytes(border,asset)*4)throw OutOfMemoryError("border admission")
+                    if(memory.lowMemory || memory.availMem-memory.threshold<(BorderCompositor.workingBytes(border,asset)+imprintBudget)*4)throw OutOfMemoryError("border admission")
                     if(android.os.StatFs(dir.path).availableBytes<BorderExportPolicy.additionalDiskBytes(border)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
                     File(dir,"film-result-${java.util.UUID.randomUUID()}.rgb").also{target->
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
-                        BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset),{NativeWorkReservations.snapshot(context)}) {
-                            BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace)){coroutine.ensureActive()}
+                        BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset)+imprintBudget,{NativeWorkReservations.snapshot(context)}) {
+                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,border.outputWidth,border.outputHeight,border)
+                            BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint){coroutine.ensureActive()}
                         }
                     }
-                } ?: initial.crop?.takeUnless{it.isIdentity}?.let{crop->
-                    if(android.os.StatFs(dir.path).availableBytes<CropCompositor.additionalDiskBytes(crop)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
+                } ?: initial.crop?.takeUnless{it.isIdentity && !initial.parameters.imprint.enabled}?.let{crop->
+                    if(android.os.StatFs(dir.path).availableBytes<CropCompositor.additionalDiskBytes(crop,initial.parameters.imprint.enabled)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
                     File(dir,"film-result-${java.util.UUID.randomUUID()}.rgb").also{target->
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
-                        BorderMemoryAdmission.withBudget(CropCompositor.workingBytes(crop),{NativeWorkReservations.snapshot(context)}){
-                            CropCompositor.composite(checkNotNull(output),target,crop){coroutine.ensureActive()}
+                        BorderMemoryAdmission.withBudget(CropCompositor.workingBytes(crop)+imprintBudget,{NativeWorkReservations.snapshot(context)}){
+                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,crop.outputWidth,crop.outputHeight)
+                            CropCompositor.composite(checkNotNull(output),target,crop,imprint,OutputColorSpace.parse(initial.parameters.outputColorSpace)){coroutine.ensureActive()}
                         }
                     }
                 } ?: checkNotNull(output)

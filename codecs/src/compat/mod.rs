@@ -4,6 +4,8 @@ mod brands;
 mod calibration;
 mod lens;
 mod profiles;
+#[cfg(test)]
+mod identity_look_tests;
 use crate::{
     error::{Result, err},
     tiff::Ifd,
@@ -20,6 +22,7 @@ fn color_err() -> crate::error::CodecError {
 }
 
 pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
+    profiles::identity_look_table(root, raw)?;
     // DNG DefaultBlackRender None is a profile rendering hint: no extra black
     // subtraction before a look table. It does not disable sensor BlackLevel.
     // This linear pipeline has no extra flare/renderer black subtraction.
@@ -49,7 +52,7 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
     // These require additional processing not implemented by the pinned developer. Never silently ignore.
     for tag in [
         50715, 50716, 50729, 50942, 52530, 52532, 52547, 50966, 50967, 50968, 50969, 50971, 50972,
-        50973, 50974, 50975, 51107, 51108, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
+        50973, 50974, 50975, 51107, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
         52537,
     ] {
         if inherited(root, raw, tag).is_some() {

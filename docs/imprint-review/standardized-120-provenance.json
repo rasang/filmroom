@@ -1,0 +1,54 @@
+{
+  "kodak_portra_160": {
+    "path": "medium120/v5/portra160-rails.png",
+    "version": "mf120-v5-portra160-a970a81fe0dc",
+    "sha256": "a970a81fe0dc3449164f0f831a73dc5cb0045d82064f33b0c1b359e68f844c2a"
+  },
+  "kodak_portra_400": {
+    "path": "medium120/v6/portra400-rails.png",
+    "version": "mf120-v6-portra400-3c329d78f008",
+    "sha256": "3c329d78f008485437704285ae4441d974b82addc4787cb406c5178578883fd5"
+  },
+  "kodak_portra_800": {
+    "path": "medium120/v5/portra800-rails.png",
+    "version": "mf120-v5-portra800-64b689c66093",
+    "sha256": "64b689c66093f1417fa25cefcb35472d4e2ab802d51b0eef420101e8017fb2cd"
+  },
+  "kodak_gold_200": {
+    "path": "medium120/v4/gold200-rails.png",
+    "version": "mf120-v4-gold200-6fad2b869ee0",
+    "sha256": "6fad2b869ee046c84d0c573af2803bb9e648aa1ac02d355865e4260e4036b166"
+  },
+  "kodak_ektar_100": {
+    "path": "medium120/v4/ektar100-rails.png",
+    "version": "mf120-v4-ektar100-91d648b6bb15",
+    "sha256": "91d648b6bb153c208c67f645e779b0f7cf78f10ce906f12eed3fefaa72043f58"
+  },
+  "kodak_ektachrome_100": {
+    "path": "medium120/v4/e100-rails.png",
+    "version": "mf120-v4-e100-12d17d86a868",
+    "sha256": "12d17d86a86873ba8b71534402043ee2eba896d282389ca82816fd4265a5b4ae"
+  },
+  "fujifilm_provia_100f": {
+    "path": "medium120/v2/provia100f-rails.png",
+    "version": "mf120-v2-provia100f-a897d5f2ea77",
+    "sha256": "a897d5f2ea7723d1237319d4bc2df62276c02ffd893766d8693f3ad275d37e91"
+  },
+  "fujifilm_velvia_100": {
+    "path": "medium120/v2/velvia100-rails.png",
+    "version": "mf120-v2-velvia100-9836225fb731",
+    "sha256": "9836225fb7315e1b763a92e94acd162ee2f69c10e9a96fc172301c26d15575fd"
+  },
+  "fujifilm_pro_400h": {
+    "path": "medium120/v2/pro400h-rails.png",
+    "version": "mf120-v2-pro400h-2d036c5cba8c",
+    "sha256": "2d036c5cba8cc72bb0388f681c4b831077e07d1118ae86bafe4334b274520f56"
+  },
+  "review": {
+    "targets-full.json": "7bdbb42b59d38d1c76252c01213e8f28d9b6feb464f7c672a2760e7d1165600f",
+    "atoms.json": "d407417ff6ff6a287337c65fe1c8f286a30f2a90d43bc2f16ab7bf284bb1580a",
+    "positions.json": "ee850dbb643d5d12426f0e1d4ddb9a1a6a724805984af8efa70b0040badcca6c",
+    "Filmroom_06_standardized_markers.pdf": "f53b3b8957515bcdf62cad30899ecde1a385481dc53a5bc92da207aca55b9e00",
+    "create_comparison.py": "578ca4855c016a1c39b08d73c86c01d2e899ea8d6fb8382f83cddacd1f54f35d"
+  }
+}

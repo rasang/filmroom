@@ -1,0 +1,3157 @@
+{
+  "kodak_portra_160": {
+    "645": {
+      "file": "assets/kodak_portra_160-645-bottom.png",
+      "size_px": [
+        284,
+        15
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 6,
+      "background_rgb": [
+        9,
+        9,
+        9
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            46,
+            8,
+            54,
+            13
+          ],
+          "bbox_mm_pdf": [
+            7.6937,
+            1.3333,
+            9.0317,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            46,
+            0,
+            54,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            214,
+            4,
+            232,
+            14
+          ],
+          "bbox_mm_pdf": [
+            35.7923,
+            0.6667,
+            38.8028,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            214,
+            0,
+            232,
+            15
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "642cefa90551ad9c05548f20a40610e9a14ca08ba8040ab4b419c885ed95d046"
+    },
+    "66": {
+      "file": "assets/kodak_portra_160-66-bottom.png",
+      "size_px": [
+        372,
+        15
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 6,
+      "background_rgb": [
+        9,
+        9,
+        9
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            90,
+            8,
+            98,
+            13
+          ],
+          "bbox_mm_pdf": [
+            15.0,
+            1.3333,
+            16.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            90,
+            0,
+            98,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            258,
+            4,
+            276,
+            14
+          ],
+          "bbox_mm_pdf": [
+            43.0,
+            0.6667,
+            46.0,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            258,
+            0,
+            276,
+            15
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "b2df81881b6bd8260cdcde9d930f1f389bf24ae3633a383795f5e4e9943a7d3c"
+    },
+    "67": {
+      "file": "assets/kodak_portra_160-67-bottom.png",
+      "size_px": [
+        456,
+        15
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 6,
+      "background_rgb": [
+        9,
+        9,
+        9
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            132,
+            8,
+            140,
+            13
+          ],
+          "bbox_mm_pdf": [
+            22.0,
+            1.3333,
+            23.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            132,
+            0,
+            140,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            300,
+            4,
+            318,
+            14
+          ],
+          "bbox_mm_pdf": [
+            50.0,
+            0.6667,
+            53.0,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            300,
+            0,
+            318,
+            15
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "79ef2d2e249fccfc2c68e828cc210976e74f61359de7cc8760ed378861002fb8"
+    },
+    "69": {
+      "file": "assets/kodak_portra_160-69-bottom.png",
+      "size_px": [
+        540,
+        15
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 6,
+      "background_rgb": [
+        9,
+        9,
+        9
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            6,
+            4,
+            24,
+            13
+          ],
+          "bbox_mm_pdf": [
+            1.0,
+            0.6667,
+            4.0,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            6,
+            0,
+            24,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            174,
+            8,
+            182,
+            13
+          ],
+          "bbox_mm_pdf": [
+            29.0,
+            1.3333,
+            30.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            174,
+            0,
+            182,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            342,
+            4,
+            360,
+            14
+          ],
+          "bbox_mm_pdf": [
+            57.0,
+            0.6667,
+            60.0,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            342,
+            0,
+            360,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            510,
+            8,
+            518,
+            13
+          ],
+          "bbox_mm_pdf": [
+            85.0,
+            1.3333,
+            86.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            510,
+            0,
+            518,
+            15
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "9e73b981a1abb94ca8aef68b10fce6ac5367d3408e2170afe784a98918caef64"
+    },
+    "617": {
+      "file": "assets/kodak_portra_160-617-bottom.png",
+      "size_px": [
+        1044,
+        15
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 6,
+      "background_rgb": [
+        9,
+        9,
+        9
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            90,
+            8,
+            98,
+            13
+          ],
+          "bbox_mm_pdf": [
+            15.0,
+            1.3333,
+            16.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            90,
+            0,
+            98,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            258,
+            4,
+            276,
+            13
+          ],
+          "bbox_mm_pdf": [
+            43.0,
+            0.6667,
+            46.0,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            258,
+            0,
+            276,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            426,
+            8,
+            434,
+            13
+          ],
+          "bbox_mm_pdf": [
+            71.0,
+            1.3333,
+            72.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            426,
+            0,
+            434,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            594,
+            4,
+            612,
+            14
+          ],
+          "bbox_mm_pdf": [
+            99.0,
+            0.6667,
+            102.0,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            594,
+            0,
+            612,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            762,
+            8,
+            770,
+            13
+          ],
+          "bbox_mm_pdf": [
+            127.0,
+            1.3333,
+            128.3333,
+            2.1667
+          ],
+          "full_height_source_clip_px": [
+            762,
+            0,
+            770,
+            15
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            930,
+            4,
+            948,
+            14
+          ],
+          "bbox_mm_pdf": [
+            155.0,
+            0.6667,
+            158.0,
+            2.3333
+          ],
+          "full_height_source_clip_px": [
+            930,
+            0,
+            948,
+            15
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "617f35b0f4d02e07e58b1e1e45b672fbb60776d5c6db5d6e4a6b83e114f3c43c"
+    }
+  },
+  "kodak_portra_400": {
+    "645": {
+      "file": "assets/kodak_portra_400-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            239,
+            5,
+            261,
+            20
+          ],
+          "bbox_mm_pdf": [
+            23.8498,
+            0.5,
+            26.0452,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            239,
+            0,
+            261,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "1cf619d54ce738e706d15d9e4652493675dba867287ec4a363e07c19744f1c55"
+    },
+    "66": {
+      "file": "assets/kodak_portra_400-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            17,
+            3,
+            60,
+            23
+          ],
+          "bbox_mm_pdf": [
+            1.7,
+            0.3,
+            6.0,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            17,
+            0,
+            60,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            311,
+            5,
+            333,
+            20
+          ],
+          "bbox_mm_pdf": [
+            31.1,
+            0.5,
+            33.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            311,
+            0,
+            333,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "be6ba27a35d986da61eba9ce5a52d74dabd1c2c6fea5a86881fd6dfd00df570b"
+    },
+    "67": {
+      "file": "assets/kodak_portra_400-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            87,
+            3,
+            130,
+            23
+          ],
+          "bbox_mm_pdf": [
+            8.7,
+            0.3,
+            13.0,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            87,
+            0,
+            130,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            381,
+            5,
+            403,
+            20
+          ],
+          "bbox_mm_pdf": [
+            38.1,
+            0.5,
+            40.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            381,
+            0,
+            403,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            710,
+            3,
+            753,
+            23
+          ],
+          "bbox_mm_pdf": [
+            71.0,
+            0.3,
+            75.3,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            710,
+            0,
+            753,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "e605c159497417f467e23e67ea1692ccd3ff58bc01dec08e512f87e3504bb7dc"
+    },
+    "69": {
+      "file": "assets/kodak_portra_400-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            157,
+            3,
+            200,
+            23
+          ],
+          "bbox_mm_pdf": [
+            15.7,
+            0.3,
+            20.0,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            157,
+            0,
+            200,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            451,
+            5,
+            473,
+            20
+          ],
+          "bbox_mm_pdf": [
+            45.1,
+            0.5,
+            47.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            451,
+            0,
+            473,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            780,
+            3,
+            823,
+            23
+          ],
+          "bbox_mm_pdf": [
+            78.0,
+            0.3,
+            82.3,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            780,
+            0,
+            823,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "c71ada338e14ec1d93c000156e80e68cd6979eaa9d108cc46a2f894ae87125ee"
+    },
+    "617": {
+      "file": "assets/kodak_portra_400-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            251,
+            5,
+            273,
+            20
+          ],
+          "bbox_mm_pdf": [
+            25.1,
+            0.5,
+            27.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            251,
+            0,
+            273,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            577,
+            3,
+            620,
+            23
+          ],
+          "bbox_mm_pdf": [
+            57.7,
+            0.3,
+            62.0,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            577,
+            0,
+            620,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            871,
+            5,
+            893,
+            20
+          ],
+          "bbox_mm_pdf": [
+            87.1,
+            0.5,
+            89.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            871,
+            0,
+            893,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1200,
+            3,
+            1243,
+            23
+          ],
+          "bbox_mm_pdf": [
+            120.0,
+            0.3,
+            124.3,
+            2.3
+          ],
+          "full_height_source_clip_px": [
+            1200,
+            0,
+            1243,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1525,
+            5,
+            1547,
+            20
+          ],
+          "bbox_mm_pdf": [
+            152.5,
+            0.5,
+            154.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1525,
+            0,
+            1547,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "a991d01b0a512bb25b5276e21b3e01f782496a5724544bfe876d8a34fa33d750"
+    }
+  },
+  "kodak_portra_800": {
+    "645": {
+      "file": "assets/kodak_portra_800-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            281,
+            5,
+            309,
+            19
+          ],
+          "bbox_mm_pdf": [
+            28.041,
+            0.5,
+            30.8351,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            281,
+            0,
+            309,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "f2c85dfaf4c09f3076ea81f6c9281a368ab44b33bce03eedb6da17862a61fe0f"
+    },
+    "66": {
+      "file": "assets/kodak_portra_800-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            40,
+            10,
+            53,
+            19
+          ],
+          "bbox_mm_pdf": [
+            4.0,
+            1.0,
+            5.3,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            40,
+            0,
+            53,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            353,
+            5,
+            381,
+            19
+          ],
+          "bbox_mm_pdf": [
+            35.3,
+            0.5,
+            38.1,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            353,
+            0,
+            381,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "b5c40d3a0e565b29ed67e2e5a8b1cef7cac0614ccbf1c78fc95e12e93e9c6db7"
+    },
+    "67": {
+      "file": "assets/kodak_portra_800-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            110,
+            10,
+            123,
+            19
+          ],
+          "bbox_mm_pdf": [
+            11.0,
+            1.0,
+            12.3,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            110,
+            0,
+            123,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            423,
+            5,
+            451,
+            19
+          ],
+          "bbox_mm_pdf": [
+            42.3,
+            0.5,
+            45.1,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            423,
+            0,
+            451,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            735,
+            10,
+            748,
+            19
+          ],
+          "bbox_mm_pdf": [
+            73.5,
+            1.0,
+            74.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            735,
+            0,
+            748,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "887f47d2c383fb2f571e2a12099221c981e284f193eea196163b0c8a3115cdea"
+    },
+    "69": {
+      "file": "assets/kodak_portra_800-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            180,
+            10,
+            193,
+            19
+          ],
+          "bbox_mm_pdf": [
+            18.0,
+            1.0,
+            19.3,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            180,
+            0,
+            193,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            493,
+            5,
+            521,
+            19
+          ],
+          "bbox_mm_pdf": [
+            49.3,
+            0.5,
+            52.1,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            493,
+            0,
+            521,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            805,
+            10,
+            818,
+            19
+          ],
+          "bbox_mm_pdf": [
+            80.5,
+            1.0,
+            81.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            805,
+            0,
+            818,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "1d605c2d4f151746b9926e86a7cc9dcbe98403648ed6851ea53341ea6180c850"
+    },
+    "617": {
+      "file": "assets/kodak_portra_800-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            288,
+            5,
+            317,
+            20
+          ],
+          "bbox_mm_pdf": [
+            28.8,
+            0.5,
+            31.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            288,
+            0,
+            317,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            600,
+            10,
+            613,
+            19
+          ],
+          "bbox_mm_pdf": [
+            60.0,
+            1.0,
+            61.3,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            600,
+            0,
+            613,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            913,
+            5,
+            941,
+            19
+          ],
+          "bbox_mm_pdf": [
+            91.3,
+            0.5,
+            94.1,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            913,
+            0,
+            941,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1225,
+            10,
+            1238,
+            19
+          ],
+          "bbox_mm_pdf": [
+            122.5,
+            1.0,
+            123.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            1225,
+            0,
+            1238,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1538,
+            5,
+            1567,
+            20
+          ],
+          "bbox_mm_pdf": [
+            153.8,
+            0.5,
+            156.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1538,
+            0,
+            1567,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "d8780d39bdad9d8515e37d8f330f0db5b93c3aed41546e0c5586e066777acf37"
+    }
+  },
+  "kodak_gold_200": {
+    "645": {
+      "file": "assets/kodak_gold_200-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            108,
+            6,
+            126,
+            19
+          ],
+          "bbox_mm_pdf": [
+            10.7773,
+            0.6,
+            12.5735,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            108,
+            0,
+            126,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            384,
+            5,
+            417,
+            20
+          ],
+          "bbox_mm_pdf": [
+            38.3193,
+            0.5,
+            41.6124,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            384,
+            0,
+            417,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "0fc40b531bec51fab0f93a640d158edf182815a8ff4fa7fee3732962189769c7"
+    },
+    "66": {
+      "file": "assets/kodak_gold_200-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            180,
+            6,
+            198,
+            19
+          ],
+          "bbox_mm_pdf": [
+            18.0,
+            0.6,
+            19.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            180,
+            0,
+            198,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            456,
+            5,
+            489,
+            20
+          ],
+          "bbox_mm_pdf": [
+            45.6,
+            0.5,
+            48.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            456,
+            0,
+            489,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "331affd290da139f8b36de7891a492e73491abd132f95fce419ac8d78e3d95a1"
+    },
+    "67": {
+      "file": "assets/kodak_gold_200-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            250,
+            6,
+            268,
+            19
+          ],
+          "bbox_mm_pdf": [
+            25.0,
+            0.6,
+            26.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            250,
+            0,
+            268,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            526,
+            5,
+            559,
+            20
+          ],
+          "bbox_mm_pdf": [
+            52.6,
+            0.5,
+            55.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            526,
+            0,
+            559,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "eece47e9347c560252b74907aa6259893d80ece9a8877c5508bf0fb78abf5465"
+    },
+    "69": {
+      "file": "assets/kodak_gold_200-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            32,
+            5,
+            65,
+            20
+          ],
+          "bbox_mm_pdf": [
+            3.2,
+            0.5,
+            6.5,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            32,
+            0,
+            65,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            320,
+            6,
+            338,
+            19
+          ],
+          "bbox_mm_pdf": [
+            32.0,
+            0.6,
+            33.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            320,
+            0,
+            338,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            596,
+            5,
+            629,
+            20
+          ],
+          "bbox_mm_pdf": [
+            59.6,
+            0.5,
+            62.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            596,
+            0,
+            629,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "f4912b8d60539358286a8f38b133321ca246ae003e93ba29ddcc17c9fd9dac85"
+    },
+    "617": {
+      "file": "assets/kodak_gold_200-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            124,
+            6,
+            142,
+            19
+          ],
+          "bbox_mm_pdf": [
+            12.4,
+            0.6,
+            14.2,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            124,
+            0,
+            142,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            452,
+            5,
+            485,
+            20
+          ],
+          "bbox_mm_pdf": [
+            45.2,
+            0.5,
+            48.5,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            452,
+            0,
+            485,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            740,
+            6,
+            758,
+            19
+          ],
+          "bbox_mm_pdf": [
+            74.0,
+            0.6,
+            75.8,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            740,
+            0,
+            758,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1016,
+            5,
+            1049,
+            20
+          ],
+          "bbox_mm_pdf": [
+            101.6,
+            0.5,
+            104.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1016,
+            0,
+            1049,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1355,
+            6,
+            1373,
+            19
+          ],
+          "bbox_mm_pdf": [
+            135.5,
+            0.6,
+            137.3,
+            1.9
+          ],
+          "full_height_source_clip_px": [
+            1355,
+            0,
+            1373,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1675,
+            5,
+            1709,
+            20
+          ],
+          "bbox_mm_pdf": [
+            167.5,
+            0.5,
+            170.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1675,
+            0,
+            1709,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "f30df0ea0f7cfd755f7b845b816379ca19f341f22fe2702d9d0174842cdaa7ca"
+    }
+  },
+  "kodak_ektar_100": {
+    "645": {
+      "file": "assets/kodak_ektar_100-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            264,
+            5,
+            307,
+            20
+          ],
+          "bbox_mm_pdf": [
+            26.3445,
+            0.5,
+            30.6355,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            264,
+            0,
+            307,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "f21770575e609ae89f13c106dd5c5bb67ee1e42c9b484dae5ec7dba0bb47f2f9"
+    },
+    "66": {
+      "file": "assets/kodak_ektar_100-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            20,
+            5,
+            40,
+            20
+          ],
+          "bbox_mm_pdf": [
+            2.0,
+            0.5,
+            4.0,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            20,
+            0,
+            40,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            336,
+            5,
+            379,
+            20
+          ],
+          "bbox_mm_pdf": [
+            33.6,
+            0.5,
+            37.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            336,
+            0,
+            379,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "ee0b88422519d2c06333ae782fd6035d5f071dd33029190d3429ebcc31e26aa6"
+    },
+    "67": {
+      "file": "assets/kodak_ektar_100-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            90,
+            5,
+            110,
+            20
+          ],
+          "bbox_mm_pdf": [
+            9.0,
+            0.5,
+            11.0,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            90,
+            0,
+            110,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            406,
+            5,
+            449,
+            20
+          ],
+          "bbox_mm_pdf": [
+            40.6,
+            0.5,
+            44.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            406,
+            0,
+            449,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            692,
+            5,
+            712,
+            20
+          ],
+          "bbox_mm_pdf": [
+            69.2,
+            0.5,
+            71.2,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            692,
+            0,
+            712,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "43fd8855de800fdeb03979129566fe76d94ea37a8c5f8bc37a6d40ef4af85978"
+    },
+    "69": {
+      "file": "assets/kodak_ektar_100-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            160,
+            5,
+            180,
+            20
+          ],
+          "bbox_mm_pdf": [
+            16.0,
+            0.5,
+            18.0,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            160,
+            0,
+            180,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            476,
+            5,
+            519,
+            20
+          ],
+          "bbox_mm_pdf": [
+            47.6,
+            0.5,
+            51.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            476,
+            0,
+            519,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            762,
+            5,
+            782,
+            20
+          ],
+          "bbox_mm_pdf": [
+            76.2,
+            0.5,
+            78.2,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            762,
+            0,
+            782,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "dc7a4e3db1c8b6ec0a87936889d09b8e338e6ed6d5cb85b78f37366be5ec06a4"
+    },
+    "617": {
+      "file": "assets/kodak_ektar_100-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            262,
+            5,
+            305,
+            20
+          ],
+          "bbox_mm_pdf": [
+            26.2,
+            0.5,
+            30.5,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            262,
+            0,
+            305,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            580,
+            5,
+            600,
+            20
+          ],
+          "bbox_mm_pdf": [
+            58.0,
+            0.5,
+            60.0,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            580,
+            0,
+            600,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            896,
+            5,
+            939,
+            20
+          ],
+          "bbox_mm_pdf": [
+            89.6,
+            0.5,
+            93.9,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            896,
+            0,
+            939,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1182,
+            5,
+            1202,
+            20
+          ],
+          "bbox_mm_pdf": [
+            118.2,
+            0.5,
+            120.2,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1182,
+            0,
+            1202,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1501,
+            5,
+            1543,
+            20
+          ],
+          "bbox_mm_pdf": [
+            150.1,
+            0.5,
+            154.3,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1501,
+            0,
+            1543,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "9941814200739860ad09be93655ae1beb167eaa17910a2a63909c079ec003c22"
+    }
+  },
+  "kodak_ektachrome_100": {
+    "645": {
+      "file": "assets/kodak_ektachrome_100-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            82,
+            5,
+            105,
+            20
+          ],
+          "bbox_mm_pdf": [
+            8.1828,
+            0.5,
+            10.4779,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            82,
+            0,
+            105,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            410,
+            4,
+            455,
+            21
+          ],
+          "bbox_mm_pdf": [
+            40.9139,
+            0.4,
+            45.4044,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            410,
+            0,
+            455,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "2a629f66bc17afea5e23da66ea78a2166892775a36bb3d8fffed1d059c51d36d"
+    },
+    "66": {
+      "file": "assets/kodak_ektachrome_100-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            154,
+            5,
+            177,
+            20
+          ],
+          "bbox_mm_pdf": [
+            15.4,
+            0.5,
+            17.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            154,
+            0,
+            177,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            482,
+            4,
+            527,
+            21
+          ],
+          "bbox_mm_pdf": [
+            48.2,
+            0.4,
+            52.7,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            482,
+            0,
+            527,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "48c0a2f94e6130a4f0421ba3605a7fb5d68d9f636f3a30b29bd3f6d566bdaab7"
+    },
+    "67": {
+      "file": "assets/kodak_ektachrome_100-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            224,
+            5,
+            247,
+            20
+          ],
+          "bbox_mm_pdf": [
+            22.4,
+            0.5,
+            24.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            224,
+            0,
+            247,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            552,
+            4,
+            597,
+            21
+          ],
+          "bbox_mm_pdf": [
+            55.2,
+            0.4,
+            59.7,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            552,
+            0,
+            597,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "a06c2f6922f45a5b30eaba459e2ffa1ec15b95086970725b1de65ce462047391"
+    },
+    "69": {
+      "file": "assets/kodak_ektachrome_100-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            294,
+            5,
+            317,
+            20
+          ],
+          "bbox_mm_pdf": [
+            29.4,
+            0.5,
+            31.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            294,
+            0,
+            317,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            622,
+            4,
+            667,
+            21
+          ],
+          "bbox_mm_pdf": [
+            62.2,
+            0.4,
+            66.7,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            622,
+            0,
+            667,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            0,
+            5,
+            2,
+            12
+          ],
+          "bbox_mm_pdf": [
+            0.0,
+            0.5,
+            0.2,
+            1.2
+          ],
+          "full_height_source_clip_px": [
+            0,
+            0,
+            2,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "880eb34102ed239aadab32220704550bf0ae070da6190ee205b6cafe52efcca4"
+    },
+    "617": {
+      "file": "assets/kodak_ektachrome_100-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            75,
+            5,
+            98,
+            20
+          ],
+          "bbox_mm_pdf": [
+            7.5,
+            0.5,
+            9.8,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            75,
+            0,
+            98,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            377,
+            4,
+            422,
+            21
+          ],
+          "bbox_mm_pdf": [
+            37.7,
+            0.4,
+            42.2,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            377,
+            0,
+            422,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            714,
+            5,
+            737,
+            20
+          ],
+          "bbox_mm_pdf": [
+            71.4,
+            0.5,
+            73.7,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            714,
+            0,
+            737,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1042,
+            4,
+            1087,
+            21
+          ],
+          "bbox_mm_pdf": [
+            104.2,
+            0.4,
+            108.7,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            1042,
+            0,
+            1087,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1343,
+            5,
+            1366,
+            20
+          ],
+          "bbox_mm_pdf": [
+            134.3,
+            0.5,
+            136.6,
+            2.0
+          ],
+          "full_height_source_clip_px": [
+            1343,
+            0,
+            1366,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1681,
+            4,
+            1726,
+            21
+          ],
+          "bbox_mm_pdf": [
+            168.1,
+            0.4,
+            172.6,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            1681,
+            0,
+            1726,
+            25
+          ]
+        }
+      ],
+      "stationary": [],
+      "crop_pixel_sha256": "8fa4819a26d34b9e05dcdd74b1f799fb026603bafb4d66a941e4575563990eee"
+    }
+  },
+  "fujifilm_provia_100f": {
+    "645": {
+      "file": "assets/fujifilm_provia_100f-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            108,
+            6,
+            153,
+            21
+          ],
+          "bbox_mm_pdf": [
+            10.7773,
+            0.6,
+            15.2679,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            108,
+            0,
+            153,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            42,
+            6,
+            101,
+            18
+          ],
+          "bbox_mm_pdf": [
+            4.1912,
+            0.6,
+            10.0788,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            42,
+            0,
+            101,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            459,
+            6,
+            476,
+            18
+          ],
+          "bbox_mm_pdf": [
+            45.8036,
+            0.6,
+            47.5,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            459,
+            0,
+            476,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "74660ee332483edbdd4835b945ad875b0a4e742928083e39d14931703bf1b208"
+    },
+    "66": {
+      "file": "assets/fujifilm_provia_100f-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            180,
+            6,
+            225,
+            21
+          ],
+          "bbox_mm_pdf": [
+            18.0,
+            0.6,
+            22.5,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            180,
+            0,
+            225,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            597,
+            6,
+            615,
+            21
+          ],
+          "bbox_mm_pdf": [
+            59.7,
+            0.6,
+            61.5,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            597,
+            0,
+            615,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            114,
+            6,
+            173,
+            18
+          ],
+          "bbox_mm_pdf": [
+            11.4,
+            0.6,
+            17.3,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            114,
+            0,
+            173,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            531,
+            6,
+            590,
+            18
+          ],
+          "bbox_mm_pdf": [
+            53.1,
+            0.6,
+            59.0,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            531,
+            0,
+            590,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "787e8140510829dd518518060320fcb83ad7cc97e3d61eabad6071be10793b08"
+    },
+    "67": {
+      "file": "assets/fujifilm_provia_100f-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            250,
+            6,
+            295,
+            21
+          ],
+          "bbox_mm_pdf": [
+            25.0,
+            0.6,
+            29.5,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            250,
+            0,
+            295,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            667,
+            6,
+            712,
+            21
+          ],
+          "bbox_mm_pdf": [
+            66.7,
+            0.6,
+            71.2,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            667,
+            0,
+            712,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            184,
+            6,
+            243,
+            18
+          ],
+          "bbox_mm_pdf": [
+            18.4,
+            0.6,
+            24.3,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            184,
+            0,
+            243,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            601,
+            6,
+            660,
+            18
+          ],
+          "bbox_mm_pdf": [
+            60.1,
+            0.6,
+            66.0,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            601,
+            0,
+            660,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "a82219f1ef71b833fcd336576952f7b6d0bb730ea92515f3c41af101e7bed025"
+    },
+    "69": {
+      "file": "assets/fujifilm_provia_100f-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            320,
+            6,
+            365,
+            21
+          ],
+          "bbox_mm_pdf": [
+            32.0,
+            0.6,
+            36.5,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            320,
+            0,
+            365,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            737,
+            6,
+            782,
+            21
+          ],
+          "bbox_mm_pdf": [
+            73.7,
+            0.6,
+            78.2,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            737,
+            0,
+            782,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            254,
+            6,
+            313,
+            18
+          ],
+          "bbox_mm_pdf": [
+            25.4,
+            0.6,
+            31.3,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            254,
+            0,
+            313,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            671,
+            6,
+            730,
+            18
+          ],
+          "bbox_mm_pdf": [
+            67.1,
+            0.6,
+            73.0,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            671,
+            0,
+            730,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "d20b9df0b108706cb84f6420c9e85b989289c957a137df6ebecf6e8c60e6bf05"
+    },
+    "617": {
+      "file": "assets/fujifilm_provia_100f-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            323,
+            6,
+            358,
+            21
+          ],
+          "bbox_mm_pdf": [
+            32.3,
+            0.6,
+            35.8,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            323,
+            0,
+            358,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            740,
+            6,
+            785,
+            21
+          ],
+          "bbox_mm_pdf": [
+            74.0,
+            0.6,
+            78.5,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            740,
+            0,
+            785,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1157,
+            6,
+            1202,
+            21
+          ],
+          "bbox_mm_pdf": [
+            115.7,
+            0.6,
+            120.2,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            1157,
+            0,
+            1202,
+            25
+          ]
+        },
+        {
+          "kind": "existing_arrow_and_visible_adjacent_digits",
+          "bbox_px_xyxy_exclusive": [
+            1574,
+            6,
+            1618,
+            21
+          ],
+          "bbox_mm_pdf": [
+            157.4,
+            0.6,
+            161.8,
+            2.1
+          ],
+          "full_height_source_clip_px": [
+            1574,
+            0,
+            1618,
+            25
+          ]
+        }
+      ],
+      "stationary": [
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            257,
+            6,
+            316,
+            18
+          ],
+          "bbox_mm_pdf": [
+            25.7,
+            0.6,
+            31.6,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            257,
+            0,
+            316,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            674,
+            6,
+            733,
+            18
+          ],
+          "bbox_mm_pdf": [
+            67.4,
+            0.6,
+            73.3,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            674,
+            0,
+            733,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            1091,
+            6,
+            1150,
+            18
+          ],
+          "bbox_mm_pdf": [
+            109.1,
+            0.6,
+            115.0,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            1091,
+            0,
+            1150,
+            25
+          ]
+        },
+        {
+          "kind": "stationary_RDPIII_or_existing_edge_fragment",
+          "bbox_px_xyxy_exclusive": [
+            1508,
+            6,
+            1567,
+            18
+          ],
+          "bbox_mm_pdf": [
+            150.8,
+            0.6,
+            156.7,
+            1.8
+          ],
+          "full_height_source_clip_px": [
+            1508,
+            0,
+            1567,
+            25
+          ]
+        }
+      ],
+      "crop_pixel_sha256": "31b0524c8e2e5fe123c322371b0fa32fff5f7962daf4e71510824448253cbe97"
+    }
+  },
+  "fujifilm_velvia_100": {
+    "645": {
+      "file": "assets/fujifilm_velvia_100-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "7e8d861c81c569eb41ffff29e414e65ee928626d08b192ac39775351458209e4"
+    },
+    "66": {
+      "file": "assets/fujifilm_velvia_100-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "6424bcf5e308cb830b9e9759e45a16014fe5171f774790716250d0f748e9f169"
+    },
+    "67": {
+      "file": "assets/fujifilm_velvia_100-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "6c09d731aebd139b473094c91d13eb1689662ad6e288a55bd5ea97267b21b871"
+    },
+    "69": {
+      "file": "assets/fujifilm_velvia_100-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "c70b21bfbdf23922716d39132e7579773550d0038199c860a01611950af0e560"
+    },
+    "617": {
+      "file": "assets/fujifilm_velvia_100-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "88bd7ef7e24bc5829c0f7f7f4e77c8c79a30a6fbd76449e1ae8a6fbb5674ed0e"
+    }
+  },
+  "fujifilm_pro_400h": {
+    "645": {
+      "file": "assets/fujifilm_pro_400h-645-bottom.png",
+      "size_px": [
+        476,
+        25
+      ],
+      "display_width_mm": 47.5,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "7e8d861c81c569eb41ffff29e414e65ee928626d08b192ac39775351458209e4"
+    },
+    "66": {
+      "file": "assets/fujifilm_pro_400h-66-bottom.png",
+      "size_px": [
+        620,
+        25
+      ],
+      "display_width_mm": 62,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "6424bcf5e308cb830b9e9759e45a16014fe5171f774790716250d0f748e9f169"
+    },
+    "67": {
+      "file": "assets/fujifilm_pro_400h-67-bottom.png",
+      "size_px": [
+        760,
+        25
+      ],
+      "display_width_mm": 76,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "6c09d731aebd139b473094c91d13eb1689662ad6e288a55bd5ea97267b21b871"
+    },
+    "69": {
+      "file": "assets/fujifilm_pro_400h-69-bottom.png",
+      "size_px": [
+        900,
+        25
+      ],
+      "display_width_mm": 90,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "c70b21bfbdf23922716d39132e7579773550d0038199c860a01611950af0e560"
+    },
+    "617": {
+      "file": "assets/fujifilm_pro_400h-617-bottom.png",
+      "size_px": [
+        1740,
+        25
+      ],
+      "display_width_mm": 174,
+      "source_pixels_per_mm": 10,
+      "background_rgb": [
+        8,
+        8,
+        8
+      ],
+      "movable": [],
+      "stationary": [],
+      "crop_pixel_sha256": "88bd7ef7e24bc5829c0f7f7f4e77c8c79a30a6fbd76449e1ae8a6fbb5674ed0e"
+    }
+  }
+}

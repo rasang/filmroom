@@ -85,6 +85,7 @@ data class EditorState(
     val paperDeveloperExhaustion: Float = 0f,
     val filmDevelopmentTime: Float = 0f,
     val paperDevelopmentTime: Float = 0f,
+    val imprint: dev.filmroom.imprint.ImprintSettings = dev.filmroom.imprint.ImprintSettings(),
     val filmBorder: Boolean = false, // output presentation only; reset defaults OFF
     val mediumFormat: dev.filmroom.border.MediumFormat? = null, // presentation only; null retains 135
     val mediumPortrait: Boolean = false, // explicit even for a square aperture
@@ -129,7 +130,7 @@ data class EditorState(
     /** Restore processing controls while leaving the user's composition and output preferences intact. */
     fun processingDefaults(defaultPaper:String,defaultRoute:String)=EditorState(
         filmStock=filmStock,paperStock=defaultPaper,outputRoute=defaultRoute,filmFormatMm=if(filmStock=="kodak_trix")8f else 35f,
-        filmBorder=filmBorder,mediumFormat=mediumFormat,mediumPortrait=mediumPortrait,negativeWhiteHoles=negativeWhiteHoles,composition=composition,crop=crop,
+        imprint=imprint,filmBorder=filmBorder,mediumFormat=mediumFormat,mediumPortrait=mediumPortrait,negativeWhiteHoles=negativeWhiteHoles,composition=composition,crop=crop,
         useGpu=useGpu,outputColorSpace=outputColorSpace,outputGamut=outputGamut,
     )
     /** Switching the output frame does not silently alter grain/optical filmFormatMm. */
@@ -155,6 +156,7 @@ data class EditorState(
     fun withPresentationTransform(value:CompositionTransform)=if(filmBorder)copy(composition=value) else copy(crop=crop.copy(transform=value))
     fun json(mode: String = "preview", includePresentation: Boolean = true) = JSONObject().apply {
         if(includePresentation){
+            put("imprint",imprint.json())
             put("filmBorder",filmBorder)
             mediumFormat?.let{put("mediumFormat",it.name);put("mediumPortrait",mediumPortrait)}
             put("negativeWhiteHoles",negativeWhiteHoles)
@@ -247,6 +249,7 @@ data class EditorState(
                 }
             EditorState(
                 filmDevelopmentTime=j.optDouble("filmDevelopmentTime",0.0).toFloat(),paperDevelopmentTime=j.optDouble("paperDevelopmentTime",0.0).toFloat(),
+                imprint=j.optJSONObject("imprint")?.let{dev.filmroom.imprint.ImprintSettings.fromJson(it)} ?: dev.filmroom.imprint.ImprintSettings(),
                 filmBorder=j.optBoolean("filmBorder",false),
                 mediumFormat=j.optString("mediumFormat").takeIf{it.isNotEmpty()}?.let{dev.filmroom.border.MediumFormat.valueOf(it)},
                 mediumPortrait=j.optBoolean("mediumPortrait",false),
