@@ -66,7 +66,7 @@ class ImprintPlan private constructor(
                 if(stamps.sumOf{it.raster.residentBytes}+stamp.raster.residentBytes>MAX_WORKING_BYTES)return false
                 stamps+=stamp;return true
             }
-            if(settings.datePlacement=="photo")content.date?.let { text ->
+            if(settings.datePlacement=="photo" || medium==null)content.date?.let { text ->
                 val ax=when {border?.geometryVersion==5->3.0;bw!=null->bw.left;border!=null->1.0;else->0.0}
                 val ay=when {border?.geometryVersion==5->2.5;bw!=null->bw.top;border!=null->5.5;else->0.0}
                 val aw=when {border?.geometryVersion==5->border.mediumFormat!!.longitudinalMm;bw!=null->bw.apertureWidth;border!=null->36.0;else->width.toDouble()}
@@ -83,17 +83,32 @@ class ImprintPlan private constructor(
             }
             val fields=if(settings.exposure && exposureSupported(border))content.fields else emptyList()
             if(border!=null && border.geometryVersion!=5){
-                fields.forEachIndexed { index,field ->
-                    // Compact valid fields from the first available inter-perforation position.
-                    // Whole values shrink uniformly to the physical gap; nothing is truncated.
-                    val r=fit(field.text,"pentax_mzs",.60*unit*ppm*settings.size,2.35*unit*ppm,1.9*unit*ppm,settings.glow,tone,MAX_WORKING_BYTES-stamps.sumOf{it.raster.residentBytes},rotated)
-                    if(r==null)omitted++ else {
-                        val center=(4.75+index*4.75)*unit
-                        val base=if(border.stock in setOf("fujifilm_c200","fujifilm_xtra_400","fujifilm_pro_400h"))30.48 else 31.28
-                        val x=center-r.coreWidth/ppm/2
-                        val y=nativeHeight-base*unit-r.coreHeight/ppm
-                        if(!add(r,x,y))omitted++
+                // Fit the whole set at one height. Per-field shrinking made ISO/aperture
+                // much smaller than the shutter and exposure compensation.
+                var h=(.60*unit*ppm*settings.size).coerceIn(1.0,512.0)
+                var commonHeight:Double?=null
+                repeat(64) {
+                    if(commonHeight==null && fields.isNotEmpty()) {
+                        val sizes=fields.map{dimensions(it.text,"pentax_mzs",h)}
+                        val bytes=sizes.map{(w,hh)->w.toLong()*hh*3}
+                        val peak=stamps.sumOf{it.raster.residentBytes}+bytes.sum()+(if(rotated)bytes.maxOrNull() ?: 0L else 0L)
+                        if(sizes.all{(w,hh)->w<=2.35*unit*ppm && hh<=1.9*unit*ppm} &&
+                            bytes.all{it<=ImprintRaster.MAX_MASK_BYTES} && peak<=MAX_WORKING_BYTES)commonHeight=h
+                        else h=(h*.90).coerceAtLeast(1.0)
                     }
+                }
+                val fh=commonHeight
+                if(fh==null)omitted+=fields.size else fields.forEachIndexed { index,field ->
+                    // Center on real inter-perforation gaps. Even counts leave the center
+                    // gap empty rather than moving lettering onto a perforation.
+                    val half=fields.size/2
+                    val offset=if(fields.size%2==1) index-half else if(index<half) index-half else index-half+1
+                    val center=(19.0+offset*4.75)*unit
+                    val r=ImprintRaster.create(field.text,"pentax_mzs",fh,settings.glow,tone)
+                    val base=if(border.stock in setOf("fujifilm_c200","fujifilm_xtra_400","fujifilm_pro_400h"))30.48 else 31.28
+                    val x=center-r.coreWidth/ppm/2
+                    val y=nativeHeight-base*unit-r.coreHeight/ppm
+                    if(!add(r,x,y))omitted++
                 }
             }else if(medium!=null){
                 data class Piece(val text:String,val style:String,val date:Boolean=false)

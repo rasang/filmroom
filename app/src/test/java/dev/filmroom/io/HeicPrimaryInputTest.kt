@@ -288,4 +288,114 @@ class HeicPrimaryInputTest {
         val bytes=sample();val at=bytes.toString(Charsets.ISO_8859_1).indexOf("iloc");bytes[at+8]=0x24;rejected(bytes)
     }
 
+    /** Byte-structured fixtures, not a HEVC pixel-decoding claim. Auxiliary payload is never selected. */
+    internal fun appleSample(
+        grid:Boolean=false, method:Int=0, transfer:Int=13, depth:Int=0,
+        auxType:String="urn:com:apple:photo:2020:aux:hdrgainmap", auxTerminated:Boolean=true,
+        auxVersion:Int=0, auxFlags:Int=0, auxExtra:ByteArray=byteArrayOf(),
+        auxFrom:Int=20, auxTargets:List<Int> = listOf(10), extraRef:ByteArray=byteArrayOf(),
+        primaryExtra:ByteArray?=null, auxExtraProperty:ByteArray?=null,
+        hiddenAux:Boolean=true, color:ByteArray=colr(transfer), includeToneMap:Boolean=false,
+    ):ByteArray {
+        val gridPayload=byteArrayOf(0,0,0,1,0,192.toByte(),0,64)
+        val payloads=linkedMapOf<Int,ByteArray>()
+        if(grid){payloads[10]=gridPayload;payloads[3]=coded;payloads[2]=coded.reversedArray()}
+        else payloads[10]=coded
+        payloads[20]=byteArrayOf(7,7,7,7)
+        val auxHvcc=hvcc(0).also {it[9]=4;it[24]=0xfc.toByte()}
+        val props=listOf(ispe(if(grid)192 else 96,64),hvcc(depth),color,box("irot",byteArrayOf(3)),
+            auxHvcc,full("auxC",auxType.toByteArray(Charsets.US_ASCII)+(if(auxTerminated)byteArrayOf(0)else byteArrayOf())+auxExtra,auxVersion,auxFlags),
+            ispe(48,32),ispe())+listOfNotNull(primaryExtra,auxExtraProperty)
+        val selected=if(grid)listOf(10,3,2)else listOf(10)
+        val ftyp=box("ftyp",data {writeBytes("heic");writeInt(0);writeBytes("mif1")})
+        fun meta(start:Int)=full("meta",data {
+            write(full("hdlr",data {writeInt(0);writeBytes("pict");repeat(3){writeInt(0)};writeByte(0)}))
+            write(full("pitm",data {writeShort(10)}))
+            val ids=selected+20+if(includeToneMap)listOf(30)else emptyList()
+            write(full("iinf",data {writeShort(ids.size);for(id in ids){
+                val type=when {id==30->"tmap";id==10&&grid->"grid";else->"hvc1"}
+                write(full("infe",data {writeShort(id);writeShort(0);writeBytes(type);writeByte(0)},2,
+                    if(id==20&&hiddenAux||id in listOf(2,3))1 else 0))
+            }}))
+            val associations=linkedMapOf<Int,List<Int>>()
+            for(id in selected)associations[id]=(if(id==10)listOf(0x81,0x83,0x84)+if(grid)emptyList()else listOf(0x82)
+                else listOf(0x88,0x82,0x83))+if(id==10&&primaryExtra!=null)listOf(0x89)else emptyList()
+            associations[20]=listOf(0x85,0x86,0x87)+if(auxExtraProperty!=null)listOf(0x80+9+if(primaryExtra!=null)1 else 0)else emptyList()
+            write(box("iprp",box("ipco",data {props.forEach {write(it)}})+full("ipma",data {
+                writeInt(associations.size);for((id,links)in associations.toSortedMap()){writeShort(id);writeByte(links.size);links.forEach {writeByte(it)}}
+            })))
+            write(full("iref",reference("auxl",auxFrom,auxTargets)+(if(grid)reference("dimg",10,listOf(3,2))else byteArrayOf())+
+                (if(includeToneMap)reference("dimg",30,listOf(10,20))else byteArrayOf())+extraRef))
+            write(full("iloc",data {
+                writeByte(0x44);writeByte(0);writeShort(payloads.size);var offset=if(method==1)0 else start
+                for((id,bytes)in payloads){writeShort(id);writeShort(method);writeShort(0);writeShort(1);writeInt(offset);writeInt(bytes.size);offset+=bytes.size}
+            },1))
+            if(method==1)write(box("idat",data {payloads.values.forEach {write(it)}}))
+        })
+        val initial=meta(0)
+        return ftyp+meta(ftyp.size+initial.size+8)+box("mdat",if(method==1)byteArrayOf()else data {payloads.values.forEach {write(it)}})
+    }
+
+    @Test fun appleGainmapIsolationPreservesSelectedPayloadPropertiesAndRotation(){
+        for(grid in listOf(false,true))for(method in 0..1)withSource(appleSample(grid=grid,method=method)){root,source->
+            val original=source.readBytes();val expectedIds=if(grid)setOf(10,3,2)else setOf(10)
+            val payloads=itemPayloads(original).filterKeys {it in expectedIds}
+            val props=propertyAssociations(original).filterKeys {it in expectedIds}
+            var view:File?=null
+            HeicPrimaryInput.open(source).use {p->
+                assertEquals("Metadata must not create a view",1,root.listFiles()!!.size)
+                assertEquals(64,p.info.displayWidth);assertEquals(if(grid)192 else 96,p.info.displayHeight)
+                assertEquals(90,p.info.rotationDegreesClockwise)
+                view=p.file;assertEquals(view,p.file)
+                val bytes=p.file.readBytes()
+                assertEquals(payloads,itemPayloads(bytes));assertEquals(props,propertyAssociations(bytes))
+                assertEquals(expectedIds.sorted(),propertyAssociations(bytes).keys.toList())
+                if(grid)assertEquals(listOf(3,2),derivedItems(bytes,10))
+                assertFalse(bytes.toString(Charsets.ISO_8859_1).contains("auxC"))
+                assertFalse(bytes.toString(Charsets.ISO_8859_1).contains("auxl"))
+                assertEquals(p.info,HeicContainer.inspect(p.file))
+            }
+            assertFalse(view!!.exists());assertArrayEquals(original,source.readBytes());assertEquals(1,root.listFiles()!!.size)
+        }
+    }
+    @Test fun appleGainmapIsolationRetainsExactDisplayP3Icc(){
+        val asset=listOf(File("src/androidTest/assets/heic/corners-icc-p3.heic"),File("app/src/androidTest/assets/heic/corners-icc-p3.heic")).first {it.isFile}
+        val fixture=asset.readBytes();val meta=children(fixture,topBox(fixture,"meta"),true)
+        val iprp=children(fixture,meta.single {it.type=="iprp"});val col=children(fixture,iprp.single {it.type=="ipco"}).single {it.type=="colr"}
+        val icc=fixture.copyOfRange(col.start,col.end)
+        withSource(appleSample(grid=true,color=icc)){_,source->HeicPrimaryInput.open(source).use {p->
+            assertEquals(HeicIccProfile.ColorIdentity.DISPLAY_P3,p.info.sourceColor)
+            val originalProps=propertyAssociations(source.readBytes())
+            for((id,props)in propertyAssociations(p.file.readBytes()))assertEquals(originalProps.getValue(id),props)
+        }}
+    }
+    @Test fun appleGainmapTypeMustBeExactAndWellFormed(){
+        for(type in listOf("urn:mpeg:hevc:2015:auxid:1","urn:mpeg:hevc:2015:auxid:2","unknown", "urn:com:apple:photo:2020:aux:hdrgainmap-extra"))rejected(appleSample(auxType=type))
+        rejected(appleSample(auxTerminated=false));rejected(appleSample(auxVersion=1));rejected(appleSample(auxFlags=1))
+        rejected(appleSample(auxExtra=byteArrayOf(1)))
+        rejected(appleSample(auxExtraProperty=full("auxC","urn:com:apple:photo:2020:aux:hdrgainmap\u0000".toByteArray())))
+    }
+    @Test fun appleGainmapCannotHideOtherDependenciesOrAmbiguousDirection(){
+        rejected(appleSample(auxFrom=10,auxTargets=listOf(20)))
+        rejected(appleSample(auxTargets=listOf(10,20)))
+        rejected(appleSample(auxTargets=emptyList()))
+        rejected(appleSample(extraRef=reference("auxl",20,listOf(10))))
+        rejected(appleSample(extraRef=reference("abcd",20,listOf(10))))
+        rejected(appleSample(extraRef=reference("abcd",10,listOf(20))))
+        rejected(appleSample(extraRef=reference("dimg",20,listOf(10))))
+        rejected(appleSample(hiddenAux=false));rejected(appleSample(includeToneMap=true))
+    }
+    @Test fun appleGainmapDoesNotRelaxPrimarySdrOrGeometryContracts(){
+        rejected(appleSample(depth=2));rejected(appleSample(transfer=16));rejected(appleSample(transfer=18))
+        for(type in listOf("imir","clap","pasp","abcd"))rejected(appleSample(primaryExtra=box(type,byteArrayOf(0))))
+    }
+    @Test fun appleGainmapCancellationAndClosedInputLeaveOnlyOriginal(){
+        withSource(appleSample()){root,source->
+            val prepared=HeicPrimaryInput.open(source){if(root.listFiles()!!.any {it.name.startsWith("heic-primary-")})throw CancellationException("interrupted")}
+            try{try{prepared.file;fail("Expected cancellation")}catch(_:CancellationException){}}finally{prepared.close()}
+            try{prepared.file;fail("Closed input must not rematerialize")}catch(_:IllegalStateException){}
+            assertEquals(setOf("source.heic"),root.listFiles()!!.map {it.name}.toSet())
+        }
+    }
+
 }

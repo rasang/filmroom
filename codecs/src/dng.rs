@@ -53,6 +53,8 @@ pub struct Dng {
     pub gain_maps: Vec<crate::gainmap::GainMap>,
     pub cfa_gain_maps: Vec<crate::cfa_gainmap::CfaGainMap>,
     pub stage1_opcodes: Vec<crate::opcodes::Stage1Opcode>,
+    pub warp: Option<crate::dng_warp::WarpRectilinear>,
+    pub cfa_color: Option<crate::dng_cfa_color::Transform>,
 }
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -225,7 +227,7 @@ impl Dng {
             w: (a[3] - a[1]) as usize,
             h: (a[2] - a[0]) as usize,
         };
-        let (gain_maps, cfa_gain_maps, stage1_opcodes) =
+        let (gain_maps, cfa_gain_maps, stage1_opcodes, warp) =
             crate::compat::lens_opcodes(root, raw, width, height, cfa_mode, active, &mut warnings)?;
         if profile.is_some()
             && (!gain_maps.is_empty() || !cfa_gain_maps.is_empty() || !stage1_opcodes.is_empty())
@@ -346,6 +348,10 @@ impl Dng {
         if wb.iter().any(|&x| x > 100.) {
             return Err(color_err());
         }
+        let cfa_color = if cfa_mode { crate::dng_cfa_color::parse(root, raw)? } else { None };
+        if cfa_color.is_some() && !gain_maps.is_empty() {
+            return Err(err("UNSUPPORTED_DNG_OPCODE", "probe"));
+        }
         let mut matrix = None;
         for (mt, il) in [(50721, 50778), (50722, 50779)] {
             if let (Some(m), Some(l)) = (inherited(root, raw, mt), inherited(root, raw, il)) {
@@ -368,15 +374,19 @@ impl Dng {
                 }
             }
         }
-        let matrix = matrix.ok_or_else(color_err)?;
-        if matrix.len() != 9 || matrix.iter().any(|x| !x.is_finite() || x.abs() > 10.) {
+        // The new ColorMatrix-only route carries its own transform. No D65
+        // matrix is invented or relabelled for demosaic-only intermediate data.
+        let matrix = if cfa_color.is_some() { Vec::new() } else { matrix.ok_or_else(color_err)? };
+        if cfa_color.is_none() && (matrix.len() != 9 || matrix.iter().any(|x| !x.is_finite() || x.abs() > 10.)) {
             return Err(color_err());
         }
+        if cfa_color.is_none() {
         let m = &matrix;
         let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
             + m[2] * (m[3] * m[7] - m[4] * m[6]);
         if det.abs() < 1e-8 {
             return Err(color_err());
+        }
         }
         let orientation = uint(root, 274, Some(1))?;
         if !(1..=8).contains(&orientation) {
@@ -497,6 +507,13 @@ impl Dng {
                 return Err(err("MEMORY_BUDGET", "probe"));
             }
         }
+        let has_repair = stage1_opcodes.iter().any(|op|matches!(op,crate::opcodes::Stage1Opcode::FixBadPixelsConstant(_)));
+        if has_repair && (!cfa_mode || compression != 1 || tiled) {
+            return Err(err("UNSUPPORTED_DNG_OPCODE", "probe"));
+        }
+        if warp.is_some() && (profile.is_some() || !gain_maps.is_empty() || !cfa_mode) {
+            return Err(err("UNSUPPORTED_DNG_OPCODE", "probe"));
+        }
         let decoded = Self {
             width,
             height,
@@ -528,6 +545,8 @@ impl Dng {
             gain_maps,
             cfa_gain_maps,
             stage1_opcodes,
+            warp,
+            cfa_color,
         };
         if compression == 52546 {
             crate::jxl::validate_headers(&decoded, f)?;
@@ -591,6 +610,8 @@ impl Dng {
                 } else {
                     "DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
+            } else if self.cfa_color.is_some() {
+                "DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve"
             } else {
                 "rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },
@@ -706,6 +727,8 @@ impl Dng {
                 .iter()
                 .map(|v| v.storage_bytes())
                 .sum::<u64>();
+        let map_bytes = map_bytes + if self.warp.is_some() { 8*1024*1024 + 65536 } else { 0 }
+            + if self.has_bad_pixel_repair() { self.width as u64 * 14 } else { 0 };
         if self.compression == 52546 {
             return map_bytes + crate::jxl::scratch_bytes(self);
         }
@@ -726,6 +749,46 @@ impl Dng {
             + (self.tile_width * self.tile_height * self.cpp * 2) as u64
             + crate::lossless::OVERHEAD
     }
+    pub fn has_bad_pixel_repair(&self) -> bool {
+        self.stage1_opcodes.iter().any(|op|matches!(op,crate::opcodes::Stage1Opcode::FixBadPixelsConstant(_)))
+    }
+    fn read_repaired_tile(&self,file:&mut File,y:usize,h:usize,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<f32>> {
+        if self.cpp!=1||self.compression!=1||self.rows_per_strip==0 {
+            return Err(err("UNSUPPORTED_DNG_OPCODE","decode"));
+        }
+        let row_bytes=(self.width*self.sample_bits as usize).div_ceil(8);
+        let mut encoded=vec![0u8;row_bytes];
+        let mut rows:Vec<Vec<u16>>=(0..5).map(|_|vec![0;self.width]).collect();
+        let mut indices=[usize::MAX;5];
+        let mut out=vec![0f32;self.active.w*h];
+        for r in 0..h {
+            if cancel.load(std::sync::atomic::Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
+            let sy=y+r;
+            for yy in sy.saturating_sub(2)..=(sy+2).min(self.height-1) {
+                let slot=yy%5;
+                if indices[slot]==yy {continue;}
+                let strip=yy/self.rows_per_strip;
+                let offset=self.offsets[strip] as u64+((yy%self.rows_per_strip)*row_bytes)as u64;
+                file.seek(SeekFrom::Start(offset)).map_err(|e|io_error(e,"decode"))?;
+                file.read_exact(&mut encoded).map_err(|e|io_error(e,"decode"))?;
+                for x in 0..self.width {
+                    rows[slot][x]=if self.sample_bits==16 {self.endian.u16(&encoded[x*2..x*2+2])}
+                        else {cfa_storage::packed_sample(&encoded,x,self.sample_bits)};
+                }
+                indices[slot]=yy;
+            }
+            for i in 0..self.active.w {
+                let x=self.active.x+i;
+                let sample=crate::opcodes::apply_stage1_neighborhood(&self.stage1_opcodes,self.width,self.height,x,sy,
+                    |xx,yy| {if indices[yy%5]!=yy {return Err(err("INVALID_INPUT","decode"));}Ok(rows[yy%5][xx])})?;
+                let sample=self.linearization.as_ref().map_or(sample,|t|t.apply(sample))as f32;
+                let ch=(sy%2)*2+x%2;
+                out[r*self.active.w+i]=(sample-self.black[ch]).max(0.)/(self.white[ch]-self.black[ch]);
+            }
+        }
+        crate::cfa_gainmap::apply_region(&self.cfa_gain_maps,&mut out,self.active.w,self.active.h,0,y-self.active.y,self.active.w,cancel)?;
+        Ok(out)
+    }
     pub fn read_tile(&self, file: &mut File, y: usize, h: usize) -> Result<Vec<f32>> {
         self.read_tile_cancellable(file, y, h, &std::sync::atomic::AtomicBool::new(false))
     }
@@ -743,6 +806,9 @@ impl Dng {
                 .is_none()
         {
             return Err(err("INVALID_INPUT", "decode"));
+        }
+        if self.has_bad_pixel_repair() {
+            return self.read_repaired_tile(file, y, h, cancel);
         }
         if self.streaming_linear || self.cfa_spool() {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "decode"));

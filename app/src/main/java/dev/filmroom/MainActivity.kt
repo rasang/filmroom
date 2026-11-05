@@ -387,7 +387,7 @@ class MainActivity:ComponentActivity() {
             if(pendingImprintSource==s.photo?.cacheKey)showImprintDialog(draft)
             pendingImprintSource=null
         }
-        photo.bindImprint(if(s.compare)null else s.imprintPlan)
+        bindImprintPreview(s)
         updateDetailStatus(photo.detailStatus)
         badge.text=when{ s.compare->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1b0acbdaf172);s.rendered!=null->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6d05fcab868f, s.rendered.width, s.rendered.height);else->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c37117eec876) }
         enabled(resetPresetButton,s.editable && !s.compositionEditing)
@@ -438,7 +438,7 @@ class MainActivity:ComponentActivity() {
     private fun updateExportProgress(s:EditorUiState){
         if(!s.exporting){dismissExportProgress();return}
         if(exportProgressDialog==null){
-            val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(16));background=shape(surface)}
+            val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(16));setBackgroundResource(R.drawable.filmroom_dialog_background)}
             val animation=ProcessingAnimationView(this)
             content.addView(animation,LinearLayout.LayoutParams(-1,dp(148)))
             val progress=text("",18f).apply{gravity=Gravity.CENTER;minLines=2;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE;setPadding(0,dp(8),0,dp(16))}
@@ -1013,9 +1013,11 @@ class MainActivity:ComponentActivity() {
         },LinearLayout.LayoutParams(-2,-2))
         val content=source?.let{dev.filmroom.imprint.ImprintContent.from(it.photoMetadata,p.imprint.copy(dateEnabled=true))}
         val currentDate=content?.date ?: t(dev.filmroom.imprint.ImprintText.MISSING)
-        val origin=if(p.imprint.manualDateTime!=null)t(dev.filmroom.imprint.ImprintText.MANUAL)else t(dev.filmroom.imprint.ImprintText.ORIGINAL)
-        dateRow.addView(button(currentDate+" · "+origin){showImprintDialog()}.apply{
-            tag="imprint-date-preview";textSize=12f;enabled(this,s.editable);contentDescription=t(dev.filmroom.imprint.ImprintText.DATE_DIALOG)+" · "+text
+        val origin=if(p.imprint.manualDateTime!=null)t(dev.filmroom.imprint.ImprintText.MANUAL)else t(dev.filmroom.imprint.ImprintText.source(source?.photoMetadata))
+        dateRow.addView(dev.filmroom.imprint.ImprintDatePreviewButton(this,content?.date,p.imprint.selectedDateStyle,p.imprint.size,p.imprint.glow,raised,muted).apply{
+            tag="imprint-date-preview";background=shape(raised);enabled(this,s.editable)
+            contentDescription=t(dev.filmroom.imprint.ImprintText.DATE_DIALOG)+" · "+currentDate+" · "+origin
+            tooltipText=contentDescription;setOnClickListener{showImprintDialog()}
         },if(dateRow.orientation==LinearLayout.HORIZONTAL)LinearLayout.LayoutParams(0,-2,1f).apply{marginStart=dp(8)}else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8)})
         // Separate the selected tool tile from the equally colored date-preview button below it.
         target.addView(dateRow,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12)})
@@ -1028,8 +1030,18 @@ class MainActivity:ComponentActivity() {
             val data=if(!supported)t(dev.filmroom.imprint.ImprintText.INACTIVE)else content?.fields?.joinToString("   "){it.text}.orEmpty().ifEmpty{t(dev.filmroom.imprint.ImprintText.NO_EXPOSURE)}
             target.addView(text(data,12f,muted).apply{tag="imprint-exposure-preview"},LinearLayout.LayoutParams(-1,-2))
         }
-        if(p.imprint.dateEnabled && p.imprint.datePlacement=="edge" && (!p.filmBorder || p.effectiveMediumFormat==null))
-            target.addView(text(t(dev.filmroom.imprint.ImprintText.EDGE_DATE_INACTIVE),12f,muted),LinearLayout.LayoutParams(-1,-2))
+    }
+    private val imprintPreviewSession=dev.filmroom.imprint.ImprintPreviewSession()
+    private var imprintDraftPreview:dev.filmroom.imprint.ImprintSettings?=null
+    private fun bindImprintPreview(s:EditorUiState){
+        val draft=imprintDraftPreview?.takeIf{imprintDialogSource==s.photo?.cacheKey && !s.compare}
+        val border=s.presentation
+        val crop=s.cropPresentation
+        val plan=if(draft!=null && s.photo!=null && (border!=null || crop!=null)) {
+            dev.filmroom.imprint.ImprintPlan.create(draft,s.photo.photoMetadata,
+                border?.outputWidth ?: crop!!.outputWidth,border?.outputHeight ?: crop!!.outputHeight,border)
+        }else if(s.compare)null else s.imprintPlan
+        photo.bindImprint(plan,draftPreview=draft!=null)
     }
     private var imprintDialog:AlertDialog?=null
     private var imprintDialogSource:String?=null
@@ -1041,7 +1053,11 @@ class MainActivity:ComponentActivity() {
         if(!current.editable)return
         finishCompositionForParameterEdit()
         imprintDialogSource=source.cacheKey
-        imprintDialog=dev.filmroom.imprint.ImprintDialog.show(this,current.parameters,source.photoMetadata,draft){settings->
+        val publishPreview=imprintPreviewSession.begin {settings->
+            imprintDraftPreview=if(model.state.value.photo===source)settings else null
+            bindImprintPreview(model.state.value)
+        }
+        imprintDialog=dev.filmroom.imprint.ImprintDialog.show(this,current.parameters,source.photoMetadata,draft,onPreview=publishPreview){settings->
             val latest=model.state.value
             if(latest.editable && latest.photo===source)model.parameters(latest.parameters.copy(imprint=settings.copy(dateEnabled=latest.parameters.imprint.dateEnabled,exposure=latest.parameters.imprint.exposure)))
         }

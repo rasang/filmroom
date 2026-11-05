@@ -2,11 +2,9 @@ package dev.filmroom.imprint
 
 import android.app.AlertDialog
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
-import android.text.format.DateFormat
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -27,10 +25,11 @@ internal object ImprintDialog {
     private val sampleDate = LocalDate.of(2000, 1, 1)
 
     private data class DateDraft(var date: LocalDate?, var time: LocalTime?, var manual: Boolean) {
-        fun dateTime(): LocalDateTime? = date?.let { date -> time?.let { LocalDateTime.of(date, it) } }
+        fun dateTime(): LocalDateTime? = date?.let { LocalDateTime.of(it, time ?: LocalTime.MIDNIGHT) }
     }
 
     private class DraftScrollView(context: Context, val dateDraft: DateDraft) : ScrollView(context) {
+        var interrupted: (() -> Unit)? = null
         var picker: AlertDialog? = null
         var pickerKind: String? = null
         fun dismissPicker() {
@@ -39,7 +38,12 @@ internal object ImprintDialog {
             pickerKind = null
             previous?.dismiss()
         }
+        override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+            super.onWindowFocusChanged(hasWindowFocus)
+            if (!hasWindowFocus) interrupted?.invoke()
+        }
         override fun onDetachedFromWindow() {
+            interrupted?.invoke()
             // Closing the editor (including a source change) also closes its pending native picker.
             dismissPicker()
             super.onDetachedFromWindow()
@@ -76,7 +80,8 @@ internal object ImprintDialog {
         val root = checkNotNull(dialog.window).decorView
         val group = root.findViewWithTag<RadioGroup>("imprint-style")
         putInt("imprint-style", (0 until group.childCount).firstOrNull { group.getChildAt(it).id == group.checkedRadioButtonId } ?: 0)
-        for (tag in listOf("imprint-placement", "imprint-corner")) putInt(tag, root.findViewWithTag<Spinner>(tag).selectedItemPosition)
+        putInt("imprint-placement", if (root.findViewWithTag<Switch>("imprint-placement").isChecked) 1 else 0)
+        putInt("imprint-corner", root.findViewWithTag<Spinner>("imprint-corner").selectedItemPosition)
         for (tag in listOf("imprint-size", "imprint-glow")) putInt(tag, root.findViewWithTag<SeekBar>(tag).progress)
         val scroll = root.findViewWithTag<DraftScrollView>("imprint-scroll")
         val values = scroll.dateDraft
@@ -93,7 +98,7 @@ internal object ImprintDialog {
         }
     }
 
-    fun show(context: Context, state: EditorState, metadata: PhotoMetadata, draft: Bundle? = null, onApply: (ImprintSettings) -> Unit): AlertDialog {
+    fun show(context: Context, state: EditorState, metadata: PhotoMetadata, draft: Bundle? = null, onPreview: (ImprintSettings?) -> Unit = {}, onApply: (ImprintSettings) -> Unit): AlertDialog {
         val old = state.imprint
         // Keep the framework hierarchy intact: clock-mode actions live inside TimePicker, and
         // wrapping it in scroll views can mismeasure/clip those actions. Use native spinners when
@@ -103,7 +108,7 @@ internal object ImprintDialog {
         val pickerTheme = if (compactPicker) dev.filmroom.R.style.ImprintCompactPickerTheme else 0
         fun t(key: ImprintText) = key.text(context)
         fun dp(n: Int) = (context.resources.displayMetrics.density * n + .5f).toInt()
-        val original = ImprintContent.originalCaptureDateTime(metadata)
+        val original = metadata.imprintDateTime()
         val values = restoreDateDraft(draft, ImprintContent.displayDateTime(metadata, old), old.manualDateTime != null)
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -137,22 +142,39 @@ internal object ImprintDialog {
         } }
         val initialStyle = (draft?.getInt("imprint-style", styles.indexOf(old.selectedDateStyle)) ?: styles.indexOf(old.selectedDateStyle)).coerceIn(styles.indices)
         group.check(buttons[initialStyle].id)
-        label(t(ImprintText.DATE_TIME))
-        val dateValue = action("imprint-date-value").apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
-        val timeValue = action("imprint-time-value").apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
+        label(t(ImprintText.DATE))
+        val dateRow = LinearLayout(context).apply {
+            tag = "imprint-dialog-date-row"
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        }
+        column.addView(dateRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        val dateValue = action("imprint-date-value").apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            // The adjacent icon keeps a full touch target; the date wraps on narrow screens.
+            minWidth = 0; minimumWidth = 0
+        }
+        column.removeView(dateValue)
+        dateRow.addView(dateValue, LinearLayout.LayoutParams(0, -2, 1f))
+        val restore = ImageButton(context).apply {
+            tag = "imprint-restore-capture"
+            setImageResource(android.R.drawable.ic_menu_revert)
+            imageTintList = android.content.res.ColorStateList.valueOf(dev.filmroom.ui.FilmroomPalette.muted)
+            contentDescription = t(ImprintText.RESTORE_CAPTURE)
+            tooltipText = contentDescription
+            minimumWidth = dp(48); minimumHeight = dp(48)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        dateRow.addView(restore, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
         val error = label(t(ImprintText.INVALID_DATE_TIME)).apply {
             tag = "imprint-date-error"; visibility = View.GONE
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         var showDateError = draft?.getBoolean("imprint-date-error", false) ?: false
         val source = label("").apply { tag = "imprint-source" }
-        val restore = action("imprint-restore-capture").apply { text = t(ImprintText.RESTORE_CAPTURE) }
         val preview = label("").apply { tag = "imprint-content" }
-        label(t(ImprintText.DATE_NOTE))
-        label(t(ImprintText.TIME_PRECISION_NOTE)).apply { tag = "imprint-time-note" }
 
         fun choice(key: ImprintText, labels: List<String>, index: Int, tagName: String): Spinner {
-            label(t(key))
+            label(t(key)).tag = "$tagName-label"
             return Spinner(context).apply {
                 tag = tagName; contentDescription = t(key)
                 adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, labels)
@@ -160,7 +182,18 @@ internal object ImprintDialog {
                 minimumHeight = dp(48)
             }.also { column.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
-        val placement = choice(ImprintText.PLACEMENT, listOf(t(ImprintText.IN_PHOTO), t(ImprintText.ON_EDGE)), ImprintSettings.PLACEMENTS.indexOf(old.datePlacement), "imprint-placement")
+        // Placement is a 120-only option, separate from the date imprint master switch.
+        // Retain the saved preference while hidden so changing format does not erase it.
+        val placement = Switch(context).apply {
+            tag = "imprint-placement"
+            text = t(ImprintText.ON_EDGE)
+            contentDescription = t(ImprintText.PLACEMENT) + " · " + t(ImprintText.ON_EDGE)
+            textSize = 14f; minimumHeight = dp(48)
+            setPadding(0, dp(10), 0, dp(3))
+            isChecked = (draft?.getInt("imprint-placement", ImprintSettings.PLACEMENTS.indexOf(old.datePlacement))
+                ?: ImprintSettings.PLACEMENTS.indexOf(old.datePlacement)) == 1
+            visibility = if (state.filmBorder && state.effectiveMediumFormat != null) View.VISIBLE else View.GONE
+        }.also { column.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         val corner = choice(ImprintText.POSITION, listOf(ImprintText.BR, ImprintText.BL, ImprintText.TR, ImprintText.TL).map(::t), ImprintSettings.CORNERS.indexOf(old.corner), "imprint-corner")
         fun slider(key: ImprintText, start: Int, tagName: String): SeekBar {
             label(t(key))
@@ -172,24 +205,42 @@ internal object ImprintDialog {
         val size = slider(ImprintText.SIZE, ((old.size - .6) * 100).roundToInt(), "imprint-size")
         val glow = slider(ImprintText.GLOW, (old.glow * 100).roundToInt(), "imprint-glow")
         label(t(ImprintText.SHARED_APPEARANCE))
+        fun settings(): ImprintSettings = old.copy(
+            dateStyle = styles[buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)],
+            corner = ImprintSettings.CORNERS[corner.selectedItemPosition],
+            size = .6 + size.progress / 100.0, glow = glow.progress / 100.0,
+            datePlacement = if (placement.isChecked) "edge" else "photo",
+            manualDateTime = if (values.manual) values.dateTime()?.let(ImprintSettings::formatDateTime) else null
+        )
+        var adjusting = false
         var lastPreviewKey: String? = null
         fun refresh() {
+            // Edge dates have a fixed 120 placement. Keep the user's photo corner intact.
+            val photoPositionEnabled = placement.visibility != View.VISIBLE || !placement.isChecked
+            if (!adjusting) {
+            corner.isEnabled = photoPositionEnabled
+            corner.alpha = if (photoPositionEnabled) 1f else .4f
+            column.findViewWithTag<TextView>("imprint-corner-label").apply {
+                isEnabled = photoPositionEnabled
+                alpha = if (photoPositionEnabled) 1f else .4f
+            }
+            }
             val dateTime = values.dateTime()
             dateValue.text = t(ImprintText.DATE) + " · " + (values.date?.toString() ?: t(ImprintText.CHOOSE_DATE))
-            timeValue.text = t(ImprintText.TIME) + " · " + (values.time?.format(timeFormat) ?: t(ImprintText.CHOOSE_TIME))
             dateValue.contentDescription = dateValue.text
-            timeValue.contentDescription = timeValue.text
             error.visibility = if (showDateError && values.manual && dateTime == null) View.VISIBLE else View.GONE
             source.isSelected = values.manual
-            source.text = if (values.manual) t(ImprintText.MANUAL) else if (original == null) t(ImprintText.MISSING) else t(ImprintText.ORIGINAL)
+            source.text = if (values.manual) t(ImprintText.MANUAL) else if (original == null) t(ImprintText.MISSING) else t(ImprintText.source(metadata))
             val selected = buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)
             val formatted = dateTime?.toLocalDate()?.let { ImprintContent.formatDate(it, styles[selected]) }
-            preview.text = listOfNotNull(formatted ?: if (values.manual) t(ImprintText.INVALID_DATE_TIME) else t(ImprintText.MISSING),
-                if (placement.selectedItemPosition == 1 && (!state.filmBorder || state.effectiveMediumFormat == null)) t(ImprintText.EDGE_DATE_INACTIVE) else null).joinToString("\n")
-            // A selected date can preview its glyphs; it is never saved/printed without its time.
+            preview.text = formatted ?: if (values.manual) t(ImprintText.INVALID_DATE_TIME) else t(ImprintText.MISSING)
+            // Preview and output share the same date-only lettering.
             val sample = values.date ?: sampleDate
             sampleNote.text = if (dateTime == null) t(ImprintText.STYLE_SAMPLE) + " · " + sample else ""
             sampleNote.visibility = if (dateTime == null) View.VISIBLE else View.GONE
+            // A preview is presentation-only, including when the date master switch is off.
+            // Incomplete manual input must not silently preview the source date.
+            onPreview(if (values.manual && dateTime == null) null else settings().copy(dateEnabled = true))
             val key = "$sample|${glow.progress}"
             if (lastPreviewKey == key) return
             lastPreviewKey = key
@@ -224,7 +275,7 @@ internal object ImprintDialog {
                     if (dialog.isShowing) {
                         val chosen = runCatching { LocalDate.of(year, month + 1, day) }.getOrNull()
                         if (chosen != null && chosen.year in 1..9999) {
-                            values.date = chosen; values.manual = true; refresh()
+                            values.date = chosen; values.time = values.time ?: LocalTime.MIDNIGHT; values.manual = true; refresh()
                         }
                     }
                 }, seed.year, seed.monthValue - 1, seed.dayOfMonth).apply {
@@ -239,21 +290,7 @@ internal object ImprintDialog {
                     setButton(AlertDialog.BUTTON_POSITIVE, t(ImprintText.SELECT), this)
                     setButton(AlertDialog.BUTTON_NEGATIVE, t(ImprintText.CANCEL), this)
                 }
-            } else {
-                val seed = values.time ?: LocalTime.MIDNIGHT
-                TimePickerDialog(context, pickerTheme, { _, hour, minute ->
-                    if (dialog.isShowing) {
-                        // The native picker edits minutes. Keep existing seconds; an explicit first
-                        // selection creates :00 seconds, as explained beside the date/time controls.
-                        values.time = LocalTime.of(hour, minute, values.time?.second ?: 0)
-                        values.manual = true; refresh()
-                    }
-                }, seed.hour, seed.minute, DateFormat.is24HourFormat(context)).apply {
-                    setTitle(t(ImprintText.CHOOSE_TIME))
-                    setButton(AlertDialog.BUTTON_POSITIVE, t(ImprintText.SELECT), this)
-                    setButton(AlertDialog.BUTTON_NEGATIVE, t(ImprintText.CANCEL), this)
-                }
-            }
+            } else return
             scroll.picker = picker
             scroll.pickerKind = kind
             picker.setOnDismissListener {
@@ -263,48 +300,46 @@ internal object ImprintDialog {
             picker.show()
         }
         dateValue.setOnClickListener { openPicker("date") }
-        timeValue.setOnClickListener { openPicker("time") }
         restore.setOnClickListener {
             values.date = original?.toLocalDate(); values.time = original?.toLocalTime()
             values.manual = false; showDateError = false; refresh()
         }
         group.setOnCheckedChangeListener { _, _ -> refresh() }
-        placement.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) = refresh()
+        placement.setOnCheckedChangeListener { _, _ -> refresh() }
+        val fade = ImprintAdjustmentFade(dialog)
+        scroll.interrupted = { adjusting = false; fade.finishImmediately() }
+        val sliderListener = object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) { refresh() }
+            override fun onStartTrackingTouch(bar: SeekBar?) { adjusting = true; bar?.let(fade::begin) }
+            override fun onStopTrackingTouch(bar: SeekBar?) { adjusting = false; fade.end() }
+        }
+        size.setOnSeekBarChangeListener(sliderListener)
+        glow.setOnSeekBarChangeListener(sliderListener)
+        corner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { refresh() }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
-        glow.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: SeekBar?, value: Int, fromUser: Boolean) { refresh() }
-            override fun onStartTrackingTouch(bar: SeekBar?) {}
-            override fun onStopTrackingTouch(bar: SeekBar?) {}
-        })
-        dialog.setOnDismissListener { scroll.dismissPicker() }
+        dialog.setOnDismissListener { fade.finishImmediately(); scroll.dismissPicker(); onPreview(null) }
         refresh()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val dateTime = values.dateTime()
-                // Missing original is valid, but a manual override must include both selected parts.
+                // Missing source date is valid; a manual override must contain a selected date.
                 if (values.manual && dateTime == null) {
                     showDateError = true; refresh()
-                    val missingControl = if (values.date == null) dateValue else timeValue
+                    val missingControl = dateValue
                     missingControl.requestFocus()
                     scroll.smoothScrollTo(0, dateValue.top)
                     error.announceForAccessibility(error.text)
                     return@setOnClickListener
                 }
-                onApply(old.copy(
-                    dateStyle = styles[buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)],
-                    corner = ImprintSettings.CORNERS[corner.selectedItemPosition],
-                    size = .6 + size.progress / 100.0, glow = glow.progress / 100.0,
-                    datePlacement = ImprintSettings.PLACEMENTS[placement.selectedItemPosition],
-                    manualDateTime = if (values.manual) checkNotNull(dateTime).let(ImprintSettings::formatDateTime) else null
-                ))
+                onApply(settings())
                 dialog.dismiss()
             }
             scroll.post {
                 if (dialog.isShowing) {
                     scroll.scrollTo(0, draft?.getInt("imprint-scroll", 0) ?: 0)
-                    draft?.getString("imprint-picker")?.takeIf { it == "date" || it == "time" }?.let {
+                    draft?.getString("imprint-picker")?.takeIf { it == "date" }?.let {
                         openPicker(it, draft.getBundle("imprint-picker-state"))
                     }
                 }

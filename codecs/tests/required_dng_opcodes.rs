@@ -65,6 +65,9 @@ fn sample(x: usize, y: usize) -> u16 {
     (1600 + x * 7 + y * 3) as u16
 }
 fn fixture(ops: &[(u16, Vec<u8>)], materialize: bool, bits: u32, orientation: u32) -> Vec<u8> {
+    fixture_color(ops,materialize,bits,orientation,false)
+}
+fn fixture_color(ops: &[(u16, Vec<u8>)], materialize: bool, bits: u32, orientation: u32,color:bool) -> Vec<u8> {
     let mut tags = Vec::<(u16, u16, u32, Vec<u8>)>::new();
     for (tag, value) in [
         (254, 0),
@@ -122,6 +125,14 @@ fn fixture(ops: &[(u16, Vec<u8>)], materialize: bool, bits: u32, orientation: u3
     ));
     for (tag, value) in ops {
         tags.push((*tag, 7, value.len() as u32, value.clone()));
+    }
+    if color {
+        tags.retain(|t|![50721,50728,50778].contains(&t.0));
+        for (tag,values) in [(50721,[12587i32,-5232,-1496,-3610,10841,277,-911,1674,2070]),(50722,[8389,-3198,-1019,-3834,10222,661,-1122,1900,3415])] {
+            tags.push((tag,10,9,values.into_iter().flat_map(|v|[v.to_le_bytes(),10000i32.to_le_bytes()].concat()).collect()));
+        }
+        tags.push((50728,5,3,[1024u32,2090,1024,1024,1024,1524].into_iter().flat_map(u32::to_le_bytes).collect()));
+        tags.push((50778,3,1,17u16.to_le_bytes().to_vec()));tags.push((50779,3,1,23u16.to_le_bytes().to_vec()));
     }
     tags.sort_by_key(|t| t.0);
     let mut b = vec![b'I', b'I', 42, 0, 8, 0, 0, 0];
@@ -288,7 +299,7 @@ fn strict_warp_identity_version_preview_flags_and_rectangular_list3() {
 }
 #[test]
 fn required_unknown_badpixel_nonidentity_and_resource_boundaries_failclosed() {
-    for record in [record(4, &[0; 8]), warp(1, 1.1), record(77, &[])] {
+    for record in [record(4, &[0; 7]), warp(1, 1.1), record(77, &[])] {
         assert!(opcodes::parse_stage1(&list(&[record]), W, H).is_err());
     }
     let raw = vignette();
@@ -310,4 +321,96 @@ fn required_unknown_badpixel_nonidentity_and_resource_boundaries_failclosed() {
     );
     assert!(!o.exists());
     fs::remove_file(p).unwrap();
+}
+
+#[test]
+fn required_badpixel_neighborhood_matches_materialized_sensor_and_strips() {
+    let marker=sample(12,130);
+    let payload=[u32::from(marker),0].into_iter().flat_map(u32::to_be_bytes).collect::<Vec<_>>();
+    let op=list(&[record(4,&payload)]);
+    assert!(opcodes::parse_stage1(&list(&[record(4,&payload),record(4,&payload)]),W,H).is_err());
+    let input=path("badpixel-neighbor.dng");
+    fs::write(&input,fixture(&[(51008,op)],false,16,1)).unwrap();
+    let mut f=fs::File::open(&input).unwrap();let d=Dng::read(&mut f).unwrap();
+    let full=d.read_tile(&mut f,d.active.y,d.active.h).unwrap();
+    let repair=film_codecs::dng_bad_pixels::BadPixelsConstant::parse(&payload).unwrap();
+    for y in d.active.y..d.active.y+d.active.h {for x in d.active.x..d.active.x+d.active.w {
+        let raw=repair.sample(W,H,x,y,|xx,yy|Ok(sample(xx,yy))).unwrap();
+        let ch=(y%2)*2+x%2;
+        let expected=(raw as f32-d.black[ch]).max(0.)/(d.white[ch]-d.black[ch]);
+        assert_eq!(full[(y-d.active.y)*d.active.w+x-d.active.x],expected);
+    }}
+    for y in (d.active.y..d.active.y+d.active.h).step_by(7) {
+        let h=7.min(d.active.y+d.active.h-y);let tile=d.read_tile(&mut f,y,h).unwrap();
+        assert_eq!(tile,&full[(y-d.active.y)*d.active.w..(y-d.active.y+h)*d.active.w]);
+    }
+    fs::remove_file(input).unwrap();
+}
+#[test]
+fn required_warp_disk_admission_and_batch_crop_orientation_equivalence() {
+    for orientation in [1,6] {
+        let input=path(&format!("warp-{orientation}.dng"));
+        fs::write(&input,fixture(&[(51022,list(&[warp(3,0.97)]))],false,16,orientation)).unwrap();
+        let d=Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();assert!(d.warp.is_some());
+        let mut budget=Budget::default();let a=film_codecs::develop::admit(&d,&budget).unwrap();
+        assert_eq!(a.required_disk_bytes,d.probe().output_bytes+(d.active.w*d.active.h*12)as u64);
+        let reject=path(&format!("warp-{orientation}-reject.rgb"));budget.disk_budget_bytes=a.required_disk_bytes-1;
+        assert_eq!(decode(&input,&reject,&budget,&AtomicBool::new(false)).unwrap_err().code,"DISK_BUDGET");assert!(!reject.exists());
+        budget=Budget::default();let one=path(&format!("warp-{orientation}-one.rgb"));let two=path(&format!("warp-{orientation}-two.rgb"));
+        decode(&input,&one,&budget,&AtomicBool::new(false)).unwrap();
+        budget.raw_batch=film_codecs::raw_batch::RawBatch::Small;
+        decode(&input,&two,&budget,&AtomicBool::new(false)).unwrap();
+        let output=fs::read(&one).unwrap();assert_eq!(output.len()as u64,d.probe().output_bytes);assert_eq!(output,fs::read(&two).unwrap());
+        assert!(output.chunks_exact(4).all(|b|f32::from_le_bytes(b.try_into().unwrap()).is_finite()));
+        for p in [input,one,two]{fs::remove_file(p).unwrap();}
+    }
+}
+#[test]
+#[ignore="Real public Q2 input and output paths must be supplied explicitly"]
+fn real_q2_required_operations_complete() {
+    let input=PathBuf::from(std::env::var("FILM_Q2_SOURCE").unwrap());
+    let output=PathBuf::from(std::env::var("FILM_Q2_OUTPUT").unwrap());
+    let mut budget=Budget::default();budget.disk_budget_bytes=2*1024*1024*1024;
+    let (probe,admission)=decode(&input,&output,&budget,&AtomicBool::new(false)).unwrap();
+    println!("Q2 {}x{} estimated_peak={} disk={} rows={}",probe.width,probe.height,admission.estimated_peak_bytes,admission.required_disk_bytes,admission.strip_rows);
+    assert_eq!(probe.width,8368);assert_eq!(probe.height,5584);
+    assert_eq!(fs::metadata(&output).unwrap().len(),probe.output_bytes);
+}
+
+#[test]
+fn new_color_route_executes_and_rejects_unimplemented_required_mix() {
+    for with_warp in [false,true] {
+        let input=path(&format!("dual-color-{with_warp}.dng"));let output=path(&format!("dual-color-{with_warp}.rgb"));
+        let ops=if with_warp {vec![(51022,list(&[warp(3,0.97)]))]}else{vec![]};
+        fs::write(&input,fixture_color(&ops,false,16,1,true)).unwrap();
+        let d=Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();assert!(d.cfa_color.is_some());assert!(d.matrix.is_empty());
+        decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();
+        assert!(fs::read(&output).unwrap().chunks_exact(4).all(|b|f32::from_le_bytes(b.try_into().unwrap()).is_finite()));
+        for p in [input,output]{fs::remove_file(p).unwrap();}
+    }
+    let input=path("dual-color-required-gain.dng");
+    fs::write(&input,fixture_color(&[(51022,list(&[gain([0,0,(H-4)as u32,(W-6)as u32,0,3,1,1],3,1.2)]))],false,16,1,true)).unwrap();
+    assert_eq!(Dng::read(&mut fs::File::open(&input).unwrap()).unwrap_err().code,"UNSUPPORTED_DNG_OPCODE");fs::remove_file(input).unwrap();
+}
+
+#[test]
+fn asymmetric_warp_nonzero_active_origin_all_orientations() {
+    let mut payload=3u32.to_be_bytes().to_vec();
+    for c in [[0.97f64,0.02,0.,0.,0.002,-0.001],[0.98,-0.01,0.,0.,0.,0.],[0.99,0.,0.005,0.,-0.001,0.003]] {
+        payload.extend(c.into_iter().flat_map(f64::to_be_bytes));
+    }
+    payload.extend([0.43f64,0.57].into_iter().flat_map(f64::to_be_bytes));
+    let mut canonical=Vec::new();let w=59usize;let h=H-12;
+    for orientation in 1..=8 {
+        let input=path(&format!("asymmetric-{orientation}.dng"));let output=path(&format!("asymmetric-{orientation}.rgb"));
+        fs::write(&input,fixture(&[(51022,list(&[record(1,&payload)]))],false,16,orientation)).unwrap();
+        decode(&input,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();let result=fs::read(&output).unwrap();
+        if orientation==1 {canonical=result.clone();}
+        let ow=if orientation>=5 {h}else{w};
+        for y in 0..h {for x in 0..w {
+            let (xx,yy)=match orientation {1=>(x,y),2=>(w-1-x,y),3=>(w-1-x,h-1-y),4=>(x,h-1-y),5=>(y,x),6=>(h-1-y,x),7=>(h-1-y,w-1-x),8=>(y,w-1-x),_=>unreachable!()};
+            assert_eq!(&canonical[(y*w+x)*12..(y*w+x+1)*12],&result[(yy*ow+xx)*12..(yy*ow+xx+1)*12]);
+        }}
+        for p in [input,output]{fs::remove_file(p).unwrap();}
+    }
 }

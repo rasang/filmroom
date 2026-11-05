@@ -1,0 +1,4 @@
+<resources>
+    <!-- Shared by native dialogs and the few custom dialog surfaces. -->
+    <dimen name="filmroom_dialog_corner_radius">20dp</dimen>
+</resources>

@@ -24,6 +24,8 @@ use std::{
 const MIB: u64 = 1024 * 1024;
 const BASE: u64 = 32 * MIB;
 const HALO: usize = 8;
+#[path="dng_geometry_develop.rs"]
+mod geometry;
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -80,6 +82,7 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let disk = d.probe().output_bytes
+        + if d.warp.is_some() { (d.active.w*d.active.h*12) as u64 } else { 0 }
         + if d.compression == 52546 {
             crate::jxl::spool_bytes(d)
         } else if d.cfa_spool() {
@@ -147,7 +150,7 @@ fn tile_raw(d: &Development, y: usize, h: usize, data: Vec<f32>) -> RawImage {
     } else {
         CFA::default()
     };
-    cam.color_matrix.insert(Illuminant::D65, d.matrix.clone());
+    if !d.matrix.is_empty() { cam.color_matrix.insert(Illuminant::D65, d.matrix.clone()); }
     let photo = if d.cpp == 1 {
         RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&cam))
     } else {
@@ -189,12 +192,46 @@ fn develop_dng_tile_cancel(
     data: Vec<f32>,
     cancel: &AtomicBool,
 ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
+    if d.warp.is_some() { return Err(err("UNSUPPORTED_DNG_OPCODE","develop")); }
+    if d.cfa_color.is_some() {
+        let camera=camera_tile(development,y,h,data)?;
+        return calibrate_camera(d,camera,cancel);
+    }
     if let Some(profile) = &d.profile {
         profile.develop(d.active, y, h, data, d.baseline_exposure_ev, cancel)
     } else {
         develop_tile_cancel(development, y, h, data, cancel)
     }
 }
+
+fn camera_tile(d:&Development,y:usize,h:usize,data:Vec<f32>)->Result<rawler::pixarray::Color2D<f32,3>> {
+    let raw=tile_raw(d,y,h,data);
+    let dev=RawDevelop {steps:vec![ProcessingStep::Demosaic]};
+    match dev.develop_intermediate(&raw).map_err(|_|err("DECODE_FAILED","develop"))? {
+        Intermediate::ThreeColor(p)=>pix_finite(p),
+        _=>Err(err("UNSUPPORTED_DNG_VARIANT","develop")),
+    }
+}
+fn calibrate_camera(d:&Dng,mut camera:rawler::pixarray::Color2D<f32,3>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
+    if let Some(color)=&d.cfa_color {
+        let xyz_to_rgb=rawler::imgop::xyz::XYZ_TO_SRGB_D50.map(|r|r.map(|x|x as f64));
+        let transform=crate::dng_color_spec::product(xyz_to_rgb,color.camera_to_pcs);
+        let exposure=d.baseline_exposure_ev.exp2() as f64;
+        for (i,p) in camera.data.iter_mut().enumerate() {
+            if i%1024==0 && cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","develop"));}
+            let input=p.map(|x|x.clamp(0.,1.)as f64);
+            *p=crate::dng_color_spec::apply(transform,input).map(|x|(x*exposure) as f32);
+        }
+        pix_finite(camera)
+    } else {
+        let mut development=Development::from(d);
+        development.cpp=3;development.width=camera.width;development.height=camera.height;
+        development.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
+        development.crop=development.active;development.gain_maps=&[];
+        develop_tile_cancel(&development,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
+    }
+}
+
 pub(crate) fn develop_tile_cancel(
     d: &Development,
     y: usize,
@@ -424,7 +461,9 @@ fn decode_with_reserve(
     };
     let storage_reader = storage_dng.as_ref().unwrap_or(&d);
     let development = Development::from(&d);
-    if d.streaming_linear {
+    if d.warp.is_some() {
+        geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel)?;
+    } else if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
         let mut batch_y = d.active.y;
         let mut expected_y = 0usize;

@@ -24,8 +24,10 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     private var imprintPlan:dev.filmroom.imprint.ImprintPlan?=null
     private var imprintOverlayUnavailable=false
     private var imprintOverlays:List<Pair<dev.filmroom.imprint.ImprintPlan.Stamp,Bitmap>> = emptyList()
-    fun bindImprint(plan:dev.filmroom.imprint.ImprintPlan?){
-        if(imprintPlan===plan)return
+    private var imprintDraftPreview = false
+    fun bindImprint(plan:dev.filmroom.imprint.ImprintPlan?, draftPreview:Boolean=false){
+        if(imprintPlan===plan && imprintDraftPreview==draftPreview)return
+        imprintDraftPreview=draftPreview
         imprintOverlays.forEach{it.second.recycle()};imprintOverlays=emptyList();imprintPlan=plan;imprintOverlayUnavailable=false
         invalidate()
     }
@@ -268,7 +270,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         super.onDraw(canvas);val b=bitmap?.takeUnless{it.isRecycled} ?: return
         target.set(viewport.left.toFloat(),viewport.top.toFloat(),(viewport.left+viewport.imageWidth).toFloat(),(viewport.top+viewport.imageHeight).toFloat())
         canvas.drawBitmap(b,null,target,paint)
-        if(isLiveComposition || freeEdit){
+        if(isLiveComposition || freeEdit || (imprintDraftPreview && usableInteractiveFrame() && compositionGeometryReady)){
             val p=presentation;val aperture=if(freeEdit)viewportRect()else compositionAperture()!!
             val photo=compositionPhotoRect()!!
             val save=canvas.save()

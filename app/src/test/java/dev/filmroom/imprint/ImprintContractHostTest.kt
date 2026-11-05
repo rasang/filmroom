@@ -2,7 +2,6 @@ package dev.filmroom.imprint
 
 import android.app.AlertDialog
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.view.View
 import android.view.ViewGroup
 import android.graphics.Bitmap
@@ -40,25 +39,18 @@ class ImprintContractHostTest {
         assertTrue(dialog.window!!.decorView.findViewWithTag<Button>("imprint-date-value").performClick());idleUi()
         return (ShadowAlertDialog.getLatestAlertDialog() as DatePickerDialog).also{assertTrue(it.isShowing)}
     }
-    private fun timePicker(dialog:AlertDialog):TimePickerDialog {
-        assertTrue(dialog.window!!.decorView.findViewWithTag<Button>("imprint-time-value").performClick());idleUi()
-        return (ShadowAlertDialog.getLatestAlertDialog() as TimePickerDialog).also{assertTrue(it.isShowing)}
-    }
     private fun chooseDate(dialog:AlertDialog,year:Int,month:Int,day:Int) {
         val picker=datePicker(dialog);picker.updateDate(year,month-1,day)
         click(picker,AlertDialog.BUTTON_POSITIVE);assertFalse(picker.isShowing)
     }
-    private fun chooseTime(dialog:AlertDialog,hour:Int,minute:Int) {
-        val picker=timePicker(dialog);picker.updateTime(hour,minute)
-        click(picker,AlertDialog.BUTTON_POSITIVE);assertFalse(picker.isShowing)
-    }
     private fun assertNoTextEntry(dialog:AlertDialog) {
         val root=dialog.window!!.decorView
-        assertTrue("Date/time entry uses picker buttons, not an editable text field",views(root).none{it is EditText})
-        for(tag in listOf("imprint-date-value","imprint-time-value")) {
+        assertTrue("Date entry uses a picker button, not an editable text field",views(root).none{it is EditText})
+        for(tag in listOf("imprint-date-value")) {
             val button=root.findViewWithTag<Button>(tag)
             assertNotNull(tag,button);assertFalse(button.onCheckIsTextEditor());assertTrue(button.isEnabled)
         }
+        assertNull(root.findViewWithTag<View>("imprint-time-value"))
         val styles=root.findViewWithTag<RadioGroup>("imprint-style")
         assertEquals(4,styles.childCount)
         repeat(styles.childCount){assertTrue(styles.getChildAt(it) is RadioButton)}
@@ -78,16 +70,16 @@ class ImprintContractHostTest {
         assertEquals("25年4月28日",ImprintContent.from(m,setting.copy(dateStyle="canon_luna")).date)
         assertEquals(ImprintContent.from(m,setting),ImprintContent.from(PhotoMetadata.fromJson(m.toJson()),setting))
     }
-    @Test fun missingAndInvalidNeverFallbackToExportOrDigitizedTime() {
-        for(m in listOf(PhotoMetadata.unavailable(),PhotoMetadata.fromAttributes(mapOf("DateTimeDigitized" to "2024:01:01 00:00:00")),PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2025:02:30 00:00:00")))) {
+    @Test fun missingAndInvalidNeverInventDate() {
+        for(m in listOf(PhotoMetadata.unavailable(),PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2025:02:30 00:00:00")))) {
             val c=ImprintContent.from(m,setting);assertNull(c.date);assertTrue(c.fields.isEmpty())
         }
     }
     @Test fun sourceFactsOnlyIncludeIsoAndFocalNeverModeAebOrAf() {
         val c=ImprintContent.from(meta(),setting)
-        assertEquals(ImprintFieldKind.entries,c.fields.map{it.kind})
-        assertEquals(listOf("ISO400","#","250","F5.6","+0.5","50mm"),c.fields.map{it.text})
-        assertEquals(ImprintMeteringMode.PATTERN,c.fields[1].meteringMode)
+        assertEquals(ImprintFieldKind.entries.filter{it!=ImprintFieldKind.METERING},c.fields.map{it.kind})
+        assertEquals(listOf("ISO400","250","F5.6","+0.5","50mm"),c.fields.map{it.text})
+        assertTrue(c.fields.none { it.kind==ImprintFieldKind.METERING })
         val ignored=PhotoMetadata.fromAttributes(mapOf("ExposureProgram" to "3","ExposureMode" to "2","FocalLengthIn35mmFilm" to "50"))
         assertTrue(ImprintContent.from(ignored,setting).fields.isEmpty())
         val partial=PhotoMetadata.fromAttributes(mapOf("FNumber" to "2/1","ExposureProgram" to "99","ExposureBiasValue" to "0/1"))
@@ -120,17 +112,17 @@ class ImprintContractHostTest {
             if(w>100)assertEquals(1,plan.stamps.size)
         }
     }
-    @Test fun packed135FieldsRotateWithFrameAndUnsupportedEdgeDateDoesNotMoveIntoPhoto() {
+    @Test fun packed135FieldsRotateAndUnsupportedEdgeDateFallsBackIntoPhoto() {
         for((w,h) in listOf(720 to 480,480 to 720)) {
             val b=BorderSnapshot.fixed135("kodak_portra_400","test",w,h)
             val p=ImprintPlan.create(setting,meta(),b.outputWidth,b.outputHeight,b)
-            assertEquals(7,p.stamps.size)
+            assertEquals(6,p.stamps.size)
             p.stamps.forEach{assertTrue(it.left>=0&&it.top>=0&&it.right<=p.width&&it.bottom<=p.height)}
             val noDate=ImprintPlan.create(setting.copy(datePlacement="edge"),meta(),b.outputWidth,b.outputHeight,b)
             assertEquals(6,noDate.stamps.size)
         }
         assertEquals(1,ImprintPlan.create(setting,meta(),720,480).stamps.size)
-        assertTrue(ImprintPlan.create(setting.copy(datePlacement="edge"),meta(),720,480).isEmpty)
+        assertEquals(1,ImprintPlan.create(setting.copy(datePlacement="edge"),meta(),720,480).stamps.size)
         assertFalse(ImprintPlan.exposureSupported(BorderSnapshot.authored("kodak_trix","test",720,480)))
     }
     private fun source(w:Int,h:Int)=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888).apply{eraseColor(Color.rgb(50,80,100))}
@@ -228,14 +220,14 @@ class ImprintContractHostTest {
         assertNoTextEntry(reopened)
         assertNotNull(reopened.window!!.decorView.findViewWithTag<android.view.View>("imprint-restore-capture"))
         reopened.window!!.decorView.findViewWithTag<SeekBar>("imprint-size").progress=88
-        reopened.window!!.decorView.findViewWithTag<Spinner>("imprint-placement").setSelection(1)
+        reopened.window!!.decorView.findViewWithTag<Switch>("imprint-placement").isChecked=true
         val draft=ImprintDialog.capture(reopened);reopened.dismiss();assertNull(result)
         controller.pause().stop().destroy()
         val recreated=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         val restored=ImprintDialog.show(recreated.get(),EditorState(imprint=old),meta(),draft){result=it}
         idleUi()
         assertEquals(88,restored.window!!.decorView.findViewWithTag<SeekBar>("imprint-size").progress)
-        assertEquals(1,restored.window!!.decorView.findViewWithTag<Spinner>("imprint-placement").selectedItemPosition)
+        assertTrue(restored.window!!.decorView.findViewWithTag<Switch>("imprint-placement").isChecked)
         restored.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertEquals(old.copy(size=1.48,datePlacement="edge"),result)
         result=null
@@ -244,50 +236,30 @@ class ImprintContractHostTest {
         back.onBackPressed();assertNull(result);assertFalse(back.isShowing)
         recreated.pause().stop().destroy()
     }
-    @Test fun missingDateKeepsLabeledSamplesButRequiresAnExplicitCompleteDateAndTime() {
+    @Test fun missingDateRequiresOnlyExplicitDateAndNoTimeControls() {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {
             var applied:ImprintSettings?=null
             val missing=PhotoMetadata.fromAttributes(emptyMap())
-            val d=ImprintDialog.show(controller.get(),EditorState(),missing){applied=it}
+            val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),missing){applied=it}
             idleUi();assertNoTextEntry(d)
-            val root=d.window!!.decorView
-            val initial=ImprintDialog.capture(d)
-            assertTrue(initial.getString("imprint-datetime").isNullOrEmpty())
-            assertNull(initial.getString("imprint-date"));assertNull(initial.getString("imprint-time"));assertFalse(initial.getBoolean("imprint-manual"))
-            assertEquals(View.VISIBLE,root.findViewWithTag<TextView>("imprint-style-sample").visibility)
-            val group=root.findViewWithTag<RadioGroup>("imprint-style")
-            repeat(group.childCount){assertNotNull((group.getChildAt(it) as RadioButton).compoundDrawables[3])}
+            assertNull(d.window!!.decorView.findViewWithTag<View>("imprint-time-value"))
+            assertNull(d.window!!.decorView.findViewWithTag<View>("imprint-time-note"))
+            assertNull(ImprintDialog.capture(d).getString("imprint-date"))
             chooseDate(d,2024,2,29)
-            val partial=ImprintDialog.capture(d)
-            assertEquals("2024-02-29",partial.getString("imprint-date"));assertNull(partial.getString("imprint-time"))
-            assertTrue(partial.getString("imprint-datetime").isNullOrEmpty());assertTrue(partial.getBoolean("imprint-manual"))
-            assertIncompleteCannotApply(d);assertNull(applied)
-            root.findViewWithTag<Button>("imprint-restore-capture").performClick();idleUi()
-            val restored=ImprintDialog.capture(d)
-            assertNull(restored.getString("imprint-date"));assertNull(restored.getString("imprint-time"));assertFalse(restored.getBoolean("imprint-manual"))
             click(d,AlertDialog.BUTTON_POSITIVE)
-            assertFalse(d.isShowing);assertNull(checkNotNull(applied).manualDateTime)
-            assertNull(ImprintContent.from(missing,checkNotNull(applied).copy(dateEnabled=true)).date)
+            assertEquals("'24 02 29",ImprintContent.from(missing,checkNotNull(applied)).date)
+            assertNull(ImprintContent.originalCaptureDateTime(missing))
         }finally{controller.pause().stop().destroy()}
     }
-    @Test fun eachNativePickerChangesOnlyItsPartAndRetainsCaptureSeconds() {
+    @Test fun datePickerPreservesSourceTimeInternallyButPrintsDateOnly() {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {
             val metadata=meta();val frozen=metadata.toJson();var applied:ImprintSettings?=null
             val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),metadata){applied=it}
-            idleUi();assertNoTextEntry(d)
-            chooseDate(d,2000,2,29)
-            var draft=ImprintDialog.capture(d)
-            assertEquals("2000-02-29 00:01:02",draft.getString("imprint-datetime"))
-            assertEquals("2000-02-29",draft.getString("imprint-date"));assertEquals("00:01:02",draft.getString("imprint-time"))
-            chooseTime(d,23,59)
-            draft=ImprintDialog.capture(d)
-            assertEquals("2000-02-29 23:59:02",draft.getString("imprint-datetime"))
-            assertEquals("2000-02-29",draft.getString("imprint-date"));assertEquals("23:59:02",draft.getString("imprint-time"))
-            assertTrue(draft.getBoolean("imprint-manual"));assertNull(applied);assertNoTextEntry(d)
-            click(d,AlertDialog.BUTTON_POSITIVE)
-            assertEquals(setting.copy(manualDateTime="2000-02-29 23:59:02"),applied)
+            idleUi();chooseDate(d,2000,2,29);click(d,AlertDialog.BUTTON_POSITIVE)
+            assertEquals(setting.copy(manualDateTime="2000-02-29 00:01:02"),applied)
+            assertEquals("'00 02 29",ImprintContent.from(metadata,checkNotNull(applied)).date)
             assertEquals(frozen,metadata.toJson())
         }finally{controller.pause().stop().destroy()}
     }
@@ -297,11 +269,11 @@ class ImprintContractHostTest {
             var applied:ImprintSettings?=null
             val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),meta()){applied=it}
             idleUi()
-            for(isDate in listOf(true,false))for(useBack in listOf(false,true)) {
-                val child=if(isDate)datePicker(d).also{it.updateDate(2000,1,29)} else timePicker(d).also{it.updateTime(23,59)}
+            for(useBack in listOf(false,true)) {
+                val child=datePicker(d).also{it.updateDate(2000,1,29)}
                 val pending=ImprintDialog.capture(d)
                 assertEquals("2025-04-28 00:01:02",pending.getString("imprint-datetime"));assertFalse(pending.getBoolean("imprint-manual"))
-                assertEquals(if(isDate)"date" else "time",pending.getString("imprint-picker"))
+                assertEquals("date",pending.getString("imprint-picker"))
                 assertNotNull(pending.getBundle("imprint-picker-state"))
                 if(useBack){child.onBackPressed();idleUi()}else click(child,AlertDialog.BUTTON_NEGATIVE)
                 assertFalse(child.isShowing);assertTrue(d.isShowing)
@@ -316,49 +288,28 @@ class ImprintContractHostTest {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {
             var applied:ImprintSettings?=null
-            for(isDate in listOf(true,false))for(useBack in listOf(false,true)) {
+            for(useBack in listOf(false,true)) {
                 val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),meta()){applied=it}
                 idleUi()
-                val child=if(isDate)datePicker(d).also{it.updateDate(2000,1,29)} else timePicker(d).also{it.updateTime(23,59)}
+                val child=datePicker(d).also{it.updateDate(2000,1,29)}
                 if(useBack){d.onBackPressed();idleUi()}else click(d,AlertDialog.BUTTON_NEGATIVE)
                 assertFalse(d.isShowing);assertFalse("Parent dismissal must close its native picker",child.isShowing);assertNull(applied)
             }
         }finally{controller.pause().stop().destroy()}
     }
-    @Test fun partialDateAndPartialTimeSurviveRecreationWithoutInventingTheOtherPart() {
-        for(dateFirst in listOf(true,false)) {
-            val first=Robolectric.buildActivity(android.app.Activity::class.java).setup()
+    @Test fun chosenDateSurvivesRecreationWithoutRequiringTime() {
+        val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
+        try {
             var applied:ImprintSettings?=null
             val missing=PhotoMetadata.unavailable()
-            val d=ImprintDialog.show(first.get(),EditorState(imprint=setting),missing){applied=it}
-            idleUi()
-            if(dateFirst)chooseDate(d,2000,2,29)else chooseTime(d,7,8)
-            val draft=ImprintDialog.capture(d)
-            assertEquals(if(dateFirst)"2000-02-29" else null,draft.getString("imprint-date"))
-            assertEquals(if(dateFirst)null else "07:08:00",draft.getString("imprint-time"))
-            assertTrue(draft.getString("imprint-datetime").isNullOrEmpty())
-            assertIncompleteCannotApply(d);assertNull(applied)
-            d.dismiss();idleUi();first.pause().stop().destroy()
-            val second=Robolectric.buildActivity(android.app.Activity::class.java).setup()
-            try {
-                val restored=ImprintDialog.show(second.get(),EditorState(imprint=setting),missing,draft){applied=it}
-                idleUi();assertNoTextEntry(restored)
-                val retained=ImprintDialog.capture(restored)
-                assertEquals(draft.getString("imprint-date"),retained.getString("imprint-date"))
-                assertEquals(draft.getString("imprint-time"),retained.getString("imprint-time"))
-                assertTrue(retained.getString("imprint-datetime").isNullOrEmpty())
-                assertIncompleteCannotApply(restored);assertNull(applied)
-                if(dateFirst)chooseTime(restored,7,8)else chooseDate(restored,2000,2,29)
-                assertEquals("2000-02-29 07:08:00",ImprintDialog.capture(restored).getString("imprint-datetime"))
-                val explanation=restored.window!!.decorView.findViewWithTag<TextView>("imprint-time-note")
-                assertEquals(View.VISIBLE,explanation.visibility)
-                assertEquals(ImprintText.TIME_PRECISION_NOTE.text(restored.context),explanation.text.toString())
-                assertTrue("The explicit seconds-00 policy must be visible",explanation.text.contains("00"))
-                click(restored,AlertDialog.BUTTON_POSITIVE)
-                assertEquals(setting.copy(manualDateTime="2000-02-29 07:08:00"),applied)
-                assertNull(ImprintContent.originalCaptureDateTime(missing))
-            }finally{second.pause().stop().destroy()}
-        }
+            val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),missing){applied=it}
+            idleUi();chooseDate(d,2000,2,29)
+            val draft=ImprintDialog.capture(d);d.dismiss()
+            val restored=ImprintDialog.show(controller.get(),EditorState(imprint=setting),missing,draft){applied=it}
+            idleUi();assertEquals("2000-02-29",ImprintDialog.capture(restored).getString("imprint-date"))
+            click(restored,AlertDialog.BUTTON_POSITIVE)
+            assertEquals("'00 02 29",ImprintContent.from(missing,checkNotNull(applied)).date)
+        }finally{controller.pause().stop().destroy()}
     }
     @Test fun pendingNativeDateSelectionSurvivesRecreationAndStillNeedsConfirmation() {
         val first=Robolectric.buildActivity(android.app.Activity::class.java).setup()
@@ -382,10 +333,8 @@ class ImprintContractHostTest {
             assertNull(ImprintDialog.capture(restored).getString("imprint-date"));assertNull(applied)
             click(pending,AlertDialog.BUTTON_POSITIVE)
             assertEquals("2000-02-29",ImprintDialog.capture(restored).getString("imprint-date"))
-            assertNull(ImprintDialog.capture(restored).getString("imprint-time"))
-            assertIncompleteCannotApply(restored);assertNull(applied)
-            chooseTime(restored,7,8);click(restored,AlertDialog.BUTTON_POSITIVE)
-            assertEquals(setting.copy(manualDateTime="2000-02-29 07:08:00"),applied)
+            click(restored,AlertDialog.BUTTON_POSITIVE)
+            assertEquals(setting.copy(manualDateTime="2000-02-29 00:00:00"),applied)
         }finally{second.pause().stop().destroy()}
     }
     @Test fun legacyCanonicalDraftMigratesButInvalidOrOversizedDraftCannotCommit() {
@@ -418,32 +367,30 @@ class ImprintContractHostTest {
                     assertEquals("2024-02-29 12:34:56",ImprintDialog.capture(d).getString("imprint-datetime"))
                     assertNull(applied)
                 }
-                d.window!!.decorView.findViewWithTag<Button>("imprint-restore-capture").performClick();idleUi()
+                d.window!!.decorView.findViewWithTag<View>("imprint-restore-capture").performClick();idleUi()
                 assertEquals("2025-04-28 00:01:02",ImprintDialog.capture(d).getString("imprint-datetime"))
                 click(d,AlertDialog.BUTTON_POSITIVE);assertEquals(setting,applied)
             }
         }finally{controller.pause().stop().destroy()}
     }
-    @Test fun unavailableCaptureNeverUsesDigitizedOrFileEditDateEvenAfterOpeningPickers() {
+    @Test fun missingCaptureUsesLabeledModifiedOrCreatedDate() {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {
-            for(attributes in listOf(
-                mapOf("DateTimeDigitized" to "2024:01:01 00:00:00","DateTime" to "2025:01:01 00:00:00"),
-                mapOf("DateTimeOriginal" to "2025:02:30 12:34:56","DateTimeDigitized" to "2024:01:01 00:00:00")
+            for((attributes,expected,kind) in listOf(
+                Triple(mapOf("DateTimeDigitized" to "2024:01:01 00:00:00","DateTime" to "2025:01:01 00:00:00"),"'25 01 01",ImprintText.MODIFIED),
+                Triple(mapOf("DateTimeOriginal" to "2025:02:30 12:34:56","DateTimeDigitized" to "2024:01:01 00:00:00"),"'24 01 01",ImprintText.CREATED)
             )) {
                 val metadata=PhotoMetadata.fromAttributes(attributes);var applied:ImprintSettings?=null
                 val d=ImprintDialog.show(controller.get(),EditorState(imprint=setting),metadata){applied=it}
-                idleUi()
-                click(datePicker(d),AlertDialog.BUTTON_NEGATIVE);click(timePicker(d),AlertDialog.BUTTON_NEGATIVE)
-                val draft=ImprintDialog.capture(d)
-                assertNull(draft.getString("imprint-date"));assertNull(draft.getString("imprint-time"))
-                assertTrue(draft.getString("imprint-datetime").isNullOrEmpty());assertFalse(draft.getBoolean("imprint-manual"))
+                idleUi();click(datePicker(d),AlertDialog.BUTTON_NEGATIVE)
+                assertEquals(kind.text(controller.get()),d.window!!.decorView.findViewWithTag<TextView>("imprint-source").text.toString())
                 click(d,AlertDialog.BUTTON_POSITIVE);assertEquals(setting,applied)
-                assertNull(ImprintContent.from(metadata,checkNotNull(applied)).date)
+                assertEquals(expected,ImprintContent.from(metadata,checkNotNull(applied)).date)
+                assertEquals(expected,ImprintContent.from(PhotoMetadata.fromJson(metadata.toJson()),setting).date)
+                assertNull(ImprintContent.originalCaptureDateTime(metadata))
             }
         }finally{controller.pause().stop().destroy()}
     }
-
     @Test fun nativeDatePickerPreservesYearEndpointsAndModernLeapDates() {
         val controller=Robolectric.buildActivity(android.app.Activity::class.java).setup()
         try {

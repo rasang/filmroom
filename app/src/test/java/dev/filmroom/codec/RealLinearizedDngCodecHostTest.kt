@@ -33,11 +33,12 @@ class RealLinearizedDngCodecHostTest {
             val path=System.getenv("FILMROOM_${format}_SAMPLE");assumeTrue(path!=null)
             format to File(checkNotNull(path))
         }
+        val allSamples=samples+listOfNotNull(System.getenv("FILMROOM_Q2_DNG_SAMPLE")?.let { "Q2_DNG" to File(it) })
         assertTrue(NativeCodecBridge.available)
         val root=kotlin.io.path.createTempDirectory("real-linearized-dng").toFile().canonicalFile
         val codec=PhotoCodecs(root,memorySnapshot={NativeMemorySnapshot(4096L*1024*1024,128L*1024*1024,false)})
         try {
-            for((format,original) in samples) {
+            for((format,original) in allSamples) {
                 val input=original.copyTo(File(root,"$format.misleading.jpeg"));val before=hash(input)
                 val capture=PhotoMetadata.read(input)
                 val fields=JSONObject(capture.toJson()).getJSONObject("attributes")
@@ -46,6 +47,7 @@ class RealLinearizedDngCodecHostTest {
                 assertEquals(RawFormat.DNG,RawMetadata.parse(codec.probe(input)).format)
                 val output=File(root,"$format.rgb");val decoded=RawMetadata.parse(codec.decode(input,output))
                 assertEquals("DNG",decoded.format.name);assertEquals(decoded.bytes,output.length())
+                if(format=="Q2_DNG") { assertEquals(8368,decoded.width);assertEquals(5584,decoded.height) }
                 val jpeg=File(root,"$format.export.jpg")
                 assertTrue(codec.encode(output,jpeg,decoded.width,decoded.height,"JPEG",90).getBoolean("ok"))
                 PhotoMetadataContainer.inject(jpeg,ExportFormat.JPEG,capture.exifBytes(decoded.width,decoded.height,"sRGB",0))

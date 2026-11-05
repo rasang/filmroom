@@ -3,7 +3,6 @@ package dev.filmroom.imprint
 import android.app.AlertDialog
 import android.app.Application
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Looper
@@ -16,7 +15,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
-import android.widget.TimePicker
 import dev.filmroom.EditorUiState
 import dev.filmroom.EditorViewModel
 import dev.filmroom.MainActivity
@@ -89,7 +87,7 @@ class ImprintActivityHostTest {
             view.draw(Canvas(image))
             File(directory,"$name.png").outputStream().use{check(image.compress(Bitmap.CompressFormat.PNG,100,it))}
         }finally{image.recycle()}
-        File(directory,"README.txt").writeText("Actual MainActivity, imprint dialog and native date/time picker Android views drawn with Robolectric native Canvas. Scientific rendering uses a tiny fixture stub. These are host UI evidence, not device screenshots or film-color acceptance.\n")
+        File(directory,"README.txt").writeText("Actual MainActivity, imprint dialog and native date picker Android views drawn with Robolectric native Canvas. Scientific rendering uses a tiny fixture stub. These are host UI evidence, not device screenshots or film-color acceptance.\n")
     }
     /** Verify the mounted native actions, not merely the existence of their listeners. */
     private fun capturePicker(name:String,dialog:AlertDialog,width:Int,maxHeight:Int) {
@@ -279,25 +277,18 @@ class ImprintActivityHostTest {
         dialog.window!!.decorView.findViewWithTag<Button>("imprint-date-value").performClick();idleUi()
         return (ShadowAlertDialog.getLatestAlertDialog() as DatePickerDialog).also{assertTrue(it.isShowing)}
     }
-    private fun openTimePicker(dialog:AlertDialog):TimePickerDialog {
-        dialog.window!!.decorView.findViewWithTag<Button>("imprint-time-value").performClick();idleUi()
-        return (ShadowAlertDialog.getLatestAlertDialog() as TimePickerDialog).also{assertTrue(it.isShowing)}
-    }
     private fun chooseDate(dialog:AlertDialog,year:Int,month:Int,day:Int) {
         val picker=openDatePicker(dialog);picker.updateDate(year,month-1,day)
-        click(picker,AlertDialog.BUTTON_POSITIVE);assertFalse(picker.isShowing)
-    }
-    private fun chooseTime(dialog:AlertDialog,hour:Int,minute:Int) {
-        val picker=openTimePicker(dialog);picker.updateTime(hour,minute)
         click(picker,AlertDialog.BUTTON_POSITIVE);assertFalse(picker.isShowing)
     }
     private fun assertPickerControls(dialog:AlertDialog) {
         val root=dialog.window!!.decorView
         assertTrue("The date editor must not require typed date/time text",all(root).none{it is EditText})
-        for(tag in listOf("imprint-date-value","imprint-time-value")) {
+        for(tag in listOf("imprint-date-value")) {
             val value=root.findViewWithTag<Button>(tag)
             assertNotNull(tag,value);assertTrue(value.isEnabled);assertFalse(value.onCheckIsTextEditor())
         }
+        assertNull(root.findViewWithTag<View>("imprint-time-value"))
         assertNotNull(root.findViewWithTag<TextView>("imprint-date-error"))
     }
     private fun assertSelectorGap(f:Fixture) {
@@ -314,48 +305,24 @@ class ImprintActivityHostTest {
         val content=dialog.window!!.decorView.findViewWithTag<ScrollView>("imprint-scroll").getChildAt(0)
         capture("$name-full-content",content,(width-48).coerceAtLeast(1),10_000)
     }
-    @Test fun nativeTimePickerActionsStayVisibleAgainstUnwrappedFrameworkBaseline() {
-        Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
-            val baseline=TimePickerDialog(f.a,null,12,34,android.text.format.DateFormat.is24HourFormat(f.a)).apply {
-                setTitle(ImprintText.CHOOSE_TIME.text(f.a))
-                setButton(AlertDialog.BUTTON_POSITIVE,ImprintText.SELECT.text(f.a),this)
-                setButton(AlertDialog.BUTTON_NEGATIVE,ImprintText.CANCEL.text(f.a),this)
-                show()
-            }
-            idleUi()
-            // Save both actual view trees and bounded screenshots before reporting either failure.
-            // The baseline is the same native dialog/theme with no Filmroom scroll wrapper.
-            val baselineFailure=runCatching{capturePicker("diagnostic-unwrapped-native-time-picker",baseline,400,760)}.exceptionOrNull()
-            baseline.dismiss();idleUi()
-            val parent=f.open();val picker=openTimePicker(parent)
-            val filmroomFailure=runCatching{capturePicker("diagnostic-filmroom-native-time-picker",picker,400,760)}.exceptionOrNull()
-            picker.dismiss();parent.dismiss();idleUi()
-            assertTrue("Unwrapped framework action geometry: $baselineFailure; Filmroom action geometry: $filmroomFailure",
-                baselineFailure==null && filmroomFailure==null)
-        }
-    }
     @Test fun nativePickerPendingSelectionsSurviveRotationAcrossPresentationModes() {
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
-            for(kind in listOf("date","time")) {
+            for(kind in listOf("date")) {
                 val parent=f.open()
-                val initial=if(kind=="date")openDatePicker(parent)else openTimePicker(parent)
-                if(initial is DatePickerDialog)initial.updateDate(2000,1,29)
-                if(initial is TimePickerDialog)initial.updateTime(23,57)
+                val initial=openDatePicker(parent)
+                initial.updateDate(2000,1,29)
                 for(landscape in listOf(true,false)) {
                     RuntimeEnvironment.setQualifiers(if(landscape)"w800dp-h400dp-land-mdpi" else "w400dp-h800dp-port-mdpi")
                     f.controller.recreate();idleUi()
                     await("$kind picker restored across presentation mode change") {
                         val current=ShadowAlertDialog.getLatestAlertDialog()
-                        current?.isShowing==true && (if(kind=="date")current is DatePickerDialog else current is TimePickerDialog)
+                        current?.isShowing==true && current is DatePickerDialog
                     }
                     val restored=ShadowAlertDialog.getLatestAlertDialog()
-                    if(restored is DatePickerDialog) {
-                        assertEquals(2000,restored.datePicker.year);assertEquals(1,restored.datePicker.month)
-                        assertEquals(29,restored.datePicker.dayOfMonth)
-                    } else {
-                        val time=all(restored.window!!.decorView).filterIsInstance<TimePicker>().single()
-                        assertEquals(23,time.hour);assertEquals(57,time.minute)
-                    }
+                    assertTrue(restored is DatePickerDialog)
+                    val restoredDate=restored as DatePickerDialog
+                    assertEquals(2000,restoredDate.datePicker.year);assertEquals(1,restoredDate.datePicker.month)
+                    assertEquals(29,restoredDate.datePicker.dayOfMonth)
                     capturePicker("rotation-$kind-${if(landscape)"landscape" else "portrait"}",restored,
                         if(landscape)800 else 400,if(landscape)360 else 760)
                     val draft=field(f.a,"imprintDialog") as AlertDialog
@@ -364,7 +331,7 @@ class ImprintActivityHostTest {
                 val restored=ShadowAlertDialog.getLatestAlertDialog()
                 click(restored,AlertDialog.BUTTON_POSITIVE)
                 val draft=field(f.a,"imprintDialog") as AlertDialog
-                assertEquals(if(kind=="date")"2000-02-29 12:34:56"else "2025-04-28 23:57:56",draftDateTime(draft))
+                assertEquals("2000-02-29 12:34:56",draftDateTime(draft))
                 click(draft,AlertDialog.BUTTON_NEGATIVE)
             }
         }
@@ -378,45 +345,41 @@ class ImprintActivityHostTest {
             val datePicker=openDatePicker(cancelled)
             capturePicker("portrait-native-date-picker",datePicker,400,760)
             datePicker.updateDate(2000,0,2);click(datePicker,AlertDialog.BUTTON_POSITIVE)
-            val timePicker=openTimePicker(cancelled)
-            timePicker.updateTime(3,4)
-            capturePicker("portrait-native-time-picker",timePicker,400,760)
-            click(timePicker,AlertDialog.BUTTON_POSITIVE)
-            assertEquals("2000-01-02 03:04:56",draftDateTime(cancelled));chooseStyle(cancelled,1)
+            assertEquals("2000-01-02 12:34:56",draftDateTime(cancelled));chooseStyle(cancelled,1)
             click(cancelled,AlertDialog.BUTTON_NEGATIVE)
             assertEquals(applied,f.flow.value.parameters.imprint)
             val back=f.open()
             assertEquals("2025-04-28 12:34:56",draftDateTime(back))
             chooseStyle(back,2);back.onBackPressed();idleUi();assertFalse(back.isShowing);assertEquals(applied,f.flow.value.parameters.imprint)
             val pending=f.open();chooseStyle(pending,3);chooseDate(pending,2000,1,2)
-            val pendingTime=openTimePicker(pending);pendingTime.updateTime(3,4)
+            val pendingDate=openDatePicker(pending);pendingDate.updateDate(2000,0,3)
             assertEquals("2000-01-02 12:34:56",draftDateTime(pending))
-            assertEquals("time",ImprintDialog.capture(pending).getString("imprint-picker"))
+            assertEquals("date",ImprintDialog.capture(pending).getString("imprint-picker"))
             assertEquals(applied,f.flow.value.parameters.imprint)
             f.controller.recreate()
             assertSame(f.vm,model(f.a));assertSame(f.source,f.flow.value.photo)
             await("saved Activity date draft and child picker reopen"){
                 (field(f.a,"imprintDialog") as? AlertDialog)?.isShowing==true &&
-                    (ShadowAlertDialog.getLatestAlertDialog() as? TimePickerDialog)?.isShowing==true
+                    (ShadowAlertDialog.getLatestAlertDialog() as? DatePickerDialog)?.isShowing==true
             }
             idleUi()
             val restored=field(f.a,"imprintDialog") as AlertDialog
-            assertNotSame(pending,restored);assertFalse(pending.isShowing);assertFalse(pendingTime.isShowing)
+            assertNotSame(pending,restored);assertFalse(pending.isShowing);assertFalse(pendingDate.isShowing)
             assertEquals("2000-01-02 12:34:56",draftDateTime(restored))
-            val restoredTime=ShadowAlertDialog.getLatestAlertDialog() as TimePickerDialog
-            val time=all(restoredTime.window!!.decorView).filterIsInstance<TimePicker>().single()
-            assertEquals(3,time.hour);assertEquals(4,time.minute)
+            val restoredDate=ShadowAlertDialog.getLatestAlertDialog() as DatePickerDialog
+            assertEquals(2000,restoredDate.datePicker.year);assertEquals(0,restoredDate.datePicker.month)
+            assertEquals(3,restoredDate.datePicker.dayOfMonth)
             val styles=restored.window!!.decorView.findViewWithTag<RadioGroup>("imprint-style")
             assertEquals(styles.getChildAt(3).id,styles.checkedRadioButtonId)
             assertEquals(applied,f.flow.value.parameters.imprint)
-            click(restoredTime,AlertDialog.BUTTON_POSITIVE)
-            assertEquals("2000-01-02 03:04:56",draftDateTime(restored));assertPickerControls(restored)
-            f.apply(restored,applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-02 03:04:56"))
-            assertEquals(applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-02 03:04:56"),f.flow.value.parameters.imprint)
+            click(restoredDate,AlertDialog.BUTTON_POSITIVE)
+            assertEquals("2000-01-03 12:34:56",draftDateTime(restored));assertPickerControls(restored)
+            f.apply(restored,applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-03 12:34:56"))
+            assertEquals(applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-03 12:34:56"),f.flow.value.parameters.imprint)
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
-            assertTrue((f.tagged("imprint-date-preview") as Button).text.contains("00年1月2日"))
-            val reopened=f.open();assertEquals("2000-01-02 03:04:56",draftDateTime(reopened))
-            reopened.window!!.decorView.findViewWithTag<Button>("imprint-restore-capture").performClick()
+            assertEquals("00年1月3日",(f.tagged("imprint-date-preview") as ImprintDatePreviewButton).displayedDate)
+            val reopened=f.open();assertEquals("2000-01-03 12:34:56",draftDateTime(reopened))
+            reopened.window!!.decorView.findViewWithTag<View>("imprint-restore-capture").performClick()
             assertEquals("2025-04-28 12:34:56",draftDateTime(reopened))
             f.apply(reopened,f.flow.value.parameters.imprint.copy(manualDateTime=null))
             assertNull(f.flow.value.parameters.imprint.manualDateTime)
@@ -429,7 +392,7 @@ class ImprintActivityHostTest {
     @Test fun newPhotoDismissesStaleDraftAndRealImportClearsAppliedManualDate() {
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
             f.applyDate()
-            val d=f.open();chooseStyle(d,3);chooseDate(d,2000,1,2);chooseTime(d,3,4)
+            val d=f.open();chooseStyle(d,3);chooseDate(d,2000,1,2)
             val pendingChild=openDatePicker(d);pendingChild.updateDate(2012,1,29)
             val replacement=source("imprint-replacement.jpg","1999:12:31 23:59:59")
             val before=f.flow.value.parameters
@@ -439,9 +402,9 @@ class ImprintActivityHostTest {
             click(d,AlertDialog.BUTTON_POSITIVE)
             assertSame(replacement,f.flow.value.photo);assertEquals(before,f.flow.value.parameters)
             val latest=f.open();assertEquals("1999-12-31 23:59:59",draftDateTime(latest))
-            chooseStyle(latest,0);chooseDate(latest,2001,2,3);chooseTime(latest,4,5)
-            f.apply(latest,f.flow.value.parameters.imprint.copy(dateStyle="contax_t2",manualDateTime="2001-02-03 04:05:59"))
-            assertEquals("2001-02-03 04:05:59",f.flow.value.parameters.imprint.manualDateTime)
+            chooseStyle(latest,0);chooseDate(latest,2001,2,3)
+            f.apply(latest,f.flow.value.parameters.imprint.copy(dateStyle="contax_t2",manualDateTime="2001-02-03 23:59:59"))
+            assertEquals("2001-02-03 23:59:59",f.flow.value.parameters.imprint.manualDateTime)
             val beforeFailedImport=f.flow.value.parameters
             f.vm.importPhoto(android.net.Uri.parse("content://missing-imprint-import-provider/photo"))
             val failedJob=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}.get(f.vm) as? Job
@@ -449,9 +412,9 @@ class ImprintActivityHostTest {
             await("failed import operation completes",{ "job=$failedJob busy=${f.flow.value.busy} message=${f.flow.value.messageDisplay}" }){failedJob!!.isCompleted}
             assertNull(f.flow.value.busy);assertSame(replacement,f.flow.value.photo)
             assertEquals("A failed import cannot clear the current photo override",beforeFailedImport,f.flow.value.parameters)
-            assertEquals("2001-02-03 04:05:59",f.flow.value.parameters.imprint.manualDateTime)
-            val stale=f.open();chooseDate(stale,2010,11,12);chooseTime(stale,13,14)
-            val staleChild=openTimePicker(stale);staleChild.updateTime(23,59)
+            assertEquals("2001-02-03 23:59:59",f.flow.value.parameters.imprint.manualDateTime)
+            val stale=f.open();chooseDate(stale,2010,11,12)
+            val staleChild=openDatePicker(stale);staleChild.updateDate(2010,10,13)
             val incoming=File(RuntimeEnvironment.getApplication().cacheDir,"imprint-real-import.png")
             val bitmap=Bitmap.createBitmap(384,256,Bitmap.Config.ARGB_8888)
             try {incoming.outputStream().use{assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,it))}}finally{bitmap.recycle()}
@@ -492,7 +455,7 @@ class ImprintActivityHostTest {
             assertEquals(2,all(field(f.a,"tools") as View).filterIsInstance<Switch>().size)
             assertFalse((f.tagged("imprint-date-switch") as Switch).isChecked)
             assertFalse((f.tagged("imprint-exposure-switch") as Switch).isChecked)
-            assertTrue((f.tagged("imprint-date-preview") as Button).text.contains("'25 04 28"))
+            assertEquals("'25 04 28",(f.tagged("imprint-date-preview") as ImprintDatePreviewButton).displayedDate)
             f.tagged("imprint-exposure-switch").performClick();f.settle()
             assertTrue(f.flow.value.parameters.imprint.exposure);assertFalse(f.flow.value.parameters.imprint.dateEnabled)
             f.tagged("imprint-date-switch").performClick();f.settle()
@@ -515,9 +478,6 @@ class ImprintActivityHostTest {
             val landscapeDate=openDatePicker(dialog)
             capturePicker("landscape-native-date-picker",landscapeDate,800,360)
             click(landscapeDate,AlertDialog.BUTTON_NEGATIVE)
-            val landscapeTime=openTimePicker(dialog)
-            capturePicker("landscape-native-time-picker",landscapeTime,800,360)
-            click(landscapeTime,AlertDialog.BUTTON_NEGATIVE)
             chooseStyle(dialog,1)
             f.apply(dialog,f.flow.value.parameters.imprint.copy(dateStyle="yashica_t4"))
             assertFalse("Style edits must not silently enable dates",f.flow.value.parameters.imprint.dateEnabled)
@@ -544,9 +504,6 @@ class ImprintActivityHostTest {
             val datePicker=openDatePicker(dialog)
             capturePicker("narrow-large-font-native-date-picker",datePicker,320,760)
             click(datePicker,AlertDialog.BUTTON_NEGATIVE)
-            val timePicker=openTimePicker(dialog)
-            capturePicker("narrow-large-font-native-time-picker",timePicker,320,760)
-            click(timePicker,AlertDialog.BUTTON_NEGATIVE)
             click(dialog,AlertDialog.BUTTON_NEGATIVE)
         }
     }
@@ -557,7 +514,7 @@ class ImprintActivityHostTest {
             capture("chinese-portrait-date-data-panel",f.root)
             val dialog=f.open();assertPickerControls(dialog)
             val root=dialog.window!!.decorView
-            assertEquals(ImprintText.TIME_PRECISION_NOTE.text(f.a),root.findViewWithTag<TextView>("imprint-time-note").text.toString())
+            assertNull(root.findViewWithTag<View>("imprint-time-note"))
             captureDialog("chinese-portrait-date-style-dialog",dialog,400,760)
             val processLocale=java.util.Locale.getDefault()
             val datePicker=openDatePicker(dialog)
@@ -571,9 +528,6 @@ class ImprintActivityHostTest {
             assertEquals(expectedHeader,header.text.toString())
             capturePicker("chinese-portrait-native-date-picker",datePicker,400,760)
             click(datePicker,AlertDialog.BUTTON_NEGATIVE)
-            val timePicker=openTimePicker(dialog)
-            capturePicker("chinese-portrait-native-time-picker",timePicker,400,760)
-            click(timePicker,AlertDialog.BUTTON_NEGATIVE)
             assertEquals("2025-04-28 12:34:56",draftDateTime(dialog))
             click(dialog,AlertDialog.BUTTON_NEGATIVE)
         }

@@ -59,7 +59,7 @@ class ImprintGeometryHostTest {
                 val b=BorderSnapshot.authored(stock,"test",if(portrait)960 else 1280,if(portrait)1280 else 960)
                 val p=plan(b,settings.copy(dateStyle=style,datePlacement=placement))
                 bounded(p)
-                assertEquals("$stock/$style/$placement",(if(placement=="photo")1 else 0)+(if(ImprintPlan.exposureSupported(b))6 else 0),p.stamps.size)
+                assertEquals("$stock/$style/$placement",1+(if(ImprintPlan.exposureSupported(b))5 else 0),p.stamps.size)
                 assertEquals(0,p.omittedFieldCount)
             }
         }
@@ -72,7 +72,7 @@ class ImprintGeometryHostTest {
             for(style in styles)for(placement in ImprintSettings.PLACEMENTS) {
                 val b=medium(stock,format,portrait)
                 val p=plan(b,settings.copy(dateStyle=style,datePlacement=placement))
-                assertEquals("$stock/$format/$portrait/$style/$placement",7,p.stamps.size)
+                assertEquals("$stock/$format/$portrait/$style/$placement",6,p.stamps.size)
                 assertEquals(0,p.omittedFieldCount)
                 clearEdge(b,p,placement=="photo")
             }
@@ -88,24 +88,24 @@ class ImprintGeometryHostTest {
             val frozen=m.toJson();val content=ImprintContent.from(m,settings)
             assertEquals("ISO$iso",content.fields.first().text)
             assertEquals("${focal}mm",content.fields.last().text)
-            assertEquals(if(shutter=="3600/1")"3600s"else shutter.removePrefix("1/"),content.fields[2].text)
+            assertEquals(if(shutter=="3600/1")"3600s"else shutter.removePrefix("1/"),content.fields[1].text)
             val b=medium("fujifilm_provia_100f",MediumFormat.entries[i%5],i%2==0)
             val p=plan(b,settings.copy(datePlacement="edge",dateStyle=styles[i%4],size=1.6),m)
-            assertEquals(7,p.stamps.size);assertEquals(0,p.omittedFieldCount);clearEdge(b,p,false)
+            assertEquals(6,p.stamps.size);assertEquals(0,p.omittedFieldCount);clearEdge(b,p,false)
             val b135=BorderSnapshot.authored("kodak_portra_400","test",1280,960)
             val p135=plan(b135,settings.copy(size=1.6),m)
-            assertEquals(7,p135.stamps.size);bounded(p135)
+            assertEquals(6,p135.stamps.size);bounded(p135)
             assertEquals(frozen,m.toJson())
         }
     }
-    @Test fun missingFieldsPackFromFirst135PositionAndCenter120WithoutReservedSlots() {
+    @Test fun missingFieldsCenterOn135And120WithoutReservedSlots() {
         val s=settings.copy(dateEnabled=false)
         val b135=BorderSnapshot.authored("kodak_portra_400","test",1280,960)
         val full=plan(b135,s)
-        for((key,value) in base.filterKeys{it!="DateTimeOriginal"}) {
+        for((key,value) in base.filterKeys{it!="DateTimeOriginal" && it!="MeteringMode"}) {
             val only=PhotoMetadata.fromAttributes(mapOf(key to value));val p=plan(b135,s,only)
             assertEquals("$key should create exactly one packed field",1,p.stamps.size)
-            val first=p.stamps.single();val original=full.stamps.first()
+            val first=p.stamps.single();val original=full.stamps[full.stamps.size/2]
             val center=first.left+first.raster.coreLeft+first.raster.coreWidth/2.0
             val originalCenter=original.left+original.raster.coreLeft+original.raster.coreWidth/2.0
             assertEquals(originalCenter,center,1.0)
@@ -118,6 +118,65 @@ class ImprintGeometryHostTest {
         val b=medium("kodak_portra_400",MediumFormat.MF67,false)
         assertTrue(plan(b,s,PhotoMetadata.unavailable()).isEmpty)
     }
+    @Test fun edgePreferenceFallsBackInsidePhotoWhen120FrameIsRemoved() {
+        val edge=settings.copy(datePlacement="edge")
+        for(portrait in listOf(false,true)) {
+            val b=BorderSnapshot.authored("kodak_portra_400","test",if(portrait)960 else 1280,if(portrait)1280 else 960)
+            val actual=plan(b,edge);val photo=plan(b,edge.copy(datePlacement="photo"))
+            assertEquals(photo.stamps.map{it.left to it.top},actual.stamps.map{it.left to it.top})
+            assertEquals(6,actual.stamps.size);bounded(actual)
+        }
+        val plain=ImprintPlan.create(edge,metadata(),960,1280)
+        assertEquals(1,plain.stamps.size);bounded(plain)
+        val b=medium("kodak_portra_400",MediumFormat.MF67,false)
+        clearEdge(b,plan(b,edge),false)
+        assertEquals("edge",edge.datePlacement)
+    }
+
+    @Test fun parametersShareOneHeightAndCenterBetweenPerforationsInBothOrientations() {
+        for(portrait in listOf(false,true))for(count in 1..5)for(iso in listOf("100","6400","65534")) {
+            val b=BorderSnapshot.authored("kodak_portra_400","test",if(portrait)960 else 1280,if(portrait)1280 else 960)
+            val facts=linkedMapOf("PhotographicSensitivity" to iso,"ExposureTime" to "1/60",
+                "FNumber" to "5579/1000","ExposureBiasValue" to "0","FocalLength" to "50")
+            val m=PhotoMetadata.fromAttributes(facts.entries.take(count).associate{it.toPair()}+mapOf("MeteringMode" to "2"))
+            val p=plan(b,settings.copy(dateEnabled=false),m)
+            assertEquals(count,p.stamps.size);assertEquals(0,p.omittedFieldCount);bounded(p)
+            val heights=p.stamps.map{if(portrait)it.raster.coreWidth else it.raster.coreHeight}
+            assertEquals("All parameters must have one glyph height",1,heights.toSet().size)
+            val centers=p.stamps.map{stamp ->
+                if(portrait)(stamp.top+stamp.raster.coreTop+stamp.raster.coreHeight/2.0-b.frameOriginY)/b.pixelsPerMm
+                else (stamp.left+stamp.raster.coreLeft+stamp.raster.coreWidth/2.0-b.frameOriginX)/b.pixelsPerMm
+            }
+            assertEquals("Parameter group must be centered",19.0,(centers.first()+centers.last())/2,.51/b.pixelsPerMm)
+            centers.forEach{center -> assertEquals("Stay between perforations",kotlin.math.round(center/4.75),center/4.75,.51/b.pixelsPerMm/4.75)}
+        }
+    }
+
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun screenshotParameterValuesRenderUniformlyForVisualReview() {
+        val b=BorderSnapshot.authored("kodak_portra_400","test",1280,960)
+        val m=PhotoMetadata.fromAttributes(mapOf("PhotographicSensitivity" to "100","MeteringMode" to "2",
+            "ExposureTime" to "1/60","FNumber" to "5579/1000","ExposureBiasValue" to "0","FocalLength" to "50"))
+        val p=plan(b,settings.copy(dateEnabled=false),m)
+        assertEquals(5,p.stamps.size)
+        assertEquals(1,p.stamps.map{it.raster.coreHeight}.toSet().size)
+        System.getProperty("filmroom.imprint.evidenceDir")?.let { directory ->
+            val first=p.stamps.minOf{it.top};val last=p.stamps.maxOf{it.bottom}
+            val image=android.graphics.Bitmap.createBitmap(p.width,last-first+32,android.graphics.Bitmap.Config.ARGB_8888)
+            for(y in first-16 until last+16) {
+                val row=FloatArray(p.width*3)
+                p.blendRow(y,row,dev.filmroom.io.OutputColorSpace.SRGB)
+                for(x in 0 until p.width) {
+                    val rgb=(dev.filmroom.io.OutputColorSpace.SRGB.encode8(row[x*3]) shl 16) or
+                        (dev.filmroom.io.OutputColorSpace.SRGB.encode8(row[x*3+1]) shl 8) or dev.filmroom.io.OutputColorSpace.SRGB.encode8(row[x*3+2])
+                    image.setPixel(x,y-first+16,rgb or (0xff shl 24))
+                }
+            }
+            val file=java.io.File(directory,"uniform-parameter-raster.png");file.parentFile.mkdirs()
+            try { file.outputStream().use{check(image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it))} } finally { image.recycle() }
+        }
+    }
+
     @Test fun tinyAndLargeOutputsStayWithinMaskBudgetWithoutAllocatingOutputImages() {
         for(size in listOf(1,16,64,192))for(style in styles) {
             val p=ImprintPlan.create(settings.copy(dateStyle=style,size=1.6),metadata(),size,size)
@@ -128,14 +187,14 @@ class ImprintGeometryHostTest {
         for(format in MediumFormat.entries)for(portrait in listOf(false,true)) {
             val b=medium("kodak_portra_400",format,portrait,192,128)
             val p=plan(b,settings.copy(datePlacement="edge"))
-            bounded(p);assertEquals(7,p.stamps.size+p.omittedFieldCount)
+            bounded(p);assertEquals(6,p.stamps.size+p.omittedFieldCount)
             clearEdge(b,p,false)
         }
         for(b in listOf(BorderSnapshot.authored("kodak_portra_400","test",8192,5460),
             medium("kodak_portra_400",MediumFormat.MF645,true,8192,5460),
             medium("fujifilm_provia_100f",MediumFormat.MF617,false,8192,5460))) {
             val p=plan(b,settings.copy(datePlacement=if(b.geometryVersion==5)"edge"else "photo",size=1.6))
-            assertEquals(7,p.stamps.size);bounded(p)
+            assertEquals(6,p.stamps.size);bounded(p)
             if(b.geometryVersion==5)clearEdge(b,p,false)
         }
     }

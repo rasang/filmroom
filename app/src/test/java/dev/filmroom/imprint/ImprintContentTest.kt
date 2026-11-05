@@ -15,9 +15,8 @@ class ImprintContentTest {
         val c = content("PhotographicSensitivity" to "400", "MeteringMode" to "5", "ExposureTime" to "1/250",
             "FNumber" to "56/10", "ExposureBiasValue" to "1/2", "FocalLength" to "800/1",
             "ExposureProgram" to "3", "ExposureMode" to "2")
-        assertEquals(ImprintFieldKind.values().toList(), c.fields.map { it.kind })
-        assertEquals(listOf("ISO400", "#", "250", "F5.6", "+0.5", "800mm"), c.fields.map { it.text })
-        assertEquals(ImprintMeteringMode.PATTERN, c.fields[1].meteringMode)
+        assertEquals(ImprintFieldKind.values().filter{it!=ImprintFieldKind.METERING}, c.fields.map { it.kind })
+        assertEquals(listOf("ISO400", "250", "F5.6", "+0.5", "800mm"), c.fields.map { it.text })
         assertTrue(content("ExposureProgram" to "3", "ExposureMode" to "2").fields.isEmpty())
         assertEquals(listOf(ImprintFieldKind.APERTURE, ImprintFieldKind.FOCAL_LENGTH),
             content("FNumber" to "2/1", "FocalLength" to "400").fields.map { it.kind })
@@ -35,7 +34,7 @@ class ImprintContentTest {
             "2024:02:29", "2024:02:29 23:59:59garbage", "2024:2:29 23:59:59")) {
             assertNull(raw, content("DateTimeOriginal" to raw).date)
         }
-        assertNull(content("DateTimeDigitized" to date, "DateTime" to date, "manualDate" to "1999-01-01").date)
+        assertEquals("'24 02 29", content("DateTimeDigitized" to date, "DateTime" to date, "manualDate" to "1999-01-01").date)
     }
 
     @Test fun isoShortNeverLosesIntegerZeros() {
@@ -108,7 +107,7 @@ class ImprintContentTest {
         } finally { Locale.setDefault(original) }
         for (raw in listOf("0", "7", "255", "-1", "bad"))
             assertNull(field(ImprintFieldKind.METERING, "MeteringMode" to raw))
-        for (mode in 1..6) assertNotNull(field(ImprintFieldKind.METERING, "MeteringMode" to "$mode"))
+        for (mode in 1..6) assertNull(field(ImprintFieldKind.METERING, "MeteringMode" to "$mode"))
     }
 
     @Test fun explicitManualDateOverridesOnlyPresentationAndDateSwitchPreservesChoice() {

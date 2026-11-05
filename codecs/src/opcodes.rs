@@ -3,7 +3,7 @@
 use crate::error::{Result, err};
 #[path = "opcode_stage1.rs"]
 mod stage1;
-pub use stage1::{Stage1Opcode, apply_stage1_sample, parse_stage1};
+pub use stage1::{Stage1Opcode, apply_stage1_sample, apply_stage1_neighborhood, parse_stage1};
 pub(crate) fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "probe")
 }

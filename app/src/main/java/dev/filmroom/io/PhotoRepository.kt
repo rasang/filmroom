@@ -75,7 +75,7 @@ class PhotoSource internal constructor(
         var closed=false
         AutoCloseable { synchronized(detailLeaseLock){if(!closed){closed=true;detailReaders--;if(discardRequested && detailReaders==0)deleteSourceFiles()}} }
     }
-    private fun deleteSourceFiles(){localFile.delete();linearFile?.delete()}
+    private fun deleteSourceFiles(){File(localFile.path+".imprint-time").delete();localFile.delete();linearFile?.delete()}
     internal fun discardWhenUnused(){synchronized(detailLeaseLock){discardRequested=true;if(detailReaders==0)deleteSourceFiles()}}
     private val previewMutex=Mutex()
     private val previewCacheLock=Any()
@@ -242,6 +242,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 try {
                     val name = queryName(uri)
                     val sizeHint = querySizeHint(uri)
+                    val sourceModified = SourcePhotoTime.modified(resolver, uri)
                     if (!PhotoLimits.hasImportSpace(sourceDirectory.usableSpace, sizeHint)) {
                         throw PhotoException(PhotoException.Reason.STORAGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_9392b8f7c99e))
                     }
@@ -269,6 +270,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                         }
                     } ?: throw FileNotFoundException("Photo provider returned no stream")
                     job.ensureActive()
+                    sourceModified?.let { File(privateCopy.path+".imprint-time").writeText(it) }
                     val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null) { rawSpool = it }
                     preview = loaded.preview
                     produced = loaded
@@ -277,6 +279,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 } finally {
                     if (!retained) {
                         preview?.recycle()
+                        File(privateCopy.path+".imprint-time").delete()
                         privateCopy.delete()
                         rawSpool?.delete()
                     }
@@ -382,7 +385,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             n
         }
         // Read the original encoded file before HEIC/RAW linearization loses its metadata.
-        val captureMetadata=PhotoMetadata.read(file)
+        val sourceTime=File(file.path+".imprint-time").takeIf{it.isFile && it.length() in 1..64}?.let{runCatching{it.readText()}.getOrNull()}
+        val captureMetadata=PhotoMetadata.read(file).withImprintFallback(sourceTime,"modified")
         return inputAdapters.load(
             PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata),
             PhotoInputHeader(header,count),

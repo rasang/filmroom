@@ -17,6 +17,7 @@
 | NCLX sRGB (1,13,1) | 已实现 | 保持 | NCLX-only P3/BT.2020、未知transfer仍拒绝 |
 | SDR primary + tmap HDR alternate + 独立 gainmap | 全局HDR属性/tmap导致拒绝 | 新增受限 SDR primary-only decoder view | 只接入明确 primary-first dimg(base,gainmap)图关系；不应用/保留HDR层；不是完整tmap/HDR支持 |
 | 原件底图自身10bit、PQ/HLG/HDR | 拒绝 | 仍拒绝 | 需高位深线性工作空间、明确映射/显示/导出策略，不能靠移除HDR标签解决 |
+| 精确 Apple auxC HDR gainmap + auxl→SDR primary | 原全局检查拒绝 | 新增受限 primary-only view | 仅隐藏 hvc1 gainmap；严格 SDR 主图、原 ICC/方向保持；无 HDR 保留，待 Android 实测 |
 | alpha/depth等auxl/auxC标准辅助图 | 拒绝 | 关联所选主图仍拒绝 | 不可静默丢alpha；深度保留另议 |
 | 动画、image sequence、视频轨 | 拒绝 | 仍拒绝 | moov/moof及序列品牌被拒绝；没有帧选择/时间轴 |
 | AVIF / 其他HEIF编码、通用mif1 | 不走HEIC实现 | 不新增 | HEIF是容器体系，不等于全部使用HEVC；AVIF标准有独立codec要求[4] |

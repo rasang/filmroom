@@ -19,14 +19,22 @@ import java.util.Locale
 
 /** A bounded, typed capture snapshot, never a copy of source offsets or opaque MakerNotes. */
 @ConsistentCopyVisibility
-data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false) {
-    /** Validated source facts only; no edit timestamps, equivalent focal length or identity data. */
+data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false, private val imprintFallback:String?=null, val imprintFallbackKind:String?=null) {
+    /** Presentation fallback is separate from capture EXIF and never written as DateTimeOriginal. */
+    fun imprintDateTime():LocalDateTime? = attributes["DateTimeOriginal"]?.let(::parseImprintDate)
+        ?: imprintFallback?.let(::parseImprintDate)
+    fun withImprintFallback(value:String?,kind:String):PhotoMetadata {
+        if(kind !in setOf("modified","created") || (imprintFallback!=null && !(kind=="modified" && imprintFallbackKind=="created")))return this
+        val valid=value?.takeIf{parseImprintDate(it)!=null} ?: return this
+        return copy(imprintFallback=valid,imprintFallbackKind=kind)
+    }
+    /** Validated exposure and original capture facts; fallback stays presentation-only. */
     internal fun imprintAttributes():Map<String,String> = attributes.filterKeys { it in setOf(
         "DateTimeOriginal","ExposureTime","ShutterSpeedValue","FNumber","ApertureValue",
         "MeteringMode","ExposureBiasValue","FocalLength","PhotographicSensitivity",
         "SensitivityType","StandardOutputSensitivity","RecommendedExposureIndex","ISOSpeed") }
 
-    fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).toString()
+    fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).put("imprintFallback",imprintFallback).put("imprintFallbackKind",imprintFallbackKind).toString()
 
     /** A timestamp without its original offset is a local wall time, not an invented UTC instant. */
     fun captureTimeMillis():Long?=runCatching {
@@ -100,6 +108,10 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
     companion object {
         const val BUDGET=48*1024
         private val DATE=DateTimeFormatter.ofPattern("uuuu:MM:dd HH:mm:ss",Locale.ROOT).withResolverStyle(ResolverStyle.STRICT)
+        internal fun parseImprintDate(value:String):LocalDateTime?=runCatching {
+            require(value.matches(Regex("[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")))
+            LocalDateTime.parse(value,DATE).also{require(it.year in 1..9999)}
+        }.getOrNull()
         private data class Spec(val group:Int,val tag:Int,val type:Int,val count:Int=1)
         private data class Entry(val tag:Int,val type:Int,val data:ByteArray)
         // No source geometry, color profile, IFD pointers, thumbnails, strip offsets or MakerNote.
@@ -138,14 +150,14 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
                 } else exif.getAttribute(key) ?: if(key=="PhotographicSensitivity")exif.getAttribute("ISOSpeedRatings")else null
                 value?.let{key to it}
             }.toMap()
-            val checked=fromAttributes(fields)
+            val checked=fromAttributes(fields + listOfNotNull(exif.getAttribute(ExifInterface.TAG_DATETIME)?.let{"DateTime" to it}).toMap()).withImprintFallback(exif.getAttribute(ExifInterface.TAG_DATETIME_DIGITIZED),"created")
             val sourceHint=runCatching { XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP)) }.getOrNull()?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
             val safeFields=checked.attributes
             val nikon=fields["Make"]?.trim()?.uppercase(Locale.ROOT) in setOf("NIKON", "NIKON CORPORATION")
             val fallback=if(nikon && (safeFields["PhotographicSensitivity"]==null || safeFields["LensSpecification"]==null || (safeFields["OffsetTimeOriginal"]==null && sourceHint==null)))NikonCaptureFallback.read(file)else emptyMap()
             val merged=fields.toMutableMap()
             fallback.forEach{(key,value)->if(safeFields[key]==null && !(key=="OffsetTimeOriginal" && (sourceHint!=null || fields.containsKey("OffsetTimeOriginal"))))merged[key]=value}
-            val result=(if(fallback.isEmpty())checked else fromAttributes(merged)).let { metadata ->
+            val result=(if(fallback.isEmpty())checked else fromAttributes(merged).withImprintFallback(checked.imprintFallback,checked.imprintFallbackKind.orEmpty())).let { metadata ->
                 if(sourceHint!=null)metadata.copy(sourceCreateDate=sourceHint) else metadata
             }
             val sourceResult=result.copy(sourceOffsetPresent=result.sourceOffsetPresent || exif.hasAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL))
@@ -193,7 +205,7 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             // Accept only an indexing instant consistent with the persisted original wall time.
             val frozen=stored?.takeIf{derived!=null && it==derived} ?: derived
             val result=checked.copy(sourceCreateDate=hint,indexTimeZone=zone,indexTimeMillis=frozen,sourceOffsetPresent=checked.sourceOffsetPresent || j.optBoolean("sourceOffsetPresent",false),issues=MetadataIssues.bounded(checked.issues+MetadataIssues.parse(j.optString("issues"))))
-            result.copy(warning=result.warning ?: if(j.isNull("warning"))null else j.optString("warning").take(160).takeIf{it.isNotEmpty()})
+            result.copy(warning=result.warning ?: if(j.isNull("warning"))null else j.optString("warning").take(160).takeIf{it.isNotEmpty()}).withImprintFallback(j.optString("imprintFallback"),j.optString("imprintFallbackKind"))
         }catch(_:Exception){unavailable()}
         internal fun fromAttributes(input:Map<String,String>):PhotoMetadata {
             val accepted=linkedMapOf<String,String>();val rejected=mutableListOf<MetadataIssue>()
@@ -204,7 +216,8 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
                     else rejected[MetadataIssues.MAX_ITEMS-1]=MetadataIssue(MetadataField.METADATA,MetadataIssueReason.ISSUE_LIMIT)
                 }
             }
-            input.forEach { (key,raw)->val spec=SCHEMA[key]
+            input.forEach { (key,raw)->if(key=="DateTime")return@forEach
+                val spec=SCHEMA[key]
                 if(spec==null){reject(key,MetadataIssueReason.UNKNOWN_FIELD);return@forEach}
                 if(raw.length>4096){reject(key,MetadataIssueReason.FIELD_TOO_LONG);return@forEach}
                 var reason=MetadataIssueReason.INVALID_TEXT
@@ -221,7 +234,7 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
                 }catch(_:Exception){accepted.remove(key);reject(key,reason)}
             }
             val zone=if(accepted.containsKey("DateTimeOriginal") && !accepted.containsKey("OffsetTimeOriginal"))ZoneId.systemDefault().id else null
-            return PhotoMetadata(accepted.toMap(),if(rejected.isNotEmpty())dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_97154723b761) else null,issues=rejected.toList(),indexTimeZone=zone,indexTimeMillis=zone?.let{localIndexTime(accepted,it)},sourceOffsetPresent=input.containsKey("OffsetTimeOriginal"))
+            return PhotoMetadata(accepted.toMap(),if(rejected.isNotEmpty())dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_97154723b761) else null,issues=rejected.toList(),indexTimeZone=zone,indexTimeMillis=zone?.let{localIndexTime(accepted,it)},sourceOffsetPresent=input.containsKey("OffsetTimeOriginal")).withImprintFallback(input["DateTime"],"modified").withImprintFallback(accepted["DateTimeDigitized"],"created")
         }
 
         private fun localIndexTime(fields:Map<String,String>,zone:String):Long?=runCatching {

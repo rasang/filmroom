@@ -3,7 +3,6 @@ package dev.filmroom.ui
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.res.ColorStateList
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.View
 import android.widget.*
@@ -182,5 +181,5 @@ internal fun showHistoryChoice(activity:ComponentActivity,action:ExportHistoryAc
     return AlertDialog.Builder(activity).setTitle((if(action==ExportHistoryAction.SINGLE)HistoryText.SINGLE_TITLE else if(count==1)HistoryText.CLEAR_ONE_TITLE else HistoryText.CLEAR_TITLE).text(activity)).setView(scroll)
         .setNegativeButton(HistoryText.CANCEL.text(activity),null)
         .setPositiveButton((if(action==ExportHistoryAction.CLEAR)HistoryText.CLEAR else HistoryText.DELETE).text(activity)){_,_->onConfirm(if(group.checkedRadioButtonId==both)ExportHistoryMode.RECORDS_AND_PHOTOS else ExportHistoryMode.RECORDS_ONLY,remember.isChecked)}
-        .show().also{it.window?.setBackgroundDrawable(GradientDrawable().apply{setColor(FilmroomPalette.surface);cornerRadius=dp(12).toFloat()})}
+        .show().also{it.window?.setBackgroundDrawableResource(dev.filmroom.R.drawable.filmroom_dialog_background)}
 }

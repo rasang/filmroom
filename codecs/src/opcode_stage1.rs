@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug)]
 pub enum Stage1Opcode {
     FixVignetteRadial(Vignette),
+    FixBadPixelsConstant(crate::dng_bad_pixels::BadPixelsConstant),
 }
 #[derive(Clone, Debug)]
 pub struct Vignette {
@@ -25,6 +26,7 @@ impl Stage1Opcode {
     pub fn storage_bytes(&self) -> u64 {
         match self {
             Self::FixVignetteRadial(v) => (v.table.len() * 2 + std::mem::size_of::<Self>()) as u64,
+            Self::FixBadPixelsConstant(_) => std::mem::size_of::<Self>() as u64,
         }
     }
 }
@@ -143,8 +145,16 @@ pub fn parse_stage1(
                     result.push(Stage1Opcode::FixVignetteRadial(vignette));
                 }
             }
-            // Bad-pixel repair and nonidentity resampling require additional
-            // neighbor/halo semantics, and MUST continue to fail closed.
+            4 => {
+                // Multiple neighborhood stages need a wider composed halo.
+                // The supported envelope is one repair, preserving list order.
+                if result.iter().any(|op| matches!(op, Stage1Opcode::FixBadPixelsConstant(_))) {
+                    return Err(unsupported());
+                }
+                result.push(Stage1Opcode::FixBadPixelsConstant(
+                    crate::dng_bad_pixels::BadPixelsConstant::parse(record.payload)?));
+            }
+            // Other neighborhood operations remain unsupported.
             _ => return Err(unsupported()),
         }
     }
@@ -159,9 +169,26 @@ pub fn apply_stage1_sample(
     for op in ops {
         sample = match op {
             Stage1Opcode::FixVignetteRadial(v) => v.apply(sample, x, y)?,
+            Stage1Opcode::FixBadPixelsConstant(_) => return Err(unsupported()),
         };
     }
     Ok(sample)
+}
+
+/// Apply the supported single-neighborhood list without reusing any repaired
+/// neighbors. Earlier scalar operations affect both center and neighbor codes.
+pub fn apply_stage1_neighborhood(
+    ops: &[Stage1Opcode], width: usize, height: usize, x: usize, y: usize,
+    mut source: impl FnMut(usize,usize)->Result<u16>,
+) -> Result<u16> {
+    let Some(index)=ops.iter().position(|op|matches!(op,Stage1Opcode::FixBadPixelsConstant(_))) else {
+        return apply_stage1_sample(ops,source(x,y)?,x,y);
+    };
+    let Stage1Opcode::FixBadPixelsConstant(repair)=&ops[index] else {unreachable!()};
+    let sample=repair.sample(width,height,x,y,|xx,yy| {
+        apply_stage1_sample(&ops[..index],source(xx,yy)?,xx,yy)
+    })?;
+    apply_stage1_sample(&ops[index+1..],sample,x,y)
 }
 
 #[cfg(test)]

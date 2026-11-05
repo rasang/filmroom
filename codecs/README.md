@@ -103,3 +103,5 @@ its photo, preview and derived pixels are not included in this repository.
 The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three-channel LinearRaw strip contract described in [JPEG XL DNG](../docs/JPEG_XL_DNG.md). This route uses official libjxl 0.12.0 and can request up to 384 MiB, subject to system memory and shared admission. Other DNG remains at 128 MiB and camera RAW at 256 MiB. This does not cover tiled, CFA, floating-point, other bit-depth, extra-channel or animated JPEG XL inputs. Android device validation remains pending.
 
 此前 JPEG-XL 不支持的说明，仅由本次已验证的16位三通道 LinearRaw 条带路径取代。该路径最高申请384 MiB，仍受系统可用内存与共享准入限制；其他DNG128 MiB和相机RAW256 MiB不变，未宣称所有三星模式或真机验证通过。
+
+- Q2 实样对应的必需坏点修复、分通道几何校正与 A/D50 CFA 色彩扩展及资源边界见 [DNG-Q2-REQUIRED-CORRECTIONS](docs/DNG-Q2-REQUIRED-CORRECTIONS.md)；这是受限结构支持，不表示全部 Leica/DNG 变体已支持。

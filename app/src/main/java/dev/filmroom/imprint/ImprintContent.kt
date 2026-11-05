@@ -32,15 +32,15 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
         private const val UINT_MAX = 4294967295L
 
         fun from(metadata: PhotoMetadata, settings: ImprintSettings): ImprintContent =
-            fromAttributes(metadata.imprintAttributes(), settings)
+            ImprintContent(displayDateTime(metadata, settings)?.let { formatDate(it.toLocalDate(), settings.effectiveDateStyle) }, exposure(metadata.imprintAttributes()))
 
         /** Original local wall time only; never edit/export time or a timezone conversion. */
         fun originalCaptureDateTime(metadata: PhotoMetadata): LocalDateTime? =
             originalCaptureDateTime(metadata.imprintAttributes())
 
-        /** Editable dialog value. A null result means the original contains no valid capture time. */
+        /** Editable date source. A null result means neither capture nor fallback date is available. */
         fun displayDateTime(metadata: PhotoMetadata, settings: ImprintSettings): LocalDateTime? =
-            settings.manualDateTime?.let(ImprintSettings::parseDateTime) ?: originalCaptureDateTime(metadata)
+            settings.manualDateTime?.let(ImprintSettings::parseDateTime) ?: metadata.imprintDateTime()
 
         private fun originalCaptureDateTime(attributes: Map<String, String>): LocalDateTime? =
             attributes["DateTimeOriginal"]?.let { raw ->
@@ -57,7 +57,9 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
         internal fun fromAttributes(attributes: Map<String, String>, settings: ImprintSettings): ImprintContent {
             val date = settings.manualDateTime?.let(ImprintSettings::parseDateTime)
                 ?: originalCaptureDateTime(attributes)
-            return ImprintContent(date?.toLocalDate()?.let { formatDate(it, settings.effectiveDateStyle) }, exposure(attributes))
+                ?: attributes["DateTime"]?.let { originalCaptureDateTime(mapOf("DateTimeOriginal" to it)) }
+                ?: attributes["DateTimeDigitized"]?.let { originalCaptureDateTime(mapOf("DateTimeOriginal" to it)) }
+            return ImprintContent(date?.let { formatDate(it.toLocalDate(), settings.effectiveDateStyle) }, exposure(attributes))
         }
 
         internal fun formatDate(date: LocalDate, style: String): String? {
@@ -121,23 +123,7 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
 
         internal fun exposure(f: Map<String, String>): List<ImprintField> = buildList {
             iso(f)?.let { add(ImprintField(ImprintFieldKind.ISO, "ISO$it")) }
-            val meter = when (unsigned(f["MeteringMode"], 6)?.toInt()) {
-                1 -> ImprintMeteringMode.AVERAGE
-                2 -> ImprintMeteringMode.CENTER_WEIGHTED
-                3 -> ImprintMeteringMode.SPOT
-                4 -> ImprintMeteringMode.MULTI_SPOT
-                5 -> ImprintMeteringMode.PATTERN
-                6 -> ImprintMeteringMode.PARTIAL
-                else -> null
-            }
-            meter?.let { add(ImprintField(ImprintFieldKind.METERING, when (it) {
-                ImprintMeteringMode.AVERAGE -> "[ ]"
-                ImprintMeteringMode.CENTER_WEIGHTED -> "[o]"
-                ImprintMeteringMode.SPOT -> "o"
-                ImprintMeteringMode.MULTI_SPOT -> "oo"
-                ImprintMeteringMode.PATTERN -> "#"
-                ImprintMeteringMode.PARTIAL -> "[o]"
-            }, it)) }
+            // Metering icons are intentionally not printed: they are ambiguous at film-edge size.
             // A valid independently recorded APEX tag may recover a missing or unusable primary tag.
             val seconds = number(f["ExposureTime"])?.takeIf { it > 0.0 && it <= UINT_MAX }
                 ?: number(f["ShutterSpeedValue"], signed = true)?.takeIf { it in -32.0..32.0 }

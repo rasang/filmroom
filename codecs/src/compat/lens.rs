@@ -16,10 +16,12 @@ pub(crate) fn lens_opcodes(
     Vec<crate::gainmap::GainMap>,
     Vec<crate::cfa_gainmap::CfaGainMap>,
     Vec<crate::opcodes::Stage1Opcode>,
+    Option<crate::dng_warp::WarpRectilinear>,
 )> {
     let mut gain_maps = Vec::new();
     let mut cfa_maps = Vec::new();
     let mut stage1 = Vec::new();
+    let mut warp = None;
     for tag in [51008, 51009, 51022] {
         if let Some(v) = inherited(root, raw, tag) {
             if !matches!(v.typ, 1 | 7) {
@@ -34,9 +36,25 @@ pub(crate) fn lens_opcodes(
                 cfa_maps = maps;
                 skipped
             } else if tag == 51022 {
-                let (maps, skipped) = crate::gainmap::parse(&v.bytes, active.w, active.h)?;
-                gain_maps = maps;
-                skipped
+                let records=crate::opcodes::records(&v.bytes)?;
+                let nonidentity=records.iter().filter(|r|r.flags&1==0 && r.id==1)
+                    .map(|r|crate::dng_warp::WarpRectilinear::parse(r.payload))
+                    .collect::<Result<Vec<_>>>()?.iter().any(|w|!w.is_identity());
+                if nonidentity {
+                    // A single required warp is the verified initial envelope.
+                    // Mixing maps/other required stages must not reorder them.
+                    let required:Vec<_>=records.iter().filter(|r|r.flags&1==0).collect();
+                    if !cfa_mode || required.len()!=1 || required[0].id!=1
+                        || !crate::opcodes::supported_version(required[0].version) {
+                        return Err(err("UNSUPPORTED_DNG_OPCODE","probe"));
+                    }
+                    warp=Some(crate::dng_warp::WarpRectilinear::parse(required[0].payload)?);
+                    records.iter().any(|r|r.flags&1!=0)
+                } else {
+                    let (maps, skipped) = crate::gainmap::parse(&v.bytes, active.w, active.h)?;
+                    gain_maps = maps;
+                    skipped
+                }
             } else {
                 crate::opcodes::optional_only(&v.bytes)?
             };
@@ -49,5 +67,5 @@ pub(crate) fn lens_opcodes(
             }
         }
     }
-    Ok((gain_maps, cfa_maps, stage1))
+    Ok((gain_maps, cfa_maps, stage1, warp))
 }

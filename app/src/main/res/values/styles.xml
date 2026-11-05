@@ -2,6 +2,8 @@
     <!-- Deliberately not DayNight: Filmroom currently has one dark interface. -->
     <style name="AppThemeBase" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="android:alertDialogTheme">@style/FilmroomDialogTheme</item>
+        <item name="android:datePickerDialogTheme">@style/FilmroomDialogTheme</item>
         <item name="android:colorAccent">#E5A35D</item>
         <item name="android:colorBackground">@color/filmroom_background</item>
         <item name="android:colorBackgroundFloating">@color/filmroom_surface</item>
@@ -14,4 +16,8 @@
         <item name="android:windowBackground">@color/filmroom_background</item>
     </style>
     <style name="AppTheme" parent="AppThemeBase"/>
+    <!-- Keep native dialog insets, shadows, sizing and interaction; change only the contour. -->
+    <style name="FilmroomDialogTheme" parent="android:style/ThemeOverlay.Material.Dialog.Alert">
+        <item name="android:dialogCornerRadius">@dimen/filmroom_dialog_corner_radius</item>
+    </style>
 </resources>

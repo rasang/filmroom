@@ -158,7 +158,7 @@ class SettingsActivity : ComponentActivity() {
                         .setPositiveButton(HistoryText.SAVE.text(this)){_,_->try{historyPreferences.set(action,modes[selected]);updateValue()}catch(_:Exception){Toast.makeText(this,HistoryText.SAVE_FAILED.text(this),Toast.LENGTH_LONG).show()}}
                         .create()
                     dialog.setOnDismissListener{if(pending===dialog)pending=null};pending=dialog;dialog.show()
-                    dialog.window?.setBackgroundDrawable(GradientDrawable().apply{setColor(FilmroomPalette.surface);cornerRadius=dp(12).toFloat()})
+                    dialog.window?.setBackgroundDrawableResource(dev.filmroom.R.drawable.filmroom_dialog_background)
                 }
             };historySection.addView(row)
         }

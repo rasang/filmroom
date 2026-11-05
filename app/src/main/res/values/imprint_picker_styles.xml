@@ -1,6 +1,6 @@
 <resources>
     <!-- Only compact imprint pickers use this overlay; the application theme is unchanged. -->
-    <style name="ImprintCompactPickerTheme" parent="android:style/ThemeOverlay.Material.Dialog.Alert">
+    <style name="ImprintCompactPickerTheme" parent="FilmroomDialogTheme">
         <item name="android:datePickerStyle">@style/ImprintCompactDatePicker</item>
         <item name="android:timePickerStyle">@style/ImprintCompactTimePicker</item>
     </style>
