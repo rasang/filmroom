@@ -1,0 +1,32 @@
+[
+  {
+    "path": "native/crates/film-engine/src/research_dir.rs",
+    "sha256": "a3eefdf4f4cd50df3ccec46ccd5464e73831c557e1e7e6ea37d3f67cdcf00858",
+    "bytes": 19125
+  },
+  {
+    "path": "native/crates/film-engine/src/research_dir/full_stage.rs",
+    "sha256": "03fe1acbdfa6c1e43966c80b1f5a4d822e585650c2e37291a00e964d588b27fb",
+    "bytes": 14091
+  },
+  {
+    "path": "native/crates/film-engine/src/research_dir/gpu.rs",
+    "sha256": "5d3431347d0ad6d2b0760f4372e7b94571feb64d51989ea03b7b488086b8e01a",
+    "bytes": 12691
+  },
+  {
+    "path": "native/crates/film-engine/src/research_dir/tests.rs",
+    "sha256": "5bf8ec208b37369f696754a83d951e493da1512209e041f8aa89a01364b47c67",
+    "bytes": 19143
+  },
+  {
+    "path": "native/crates/film-engine/src/research_exposure/full_stage.rs",
+    "sha256": "c2e55be64fc75a9907d32ffffb3846249183684abd4f5ba3613347d4f7ff2d20",
+    "bytes": 16635
+  },
+  {
+    "path": "native/crates/film-engine/src/shaders/research_dir_linear.wgsl",
+    "sha256": "0095576a739711246f7731014ada6f84a555eb347376474bfa32acf50db4c42e",
+    "bytes": 426
+  }
+]

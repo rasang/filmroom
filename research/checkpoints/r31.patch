@@ -1,0 +1,637 @@
+diff --git a/native/crates/film-engine/src/research_optics64_point.rs b/native/crates/film-engine/src/research_optics64_point.rs
+index 3b4bdad81c15cf44505af9fbe9e4db688e1e1d07..ff11e20c4152e01fe22004051da4468bec5f8298 100644
+--- a/native/crates/film-engine/src/research_optics64_point.rs
++++ b/native/crates/film-engine/src/research_optics64_point.rs
+@@ -1,5 +1,5 @@
+-//! Closed test-only scalar optics primitives. No GPU runner, image graph,
+-//! provenance, production admission or spatial-kernel change is supplied here.
++//! Closed test-only scalar optics primitives and isolated point GPU owner.
++//! No image graph, provenance, production admission or spatial-kernel change.
+ #![cfg(test)]
+ 
+ pub(crate) type R<T> = Result<T, String>;
+@@ -21,6 +21,8 @@ const MIB: u64 = 1024 * 1024;
+ mod host;
+ mod kernel;
+ mod tests;
++#[cfg(feature = "gpu-diffusion-research")]
++mod gpu;
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ #[repr(u32)]
+@@ -202,7 +204,7 @@ fn checked_sum(parts: &[u64]) -> R<u64> {
+         .ok_or_else(|| "GPU_OPTICS64_POINT_BUDGET".into()))
+ }
+ 
+-/// Future runner's fixed accounting contract, not an implemented GPU owner.
++/// Fixed point-owner accounting contract, not a measured process-RSS limit.
+ #[derive(Clone, Debug, PartialEq, Eq)]
+ pub(crate) struct Resources {
+     pub packet_bytes: u64,
+diff --git a/native/crates/film-engine/src/research_optics64_point/gpu.rs b/native/crates/film-engine/src/research_optics64_point/gpu.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3dd4c29dba4b6a7e3f54d54f86847f2fa594bdaf
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/gpu.rs
+@@ -0,0 +1,228 @@
++//! Isolated one-stage point runner. The caller owns the real session/ticket,
++//! full family prepayment and post-return seal. No files or spatial operations.
++use super::*;
++use crate::{gpu_phase_diagnostics::{self as trace, Phase}, gpu_session as session};
++use std::{sync::{atomic::Ordering, mpsc}, time::{Duration, Instant}};
++
++mod fault;
++mod tests;
++use fault::FaultControl;
++
++#[derive(Debug, serde::Serialize)]
++#[serde(rename_all = "camelCase")]
++pub(super) struct Stats {
++    pub adapter: String,
++    pub source_sha256: String,
++    pub compile_ms: f64,
++    pub upload_ms: f64,
++    pub dispatch_readback_ms: f64,
++    pub known_host_payload_bytes: u64,
++    pub resident_bytes: u64,
++    pub upload_staging_bytes: u64,
++    pub device_margin_bytes: u64,
++    pub reserved_combined_bytes: u64,
++    pub dispatches: u64,
++    pub workgroups: u64,
++    pub active_points: u64,
++    pub validation_points: u64,
++    pub readbacks: u64,
++    pub releases: u64,
++    pub pipeline_count: u64,
++    pub host_image_arithmetic: bool,
++}
++#[derive(Debug)]
++pub(super) struct Output { pub words: Vec<u64>, pub stats: Stats }
++
++pub(super) fn run(packet: &Packet, epoch: u64, cancel: &mut impl FnMut() -> bool) -> R<Output> {
++    run_impl(packet, epoch, cancel, None)
++}
++fn run_with_fault(packet: &Packet, epoch: u64, cancel: &mut impl FnMut() -> bool,
++    control: &FaultControl) -> R<Output> {
++    run_impl(packet, epoch, cancel, Some(control))
++}
++fn event(fault: Option<&FaultControl>, name: &'static str) {
++    if let Some(f) = fault { f.event(name); }
++}
++fn check(cancel: &mut impl FnMut() -> bool) -> R<()> {
++    if cancel() { Err("CANCELLED".into()) } else { Ok(()) }
++}
++fn healthy(context: &session::Context, epoch: u64, cancel: &mut impl FnMut() -> bool) -> R<()> {
++    check(cancel)?;
++    if context.error.load(Ordering::Acquire) || session::is_cancelled(epoch) {
++        return Err("GPU_DEVICE_FAILED".into());
++    }
++    Ok(())
++}
++fn run_impl(packet: &Packet, epoch: u64, cancel: &mut impl FnMut() -> bool,
++    fault: Option<&FaultControl>) -> R<Output> {
++    if let Some(f) = fault { f.initial(); }
++    let mut combined_cancel = || fault.is_some_and(FaultControl::cancelled) || cancel();
++    let result = run_inner(packet, epoch, &mut combined_cancel, fault);
++    if result.is_err() { session::retire_current(); }
++    if let Some(f) = fault { f.returned(result.as_ref().err()); }
++    result
++}
++
++fn run_inner(packet: &Packet, epoch: u64, cancel: &mut impl FnMut() -> bool,
++    fault: Option<&FaultControl>) -> R<Output> {
++    check(cancel)?;
++    packet.validate()?;
++    event(fault, "validated");
++    let r = Resources::fixed();
++    // acquire alone permits legacy standalone use. This preflight must precede
++    // it and the first trace/driver operation; retired retries stop here.
++    session::validate_fixed_reserve(epoch, r.fixed_bytes)?;
++    if session::is_cancelled(epoch) { return Err("GPU_DEVICE_FAILED".into()); }
++    if !cfg!(target_endian = "little") { return Err("GPU_OPTICS64_POINT_ENDIAN".into()); }
++    if checked_sum(&[r.pool_bytes, r.upload_bytes, r.margin_bytes])? > r.device_bytes {
++        return Err("GPU_OPTICS64_POINT_BUDGET".into());
++    }
++    let shader = trace::phase_result(Phase::Prepare, kernel::shader)?;
++    let shader_bytes = checked_bytes(shader.capacity(), 1)?;
++    let known_host_payload_bytes = packet.host_payload_bytes(
++        r.upload_bytes, packet.count(), shader_bytes, 0)?;
++    check(cancel)?;
++    let context = trace::phase_result(Phase::Device,
++        || session::Context::acquire(r.packet_bytes, 3, true))?;
++    event(fault, "acquired");
++    // GPU buffers, groups, pipeline, encoder and mapped views are closure-local
++    // and therefore drop before the single Context below, on every Result path.
++    let result = (|| {
++        healthy(&context, epoch, cancel)?;
++        let entries: Vec<_> = (0..4).map(|binding| wgpu::BindGroupLayoutEntry {
++            binding, visibility: wgpu::ShaderStages::COMPUTE,
++            ty: wgpu::BindingType::Buffer {
++                ty: if binding == 3 { wgpu::BufferBindingType::Uniform }
++                    else { wgpu::BufferBindingType::Storage { read_only: binding == 0 } },
++                has_dynamic_offset: false,
++                min_binding_size: wgpu::BufferSize::new(match binding { 2 => 4, 3 => 64, _ => 8 }),
++            }, count: None,
++        }).collect();
++        let started_compile = Instant::now();
++        let (mut pipelines, _) = trace::phase_result(Phase::Pipeline,
++            || context.pipelines(&[&shader], Some(&entries)))?;
++        let compile_ms = started_compile.elapsed().as_secs_f64() * 1000.;
++        if pipelines.len() != 1 { return Err("GPU_OPTICS64_POINT_PIPELINE_COUNT".into()); }
++        let pipeline = pipelines.pop().ok_or("GPU_OPTICS64_POINT_PIPELINE_COUNT")?;
++        event(fault, "pipeline");
++        healthy(&context, epoch, cancel)?;
++        let upload_phase = trace::PhaseGuard::begin(Phase::Upload);
++        let upload_start = Instant::now();
++        let mut words = Vec::with_capacity(PACKET_WORDS * 2);
++        words.extend(packet.words().iter().flat_map(|v| [*v as u32, (*v >> 32) as u32]));
++        let mut parameters = *packet.parameters();
++        if checked_bytes(words.len(), 4)? != r.packet_bytes {
++            return Err("GPU_OPTICS64_POINT_UPLOAD_SIZE".into());
++        }
++        let actual_upload_capacity = checked_sum(&[checked_bytes(words.capacity(), 4)?, 64])?;
++        let _preflight_upload_payload_bytes = packet.host_payload_bytes(
++            actual_upload_capacity, packet.count(), shader_bytes, 0)?;
++        if let Some(f) = fault { f.serialized(&mut words, &mut parameters); }
++        let init = |label, data: &[u32], usage| context.buffer_init(
++            &wgpu::util::BufferInitDescriptor {
++                label: Some(label), contents: bytemuck::cast_slice(data), usage,
++            }, true);
++        let uniform = init("optics64 immutable point descriptor", &parameters, wgpu::BufferUsages::UNIFORM)?;
++        let input = init("optics64 fixed packet including all padding", &words, wgpu::BufferUsages::STORAGE)?;
++        drop(words);
++        let make = |label, size, usage| context.buffer(&wgpu::BufferDescriptor {
++            label: Some(label), size, usage, mapped_at_creation: false,
++        }, true);
++        let storage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
++        let output = make("optics64 separate raw64 output", r.output_bytes, storage)?;
++        // Zero initialized only for a valid new request, never reset after error.
++        let error = make("optics64 request sticky error", r.error_bytes, storage)?;
++        let readback = make("optics64 full output and fixed-offset flag", r.map_bytes,
++            wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST)?;
++        let upload_ms = upload_start.elapsed().as_secs_f64() * 1000.;
++        upload_phase.finish();
++        healthy(&context, epoch, cancel)?;
++        let buffers = [&input, &output, &error, &uniform];
++        let bindings: Vec<_> = buffers.iter().enumerate().map(|(binding, buffer)|
++            wgpu::BindGroupEntry { binding: binding as u32, resource: buffer.as_entire_binding() }).collect();
++        let group = context.device.create_bind_group(&wgpu::BindGroupDescriptor {
++            label: Some("optics64 exact four binding ABI"),
++            layout: &pipeline.get_bind_group_layout(0), entries: &bindings,
++        });
++        let encoding_phase = trace::StepGuard::begin(1, Phase::Compute);
++        let mut encoder = context.device.create_command_encoder(&Default::default());
++        {
++            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
++                label: Some("optics64 full-capacity validation and active point math"), timestamp_writes: None,
++            });
++            pass.set_pipeline(&pipeline); pass.set_bind_group(0, &group, &[]);
++            pass.dispatch_workgroups(kernel::WORKGROUPS, 1, 1);
++        }
++        event(fault, "encoded");
++        encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, r.output_bytes);
++        encoder.copy_buffer_to_buffer(&error, 0, &readback, r.output_bytes, 4);
++        healthy(&context, epoch, cancel)?;
++        let started = Instant::now();
++        let command = encoder.finish();
++        encoding_phase.finish();
++        let submit_phase = trace::StepGuard::begin(2, Phase::Compute);
++        context.queue.submit([command]);
++        event(fault, "submit");
++        if let Some(f) = fault { f.submitted(); }
++        submit_phase.finish();
++        let readback_phase = trace::PhaseGuard::begin(Phase::Readback);
++        let (tx, rx) = mpsc::channel();
++        readback.slice(0..r.map_bytes).map_async(wgpu::MapMode::Read, move |result| { let _ = tx.send(result); });
++        event(fault, "map_requested");
++        let mapped_result: R<Vec<u64>> = (|| {
++            loop {
++                healthy(&context, epoch, cancel)?;
++                if started.elapsed() > Duration::from_secs(5) { return Err("GPU_OPTICS64_POINT_TIMEOUT".into()); }
++                let _ = context.device.poll(wgpu::Maintain::Poll);
++                match rx.try_recv() {
++                    Ok(Ok(())) => break,
++                    Ok(Err(_)) | Err(mpsc::TryRecvError::Disconnected) => return Err("GPU_OPTICS64_POINT_READBACK".into()),
++                    Err(mpsc::TryRecvError::Empty) => {}
++                }
++                if started.elapsed() > Duration::from_secs(5) { return Err("GPU_OPTICS64_POINT_TIMEOUT".into()); }
++                std::thread::sleep(Duration::from_millis(1));
++            }
++            event(fault, "map_succeeded");
++            if started.elapsed() > Duration::from_secs(5) { return Err("GPU_OPTICS64_POINT_TIMEOUT".into()); }
++            let mapped = readback.slice(0..r.map_bytes).get_mapped_range();
++            let flag = u32::from_le_bytes(mapped[r.output_bytes as usize..].try_into().unwrap());
++            if let Some(f) = fault { f.flag(flag); }
++            if flag != 0 { return Err(DOMAIN_ERROR.into()); }
++            let active_bytes = packet.count() * 8;
++            let words: Vec<u64> = mapped[..active_bytes].chunks_exact(8)
++                .map(|v| u64::from_le_bytes(v.try_into().unwrap())).collect();
++            if words.iter().any(|&v| !admitted(v)) { return Err("GPU_OPTICS64_POINT_OUTPUT_DOMAIN".into()); }
++            if let Some(f) = fault { f.decoded(words.len()); }
++            Ok(words)
++        })();
++        // mapped views have died with mapped_result's closure, including errors.
++        readback.unmap(); event(fault, "unmap");
++        let words = mapped_result?;
++        let known_host_payload_bytes = packet.host_payload_bytes(
++            actual_upload_capacity, words.capacity(), shader_bytes, 0)?;
++        // Named hook only after successful map/decode/unmap, not guessed polling.
++        if let Some(f) = fault { f.after_unmap(&context.error); }
++        if started.elapsed() > Duration::from_secs(5) { return Err("GPU_OPTICS64_POINT_TIMEOUT".into()); }
++        readback_phase.finish();
++        healthy(&context, epoch, cancel)?;
++        event(fault, "release_reached");
++        context.release_transients_after_fence()?;
++        event(fault, "released");
++        healthy(&context, epoch, cancel)?;
++        Ok(Output { words, stats: Stats {
++            adapter: context.info.name.clone(), source_sha256: kernel::GENERATED_SHA256.into(),
++            compile_ms, upload_ms, dispatch_readback_ms: started.elapsed().as_secs_f64() * 1000.,
++            known_host_payload_bytes, resident_bytes: r.pool_bytes, upload_staging_bytes: r.upload_bytes,
++            device_margin_bytes: r.margin_bytes, reserved_combined_bytes: r.combined_bytes,
++            dispatches: 1, workgroups: kernel::WORKGROUPS as u64, active_points: packet.count() as u64,
++            validation_points: CAPACITY as u64, readbacks: 1, releases: 1, pipeline_count: 1,
++            host_image_arithmetic: false,
++        } })
++    })();
++    if result.is_err() { context.error.store(true, Ordering::Release); session::retire_current(); }
++    drop(context); event(fault, "owner_dropped");
++    // Outer complete_stage checks the last fence and live-owner count; the
++    // caller then checks cancellation again before treating these words as accepted.
++    let _ = known_host_payload_bytes; // pre-allocation bound checked above
++    result
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/gpu/fault.rs b/native/crates/film-engine/src/research_optics64_point/gpu/fault.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..aa41f3cb5419c8a2c5b47d91ad2c2307697546aa
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/gpu/fault.rs
+@@ -0,0 +1,82 @@
++//! Closed, explicit one-shot faults. Normal run always supplies None.
++use std::{cell::{Cell, RefCell}, sync::atomic::{AtomicBool, Ordering}};
++use sha2::{Digest, Sha256};
++
++#[derive(Clone, Copy, Debug, serde::Serialize)]
++pub(super) enum Fault {
++    ObserveOnly,
++    PreCancel, AfterSubmitCancel, AfterUnmapCancel, AfterUnmapDeviceError,
++    SerializedWord { index: usize, bits: u64 },
++    UniformWord { index: usize, value: u32 },
++}
++#[derive(Clone, Debug, Default, serde::Serialize)]
++pub(super) struct Observation {
++    pub events: Vec<&'static str>, pub triggers: u32, pub validations: u32,
++    pub acquires: u32, pub pipelines: u32, pub encoded: u32, pub submits: u32,
++    pub maps_requested: u32, pub maps_succeeded: u32, pub numeric_flag: Option<u32>,
++    pub decoded_words: Option<usize>, pub unmaps: u32, pub release_reached: u32,
++    pub releases: u32, pub owner_drops: u32, pub returned_error: Option<String>,
++    pub patch: Option<serde_json::Value>,
++}
++pub(super) struct FaultControl { plan: Fault, cancel: Cell<bool>, trace: RefCell<Observation> }
++impl FaultControl {
++    pub(super) fn new(plan: Fault) -> Self {
++        Self { plan, cancel: Cell::new(false), trace: RefCell::new(Observation::default()) }
++    }
++    pub(super) fn snapshot(&self) -> Observation { self.trace.borrow().clone() }
++    pub(super) fn cancelled(&self) -> bool { self.cancel.get() }
++    pub(super) fn clear_caller_cancel(&self) { self.cancel.set(false); }
++    pub(super) fn event(&self, name: &'static str) {
++        let mut t = self.trace.borrow_mut(); assert!(t.events.len() < 48); t.events.push(name);
++        match name {
++            "validated" => t.validations += 1, "acquired" => t.acquires += 1,
++            "pipeline" => t.pipelines += 1, "encoded" => t.encoded += 1,
++            "submit" => t.submits += 1, "map_requested" => t.maps_requested += 1,
++            "map_succeeded" => t.maps_succeeded += 1, "unmap" => t.unmaps += 1,
++            "release_reached" => t.release_reached += 1, "released" => t.releases += 1,
++            "owner_dropped" => t.owner_drops += 1, _ => {}
++        }
++    }
++    fn trigger(&self, event: &'static str) {
++        self.event(event); let mut t = self.trace.borrow_mut(); t.triggers += 1; assert_eq!(t.triggers, 1);
++    }
++    pub(super) fn initial(&self) {
++        self.event("entry");
++        if matches!(self.plan, Fault::PreCancel) { self.trigger("pre_cancel"); self.cancel.set(true); }
++    }
++    pub(super) fn submitted(&self) {
++        if matches!(self.plan, Fault::AfterSubmitCancel) { self.trigger("post_submit_cancel"); self.cancel.set(true); }
++    }
++    pub(super) fn after_unmap(&self, device_error: &AtomicBool) {
++        match self.plan {
++            Fault::AfterUnmapCancel => { self.trigger("post_unmap_cancel"); self.cancel.set(true); }
++            Fault::AfterUnmapDeviceError => { self.trigger("post_unmap_device_error"); device_error.store(true, Ordering::Release); }
++            _ => {}
++        }
++    }
++    pub(super) fn flag(&self, value: u32) { self.trace.borrow_mut().numeric_flag = Some(value); }
++    pub(super) fn decoded(&self, count: usize) { self.trace.borrow_mut().decoded_words = Some(count); }
++    pub(super) fn returned(&self, error: Option<&String>) { self.trace.borrow_mut().returned_error = error.cloned(); }
++    pub(super) fn serialized(&self, words: &mut [u32], params: &mut [u32; 16]) {
++        match self.plan {
++            Fault::SerializedWord { index, bits } => {
++                assert!(index < words.len() / 2);
++                let before = format!("{:x}", Sha256::digest(bytemuck::cast_slice(words)));
++                let old = u64::from(words[index * 2]) | (u64::from(words[index * 2 + 1]) << 32);
++                assert_ne!(old, bits); words[index * 2] = bits as u32; words[index * 2 + 1] = (bits >> 32) as u32;
++                let after = format!("{:x}", Sha256::digest(bytemuck::cast_slice(words)));
++                self.trigger("serialized_word");
++                self.trace.borrow_mut().patch = Some(serde_json::json!({"index": index,
++                    "beforeBits": format!("{old:016x}"), "afterBits": format!("{bits:016x}"),
++                    "beforeSha256": before, "afterSha256": after, "changedRaw64Words": 1}));
++            }
++            Fault::UniformWord { index, value } => {
++                assert!(index < params.len()); let old = params[index]; assert_ne!(old, value);
++                params[index] = value; self.trigger("uniform_word");
++                self.trace.borrow_mut().patch = Some(serde_json::json!({"index": index,
++                    "before": old, "after": value, "changedU32Words": 1}));
++            }
++            _ => {}
++        }
++    }
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/gpu/tests.rs b/native/crates/film-engine/src/research_optics64_point/gpu/tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..92c8e73a72b50d28cf4f4fa536d01432d44ffb99
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/gpu/tests.rs
+@@ -0,0 +1,279 @@
++//! Each ignored gate requires its own externally guarded process. Never run
++//! multiple actual cases in one registry or infer device success from host tests.
++use super::*;
++use super::fault::{Fault, FaultControl};
++use crate::gpu_session_contract::StageTicket;
++use std::{cell::Cell, rc::Rc};
++
++const EPOCH: u64 = 0x4f50_3634_0000_0001;
++fn b(value: f64) -> u64 { value.to_bits() }
++fn packet(job: Job, row: [f64; 3]) -> Packet { Packet::new(job, &[row.map(b)]).unwrap() }
++fn ticket(sequence: u64) -> StageTicket { StageTicket { epoch: EPOCH, generation: 1, sequence } }
++fn activate() {
++    let r = Resources::fixed();
++    session::activate(EPOCH, r.combined_bytes, r.fixed_bytes, 1).unwrap();
++    session::begin_frame(EPOCH, 1).unwrap();
++}
++fn emit(value: serde_json::Value) { println!("{}", value); }
++fn trace_scope(token: u64, calls: Rc<Cell<u64>>) -> trace::TaskScope {
++    trace::TaskScope::for_test(token, 31, move |snapshot| {
++        calls.set(calls.get() + 1);
++        use std::io::Write;
++        let Ok(mut bytes) = serde_json::to_vec(&serde_json::json!({"optics64PointPhase":snapshot,"observationOnly":true})) else { return false; };
++        bytes.push(b'\n'); let stderr = std::io::stderr(); let mut sink = stderr.lock();
++        sink.write_all(&bytes).and_then(|_| sink.flush()).is_ok()
++    })
++}
++fn jobs() -> Vec<Job> {
++    vec![Job::clear(), Job::weighted_accum(b(0.1633)).unwrap(),
++        Job::scatter(b(1.0), b(0.78)).unwrap(), Job::bounce_add(b(0.05)).unwrap(),
++        Job::divide(b(1.05)).unwrap()]
++}
++fn original_jobs() -> Vec<Job> {
++    let params: spektrafilm_core::params::RuntimeParams =
++        serde_json::from_str(include_str!("../actual384_params.json")).unwrap();
++    let h = &params.film_render.halation;
++    let mut weights: Vec<f64> = (0..h.halation_n_bounces)
++        .map(|k| h.halation_bounce_decay.powi(k as i32)).collect();
++    let sum: f64 = weights.iter().sum(); for v in &mut weights { *v /= sum; }
++    let mut all = vec![Job::clear()];
++    for k in [0.1633, 0.6496, 0.1870].into_iter().chain(weights) {
++        all.push(Job::weighted_accum(b(k)).unwrap());
++    }
++    let strengths = h.halation_strength.map(|s| s * h.halation_amount);
++    for ch in 0..3 {
++        all.push(Job::scatter(b(h.scatter_amount), b(h.scatter_tail_weight[ch])).unwrap());
++        // Zero-strength primitive is covered, without claiming CPU schedules it.
++        all.push(Job::bounce_add(b(strengths[ch])).unwrap());
++        all.push(Job::divide(b(1.0 + strengths[ch])).unwrap());
++    }
++    all
++}
++fn run_success(p: &Packet, sequence: u64) -> session::SessionStats {
++    let r = Resources::fixed();
++    let original = host::native_oracle(p).unwrap();
++    assert_eq!(original, host::guarded_model(p).unwrap());
++    // Current oracle plus a bounded 1 MiB caller reserve covers the at most 16 Jobs,
++    // receipt/trace state and at most one other 98560-byte Packet in fault tests.
++    // The current packet/upload/shader/output are separately counted by run.
++    let caller = checked_sum(&[checked_bytes(original.capacity(), 8).unwrap(), MIB]).unwrap();
++    assert!(p.host_payload_bytes(r.upload_bytes, p.count(), MIB, caller).is_ok());
++    let t = ticket(sequence); session::begin_stage(t, r.family_bytes).unwrap();
++    let out = run(p, EPOCH, &mut || false).unwrap();
++    assert_eq!(out.words, original, "op {:?}", p.job.operation);
++    assert!(!session::is_cancelled(EPOCH));
++    let seal = session::complete_stage(t).unwrap();
++    assert!(!session::is_cancelled(EPOCH));
++    assert_eq!((seal.epoch, seal.prepaid_bytes, seal.fixed_bytes), (EPOCH, r.combined_bytes, r.fixed_bytes));
++    assert_eq!((seal.pool_bytes, seal.charged_bytes, seal.pipeline_slots), (r.pool_bytes, r.fresh_charged_bytes, 1));
++    assert_eq!(seal.pipeline_hits, sequence - 1);
++    assert_eq!(seal.buffer_hits, 5 * (sequence - 1));
++    assert_eq!((out.stats.dispatches, out.stats.readbacks, out.stats.releases), (1, 1, 1));
++    assert_eq!((out.stats.active_points, out.stats.validation_points, out.stats.workgroups), (p.count() as u64, 4096, 64));
++    assert_eq!(out.stats.pipeline_count, 1);
++    assert_eq!(out.stats.source_sha256, kernel::GENERATED_SHA256);
++    assert_eq!(out.stats.resident_bytes, r.pool_bytes);
++    assert_eq!(out.stats.reserved_combined_bytes, r.combined_bytes);
++    assert_eq!(out.stats.upload_staging_bytes, r.upload_bytes);
++    assert!(out.stats.resident_bytes + out.stats.upload_staging_bytes + out.stats.device_margin_bytes <= r.device_bytes);
++    assert!(caller + out.stats.known_host_payload_bytes <= r.host_bytes);
++    assert!(!out.stats.host_image_arithmetic);
++    emit(serde_json::json!({"pointSuccess":true,"operation":p.job.operation as u32,
++        "sequence":sequence,"words":p.count(),"allNativeWordsEqual":true,"zeroSignDifferences":0,
++        "stats":out.stats,"seal":seal,"callerBytes":caller,
++        "scope":"synthetic scalar point primitives; no spatial/image/Adreno claim"}));
++    seal
++}
++fn success_case(count: usize, repeated: bool) {
++    success_jobs(count, repeated, jobs());
++}
++fn success_jobs(count: usize, repeated: bool, operations: Vec<Job>) {
++    let calls = Rc::new(Cell::new(0)); let mut diagnostics = trace_scope(0x4f50_3634_5355_4301, calls);
++    activate(); let mut sequence = 0;
++    for round in 0..if repeated { 2 } else { 1 } {
++        for &job in &operations {
++            let rows: Vec<_> = (0..count).map(|i| {
++                let base = if count == 1 { 0.25 }
++                    else if i % 11 == 0 { if i % 2 == 0 { 0.0 } else { -0.0 } }
++                    else { (i as f64 + 1.0) / 8192.0 - 0.25 };
++                let mut row = [b(base), b(0.125 + round as f64 * 0.1), b(-0.375)];
++                row[job.operation.used_lanes()..].fill(0); row
++            }).collect();
++            let p = Packet::new(job, &rows).unwrap();
++            if count == 1 && job.operation == Operation::Divide {
++                assert!(!zero(p.words()[PREFIX_WORDS]), "first Divide must exercise sf_div");
++            }
++            drop(rows); sequence += 1; run_success(&p, sequence);
++        }
++    }
++    session::finish_frame(EPOCH, 1).unwrap(); diagnostics.finish(&Ok::<(), String>(()));
++}
++
++fn rejected_case(label: &str, valid: Packet, rejected: Packet, plan: Fault) {
++    let calls = Rc::new(Cell::new(0)); let mut diagnostics = trace_scope(0x4f50_3634_4641_554c, calls);
++    activate(); run_success(&valid, 1);
++    let r = Resources::fixed(); let t = ticket(2);
++    session::begin_stage(t, r.family_bytes).unwrap();
++    let control = FaultControl::new(plan);
++    let result = run_with_fault(&rejected, EPOCH, &mut || false, &control);
++    let observed = control.snapshot();
++    let error = match result {
++        Ok(output) => { emit(serde_json::json!({"unexpectedAcceptedOutput":output.words,"stats":output.stats})); panic!("fault returned accepted output"); },
++        Err(error) => error,
++    };
++    // Preserve the actual failure state even if a later expectation is wrong.
++    emit(serde_json::json!({"pointFaultObservation":true,"observationOnly":true,
++        "case":label,"plan":plan,"error":error,"observed":observed}));
++    assert_eq!(observed.triggers, if matches!(plan, Fault::ObserveOnly) { 0 } else { 1 });
++    assert_eq!(observed.returned_error.as_deref(), Some(error.as_str()));
++    assert_eq!((observed.release_reached, observed.releases), (0, 0));
++    match plan {
++        Fault::PreCancel => {
++            assert_eq!(error, "CANCELLED");
++            assert_eq!((observed.validations, observed.acquires, observed.pipelines, observed.encoded,
++                observed.submits, observed.maps_requested, observed.unmaps, observed.owner_drops), (0,0,0,0,0,0,0,0));
++        }
++        Fault::AfterSubmitCancel => {
++            assert_eq!(error, "CANCELLED");
++            assert_eq!((observed.acquires, observed.encoded, observed.submits, observed.maps_requested,
++                observed.maps_succeeded, observed.unmaps, observed.owner_drops), (1,1,1,1,0,1,1));
++            assert_eq!(observed.decoded_words, None);
++        }
++        Fault::AfterUnmapCancel | Fault::AfterUnmapDeviceError => {
++            assert_eq!(error, if matches!(plan, Fault::AfterUnmapCancel) { "CANCELLED" } else { "GPU_DEVICE_FAILED" });
++            assert_eq!((observed.acquires, observed.encoded, observed.submits, observed.maps_requested,
++                observed.maps_succeeded, observed.unmaps, observed.owner_drops), (1,1,1,1,1,1,1));
++            assert_eq!(observed.numeric_flag, Some(0));
++            assert_eq!(observed.decoded_words, Some(rejected.count()));
++        }
++        _ => {
++            assert_eq!(error, DOMAIN_ERROR);
++            assert_eq!((observed.acquires, observed.encoded, observed.submits, observed.maps_requested,
++                observed.maps_succeeded, observed.unmaps, observed.owner_drops), (1,1,1,1,1,1,1));
++            assert!(observed.numeric_flag.is_some_and(|v| v != 0));
++            assert_eq!(observed.decoded_words, None);
++        }
++    }
++    control.clear_caller_cancel(); assert!(session::is_cancelled(EPOCH));
++    // Fresh diagnostic scope only, NOT a fresh epoch: prove ordinary retry
++    // stops before any driver/preparation event after caller cancel is cleared.
++    let retry_calls = Rc::new(Cell::new(0));
++    let mut retry_diagnostics = trace_scope(0x4f50_3634_5254_5259, retry_calls.clone());
++    let before = retry_calls.get(); let retry = run(&valid, EPOCH, &mut || false);
++    let after = retry_calls.get(); assert_eq!(before, after);
++    let retry_error = retry.expect_err("retired epoch reused");
++    retry_diagnostics.finish(&Err::<(), String>(retry_error.clone())); drop(retry_diagnostics);
++    assert_eq!(retry_error, "GPU_SESSION_RECYCLE_REQUIRED");
++    let seal_error = session::complete_stage(t).expect_err("fault stage sealed");
++    let next_error = session::begin_stage(ticket(3), r.family_bytes).expect_err("retired next stage");
++    let frame_error = session::finish_frame(EPOCH, 1).expect_err("retired frame completed");
++    for value in [&seal_error, &next_error, &frame_error] { assert_eq!(value, "GPU_SESSION_RECYCLE_REQUIRED"); }
++    emit(serde_json::json!({"expectedPointRejection":true,"case":label,"plan":plan,"error":error,
++        "observed":observed,"retryError":retry_error,"retryGpuPhaseEvents":after-before,
++        "sealError":seal_error,"nextStageError":next_error,"finishFrameError":frame_error,
++        "noAcceptedOutput":true,"noSuccessfulFaultSeal":true,"resourceRefundClaim":false,
++        "confirmedProcessDeathClaim":false}));
++    diagnostics.finish(&Ok::<(), String>(()));
++}
++fn ordinary_fault(label: &str, plan: Fault) {
++    let p = packet(Job::divide(b(1.05)).unwrap(), [-0.0, 0.0, 0.0]);
++    rejected_case(label, p.clone(), p, plan);
++}
++fn padding_fault(label: &str, bits: u64) {
++    let p = packet(Job::clear(), [0.0; 3]);
++    rejected_case(label, p.clone(), p, Fault::SerializedWord { index: PACKET_WORDS - 1, bits });
++}
++
++#[test]
++fn named_fault_controls_are_local_and_deterministic() {
++    let f = FaultControl::new(Fault::SerializedWord { index: 1, bits: b(-1.0) });
++    let mut words = [0u32,0x3ff00000,0,0x40000000,0,0x40080000]; let before = words;
++    f.serialized(&mut words, &mut [0;16]);
++    assert_eq!(&words[..2], &before[..2]); assert_eq!(&words[4..], &before[4..]);
++    assert_eq!((words[2], words[3]), (0, 0xbff00000)); assert_eq!(f.snapshot().triggers, 1);
++    let f = FaultControl::new(Fault::AfterUnmapCancel); assert!(!f.cancelled());
++    f.after_unmap(&std::sync::atomic::AtomicBool::new(false)); assert!(f.cancelled());
++    f.clear_caller_cancel(); assert!(!f.cancelled());
++    let f = FaultControl::new(Fault::AfterUnmapDeviceError); let error = std::sync::atomic::AtomicBool::new(false);
++    f.after_unmap(&error); assert!(error.load(Ordering::Acquire)); assert_eq!(f.snapshot().triggers, 1);
++}
++
++#[test]
++fn owner_none_path_fixed_dispatch_and_postmap_hooks_are_source_bound() {
++    let source = include_str!("../gpu.rs");
++    assert!(source.contains("run_impl(packet, epoch, cancel, None)"));
++    assert!(source.contains("pass.dispatch_workgroups(kernel::WORKGROUPS, 1, 1)"));
++    assert!(source.contains("let started = Instant::now();\n        let command = encoder.finish();"));
++    let unmap = source.find("readback.unmap();").unwrap();
++    let success = source.find("let words = mapped_result?;").unwrap();
++    let inject = source.find("f.after_unmap(&context.error)").unwrap();
++    let release = source.find("context.release_transients_after_fence()?").unwrap();
++    assert!(unmap < success && success < inject && inject < release);
++    assert!(source.contains("session::validate_fixed_reserve(epoch, r.fixed_bytes)?"));
++    assert!(source.contains("Duration::from_secs(5)"));
++    assert!(source.contains("r.output_bytes, 4"));
++}
++
++#[test]
++#[ignore = "FIRST gate; fresh externally guarded process; one active point, all five opcodes"]
++fn actual_one_point_all_five_original_trees() { success_case(1, false); }
++#[test]
++#[ignore = "After first gate; original384 FIT/bounce/scatter/strength/divisor bit matrix"]
++fn actual_one_point_original384_constant_matrix() { success_jobs(1, false, original_jobs()); }
++#[test]
++#[ignore = "Only after first gate; fresh guarded process;17 adverse points"]
++fn actual_seventeen_points_all_five_trees() { success_case(17, false); }
++#[test]
++#[ignore = "Only after tiny gates; fresh guarded process;full4096 cap"]
++fn actual_full_capacity_all_five_trees() { success_case(CAPACITY, false); }
++#[test]
++#[ignore = "After first gate; same epoch/fixed shape, genuine repeated pipeline+buffer reuse"]
++fn actual_same_epoch_reuses_all_five_buffers_and_pipeline() { success_case(17, true); }
++
++#[test] #[ignore = "Fresh process; one positive baseline then one fault"]
++fn actual_pre_cancel_never_acquires() { ordinary_fault("pre_cancel", Fault::PreCancel); }
++#[test] #[ignore = "Fresh process; explicit post-submit cancellation"]
++fn actual_postsubmit_cancel_retires_without_release() { ordinary_fault("postsubmit_cancel", Fault::AfterSubmitCancel); }
++#[test] #[ignore = "Fresh process; successful map/decode/unmap before cancellation"]
++fn actual_postunmap_cancel_retires_without_release() { ordinary_fault("postunmap_cancel", Fault::AfterUnmapCancel); }
++#[test] #[ignore = "Fresh process; successful map/decode/unmap before device error"]
++fn actual_postunmap_device_error_retires_without_release() { ordinary_fault("postunmap_device", Fault::AfterUnmapDeviceError); }
++#[test] #[ignore = "Fresh process; last inactive lane NaN on Clear"]
++fn actual_late_padding_nan_is_not_masked_by_clear() { padding_fault("padding_nan", f64::NAN.to_bits()); }
++#[test] #[ignore = "Fresh process; last inactive lane infinity on Clear"]
++fn actual_late_padding_inf_is_not_masked_by_clear() { padding_fault("padding_inf", f64::INFINITY.to_bits()); }
++#[test] #[ignore = "Fresh process; last inactive lane subnormal on Clear"]
++fn actual_late_padding_subnormal_is_not_masked_by_clear() { padding_fault("padding_subnormal", 1); }
++#[test] #[ignore = "Fresh process; active source NaN"]
++fn actual_active_nan_rejects_before_zero_branches() { ordinary_fault("active_nan", Fault::SerializedWord { index: PREFIX_WORDS, bits: f64::NAN.to_bits() }); }
++#[test] #[ignore = "Fresh process; active source infinity"]
++fn actual_active_inf_rejects_before_zero_branches() { ordinary_fault("active_inf", Fault::SerializedWord { index: PREFIX_WORDS, bits: f64::INFINITY.to_bits() }); }
++#[test] #[ignore = "Fresh process; active source subnormal"]
++fn actual_active_subnormal_rejects_before_zero_branches() { ordinary_fault("active_subnormal", Fault::SerializedWord { index: PREFIX_WORDS, bits: 1 }); }
++#[test] #[ignore = "Fresh process; unreferenced prefix word must remain canonical"]
++fn actual_reserved_prefix_word_rejects() { ordinary_fault("reserved_prefix", Fault::SerializedWord { index: 31, bits: b(1.0) }); }
++#[test] #[ignore = "Fresh process; unused active lane must be +0, not -0"]
++fn actual_unused_lane_negative_zero_rejects() { ordinary_fault("unused_negative_zero", Fault::SerializedWord { index: PREFIX_WORDS+2, bits: SIGN }); }
++#[test] #[ignore = "Fresh process; reserved uniform metadata"]
++fn actual_reserved_uniform_word_rejects() { ordinary_fault("reserved_uniform", Fault::UniformWord { index: 15, value: 1 }); }
++#[test] #[ignore = "Fresh process; divisor floor must precede zero numerator"]
++fn actual_floor_rejects_even_with_zero_numerator() { ordinary_fault("divisor_floor", Fault::SerializedWord { index: 0, bits: DIVISOR_FLOOR_BITS-1 }); }
++#[test] #[ignore = "Fresh process; +0 denominator must precede zero numerator"]
++fn actual_positive_zero_denominator_rejects() { ordinary_fault("positive_zero_denominator", Fault::SerializedWord { index: 0, bits: 0 }); }
++#[test] #[ignore = "Fresh process; -0 denominator must precede zero numerator"]
++fn actual_negative_zero_denominator_rejects() { ordinary_fault("negative_zero_denominator", Fault::SerializedWord { index: 0, bits: SIGN }); }
++#[test] #[ignore = "Fresh process; valid packet whose hidden Scatter intermediate exceeds bound"]
++fn actual_masked_scatter_intermediate_bound_rejects() {
++    let job = Job::scatter(b(0.0), b(-1.0)).unwrap();
++    let valid = packet(job, [1.0,2.0,2.0]);
++    let rejected = packet(job, [1.0,f64::from_bits(BOUND_BITS),f64::from_bits(BOUND_BITS)]);
++    assert_eq!(host::native_oracle(&rejected).unwrap(), vec![b(1.0)]);
++    rejected_case("masked_scatter_bound", valid, rejected, Fault::ObserveOnly);
++}
++#[test] #[ignore = "Fresh process; valid packet whose weighted product underflows before add1"]
++fn actual_masked_weighted_underflow_rejects() {
++    let job = Job::weighted_accum(b(0.1633)).unwrap();
++    let valid = packet(job, [1.0,0.125,0.0]); let rejected = packet(job, [1.0,f64::MIN_POSITIVE,0.0]);
++    assert_eq!(host::native_oracle(&rejected).unwrap(), vec![b(1.0)]);
++    rejected_case("masked_weighted_underflow", valid, rejected, Fault::ObserveOnly);
++}

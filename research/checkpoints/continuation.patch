@@ -1,0 +1,801 @@
+diff --git a/native/crates/film-engine/src/research_dir.rs b/native/crates/film-engine/src/research_dir.rs
+index 9c1da752647c161bd6f6a3a54b25be43536555ca..e538ae5e7164bfd0756b43f2fbcd8ea839cab6bf 100644
+--- a/native/crates/film-engine/src/research_dir.rs
++++ b/native/crates/film-engine/src/research_dir.rs
+@@ -201,9 +201,58 @@ impl Curve {
+             + t * (self.values[lo + 1][ch] as f32 - self.values[lo][ch] as f32)
+     }
+ }
++/// The linear route is explicitly experimental f32, not original f64 parity.
++/// Correction comes from the original prepared pipeline, never recomputed here.
++#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
++#[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
++pub enum DirInput {
++    #[default]
++    Logarithmic,
++    LinearExposureF32 {
++        #[serde(with = "f64_scalar_bits")]
++        correction: f64,
++    },
++}
++impl DirInput {
++    pub fn is_logarithmic(&self) -> bool { matches!(self, Self::Logarithmic) }
++    fn validate(&self) -> R<()> {
++        if let Self::LinearExposureF32 { correction } = self {
++            if !finite(*correction) || *correction <= 0. || (*correction as f32) <= 0. {
++                return Err("INVALID_DIR_INPUT_MODE".into());
++            }
++        }
++        Ok(())
++    }
++    pub fn log_f64(&self, x: f64) -> f64 {
++        match self {
++            Self::Logarithmic => x,
++            Self::LinearExposureF32 { correction } => ((x * correction).max(0.) + 1e-10).log10(),
++        }
++    }
++    pub fn log_f32(&self, x: f32) -> R<f32> {
++        match self {
++            Self::Logarithmic => Ok(x),
++            Self::LinearExposureF32 { correction } => {
++                // Match the shader's conservative pre-arithmetic admission.
++                let factor = *correction as f32;
++                if !x.is_finite() || x.abs() > 1e15 || factor.abs() > 1e15 {
++                    return Err("GPU_DIR_NUMERIC_DOMAIN".into());
++                }
++                let corrected = x * factor;
++                if !corrected.is_finite() || corrected.abs() > 1e15 {
++                    return Err("GPU_DIR_NUMERIC_DOMAIN".into());
++                }
++                Ok((corrected.max(0.) + 1e-10f32).ln() * std::f32::consts::LOG10_E)
++            }
++        }
++    }
++}
++
+ #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase", deny_unknown_fields)]
+ pub struct DirPlan {
++    #[serde(default, skip_serializing_if = "DirInput::is_logarithmic")]
++    pub input_mode: DirInput,
+     pub width: u32,
+     pub height: u32,
+     pub dir_active: bool,
+@@ -220,6 +269,11 @@ pub struct DirPlan {
+     pub before_dir: Curve,
+ }
+ impl DirPlan {
++    pub fn with_linear_exposure(mut self, correction: f64) -> R<Self> {
++        self.input_mode = DirInput::LinearExposureF32 { correction };
++        self.validate()?;
++        Ok(self)
++    }
+     pub fn new(pipe: &Pipeline, pitch: f32, width: u32, height: u32) -> R<Self> {
+         if !pitch.is_finite() || pitch <= 0. {
+             return Err("GPU_DIR_UNSUPPORTED".into());
+@@ -263,6 +317,7 @@ impl DirPlan {
+             gamma,
+         )?;
+         let result = Self {
++            input_mode: DirInput::Logarithmic,
+             width,
+             height,
+             dir_active: d.active,
+@@ -289,6 +344,7 @@ impl DirPlan {
+         FilmOpticsPlan::new(&p, 1., self.width, self.height)
+     }
+     pub fn validate(&self) -> R<()> {
++        self.input_mode.validate()?;
+         self.spatial_plan()?.validate()?;
+         self.initial.validate()?;
+         self.before_dir.validate()?;
+@@ -401,6 +457,20 @@ pub fn cpu_mirror(
+     {
+         return Err("NONFINITE_DIR_INPUT".into());
+     }
++    let converted;
++    let logs = if matches!(p.input_mode, DirInput::LinearExposureF32 { .. }) {
++        converted = {
++            let mut result: [Vec<f64>; 3] = std::array::from_fn(|_| Vec::with_capacity(n));
++            for ch in 0..3 {
++                for (i, &x) in logs[ch].iter().enumerate() {
++                    if i % CHUNK_PIXELS as usize == 0 { spatial::check(c)?; }
++                    result[ch].push(p.input_mode.log_f32(x as f32)? as f64);
++                }
++            }
++            result
++        };
++        &converted
++    } else { logs };
+     let mut outputs = std::array::from_fn(|_| Vec::new());
+     for ch in 0..3 {
+         spatial::check(c)?;
+@@ -440,5 +510,19 @@ pub fn cpu_mirror(
+     }
+     Ok(outputs)
+ }
++// Closed composition on the already guarded original DIR shader. Any upstream
++// input-expression drift fails before GPU submission rather than silently omitting log.
++fn linear_shader() -> R<String> {
++    let mut s = crate::research_spatial::guarded::shader()?;
++    for (old, new) in [
++        ("ch,probe.values[524288u+3u*i+ch])", "ch,dir_input_log(probe.values[524288u+3u*i+ch]))"),
++        ("tsub(probe.values[524288u+i],source.values[index])", "tsub(dir_input_log(probe.values[524288u+i]),source.values[index])"),
++    ] {
++        if s.matches(old).count() != 1 { return Err("GPU_DIR_SHADER_VERSION".into()); }
++        s = s.replace(old, new);
++    }
++    s.push_str(include_str!("shaders/research_dir_linear.wgsl"));
++    Ok(s)
++}
+ #[cfg(test)]
+ mod tests;
+diff --git a/native/crates/film-engine/src/research_dir/full_stage.rs b/native/crates/film-engine/src/research_dir/full_stage.rs
+index a9025897d850079447480c03f005a0f6f5b31a25..8f7fc994683b7154a92b5d6d53b473db38d0c8e2 100644
+--- a/native/crates/film-engine/src/research_dir/full_stage.rs
++++ b/native/crates/film-engine/src/research_dir/full_stage.rs
+@@ -1,6 +1,5 @@
+ //! Private immutable manifests and all-three-plane atomic candidate validation.
+ //! Main process publishes only after confirmed helper death. No source mutation.
+-use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
+ use super::*;
+ use crate::research_spatial::{MEMORY_CAP, check};
+ use sha2::{Digest, Sha256};
+@@ -21,6 +20,8 @@ struct Manifest {
+ #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase", deny_unknown_fields)]
+ pub struct StagePlan {
++    #[serde(default, skip_serializing_if = "DirInput::is_logarithmic")]
++    pub input_mode: DirInput,
+     pub schema_version: u32,
+     pub operation: String,
+     pub token: u64,
+@@ -55,10 +56,7 @@ struct OwnedDir(PathBuf, bool);
+ impl Drop for OwnedDir {
+     fn drop(&mut self) {
+         if !self.1 {
+-            trace::phase_value(GpuPhase::Cleanup, || {
+             let _ = fs::remove_dir_all(&self.0);
+-
+-            });
+         }
+     }
+ }
+@@ -114,10 +112,8 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
+     m.dir_config.validate()?;
+     let p = &m.dir_config;
+     let memory = p.spatial_plan()?;
+-    let extra = crate::research_spatial::PIPELINE_RESERVATION_BYTES;
+-    let combined_peak_bytes = memory.combined_peak_bytes.checked_add(extra).ok_or("GPU_DIR_MEMORY_LIMIT")?;
+-    if combined_peak_bytes > MEMORY_CAP { return Err("GPU_DIR_MEMORY_LIMIT".into()); }
+     Ok(StagePlan {
++        input_mode: p.input_mode.clone(),
+         schema_version: 1,
+         operation: OPERATION.into(),
+         token: m.token,
+@@ -132,14 +128,13 @@ fn make_plan(m: &Manifest, hash: String) -> R<StagePlan> {
+         pass_count: p.pass_count(),
+         device_bytes: memory.device_bytes,
+         host_bytes: memory.host_bytes,
+-        driver_allowance_bytes: memory.driver_allowance_bytes + extra,
++        driver_allowance_bytes: memory.driver_allowance_bytes,
+         helper_allowance_bytes: memory.helper_allowance_bytes,
+-        combined_peak_bytes,
++        combined_peak_bytes: memory.combined_peak_bytes,
+         disk_bytes: p.disk_bytes(),
+     })
+ }
+ fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
+-        trace::phase_result(GpuPhase::Prepare, || {
+     owner(dir, token)?;
+     let (m, b): (Manifest, _) = read_json(&dir.join("manifest.json"))?;
+     if m.token != token {
+@@ -153,9 +148,7 @@ fn load(dir: &Path, token: u64) -> R<(Manifest, StagePlan)> {
+         )?;
+     }
+     Ok((m, p))
+-
+-        })
+-    }
++}
+ pub fn estimated_disk_bytes(width: u32, height: u32, dir_config: &DirPlan) -> R<u64> {
+     dir_config.validate()?;
+     if dir_config.width != width || dir_config.height != height {
+@@ -234,7 +227,6 @@ fn plane_hash(path: &Path, n: u64, c: &mut impl FnMut() -> bool) -> R<String> {
+     Ok(hex(&hash.finalize()))
+ }
+ fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool) -> R<()> {
+-        trace::phase_result(GpuPhase::Commit, || {
+     let candidate = dir.join("candidate");
+     let n = p.width as u64 * p.height as u64;
+     let mut hashes = std::array::from_fn(|_| String::new());
+@@ -259,9 +251,7 @@ fn publish(dir: &Path, m: &Manifest, p: &StagePlan, c: &mut impl FnMut() -> bool
+     check(c)?;
+     io(fs::rename(temp, candidate.join("complete.json")))?;
+     Ok(())
+-
+-        })
+-    }
++}
+ pub fn validate_outputs(
+     dir: &Path,
+     token: u64,
+diff --git a/native/crates/film-engine/src/research_dir/gpu.rs b/native/crates/film-engine/src/research_dir/gpu.rs
+index 0ff15edef6bf406402a9d242616cd16d4044d745..ef10fb8aafda6363f344388aa9928fda7d3f9049 100644
+--- a/native/crates/film-engine/src/research_dir/gpu.rs
++++ b/native/crates/film-engine/src/research_dir/gpu.rs
+@@ -1,6 +1,5 @@
+ //! Single isolated helper, one full correction plane at a time. The original
+ //! initial-density curves are reused per receiver rather than storing RGB images.
+-use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
+ use super::*;
+ use crate::research_spatial::{
+     check,
+@@ -13,11 +12,11 @@ use std::{
+     time::Instant,
+ };
+ #[derive(Clone, Copy)]
+-pub(crate) struct Tables {
++struct Tables {
+     initial: [u32; 4],
+     before: [u32; 4],
+ }
+-pub(crate) fn pack_tables(p: &DirPlan) -> (Vec<u8>, Tables) {
++fn pack_tables(p: &DirPlan) -> (Vec<u8>, Tables) {
+     let mut data = Vec::<f32>::new();
+     let mut pack = |c: &Curve| {
+         let base = TABLE_BASE + data.len() as u32;
+@@ -35,7 +34,7 @@ pub(crate) fn pack_tables(p: &DirPlan) -> (Vec<u8>, Tables) {
+         Tables { initial, before },
+     )
+ }
+-pub(crate) fn base(p: &DirPlan, t: Tables, ch: usize, offset: u64, count: usize, op: u32) -> [u32; 40] {
++fn base(p: &DirPlan, t: Tables, ch: usize, offset: u64, count: usize, op: u32) -> [u32; 40] {
+     let mut v = params(p.width, p.height, op);
+     v[4] = count as u32;
+     v[6] = ch as u32;
+@@ -51,9 +50,13 @@ pub(crate) fn base(p: &DirPlan, t: Tables, ch: usize, offset: u64, count: usize,
+     v[22] = u32::from(p.dir_active);
+     v[23] = t.before[3];
+     v[24] = t.before[0];
++    if let DirInput::LinearExposureF32 { correction } = p.input_mode {
++        v[25] = 1;
++        v[26] = (correction as f32).to_bits();
++    }
+     v
+ }
+-pub(crate) fn sample(
++fn sample(
+     r: &Runner,
+     p: &DirPlan,
+     offset: u64,
+@@ -72,8 +75,7 @@ pub(crate) fn sample(
+         .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+         .collect())
+ }
+-pub(crate) fn guard(reference: impl Iterator<Item = f64>, actual: &[f32], m: &mut RunMetrics) -> R<()> {
+-        trace::phase_result(GpuPhase::Guard, || {
++fn guard(reference: impl Iterator<Item = f64>, actual: &[f32], m: &mut RunMetrics) -> R<()> {
+     let at = Instant::now();
+     for (r, &a) in reference.zip(actual) {
+         let e = (r - a as f64).abs();
+@@ -86,10 +88,8 @@ pub(crate) fn guard(reference: impl Iterator<Item = f64>, actual: &[f32], m: &mu
+     }
+     m.guard_ms += at.elapsed().as_secs_f64() * 1000.;
+     Ok(())
+-
+-        })
+-    }
+-pub(crate) fn read64(f: &mut File, n: usize) -> R<Vec<f64>> {
++}
++fn read64(f: &mut File, n: usize) -> R<Vec<f64>> {
+     let mut b = vec![0u8; n * 8];
+     f.read_exact(&mut b).map_err(|_| "GPU_DIR_IO")?;
+     let v: Vec<f64> = b
+@@ -123,33 +123,12 @@ pub fn run_files(
+ ) -> R<serde_json::Value> {
+     run_files_inner(p, sources, outputs, c, false).map_err(|code| code.replace("OPTICS", "DIR"))
+ }
+-/// Compound-only entry. Ordinary DIR uses the same request-selected DIR families.
+-pub(crate) fn run_files_with_log_prefix(
+-    p: &DirPlan,
+-    correction: f64,
+-    sources: [&Path; 3],
+-    outputs: [&Path; 3],
+-    c: &mut impl FnMut() -> bool,
+-) -> R<serde_json::Value> {
+-    crate::research_log_dir::log_prefix::validate_correction(p.width, p.height, correction)?;
+-    run_files_inner_with_prefix(p, sources, outputs, c, false, Some(correction))
+-}
+ fn run_files_inner(
+     p: &DirPlan,
+     sources: [&Path; 3],
+     outputs: [&Path; 3],
+     c: &mut impl FnMut() -> bool,
+     allow_probe: bool,
+-) -> R<serde_json::Value> {
+-    run_files_inner_with_prefix(p, sources, outputs, c, allow_probe, None)
+-}
+-fn run_files_inner_with_prefix(
+-    p: &DirPlan,
+-    sources: [&Path; 3],
+-    outputs: [&Path; 3],
+-    c: &mut impl FnMut() -> bool,
+-    allow_probe: bool,
+-    log_correction: Option<f64>,
+ ) -> R<serde_json::Value> {
+     let start = Instant::now();
+     p.numerical_preflight(c)?;
+@@ -165,16 +144,12 @@ fn run_files_inner_with_prefix(
+             return Err("INVALID_DIR_FILE".into());
+         }
+     }
+-    let mut families = crate::research_spatial::families::shaders_for_dir(
+-        p.dir_active, p.core_sigma, p.tail_decay,
+-    )?;
+-    if log_correction.is_some() {
+-        families.push((vec![16, 17], crate::research_log_dir::log_prefix::shader()?));
+-    }
+-    let (r, mut m) = Runner::new_with_fixed_iir_families(
+-        &p.spatial_plan()?, allow_probe, &families,
+-    )?;
+-    let mut prefix_metrics = crate::research_log_dir::log_prefix::Metrics::default();
++    let (r, mut m) = match p.input_mode {
++        DirInput::Logarithmic => Runner::new(&p.spatial_plan()?, allow_probe)?,
++        DirInput::LinearExposureF32 { .. } => Runner::new_with_shader_error(
++            &p.spatial_plan()?, allow_probe, &super::linear_shader()?,
++        )?,
++    };
+     m.setup_ms += preflight;
+     m.sample_scope = "per_axis_and_chunk_f64_on_gpu_f32_input";
+     let (tables, layout) = pack_tables(p);
+@@ -196,7 +171,7 @@ fn run_files_inner_with_prefix(
+             check(c)?;
+             let at = Instant::now();
+             let count = (n - offset).min(chunk as u64) as usize;
+-            let mut logs: [Vec<f64>; 3] = [
++            let logs: [Vec<f64>; 3] = [
+                 read64(&mut input[0], count)?,
+                 read64(&mut input[1], count)?,
+                 read64(&mut input[2], count)?,
+@@ -209,22 +184,12 @@ fn run_files_inner_with_prefix(
+             }
+             m.upload_ms += at.elapsed().as_secs_f64() * 1000.;
+             r.upload_aux(CHUNK_BASE as u64 * 4, &upload, c, &mut m)?;
+-            if let Some(correction) = log_correction {
+-                let actual = crate::research_log_dir::log_prefix::apply(
+-                    &r, correction, &[&logs[0], &logs[1], &logs[2]], c, &mut m, &mut prefix_metrics,
+-                )?;
+-                // Only bounded witness slots are changed on the host. All image
+-                // arithmetic and the following DIR consumer remain on-device.
+-                for (sample, i) in sample_indices(count).into_iter().enumerate() {
+-                    for lane in 0..3 { logs[lane][i] = actual[3 * sample + lane] as f64; }
+-                }
+-            }
+             r.dispatch(base(p, layout, ch, offset, count, 12), c, &mut m)?;
+             let actual = sample(&r, p, offset, count, c, &mut m)?;
+             guard(
+                 sample_indices(count)
+                     .into_iter()
+-                    .map(|i| p.initial_f64(ch, [logs[0][i], logs[1][i], logs[2][i]])),
++                    .map(|i| p.initial_f64(ch, [logs[0][i], logs[1][i], logs[2][i]].map(|x| p.input_mode.log_f64(x)))),
+                 &actual,
+                 &mut m,
+             )?;
+@@ -261,21 +226,13 @@ fn run_files_inner_with_prefix(
+                 check(c)?;
+                 let at = Instant::now();
+                 let count = (n - offset).min(chunk as u64) as usize;
+-                let mut logs = read64(&mut original, count)?;
++                let logs = read64(&mut original, count)?;
+                 let upload: Vec<u8> = logs
+                     .iter()
+                     .flat_map(|&x| (x as f32).to_le_bytes())
+                     .collect();
+                 m.upload_ms += at.elapsed().as_secs_f64() * 1000.;
+                 r.upload_aux(CHUNK_BASE as u64 * 4, &upload, c, &mut m)?;
+-                if let Some(factor) = log_correction {
+-                    let actual = crate::research_log_dir::log_prefix::apply(
+-                        &r, factor, &[&logs], c, &mut m, &mut prefix_metrics,
+-                    )?;
+-                    for (sample, i) in sample_indices(count).into_iter().enumerate() {
+-                        logs[i] = actual[sample] as f64;
+-                    }
+-                }
+                 let correction = sample(&r, p, offset, count, c, &mut m)?;
+                 r.dispatch(base(p, layout, ch, offset, count, 14), c, &mut m)?;
+                 let actual = sample(&r, p, offset, count, c, &mut m)?;
+@@ -283,7 +240,7 @@ fn run_files_inner_with_prefix(
+                     sample_indices(count)
+                         .into_iter()
+                         .zip(&correction)
+-                        .map(|(i, &corr)| p.before_dir.at_f64(ch, logs[i] - corr as f64)),
++                        .map(|(i, &corr)| p.before_dir.at_f64(ch, p.input_mode.log_f64(logs[i]) - corr as f64)),
+                     &actual,
+                     &mut m,
+                 )?;
+@@ -325,6 +282,7 @@ fn run_files_inner_with_prefix(
+     m.elapsed_ms = start.elapsed().as_secs_f64() * 1000.;
+     let mut value = serde_json::to_value(m).map_err(|_| "INVALID_DIR_RESULT")?;
+     let object = value.as_object_mut().ok_or("INVALID_DIR_RESULT")?;
++    object.insert("inputMode".into(), serde_json::to_value(&p.input_mode).map_err(|_| "INVALID_DIR_RESULT")?);
+     object.insert("dirActive".into(), serde_json::json!(p.dir_active));
+     object.insert("chunkCount".into(), serde_json::json!(p.chunk_count()));
+     object.insert(
+@@ -335,11 +293,6 @@ fn run_files_inner_with_prefix(
+         "pointwiseToleranceRelative".into(),
+         serde_json::json!(POINT_TOLERANCE),
+     );
+-    if log_correction.is_some() {
+-        object.insert("logSampleCount".into(), prefix_metrics.count.into());
+-        object.insert("logSampleMaxAbs".into(), prefix_metrics.max.into());
+-        object.insert("logSampleRms".into(), (prefix_metrics.sum / prefix_metrics.count.max(1) as f64).sqrt().into());
+-    }
+     ownership.keep = true;
+     Ok(value)
+ }
+@@ -355,6 +308,7 @@ mod numeric_tests {
+         let curve =
+             Curve::new(vec![-1., 0., 1.], vec![[0.; 3], [-3e38; 3], [3e38; 3]], 1.).unwrap();
+         let p = DirPlan {
++            input_mode: DirInput::Logarithmic,
+             width: 64,
+             height: 1,
+             dir_active: false,
+@@ -399,79 +353,3 @@ mod numeric_tests {
+         std::fs::remove_dir_all(root).unwrap();
+     }
+ }
+-
+-#[cfg(test)]
+-mod log_prefix_gpu_tests {
+-    use super::*;
+-    use std::{fs, path::PathBuf, sync::atomic::{AtomicU64, Ordering}};
+-    static NEXT: AtomicU64 = AtomicU64::new(1);
+-    struct Root(PathBuf);
+-    impl Root {
+-        fn new() -> Self {
+-            let p=std::env::temp_dir().join(format!("log-dir-vulkan-{}-{}",std::process::id(),NEXT.fetch_add(1,Ordering::Relaxed)));
+-            fs::create_dir(&p).unwrap();Self(p.canonicalize().unwrap())
+-        }
+-    }
+-    impl Drop for Root { fn drop(&mut self) {let _=fs::remove_dir_all(&self.0);} }
+-    fn config(w:u32,h:u32,active:bool)->DirPlan {
+-        let curve=Curve::new(vec![-12.,-3.,-1.,0.,2.],vec![[0.;3],[0.2,0.3,0.4],[0.8,0.9,1.],[1.4,1.5,1.6],[2.;3]],1.).unwrap();
+-        DirPlan {width:w,height:h,dir_active:active,positive:false,core_sigma:if active{0.7}else{0.},tail_decay:0.5,tail_weight:0.3,
+-            matrix:[[0.09,0.03,0.02],[0.07,0.06,0.01],[0.04,0.05,0.08]],density_max:[2.;3],initial:curve.clone(),before_dir:curve}
+-    }
+-    fn inputs(root:&Root,p:&DirPlan,bad:bool)->[PathBuf;3] {
+-        let paths=std::array::from_fn(|ch|root.0.join(format!("source-{ch}.f64le")));
+-        for ch in 0..3 {
+-            let values:Vec<f64>=(0..p.width*p.height).map(|i| {
+-                if bad&&i==1 {1e16} else if i%17==0 {1e12} else if i%13==0 {-0.3} else if i%11==0 {0.} else if i%7==0 {1.0000000596046448} else {(i as f64+ch as f64*0.37)/67.}
+-            }).collect();
+-            fs::write(&paths[ch],values.iter().flat_map(|x|x.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+-        }paths
+-    }
+-    #[test]
+-    #[ignore="Explicit Vulkan including software; all-output correctness only, never mobile performance evidence"]
+-    fn actual_vulkan_compound_log_dir_matches_separate_gpu_stages_all_scalars() {
+-        for (w,h,active,correction) in [(17,11,false,0.731923),(17,11,true,3.7),(257,257,false,1e-6)] {
+-            let root=Root::new();let p=config(w,h,active);let source=inputs(&root,&p,false);
+-            let original:Vec<_>=source.iter().map(|p|fs::read(p).unwrap()).collect();
+-            let log_out=root.0.join("log-output");fs::create_dir(&log_out).unwrap();
+-            let log=crate::research_global::GlobalPlan::log_exposure(w,h,correction).unwrap();
+-            let lm=crate::research_global::run_probe_for_test(&log,&root.0,&log_out,&mut ||false).unwrap();
+-            let logged:[PathBuf;3]=std::array::from_fn(|ch|log_out.join(format!("plane-{ch}.f64le")));
+-            let separate:[PathBuf;3]=std::array::from_fn(|ch|root.0.join(format!("separate-{ch}")));
+-            let dm=run_files_inner(&p,logged.each_ref().map(|p|p.as_path()),separate.each_ref().map(|p|p.as_path()),&mut ||false,true).unwrap();
+-            let compound:[PathBuf;3]=std::array::from_fn(|ch|root.0.join(format!("compound-{ch}")));
+-            let cm=run_files_inner_with_prefix(&p,source.each_ref().map(|p|p.as_path()),compound.each_ref().map(|p|p.as_path()),&mut ||false,true,Some(correction)).unwrap();
+-            assert_eq!(lm["adapter"],dm["adapter"]);assert_eq!(dm["adapter"],cm["adapter"]);
+-            assert_eq!(lm["vendor"],dm["vendor"]);assert_eq!(dm["vendor"],cm["vendor"]);
+-            let n=w as u64*h as u64;let chunks=p.chunk_count();let samples=8*(chunks-1)+(n-(chunks-1)*p.chunk_pixels() as u64).min(8);
+-            assert_eq!(cm["logSampleCount"].as_u64(),Some((9+if active{3}else{0})*samples));
+-            let mut max=0f64;let mut square=0f64;let mut count=0u64;
+-            for ch in 0..3 {
+-                let got=fs::read(&compound[ch]).unwrap();let want=fs::read(&separate[ch]).unwrap();assert_eq!(got.len(),want.len());
+-                for(a,b)in got.chunks_exact(8).zip(want.chunks_exact(8)) {
+-                    let a=f64::from_le_bytes(a.try_into().unwrap());let b=f64::from_le_bytes(b.try_into().unwrap());let e=(a-b).abs();
+-                    assert!(a.is_finite()&&b.is_finite()&&e<=POINT_TOLERANCE*b.abs().max(1.),"scalar {count}: compound={a} separate={b}");
+-                    max=max.max(e);square+=e*e;count+=1;
+-                }
+-                assert_eq!(fs::read(&source[ch]).unwrap(),original[ch]);
+-            }
+-            assert_eq!(count,n*3);
+-            eprintln!("SOFTWARE_CAPABLE_VULKAN_CORRECTNESS_ONLY compound={cm}; separate_log={lm}; separate_dir={dm}; all_scalars={count}; max_abs={max}; rms={}",(square/count as f64).sqrt());
+-        }
+-    }
+-    #[test]
+-    #[ignore="Explicit Vulkan including software; verifies unsampled prefix error and cancelled output cleanup"]
+-    fn actual_vulkan_compound_prefix_unsampled_failure_and_cancel_publish_nothing() {
+-        let root=Root::new();let p=config(64,1,false);assert!(!sample_indices(64).contains(&1));
+-        let source=inputs(&root,&p,true);
+-        let outputs:[PathBuf;3]=std::array::from_fn(|ch|root.0.join(format!("invalid-{ch}")));
+-        let result=run_files_inner_with_prefix(&p,source.each_ref().map(|p|p.as_path()),outputs.each_ref().map(|p|p.as_path()),&mut ||false,true,Some(0.73));
+-        assert_eq!(result.unwrap_err(),"GPU_DIR_NUMERIC_DOMAIN");assert!(outputs.iter().all(|p|!p.exists()));
+-        let source=inputs(&root,&p,false);
+-        let outputs:[PathBuf;3]=std::array::from_fn(|ch|root.0.join(format!("cancelled-{ch}")));
+-        let mut observed_output=false;
+-        let mut cancel=||{if outputs[0].exists(){observed_output=true;true}else{false}};
+-        let result=run_files_inner_with_prefix(&p,source.each_ref().map(|p|p.as_path()),outputs.each_ref().map(|p|p.as_path()),&mut cancel,true,Some(0.73));
+-        assert_eq!(result.unwrap_err(),"CANCELLED");assert!(observed_output);assert!(outputs.iter().all(|p|!p.exists()));
+-    }
+-}
+diff --git a/native/crates/film-engine/src/research_dir/tests.rs b/native/crates/film-engine/src/research_dir/tests.rs
+index 6c9c3bdbd57d2cdab7f45f83c545df79f55402c4..016c95708df256dd22b6e1d3f3e6c5542d799a1d 100644
+--- a/native/crates/film-engine/src/research_dir/tests.rs
++++ b/native/crates/film-engine/src/research_dir/tests.rs
+@@ -34,6 +34,7 @@ fn fixture(w: u32, h: u32, positive: bool) -> DirPlan {
+         [2.2, 2.1, 2.],
+     ];
+     DirPlan {
++        input_mode: DirInput::Logarithmic,
+         width: w,
+         height: h,
+         dir_active: true,
+@@ -361,8 +362,6 @@ fn emit_dir_plan_contract_when_requested() {
+         || false,
+     )
+     .unwrap();
+-    assert_eq!(stage.driver_allowance_bytes,104*crate::research_spatial::MIB);
+-    assert_eq!(stage.combined_peak_bytes,stage.device_bytes+stage.host_bytes+stage.driver_allowance_bytes+stage.helper_allowance_bytes);
+     let envelope = serde_json::json!({"ok":true,"schemaVersion":1,"operation":"planGpuFilmDirStage","plan":stage});
+     let destination = PathBuf::from(destination);
+     fs::create_dir_all(&destination).unwrap();
+@@ -403,3 +402,107 @@ fn nonfinite_correction_cannot_hide_in_curve_endpoint_clamp() {
+         assert!(p.before_dir.at_f64(0, x).is_nan());
+     }
+ }
++
++#[test]
++fn linear_shader_is_closed_guarded_and_valid() {
++    let s = linear_shader().unwrap();
++    let m = naga::front::wgsl::parse_str(&s)
++        .unwrap_or_else(|e| panic!("{}", e.emit_to_string(&s)));
++    naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::empty())
++        .validate(&m).unwrap();
++    assert_eq!(s.matches("dir_input_log(probe.values[").count(), 2);
++    assert!(s.contains("atomicOr(&tail_numeric_error.value,1u)"));
++    assert!(s.contains("tmul(tlog(tadd(max(corrected,0.0),1e-10)),0.4342944819032518)"));
++}
++
++#[test]
++fn fused_linear_matches_separate_f32_log_all_channels_dir_modes() {
++    use crate::research_global::{GlobalPlan, cpu_mirror as global_mirror};
++    for active in [false, true] {
++        for positive in [false, true] {
++            for sigma in [0., 3.5] {
++                let mut p = fixture(71, 37, positive);
++                p.dir_active = active;
++                p.core_sigma = sigma;
++                let raw = std::array::from_fn(|ch| (0..71*37).map(|i| {
++                    let values = [-1e10, -1., -0., 0., 1e-30, 1e-10, 0.001, 0.3, 1., 12., 1e9];
++                    values[(i + ch * 3) % values.len()]
++                }).collect());
++                let correction = 1.2345678901234567;
++                let separate = global_mirror(&GlobalPlan::log_exposure(71, 37, correction).unwrap(), &raw, &mut || false).unwrap();
++                let expected = cpu_mirror(&p, &separate, &mut || false).unwrap();
++                let fused = p.clone().with_linear_exposure(correction).unwrap();
++                let actual = cpu_mirror(&fused, &raw, &mut || false).unwrap();
++                assert_eq!(actual, expected);
++                #[cfg(feature = "precision-f64")]
++                {
++                    let original = raw.each_ref().map(|plane| plane.iter().map(|&x| fused.input_mode.log_f64(x)).collect());
++                    let reference = f64_reference(&p, &original);
++                    for ch in 0..3 {
++                        for (&a, &b) in actual[ch].iter().zip(&reference[ch]) {
++                            assert!((a-b).abs() < 1e-3 * b.abs().max(1.), "{active} {positive} {sigma} ch{ch}: {a} {b}");
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
++fn linear_mode_bits_identity_and_log_compatibility() {
++    let p = fixture(11, 7, false);
++    let old = serde_json::to_value(&p).unwrap();
++    assert!(old.get("inputMode").is_none());
++    assert_eq!(serde_json::from_value::<DirPlan>(old).unwrap(), p);
++    let correction = 1.2345678901234567;
++    let linear = p.clone().with_linear_exposure(correction).unwrap();
++    let encoded = serde_json::to_value(&linear).unwrap();
++    assert_eq!(encoded["inputMode"]["correction"], format!("{:016x}", correction.to_bits()));
++    assert_eq!(serde_json::from_value::<DirPlan>(encoded.clone()).unwrap(), linear);
++    let mut unknown = encoded;
++    unknown["inputMode"]["unchecked"] = true.into();
++    assert!(serde_json::from_value::<DirPlan>(unknown).is_err());
++    for c in [0., -1., f64::INFINITY, f64::NAN, 1e-300] {
++        assert!(p.clone().with_linear_exposure(c).is_err());
++    }
++    let mode = DirInput::LinearExposureF32 { correction: 2. };
++    for x in [f32::MAX, -f32::MAX, f32::INFINITY, f32::NAN, 1e15] {
++        assert!(mode.log_f32(x).is_err());
++    }
++    assert_eq!(mode.log_f32(-1.).unwrap(), (1e-10f32).ln()*std::f32::consts::LOG10_E);
++}
++
++#[test]
++fn linear_stage_cancellation_identity_and_partial_candidate_are_closed() {
++    let root = Root::new();
++    let base = fixture(23, 17, true);
++    let p = base.clone().with_linear_exposure(0.73).unwrap();
++    let input = logs(p.width, p.height);
++    let paths = write_inputs(&root, &input);
++    let dir = root.0.join("gpu-stage-88");
++    let plan = full_stage::prepare_stage(paths.each_ref().map(|p| p.as_path()), &dir, 88, p.width, p.height, &p, || false).unwrap();
++    assert_eq!(plan.input_mode, p.input_mode);
++    let original = fs::read(dir.join("manifest.json")).unwrap();
++    let mut tampered: serde_json::Value = serde_json::from_slice(&original).unwrap();
++    tampered["dirConfig"]["inputMode"] = serde_json::json!({"mode":"logarithmic"});
++    fs::write(dir.join("manifest.json"), serde_json::to_vec(&tampered).unwrap()).unwrap();
++    assert!(full_stage::run_stage_cpu_mirror_for_test(&dir, 88, &plan.manifest_sha256, || false).is_err());
++    fs::write(dir.join("manifest.json"), &original).unwrap();
++    // Cancellation at every check must remove any partial output; successful
++    // endpoint is verified once after sweeping all earlier cancellation points.
++    let mut reached_success = false;
++    for limit in 0..500 {
++        let mut count = 0;
++        let result = full_stage::run_stage_cpu_mirror_for_test(&dir, 88, &plan.manifest_sha256, || { count += 1; count > limit });
++        match result {
++            Err(e) => { assert_eq!(e, "CANCELLED"); assert!(!dir.join("candidate").exists()); }
++            Ok(_) => { reached_success = true; break; }
++        }
++    }
++    assert!(reached_success);
++    let output = full_stage::validate_outputs(&dir, 88, &plan.manifest_sha256, || false).unwrap();
++    fs::remove_file(&output[2]).unwrap();
++    assert!(full_stage::validate_outputs(&dir, 88, &plan.manifest_sha256, || false).is_err());
++    for ch in 0..3 { assert_eq!(fs::read(&paths[ch]).unwrap(), fs::read(dir.join(format!("source-{ch}.f64le"))).unwrap()); }
++}
+diff --git a/native/crates/film-engine/src/research_exposure/full_stage.rs b/native/crates/film-engine/src/research_exposure/full_stage.rs
+index dcf0702374902bc1697b624b0c987c617d7c85b0..f9e36cb8c94315b80df0aeee9d8f6e2de21ae911 100644
+--- a/native/crates/film-engine/src/research_exposure/full_stage.rs
++++ b/native/crates/film-engine/src/research_exposure/full_stage.rs
+@@ -1,7 +1,8 @@
+ //! Immutable bounded exposure packets and all-three-plane atomic publication.
+ //! The caller reserves disk before prepare and proves helper death before validate.
+-use crate::gpu_phase_diagnostics::{self as trace, Phase as GpuPhase};
+ use super::ExposureDescriptor;
++pub mod highlight;
++use highlight::HighlightParameters;
+ use crate::gpu_stage_staging::{io_at, Phase};
+ use serde::{Deserialize, Serialize};
+ use sha2::{Digest, Sha256};
+@@ -67,6 +68,8 @@ pub(super) struct Manifest {
+     auto_exposure_bits: String,
+     exposure_bits: String,
+     table_sha256: String,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    highlight: Option<HighlightParameters>,
+ }
+ impl Manifest {
+     fn descriptor(&self, table: Vec<f64>) -> R<ExposureDescriptor> {
+@@ -106,6 +109,8 @@ pub struct ExposurePlan {
+     pub helper_allowance_bytes: u64,
+     pub combined_peak_bytes: u64,
+     pub disk_bytes: u64,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub highlight: Option<HighlightParameters>,
+ }
+ fn make_plan(m: &Manifest, hash: String) -> R<ExposurePlan> {
+     if m.schema_version != 1
+@@ -122,6 +127,7 @@ fn make_plan(m: &Manifest, hash: String) -> R<ExposurePlan> {
+     {
+         return err("INVALID_EXPOSURE_MANIFEST");
+     }
++    if let Some(h) = &m.highlight { h.validate()?; }
+     let d = m.descriptor(vec![])?;
+     if d.auto_exposure <= 0.
+         || d.exposure <= 0.
+@@ -134,7 +140,7 @@ fn make_plan(m: &Manifest, hash: String) -> R<ExposurePlan> {
+     let c = n.min(65536);
+     let t = m.side as u64 * m.side as u64 * 3;
+     // Four-byte sticky flag plus four extra bytes in the existing readback.
+-    let device = 4 * t + 36 * c + 4096 + 8;
++    let device = 4 * t + 36 * c + 4096 + 8 + if m.highlight.is_some() { 8 } else { 0 };
+     // f64 oracle, f32 packing and table-initialization staging overlap, plus bounded chunks.
+     let host = 16 * t + 128 * c + 2 * MIB;
+     let combined = device + host + 128 * MIB;
+@@ -157,6 +163,7 @@ fn make_plan(m: &Manifest, hash: String) -> R<ExposurePlan> {
+         helper_allowance_bytes: 64 * MIB,
+         combined_peak_bytes: combined,
+         disk_bytes: 36 * n + 8 * t + 65536,
++        highlight: m.highlight.clone(),
+     })
+ }
+ fn manifest(d: &ExposureDescriptor, token: u64, width: u32, height: u32) -> R<Manifest> {
+@@ -173,6 +180,7 @@ fn manifest(d: &ExposureDescriptor, token: u64, width: u32, height: u32) -> R<Ma
+         auto_exposure_bits: bits(d.auto_exposure),
+         exposure_bits: bits(d.exposure),
+         table_sha256: "0".repeat(64),
++        highlight: None,
+     })
+ }
+ pub fn estimated_disk_bytes(width: u32, height: u32, d: &ExposureDescriptor) -> R<u64> {
+@@ -182,10 +190,7 @@ pub(super) struct OwnedDir(pub PathBuf, pub bool);
+ impl Drop for OwnedDir {
+     fn drop(&mut self) {
+         if !self.1 {
+-            trace::phase_value(GpuPhase::Cleanup, || {
+             let _ = fs::remove_dir_all(&self.0);
+-
+-            });
+         }
+     }
+ }
+@@ -227,7 +232,6 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> R<(T, Vec<u8>)> {
+     Ok((value, bytes))
+ }
+ pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, ExposurePlan)> {
+-        trace::phase_result(GpuPhase::Prepare, || {
+     owner(dir, token)?;
+     let mut names = Vec::new();
+     for entry in io(fs::read_dir(dir))?.take(5) {
+@@ -257,9 +261,7 @@ pub(super) fn load(dir: &Path, token: u64) -> R<(Manifest, ExposurePlan)> {
+     )?;
+     regular(&dir.join("tables.f64le"), p.table_scalars * 8)?;
+     Ok((m, p))
+-
+-        })
+-    }
++}
+ pub fn plan_stage(dir: &Path, token: u64) -> R<ExposurePlan> {
+     load(dir, token).map(|(_, p)| p)
+ }
+@@ -273,9 +275,19 @@ pub fn prepare_stage(
+     height: u32,
+     d: &ExposureDescriptor,
+     mut cancel: impl FnMut() -> bool,
++) -> R<ExposurePlan> {
++    prepare_stage_with_highlight(source, dir, token, width, height, d, None, &mut cancel)
++}
++/// Optional two-pass exposure/peak then exposure/highlight composition, on one GPU.
++/// No intermediate full-frame exposure planes are published.
++pub fn prepare_stage_with_highlight(
++    source: &Path, dir: &Path, token: u64, width: u32, height: u32,
++    d: &ExposureDescriptor, highlight: Option<HighlightParameters>,
++    mut cancel: impl FnMut() -> bool,
+ ) -> R<ExposurePlan> {
+     check(&mut cancel)?;
+     let mut m = manifest(d, token, width, height)?;
++    m.highlight = highlight;
+     make_plan(&m, "0".repeat(64))?;
+     owner_name(dir, token)?;
+     crate::gpu_stage_staging::create_stage_dir(dir)?;
+@@ -326,7 +338,6 @@ pub(super) fn read_descriptor(
+     p: &ExposurePlan,
+     cancel: &mut impl FnMut() -> bool,
+ ) -> R<ExposureDescriptor> {
+-        trace::phase_result(GpuPhase::Prepare, || {
+     let mut input = io(File::open(dir.join("tables.f64le")))?;
+     let mut table = Vec::with_capacity(p.table_scalars as usize);
+     let mut hash = Sha256::new();
+@@ -350,9 +361,7 @@ pub(super) fn read_descriptor(
+     let d = m.descriptor(table)?;
+     d.validate()?;
+     Ok(d)
+-
+-        })
+-    }
++}
+ #[derive(Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase", deny_unknown_fields)]
+ pub(super) struct Complete {
+diff --git a/native/crates/film-engine/src/shaders/research_dir_linear.wgsl b/native/crates/film-engine/src/shaders/research_dir_linear.wgsl
+new file mode 100644
+index 0000000000000000000000000000000000000000..c464bef6c377256611bc37734f64a5c15c2ddd89
+--- /dev/null
++++ b/native/crates/film-engine/src/shaders/research_dir_linear.wgsl
+@@ -0,0 +1,8 @@
++// Only the two DIR input loads call this function. No full RGB plane allocation.
++// Exactly the separate globalLog f32 arithmetic order, including additive epsilon.
++// The shared request-wide error is sticky even when density clamps the result.
++fn dir_input_log(x:f32)->f32 {
++ if(p.u[6].y==0u){return x;}
++ let corrected=tmul(x,bitcast<f32>(p.u[6].z));
++ return tmul(tlog(tadd(max(corrected,0.0),1e-10)),0.4342944819032518);
++}

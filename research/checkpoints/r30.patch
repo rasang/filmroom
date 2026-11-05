@@ -1,0 +1,1266 @@
+diff --git a/native/crates/film-engine/src/lib.rs b/native/crates/film-engine/src/lib.rs
+index 649bbc9537870a6eec66d9e953c8908b26021f60..3cb70e81671b8fc203f6318c3a9ecbd7804e8fa0 100644
+--- a/native/crates/film-engine/src/lib.rs
++++ b/native/crates/film-engine/src/lib.rs
+@@ -107,3 +107,6 @@ pub(crate) mod research_exposure64_threepass;
+ 
+ #[cfg(all(test, feature="precision-f64"))]
+ pub(crate) mod research_exposure64_real_fixture;
++
++#[cfg(all(test, feature = "precision-f64"))]
++pub(crate) mod research_optics64_point;
+diff --git a/native/crates/film-engine/src/research_optics64_point.rs b/native/crates/film-engine/src/research_optics64_point.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3b4bdad81c15cf44505af9fbe9e4db688e1e1d07
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point.rs
+@@ -0,0 +1,238 @@
++//! Closed test-only scalar optics primitives. No GPU runner, image graph,
++//! provenance, production admission or spatial-kernel change is supplied here.
++#![cfg(test)]
++
++pub(crate) type R<T> = Result<T, String>;
++pub(crate) const CAPACITY: usize = 4096;
++pub(crate) const PREFIX_WORDS: usize = 32;
++pub(crate) const LANES: usize = 3;
++pub(crate) const PACKET_WORDS: usize = PREFIX_WORDS + LANES * CAPACITY;
++pub(crate) const BOUND_BITS: u64 = 0x430c_6bf5_2000_0000;
++// Existing GPU tdiv's conservative admission floor, not a native CPU rule.
++pub(crate) const DIVISOR_FLOOR_BITS: u64 = 0x3cd2_03af_a000_0000;
++const SIGN: u64 = 1 << 63;
++const TAG: u32 = 0x4f50_3634;
++const VERSION: u32 = 1;
++const ZERO_POLICY: u32 = 1;
++const ERROR: &str = "GPU_OPTICS64_POINT_DESCRIPTOR";
++pub(crate) const DOMAIN_ERROR: &str = "GPU_OPTICS64_POINT_NUMERIC_DOMAIN";
++const MIB: u64 = 1024 * 1024;
++
++mod host;
++mod kernel;
++mod tests;
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++#[repr(u32)]
++pub(crate) enum Operation {
++    Clear = 1,
++    WeightedAccum = 2,
++    Scatter = 3,
++    BounceAdd = 4,
++    Divide = 5,
++}
++impl Operation {
++    fn from_word(word: u32) -> R<Self> {
++        match word {
++            1 => Ok(Self::Clear),
++            2 => Ok(Self::WeightedAccum),
++            3 => Ok(Self::Scatter),
++            4 => Ok(Self::BounceAdd),
++            5 => Ok(Self::Divide),
++            _ => Err(ERROR.into()),
++        }
++    }
++    fn used_lanes(self) -> usize {
++        match self {
++            Self::Clear => 0,
++            Self::WeightedAccum | Self::BounceAdd => 2,
++            Self::Scatter => 3,
++            Self::Divide => 1,
++        }
++    }
++}
++
++/// Mathematical primitive only. This does not certify original image input,
++/// a physical profile's parameter range, or an optical schedule.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct Job {
++    operation: Operation,
++    constants: [u64; 2],
++}
++impl Job {
++    pub(crate) fn clear() -> Self {
++        Self { operation: Operation::Clear, constants: [0; 2] }
++    }
++    fn construct(operation: Operation, constants: [u64; 2]) -> R<Self> {
++        let job = Self { operation, constants };
++        job.validate()?;
++        Ok(job)
++    }
++    pub(crate) fn weighted_accum(coefficient: u64) -> R<Self> {
++        Self::construct(Operation::WeightedAccum, [coefficient, 0])
++    }
++    pub(crate) fn scatter(amount: u64, tail_weight: u64) -> R<Self> {
++        Self::construct(Operation::Scatter, [amount, tail_weight])
++    }
++    pub(crate) fn bounce_add(strength: u64) -> R<Self> {
++        Self::construct(Operation::BounceAdd, [strength, 0])
++    }
++    pub(crate) fn divide(divisor: u64) -> R<Self> {
++        Self::construct(Operation::Divide, [divisor, 0])
++    }
++    fn validate(&self) -> R<()> {
++        if self.constants.iter().any(|&v| !admitted(v)) {
++            return Err(DOMAIN_ERROR.into());
++        }
++        if (self.operation == Operation::Clear && self.constants != [0; 2])
++            || (self.operation != Operation::Scatter && self.constants[1] != 0)
++        {
++            return Err(ERROR.into());
++        }
++        if self.operation == Operation::Divide
++            && (zero(self.constants[0])
++                || magnitude(self.constants[0]) < DIVISOR_FLOOR_BITS)
++        {
++            return Err(DOMAIN_ERROR.into());
++        }
++        Ok(())
++    }
++}
++
++#[derive(Clone, Debug)]
++pub(crate) struct Packet {
++    job: Job,
++    count: usize,
++    words: Vec<u64>,
++    parameters: [u32; 16],
++}
++impl Packet {
++    pub(crate) fn new(job: Job, values: &[[u64; 3]]) -> R<Self> {
++        job.validate()?;
++        if values.is_empty() || values.len() > CAPACITY {
++            return Err(ERROR.into());
++        }
++        for row in values {
++            validate_row(job.operation, row)?;
++        }
++        let mut words = Vec::with_capacity(PACKET_WORDS);
++        words.resize(PACKET_WORDS, 0);
++        words[..2].copy_from_slice(&job.constants);
++        for (i, row) in values.iter().enumerate() {
++            words[PREFIX_WORDS + LANES * i..PREFIX_WORDS + LANES * (i + 1)]
++                .copy_from_slice(row);
++        }
++        let mut parameters = [0; 16];
++        parameters[..8].copy_from_slice(&[
++            VERSION, job.operation as u32, values.len() as u32,
++            CAPACITY as u32, PREFIX_WORDS as u32, LANES as u32, ZERO_POLICY, TAG,
++        ]);
++        let packet = Self { job, count: values.len(), words, parameters };
++        packet.validate()?;
++        Ok(packet)
++    }
++    pub(crate) fn validate(&self) -> R<()> {
++        self.job.validate()?;
++        let operation = Operation::from_word(self.parameters[1])?;
++        if self.count == 0 || self.count > CAPACITY
++            || self.words.len() != PACKET_WORDS
++            || self.parameters[..8] != [VERSION, operation as u32, self.count as u32,
++                CAPACITY as u32, PREFIX_WORDS as u32, LANES as u32, ZERO_POLICY, TAG]
++            || self.parameters[8..].iter().any(|&v| v != 0)
++            || operation != self.job.operation
++            || self.words[..2] != self.job.constants
++            || self.words[2..PREFIX_WORDS].iter().any(|&v| v != 0)
++        {
++            return Err(ERROR.into());
++        }
++        for (i, row) in self.words[PREFIX_WORDS..].chunks_exact(LANES).enumerate() {
++            let row: &[u64; 3] = row.try_into().map_err(|_| ERROR)?;
++            if i < self.count {
++                validate_row(operation, row)?;
++            } else if row.iter().any(|&v| v != 0) {
++                return Err(ERROR.into());
++            }
++        }
++        self.host_payload_bytes(0, 0, 0, 0)?;
++        Ok(())
++    }
++    pub(crate) fn count(&self) -> usize { self.count }
++    pub(crate) fn words(&self) -> &[u64] { &self.words }
++    pub(crate) fn parameters(&self) -> &[u32; 16] { &self.parameters }
++    pub(crate) fn invocations(&self) -> u32 { CAPACITY as u32 }
++    /// Includes capacities, serialized uploads, output, shader and caller-owned
++    /// retained fixture/oracle/active-input memory. No total-process RSS claim.
++    pub(crate) fn host_payload_bytes(
++        &self, upload_capacity_bytes: u64, output_capacity_words: usize,
++        shader_capacity_bytes: u64, caller_retained_bytes: u64,
++    ) -> R<u64> {
++        let bytes = checked_sum(&[
++            checked_bytes(self.words.capacity(), 8)?, upload_capacity_bytes,
++            checked_bytes(output_capacity_words, 8)?, shader_capacity_bytes,
++            caller_retained_bytes, 65536,
++        ])?;
++        if bytes > Resources::fixed().host_bytes {
++            return Err("GPU_OPTICS64_POINT_HOST_BUDGET".into());
++        }
++        Ok(bytes)
++    }
++}
++fn validate_row(operation: Operation, values: &[u64; 3]) -> R<()> {
++    if values.iter().any(|&v| !admitted(v)) {
++        return Err(DOMAIN_ERROR.into());
++    }
++    if values[operation.used_lanes()..].iter().any(|&v| v != 0) {
++        return Err(ERROR.into());
++    }
++    Ok(())
++}
++pub(crate) fn admitted(bits: u64) -> bool {
++    let absolute = magnitude(bits);
++    let exponent = absolute >> 52;
++    exponent != 2047 && (exponent != 0 || absolute == 0) && absolute <= BOUND_BITS
++}
++fn magnitude(bits: u64) -> u64 { bits & !SIGN }
++fn zero(bits: u64) -> bool { magnitude(bits) == 0 }
++fn checked_bytes(count: usize, unit: u64) -> R<u64> {
++    u64::try_from(count).ok().and_then(|n| n.checked_mul(unit))
++        .ok_or_else(|| "GPU_OPTICS64_POINT_BUDGET".into())
++}
++fn checked_sum(parts: &[u64]) -> R<u64> {
++    parts.iter().try_fold(0u64, |a, &b| a.checked_add(b)
++        .ok_or_else(|| "GPU_OPTICS64_POINT_BUDGET".into()))
++}
++
++/// Future runner's fixed accounting contract, not an implemented GPU owner.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(crate) struct Resources {
++    pub packet_bytes: u64,
++    pub output_bytes: u64,
++    pub map_bytes: u64,
++    pub error_bytes: u64,
++    pub uniform_bytes: u64,
++    pub pool_bytes: u64,
++    pub upload_bytes: u64,
++    pub margin_bytes: u64,
++    pub device_bytes: u64,
++    pub host_bytes: u64,
++    pub helper_bytes: u64,
++    pub fixed_bytes: u64,
++    pub family_bytes: u64,
++    pub combined_bytes: u64,
++    pub fresh_charged_bytes: u64,
++}
++impl Resources {
++    pub(crate) fn fixed() -> Self {
++        let packet_bytes = (PACKET_WORDS * 8) as u64;
++        let output_bytes = (CAPACITY * 8) as u64;
++        let map_bytes = output_bytes + 4;
++        let pool_bytes = packet_bytes + output_bytes + map_bytes + 4 + 64;
++        Self {
++            packet_bytes, output_bytes, map_bytes, error_bytes: 4, uniform_bytes: 64,
++            pool_bytes, upload_bytes: packet_bytes + 64, margin_bytes: 65536,
++            device_bytes: 64 * MIB, host_bytes: 64 * MIB, helper_bytes: 64 * MIB,
++            fixed_bytes: 128 * MIB, family_bytes: 64 * MIB,
++            combined_bytes: 256 * MIB, fresh_charged_bytes: 192 * MIB + pool_bytes,
++        }
++    }
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/host.rs b/native/crates/film-engine/src/research_optics64_point/host.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c20f40c06d2998d086f0ee684b118390de19aa86
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/host.rs
+@@ -0,0 +1,91 @@
++//! Independent literal native-f64 oracle and separately guarded soft64 model.
++//! Both are test models, not candidate-side CPU image arithmetic.
++use super::*;
++use crate::research_grain::soft64;
++
++pub(super) fn native_oracle(packet: &Packet) -> R<Vec<u64>> {
++    packet.validate()?;
++    let [k, w] = packet.job.constants.map(f64::from_bits);
++    let mut output = Vec::with_capacity(packet.count);
++    for row in packet.words[PREFIX_WORDS..PREFIX_WORDS + packet.count * LANES]
++        .chunks_exact(LANES)
++    {
++        let x0 = f64::from_bits(row[0]);
++        let x1 = f64::from_bits(row[1]);
++        let x2 = f64::from_bits(row[2]);
++        let result = match packet.job.operation {
++            Operation::Clear => 0.0,
++            Operation::WeightedAccum => x0 + k * x1,
++            Operation::Scatter => (1.0 - k) * x0 + k * ((1.0 - w) * x1 + w * x2),
++            Operation::BounceAdd => x0 + k * x1,
++            Operation::Divide => x0 / k,
++        };
++        // No final-domain or intermediate check is imposed on the original
++        // oracle. A finite native answer may still be outside the GPU subset.
++        output.push(result.to_bits());
++    }
++    Ok(output)
++}
++
++#[derive(Default)]
++pub(super) struct Guard { pub(super) failed: bool }
++impl Guard {
++    fn accept(&mut self, value: u64) -> bool {
++        if self.failed || !admitted(value) { self.failed = true; false } else { true }
++    }
++    fn reject(&mut self) -> u64 { self.failed = true; soft64::NAN }
++    fn checked(&mut self, value: u64) -> u64 {
++        if self.accept(value) { value } else { soft64::NAN }
++    }
++    pub(super) fn add(&mut self, a: u64, b: u64) -> u64 {
++        if !self.accept(a) || !self.accept(b) { return self.reject(); }
++        if zero(a) && zero(b) { return (a & b) & SIGN; }
++        self.checked(soft64::add(a, b))
++    }
++    pub(super) fn sub(&mut self, a: u64, b: u64) -> u64 { self.add(a, b ^ SIGN) }
++    pub(super) fn mul(&mut self, a: u64, b: u64) -> u64 {
++        if !self.accept(a) || !self.accept(b) { return self.reject(); }
++        if zero(a) || zero(b) { return (a ^ b) & SIGN; }
++        self.checked(soft64::mul(a, b))
++    }
++    pub(super) fn div(&mut self, a: u64, b: u64) -> u64 {
++        if !self.accept(a) || !self.accept(b) { return self.reject(); }
++        // Preserve the existing GPU subset; native CPU has no such floor.
++        if zero(b) || magnitude(b) < DIVISOR_FLOOR_BITS { return self.reject(); }
++        if zero(a) { return (a ^ b) & SIGN; }
++        self.checked(soft64::div(a, b))
++    }
++}
++
++pub(super) fn guarded_model(packet: &Packet) -> R<Vec<u64>> {
++    packet.validate()?;
++    let [k, w] = packet.job.constants;
++    let one = 1.0f64.to_bits();
++    let mut guard = Guard::default();
++    let mut output = Vec::with_capacity(packet.count);
++    for row in packet.words[PREFIX_WORDS..PREFIX_WORDS + packet.count * LANES]
++        .chunks_exact(LANES)
++    {
++        let result = match packet.job.operation {
++            Operation::Clear => 0,
++            Operation::WeightedAccum | Operation::BounceAdd => {
++                let product = guard.mul(k, row[1]);
++                guard.add(row[0], product)
++            }
++            Operation::Scatter => {
++                let source_weight = guard.sub(one, k);
++                let source_term = guard.mul(source_weight, row[0]);
++                let core_weight = guard.sub(one, w);
++                let core_term = guard.mul(core_weight, row[1]);
++                let tail_term = guard.mul(w, row[2]);
++                let core_tail = guard.add(core_term, tail_term);
++                let scatter_term = guard.mul(k, core_tail);
++                guard.add(source_term, scatter_term)
++            }
++            Operation::Divide => guard.div(row[0], k),
++        };
++        if !guard.accept(result) { return Err(DOMAIN_ERROR.into()); }
++        output.push(result);
++    }
++    Ok(output)
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/kernel.rs b/native/crates/film-engine/src/research_optics64_point/kernel.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cd535fd467efddabd799cf0463404a5d398eac32
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/kernel.rs
+@@ -0,0 +1,462 @@
++//! Closed optics point shader composition. Shared arithmetic is extracted,
++//! never rewritten. Source tests are definitions, not evidence of execution.
++use crate::research_grain::soft64;
++use sha2::{Digest, Sha256};
++use std::collections::{BTreeMap, BTreeSet};
++
++pub(super) const LAYOUT: &str =
++    "opticsPacket64:read,scalarResult64:read_write,error:atomic_u32,parameters:array_vec4_u32_4";
++pub(super) const SHARED_SHA256: &str =
++    "7173a5998b5fc2d22434f12cd07b5b81091e25d4f5ac05c2923fe79947fd5ce1";
++pub(super) const KERNEL_SHA256: &str =
++    "84dd20d5ba31321c91209bc55a2d188df2c796c61548270b22e0bf42ee83dfb4";
++pub(super) const GENERATED_SHA256: &str = "902b93644cb850975467498c038e416aab5939f31a3c18ad98cce9dd0f01bbf7";
++pub(super) const POINT_CAPACITY: usize = 4096;
++pub(super) const PREFIX_WORDS: usize = 32;
++pub(super) const PACKET_WORDS: usize = 12_320;
++pub(super) const HEADER_WORDS: usize = 16;
++pub(super) const WORKGROUP_SIZE: u32 = 64;
++pub(super) const WORKGROUPS: u32 = 64;
++const KERNEL: &str = include_str!("kernel.wgsl");
++const DECLARATIONS: [&str; 2] = [
++    "const SF_NAN:vec2<u32>=vec2<u32>(0u,0x7ff80000u);",
++    "var<private> sf_failed:u32;",
++];
++const HELPERS: [&str; 17] = [
++    "sf_abs", "sf_add", "sf_addu", "sf_cmpu", "sf_div", "sf_exp", "sf_fail", "sf_jam",
++    "sf_mul", "sf_neg", "sf_round", "sf_shl", "sf_shr", "sf_sig", "sf_subu", "sf_valid",
++    "sf_zero",
++];
++const LOCAL_FUNCTIONS: [&str; 8] = [
++    "main", "op_accept", "op_add", "op_canonical_zero", "op_div", "op_mul", "op_reject",
++    "op_sub",
++];
++const FORBIDDEN: [&str; 14] = [
++    "f16", "f32", "f64", "sf_scalar", "sf_log", "sf_exp_nonpositive", "sf_sqrt",
++    "sf_integer", "sf_floor", "fma", "pow", "sqrt", "exp", "log",
++];
++const ERROR: &str = "GPU_OPTICS64_POINT_SHADER_IDENTITY";
++const CLOSURE_ERROR: &str = "GPU_OPTICS64_POINT_SHADER_CLOSURE";
++
++pub(super) fn shader() -> super::R<String> {
++    compose(soft64::SHADER, KERNEL)
++}
++
++fn digest(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++
++#[derive(Clone, Copy)]
++struct Token<'a> {
++    text: &'a str,
++    start: usize,
++    end: usize,
++}
++
++// Parse byte spans while excluding comments from both function discovery and
++// reachability. WGSL has no string literals; non-ASCII outside comments rejects.
++fn tokens(source: &str) -> super::R<Vec<Token<'_>>> {
++    let bytes = source.as_bytes();
++    let mut out = Vec::new();
++    let mut cursor = 0;
++    while cursor < bytes.len() {
++        if bytes[cursor].is_ascii_whitespace() {
++            cursor += 1;
++        } else if bytes[cursor..].starts_with(b"//") {
++            cursor += 2;
++            while cursor < bytes.len() && bytes[cursor] != b'\n' {
++                cursor += 1;
++            }
++        } else if bytes[cursor..].starts_with(b"/*") {
++            cursor += 2;
++            let mut depth = 1usize;
++            while cursor < bytes.len() && depth != 0 {
++                if bytes[cursor..].starts_with(b"/*") {
++                    depth = depth.checked_add(1).ok_or(ERROR)?;
++                    cursor += 2;
++                } else if bytes[cursor..].starts_with(b"*/") {
++                    depth = depth.checked_sub(1).ok_or(ERROR)?;
++                    cursor += 2;
++                } else {
++                    cursor += 1;
++                }
++            }
++            if depth != 0 {
++                return Err(ERROR.into());
++            }
++        } else {
++            let start = cursor;
++            if !bytes[cursor].is_ascii() {
++                return Err(ERROR.into());
++            }
++            cursor += 1;
++            if bytes[start].is_ascii_alphanumeric() || bytes[start] == b'_' {
++                while cursor < bytes.len()
++                    && (bytes[cursor].is_ascii_alphanumeric() || bytes[cursor] == b'_')
++                {
++                    cursor += 1;
++                }
++            }
++            out.push(Token {
++                text: &source[start..cursor],
++                start,
++                end: cursor,
++            });
++        }
++    }
++    Ok(out)
++}
++
++fn identifier(text: &str) -> bool {
++    text.as_bytes()
++        .first()
++        .map(|b| b.is_ascii_alphabetic() || *b == b'_')
++        .unwrap_or(false)
++        && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
++}
++
++fn identifiers(source: &str) -> super::R<BTreeSet<&str>> {
++    Ok(tokens(source)?
++        .into_iter()
++        .map(|token| token.text)
++        .filter(|text| identifier(text))
++        .collect())
++}
++
++fn functions(source: &str) -> super::R<BTreeMap<String, &str>> {
++    let tokens = tokens(source)?;
++    let mut out = BTreeMap::new();
++    let mut cursor = 0;
++    while cursor < tokens.len() {
++        if tokens[cursor].text != "fn" {
++            cursor += 1;
++            continue;
++        }
++        let start = tokens[cursor].start;
++        let name = tokens.get(cursor + 1).ok_or(ERROR)?.text;
++        if !identifier(name) || tokens.get(cursor + 2).ok_or(ERROR)?.text != "(" {
++            return Err(ERROR.into());
++        }
++        cursor += 3;
++        while cursor < tokens.len() && tokens[cursor].text != "{" {
++            cursor += 1;
++        }
++        if cursor == tokens.len() {
++            return Err(ERROR.into());
++        }
++        let mut depth = 0usize;
++        let mut end = None;
++        while cursor < tokens.len() {
++            match tokens[cursor].text {
++                "{" => depth = depth.checked_add(1).ok_or(ERROR)?,
++                "}" => {
++                    depth = depth.checked_sub(1).ok_or(ERROR)?;
++                    if depth == 0 {
++                        end = Some(tokens[cursor].end);
++                        cursor += 1;
++                        break;
++                    }
++                }
++                _ => {}
++            }
++            cursor += 1;
++        }
++        let end = end.ok_or(ERROR)?;
++        if out.insert(name.to_owned(), &source[start..end]).is_some() {
++            return Err(ERROR.into());
++        }
++    }
++    Ok(out)
++}
++
++fn reachable(all: &BTreeMap<String, &str>, root: &str) -> super::R<BTreeSet<String>> {
++    if !all.contains_key(root) {
++        return Err(CLOSURE_ERROR.into());
++    }
++    let mut reached = BTreeSet::from([root.to_owned()]);
++    loop {
++        let mut next = reached.clone();
++        for name in &reached {
++            for name in identifiers(all[name])? {
++                if all.contains_key(name) {
++                    next.insert(name.to_owned());
++                } else if name.starts_with("sf_") && name != "sf_failed" {
++                    return Err(CLOSURE_ERROR.into());
++                }
++            }
++        }
++        if next == reached {
++            return Ok(reached);
++        }
++        reached = next;
++    }
++}
++
++fn compose(shared: &str, kernel: &str) -> super::R<String> {
++    if digest(shared.as_bytes()) != SHARED_SHA256 || digest(kernel.as_bytes()) != KERNEL_SHA256 {
++        return Err(ERROR.into());
++    }
++    let shared_functions = functions(shared)?;
++    let local_functions = functions(kernel)?;
++    let local_names: BTreeSet<String> = LOCAL_FUNCTIONS.into_iter().map(str::to_owned).collect();
++    if shared_functions.len() != 26
++        || local_functions.keys().cloned().collect::<BTreeSet<_>>() != local_names
++        || shared_functions.keys().any(|name| local_functions.contains_key(name))
++    {
++        return Err(CLOSURE_ERROR.into());
++    }
++    let mut all = shared_functions.clone();
++    all.extend(local_functions.clone());
++    let reached = reachable(&all, "main")?;
++    let wanted: BTreeSet<String> = HELPERS
++        .into_iter()
++        .chain(LOCAL_FUNCTIONS)
++        .map(str::to_owned)
++        .collect();
++    if reached != wanted {
++        return Err(CLOSURE_ERROR.into());
++    }
++    let mut output = String::new();
++    for declaration in DECLARATIONS {
++        if shared.matches(declaration).count() != 1 || kernel.contains(declaration) {
++            return Err(ERROR.into());
++        }
++        let start = shared.find(declaration).ok_or(ERROR)?;
++        output.push_str(&shared[start..start + declaration.len()]);
++        output.push('\n');
++    }
++    for helper in HELPERS {
++        output.push_str(shared_functions.get(helper).ok_or(CLOSURE_ERROR)?);
++        output.push('\n');
++    }
++    output.push_str(kernel);
++    let output_identifiers = identifiers(&output)?;
++    if FORBIDDEN.into_iter().any(|name| output_identifiers.contains(name)) {
++        return Err(ERROR.into());
++    }
++    // Fail closed if a body, declaration, helper set or generated byte changes.
++    let output_functions = functions(&output)?;
++    if output_functions.keys().cloned().collect::<BTreeSet<_>>() != wanted {
++        return Err(CLOSURE_ERROR.into());
++    }
++    for name in &reached {
++        if output_functions.get(name) != all.get(name) {
++            return Err(ERROR.into());
++        }
++    }
++    for declaration in DECLARATIONS {
++        if output.matches(declaration).count() != 1 {
++            return Err(ERROR.into());
++        }
++    }
++    if digest(output.as_bytes()) != GENERATED_SHA256 {
++        return Err(ERROR.into());
++    }
++    Ok(output)
++}
++
++#[test]
++fn pinned_hashes_and_generated_source_identity_are_exact() {
++    let composed = shader().unwrap();
++    assert_eq!(digest(soft64::SHADER.as_bytes()), SHARED_SHA256);
++    assert_eq!(digest(KERNEL.as_bytes()), KERNEL_SHA256);
++    assert_eq!(digest(composed.as_bytes()), GENERATED_SHA256);
++    assert!(compose(&(soft64::SHADER.to_owned() + "\n"), KERNEL).is_err());
++    assert!(compose(soft64::SHADER, &(KERNEL.to_owned() + "\n")).is_err());
++    assert!(compose(
++        &soft64::SHADER.replace("i<55u", "i<54u"),
++        KERNEL,
++    ).is_err());
++    assert!(compose(
++        soft64::SHADER,
++        &KERNEL.replace("0xa0000000u", "0xa0000001u"),
++    ).is_err());
++    for declaration in DECLARATIONS {
++        assert!(compose(
++            soft64::SHADER,
++            &(KERNEL.to_owned() + declaration),
++        ).is_err());
++    }
++}
++
++#[test]
++fn helpers_are_exact_reachable_and_byte_identical() {
++    let composed = shader().unwrap();
++    let shared = functions(soft64::SHADER).unwrap();
++    let actual = functions(&composed).unwrap();
++    let expected: BTreeSet<String> = HELPERS
++        .into_iter().chain(LOCAL_FUNCTIONS).map(str::to_owned).collect();
++    assert_eq!(actual.keys().cloned().collect::<BTreeSet<_>>(), expected);
++    assert_eq!(reachable(&actual, "main").unwrap(), expected);
++    for name in HELPERS {
++        assert_eq!(actual[name], shared[name], "changed shared body {name}");
++    }
++    for name in LOCAL_FUNCTIONS {
++        assert_eq!(actual[name], functions(KERNEL).unwrap()[name]);
++    }
++    for token in FORBIDDEN {
++        assert!(!identifiers(&composed).unwrap().contains(token), "unexpected {token}");
++    }
++    assert!(!actual.contains_key("sf_sub"));
++    assert!(actual["sf_div"].contains("for(var i=0u;i<55u;i=i+1u)"));
++    for declaration in DECLARATIONS {
++        assert_eq!(composed.matches(declaration).count(), 1);
++    }
++}
++
++#[test]
++fn parsed_spans_ignore_comments_and_reject_duplicate_or_truncated_functions() {
++    let source = "// fn fake() {}\n/* outer /* fn hidden() {} */ } */\nfn a() { /* } */ }\n";
++    let parsed = functions(source).unwrap();
++    assert_eq!(parsed.len(), 1);
++    assert_eq!(parsed["a"], "fn a() { /* } */ }");
++    assert!(functions("fn a() {} fn a() {}").is_err());
++    assert!(functions("fn a() {").is_err());
++    assert!(functions("/* missing").is_err());
++    let all = functions("fn main() { sf_missing(); }").unwrap();
++    assert!(reachable(&all, "main").is_err());
++}
++
++fn assert_ordered(source: &str, expected: &[&str]) {
++    let mut cursor = 0;
++    for part in expected {
++        let next = source[cursor..].find(part).unwrap_or_else(|| panic!("missing {part}"));
++        cursor += next + part.len();
++    }
++}
++
++#[test]
++fn the_five_original_trees_and_signed_zero_guards_are_fixed() {
++    let local = functions(KERNEL).unwrap();
++    let main = local["main"];
++    assert_ordered(main, &[
++        "if (operation == 1u) {\n        result = OP_ZERO;",
++        "else if (operation == 2u)",
++        "let weighted = op_mul(parameter, x1)",
++        "result = op_add(x0, weighted)",
++        "else if (operation == 3u)",
++        "let source_weight = op_sub(OP_ONE, parameter)",
++        "let source_part = op_mul(source_weight, x0)",
++        "let core_weight = op_sub(OP_ONE, tail_weight)",
++        "let core_part = op_mul(core_weight, x1)",
++        "let tail_part = op_mul(tail_weight, x2)",
++        "let mixture = op_add(core_part, tail_part)",
++        "let scatter_part = op_mul(parameter, mixture)",
++        "result = op_add(source_part, scatter_part)",
++        "else if (operation == 4u)",
++        "let bounce = op_mul(parameter, x1)",
++        "result = op_add(x0, bounce)",
++        "result = op_div(x0, parameter)",
++    ]);
++    let scatter = main.split("else if (operation == 3u)").nth(1).unwrap()
++        .split("else if (operation == 4u)").next().unwrap();
++    assert_eq!(scatter.matches("op_sub(").count(), 2);
++    assert_eq!(scatter.matches("op_mul(").count(), 4);
++    assert_eq!(scatter.matches("op_add(").count(), 2);
++    assert_eq!(local["op_sub"].matches("op_add(a, sf_neg(b))").count(), 1);
++    assert!(local["op_add"].contains("(a.y & b.y) & 0x80000000u"));
++    for name in ["op_mul", "op_div"] {
++        assert!(local[name].contains("(a.y ^ b.y) & 0x80000000u"));
++    }
++    assert_ordered(local["op_div"], &[
++        "let a_ok = op_accept(a)", "let b_ok = op_accept(b)",
++        "if (!a_ok || !b_ok)", "if (sf_zero(b))",
++        "if (sf_cmpu(sf_abs(b), OP_DIVISOR_FLOOR) < 0)",
++        "if (sf_zero(a))", "let result = sf_div(a, b)", "op_accept(result)",
++    ]);
++    for (name, zero_branch) in [("op_add", "if (sf_zero(a) &&"), ("op_mul", "if (sf_zero(a) ||")] {
++        assert_ordered(local[name], &[
++            "let a_ok = op_accept(a)", "let b_ok = op_accept(b)",
++            "if (!a_ok || !b_ok)", zero_branch,
++        ]);
++    }
++}
++
++#[test]
++fn complete_fixed_capacity_validation_precedes_active_output() {
++    let local = functions(KERNEL).unwrap();
++    let main = local["main"];
++    assert_eq!(POINT_CAPACITY, 4096);
++    assert_eq!(POINT_CAPACITY, super::CAPACITY);
++    assert_eq!(PREFIX_WORDS, super::PREFIX_WORDS);
++    assert_eq!(PACKET_WORDS, super::PACKET_WORDS);
++    assert_eq!(super::LANES, 3);
++    let resources = super::Resources::fixed();
++    assert_eq!(resources.packet_bytes, (PACKET_WORDS * 8) as u64);
++    assert_eq!(resources.output_bytes, (POINT_CAPACITY * 8) as u64);
++    assert_eq!(resources.uniform_bytes, (HEADER_WORDS * 4) as u64);
++    assert_eq!(resources.error_bytes, 4);
++    assert_eq!(resources.map_bytes, resources.output_bytes + resources.error_bytes);
++    assert_eq!(resources.pool_bytes, resources.packet_bytes + resources.output_bytes
++        + resources.map_bytes + resources.error_bytes + resources.uniform_bytes);
++    assert_eq!(resources.pool_bytes, 164_168);
++    assert_eq!(resources.upload_bytes, resources.packet_bytes + resources.uniform_bytes);
++    assert_eq!(resources.upload_bytes, 98_624);
++    assert_eq!(resources.pool_bytes + resources.upload_bytes + resources.margin_bytes, 328_328);
++    let packet = super::Packet::new(super::Job::clear(), &[[0; 3]]).unwrap();
++    assert_eq!(packet.parameters().len(), HEADER_WORDS);
++    assert_eq!(packet.parameters(), &[1, 1, 1, 4096, 32, 3, 1, 0x4f50_3634,
++        0, 0, 0, 0, 0, 0, 0, 0]);
++    for bits in [super::BOUND_BITS, super::DIVISOR_FLOOR_BITS] {
++        assert!(KERNEL.contains(&format!("vec2<u32>(0x{:08x}u, 0x{:08x}u)",
++            bits as u32, (bits >> 32) as u32)));
++    }
++    assert_eq!(PREFIX_WORDS, 32);
++    assert_eq!(PACKET_WORDS, PREFIX_WORDS + 3 * POINT_CAPACITY);
++    assert_eq!(HEADER_WORDS, 16);
++    assert_eq!(WORKGROUPS * WORKGROUP_SIZE, POINT_CAPACITY as u32);
++    assert_eq!(PACKET_WORDS * 8, 98_560);
++    assert_eq!(POINT_CAPACITY * 8, 32_768);
++    assert!(LAYOUT.contains("scalarResult64"));
++    for literal in [
++        "OP_CAPACITY: u32 = 4096u", "OP_PREFIX: u32 = 32u",
++        "OP_PACKET_WORDS: u32 = 12320u", "@compute @workgroup_size(64)",
++        "vec2<u32>(0x20000000u, 0x430c6bf5u)",
++        "vec2<u32>(0xa0000000u, 0x3cd203afu)",
++        "header.x != 1u", "operation < 1u", "operation > 5u",
++        "count == 0u", "count > OP_CAPACITY", "header.w != OP_CAPACITY",
++        "shape.x != OP_PREFIX", "shape.y != 3u", "shape.z != 1u",
++        "shape.w != 0x4f503634u", "optics_parameters.words[2] != vec4<u32>(0u)",
++        "optics_parameters.words[3] != vec4<u32>(0u)",
++        "gid.x >= OP_CAPACITY", "gid.y != 0u", "gid.z != 0u",
++    ] {
++        assert!(KERNEL.contains(literal), "missing ABI check {literal}");
++    }
++    assert_ordered(main, &[
++        "arrayLength(&optics_packet) != OP_PACKET_WORDS",
++        "arrayLength(&optics_result) != OP_CAPACITY",
++        "let constant = optics_packet[index]",
++        "let x0 = optics_packet[at]", "let x1 = optics_packet[at + 1u]",
++        "let x2 = optics_packet[at + 2u]",
++        "if (index >= count || operation == 1u)",
++        "let x0_zero = op_canonical_zero(x0)",
++        "let x1_zero = op_canonical_zero(x1)",
++        "let x2_zero = op_canonical_zero(x2)",
++        "if (sf_failed != 0u) { op_reject(); return; }",
++        "if (index >= count) { return; }",
++        "if (!op_accept(result)) { return; }",
++        "if (sf_failed != 0u) { op_reject(); return; }",
++        "optics_result[index] = result",
++    ]);
++    assert!(main.contains("index == 0u && operation != 1u"));
++    assert!(main.contains("index == 1u && operation == 3u"));
++    assert!(local["op_reject"].contains("sf_failed = 1u"));
++    assert!(local["op_reject"].contains("atomicOr(&optics_error, 1u)"));
++    assert!(!KERNEL.contains("sf_failed = 0"));
++    assert!(!KERNEL.contains("atomicStore"));
++    assert!(!KERNEL.contains("atomicLoad"));
++}
++
++// This gate must be executed later in the coordinator's serial build window.
++// Its presence does not establish a Naga parse or validation result.
++#[test]
++fn actual_rust_composed_source_parses_and_validates_with_naga() {
++    let composed = shader().unwrap();
++    let module = naga::front::wgsl::parse_str(&composed).unwrap();
++    naga::valid::Validator::new(
++        naga::valid::ValidationFlags::all(),
++        naga::valid::Capabilities::empty(),
++    )
++    .validate(&module)
++    .unwrap();
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/kernel.wgsl b/native/crates/film-engine/src/research_optics64_point/kernel.wgsl
+new file mode 100644
+index 0000000000000000000000000000000000000000..2eef0b4d7102846f63de941e0d096d8e02167c3c
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/kernel.wgsl
+@@ -0,0 +1,149 @@
++// Closed point-only optics unit. Three input lanes are operand roles, not RGB.
++// Every candidate remains private until the whole dispatch's sticky flag is read.
++struct OpticsPointParameters { words: array<vec4<u32>, 4>, }
++@group(0) @binding(0) var<storage, read> optics_packet: array<vec2<u32>>;
++@group(0) @binding(1) var<storage, read_write> optics_result: array<vec2<u32>>;
++@group(0) @binding(2) var<storage, read_write> optics_error: atomic<u32>;
++@group(0) @binding(3) var<uniform> optics_parameters: OpticsPointParameters;
++const OP_CAPACITY: u32 = 4096u;
++const OP_PREFIX: u32 = 32u;
++const OP_PACKET_WORDS: u32 = 12320u;
++const OP_BOUND: vec2<u32> = vec2<u32>(0x20000000u, 0x430c6bf5u);
++const OP_DIVISOR_FLOOR: vec2<u32> = vec2<u32>(0xa0000000u, 0x3cd203afu);
++const OP_ZERO: vec2<u32> = vec2<u32>(0u);
++const OP_ONE: vec2<u32> = vec2<u32>(0u, 0x3ff00000u);
++
++fn op_reject() {
++    sf_failed = 1u;
++    atomicOr(&optics_error, 1u);
++}
++fn op_accept(value: vec2<u32>) -> bool {
++    if (sf_failed != 0u || !sf_valid(value)) { op_reject(); return false; }
++    if (sf_cmpu(sf_abs(value), OP_BOUND) > 0) { op_reject(); return false; }
++    return true;
++}
++fn op_canonical_zero(value: vec2<u32>) -> bool {
++    if (any(value != OP_ZERO)) { op_reject(); return false; }
++    return true;
++}
++fn op_add(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
++    let a_ok = op_accept(a);
++    let b_ok = op_accept(b);
++    if (!a_ok || !b_ok) { return SF_NAN; }
++    if (sf_zero(a) && sf_zero(b)) {
++        return vec2<u32>(0u, (a.y & b.y) & 0x80000000u);
++    }
++    let result = sf_add(a, b);
++    if (!op_accept(result)) { return SF_NAN; }
++    return result;
++}
++fn op_sub(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
++    return op_add(a, sf_neg(b));
++}
++fn op_mul(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
++    let a_ok = op_accept(a);
++    let b_ok = op_accept(b);
++    if (!a_ok || !b_ok) { return SF_NAN; }
++    if (sf_zero(a) || sf_zero(b)) {
++        return vec2<u32>(0u, (a.y ^ b.y) & 0x80000000u);
++    }
++    let result = sf_mul(a, b);
++    if (!op_accept(result)) { return SF_NAN; }
++    return result;
++}
++fn op_div(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
++    let a_ok = op_accept(a);
++    let b_ok = op_accept(b);
++    if (!a_ok || !b_ok) { return SF_NAN; }
++    if (sf_zero(b)) { op_reject(); return SF_NAN; }
++    // Existing conservative GPU admission floor, not a native CPU restriction.
++    if (sf_cmpu(sf_abs(b), OP_DIVISOR_FLOOR) < 0) { op_reject(); return SF_NAN; }
++    if (sf_zero(a)) {
++        return vec2<u32>(0u, (a.y ^ b.y) & 0x80000000u);
++    }
++    let result = sf_div(a, b);
++    if (!op_accept(result)) { return SF_NAN; }
++    return result;
++}
++
++@compute @workgroup_size(64)
++fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
++    // Do not reset or short-circuit on the request-wide atomic error. Each of
++    // the fixed 4096 invocations owns three input words, including late padding.
++    let header = optics_parameters.words[0];
++    let shape = optics_parameters.words[1];
++    let operation = header.y;
++    let count = header.z;
++    if (header.x != 1u || operation < 1u || operation > 5u ||
++        count == 0u || count > OP_CAPACITY || header.w != OP_CAPACITY ||
++        shape.x != OP_PREFIX || shape.y != 3u || shape.z != 1u ||
++        shape.w != 0x4f503634u ||
++        any(optics_parameters.words[2] != vec4<u32>(0u)) ||
++        any(optics_parameters.words[3] != vec4<u32>(0u)) ||
++        arrayLength(&optics_packet) != OP_PACKET_WORDS ||
++        arrayLength(&optics_result) != OP_CAPACITY ||
++        gid.x >= OP_CAPACITY || gid.y != 0u || gid.z != 0u) {
++        op_reject(); return;
++    }
++    // Exact lengths and the invocation bound have been checked before all
++    // storage indexing. The prefix is validated even for a one-point request.
++    let index = gid.x;
++    if (index < OP_PREFIX) {
++        let constant = optics_packet[index];
++        if ((index == 0u && operation != 1u) || (index == 1u && operation == 3u)) {
++            let constant_ok = op_accept(constant);
++        } else {
++            let constant_zero = op_canonical_zero(constant);
++        }
++    }
++    let at = OP_PREFIX + 3u * index;
++    let x0 = optics_packet[at];
++    let x1 = optics_packet[at + 1u];
++    let x2 = optics_packet[at + 2u];
++    if (index >= count || operation == 1u) {
++        let x0_zero = op_canonical_zero(x0);
++        let x1_zero = op_canonical_zero(x1);
++        let x2_zero = op_canonical_zero(x2);
++    } else {
++        let x0_ok = op_accept(x0);
++        if (operation == 5u) {
++            let x1_zero = op_canonical_zero(x1);
++        } else {
++            let x1_ok = op_accept(x1);
++        }
++        if (operation == 3u) {
++            let x2_ok = op_accept(x2);
++        } else {
++            let x2_zero = op_canonical_zero(x2);
++        }
++    }
++    // Never lose a private arithmetic failure through an inactive early return.
++    if (sf_failed != 0u) { op_reject(); return; }
++    if (index >= count) { return; }
++    let parameter = optics_packet[0u];
++    var result = OP_ZERO;
++    if (operation == 1u) {
++        result = OP_ZERO;
++    } else if (operation == 2u) {
++        let weighted = op_mul(parameter, x1);
++        result = op_add(x0, weighted);
++    } else if (operation == 3u) {
++        let tail_weight = optics_packet[1u];
++        let source_weight = op_sub(OP_ONE, parameter);
++        let source_part = op_mul(source_weight, x0);
++        let core_weight = op_sub(OP_ONE, tail_weight);
++        let core_part = op_mul(core_weight, x1);
++        let tail_part = op_mul(tail_weight, x2);
++        let mixture = op_add(core_part, tail_part);
++        let scatter_part = op_mul(parameter, mixture);
++        result = op_add(source_part, scatter_part);
++    } else if (operation == 4u) {
++        let bounce = op_mul(parameter, x1);
++        result = op_add(x0, bounce);
++    } else {
++        result = op_div(x0, parameter);
++    }
++    if (!op_accept(result)) { return; }
++    if (sf_failed != 0u) { op_reject(); return; }
++    optics_result[index] = result;
++}
+diff --git a/native/crates/film-engine/src/research_optics64_point/tests.rs b/native/crates/film-engine/src/research_optics64_point/tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3ac6eaa68c99e22ef62c3152be0e72bba581e09
+--- /dev/null
++++ b/native/crates/film-engine/src/research_optics64_point/tests.rs
+@@ -0,0 +1,285 @@
++use super::*;
++use host::{Guard, guarded_model, native_oracle};
++use sha2::{Digest, Sha256};
++
++fn b(x: f64) -> u64 { x.to_bits() }
++fn one(job: Job, values: [f64; 3]) -> Packet {
++    Packet::new(job, &[values.map(b)]).unwrap()
++}
++fn assert_exact(packet: &Packet) {
++    let expected = native_oracle(packet).unwrap();
++    let actual = guarded_model(packet).unwrap();
++    assert_eq!(actual, expected, "operation {:?}", packet.job.operation);
++}
++fn jobs() -> Vec<Job> {
++    vec![Job::clear(), Job::weighted_accum(b(0.1633)).unwrap(),
++        Job::scatter(b(1.0), b(0.78)).unwrap(), Job::bounce_add(b(0.05)).unwrap(),
++        Job::divide(b(1.05)).unwrap()]
++}
++fn row_for(job: Job, row: [u64; 3]) -> [u64; 3] {
++    let mut row = row;
++    row[job.operation.used_lanes()..].fill(0);
++    row
++}
++
++#[test]
++fn fixed_resource_and_full_family_accounting_are_exact() {
++    let r = Resources::fixed();
++    assert_eq!(r.packet_bytes, 98560);
++    assert_eq!(r.output_bytes, 32768);
++    assert_eq!(r.map_bytes, 32772);
++    assert_eq!(r.error_bytes, 4);
++    assert_eq!(r.uniform_bytes, 64);
++    assert_eq!(r.pool_bytes, 164168);
++    assert_eq!(r.upload_bytes, 98624);
++    assert_eq!(r.pool_bytes + r.upload_bytes + r.margin_bytes, 328328);
++    assert_eq!(r.device_bytes, 64 * MIB);
++    assert_eq!(r.fixed_bytes, r.host_bytes + r.helper_bytes);
++    assert_eq!(r.fixed_bytes, 128 * MIB);
++    assert_eq!(r.family_bytes, 64 * MIB);
++    assert_eq!(r.combined_bytes, r.fixed_bytes + r.family_bytes + r.device_bytes);
++    assert_eq!(r.combined_bytes, 256 * MIB);
++    assert_eq!(r.fresh_charged_bytes, 201490760);
++    assert!(r.fresh_charged_bytes < r.combined_bytes);
++    assert!(checked_sum(&[u64::MAX, 1]).is_err());
++    assert!(checked_bytes(usize::MAX, u64::MAX).is_err());
++}
++
++#[test]
++fn opaque_packet_exact_shape_all_operations_and_counts() {
++    for job in jobs() {
++        for count in [1, 17, CAPACITY] {
++            let rows = vec![row_for(job, [b(0.25), b(0.5), b(0.75)]); count];
++            let p = Packet::new(job, &rows).unwrap();
++            assert_eq!(p.count(), count);
++            assert_eq!(p.words().len(), 12320);
++            assert_eq!(p.parameters()[2], count as u32);
++            assert_eq!(p.invocations(), 4096);
++            assert_eq!(&p.words()[..2], &job.constants);
++            assert!(p.words()[PREFIX_WORDS + count * LANES..].iter().all(|&v| v == 0));
++            assert_exact(&p);
++        }
++    }
++}
++
++#[test]
++fn constructor_rejects_empty_oversize_unused_and_invalid_lanes() {
++    for job in jobs() {
++        assert!(Packet::new(job, &[]).is_err());
++        assert!(Packet::new(job, &vec![[0; 3]; CAPACITY + 1]).is_err());
++        for lane in 0..3 {
++            let mut row = [0; 3]; row[lane] = f64::NAN.to_bits();
++            assert!(Packet::new(job, &[row]).is_err());
++        }
++        for lane in job.operation.used_lanes()..3 {
++            let mut row = [0; 3]; row[lane] = SIGN;
++            assert!(Packet::new(job, &[row]).is_err(), "unused -0 lane {lane}");
++            row[lane] = b(1.0);
++            assert!(Packet::new(job, &[row]).is_err());
++        }
++        Packet::new(job, &[[0; 3]]).unwrap();
++    }
++}
++
++#[test]
++fn every_uniform_word_and_opaque_identity_are_checked_independently() {
++    let valid = one(Job::scatter(b(1.0), b(0.78)).unwrap(), [0.25, 0.5, 0.75]);
++    for index in 0..16 {
++        let mut p = valid.clone(); p.parameters[index] ^= 1;
++        assert!(p.validate().is_err(), "uniform word {index}");
++    }
++    for opcode in [0, 6, u32::MAX] {
++        let mut p = valid.clone(); p.parameters[1] = opcode;
++        assert!(p.validate().is_err());
++    }
++    for count in [0, CAPACITY + 1, usize::MAX] {
++        let mut p = valid.clone(); p.count = count;
++        assert!(p.validate().is_err());
++    }
++    let mut p = valid.clone(); p.job = Job::clear();
++    assert!(p.validate().is_err());
++    let mut p = valid.clone(); p.words.pop();
++    assert!(p.validate().is_err());
++    let mut p = valid.clone(); p.words.push(0);
++    assert!(p.validate().is_err());
++    valid.validate().unwrap();
++}
++
++#[test]
++fn every_prefix_word_and_late_padding_are_checked_even_for_clear() {
++    for job in jobs() {
++        let valid = Packet::new(job, &[[0; 3]]).unwrap();
++        for index in 0..PREFIX_WORDS {
++            let mut p = valid.clone(); p.words[index] ^= 1;
++            assert!(p.validate().is_err(), "prefix {index}, {:?}", job.operation);
++        }
++        for index in [PREFIX_WORDS + LANES, PACKET_WORDS - 2, PACKET_WORDS - 1] {
++            for poison in [SIGN, b(1.0), f64::INFINITY.to_bits(), 1] {
++                let mut p = valid.clone(); p.words[index] = poison;
++                assert!(p.validate().is_err(), "padding {index}");
++            }
++        }
++        valid.validate().unwrap();
++    }
++}
++
++#[test]
++fn capacities_and_all_retained_host_payload_are_budgeted() {
++    let p = one(Job::divide(b(1.05)).unwrap(), [0.25, 0.0, 0.0]);
++    let r = Resources::fixed();
++    let expected = p.words.capacity() as u64 * 8 + r.upload_bytes + 17 * 8 + 4096 + 8192 + 65536;
++    assert_eq!(p.host_payload_bytes(r.upload_bytes, 17, 4096, 8192).unwrap(), expected);
++    assert!(p.host_payload_bytes(u64::MAX, 0, 0, 0).is_err());
++    assert!(p.host_payload_bytes(0, usize::MAX, 0, 0).is_err());
++    assert!(p.host_payload_bytes(0, 0, 0, r.host_bytes).is_err());
++    // Extra capacity counts even when the packet's logical length is unchanged.
++    let mut q = p.clone(); q.words.reserve_exact(4096);
++    assert!(q.host_payload_bytes(0, 0, 0, 0).unwrap() > p.host_payload_bytes(0, 0, 0, 0).unwrap());
++}
++
++#[test]
++fn actual384_parameter_fixture_and_original_scalar_preparation_are_pinned() {
++    let text = include_str!("actual384_params.json");
++    assert_eq!(format!("{:x}", Sha256::digest(text.as_bytes())),
++        "613ca4d2479226e62d7854bc4c502bc08cc4d3eedba418cb3e66ce7da5c4dfca");
++    let p: spektrafilm_core::params::RuntimeParams = serde_json::from_str(text).unwrap();
++    assert_eq!(p.camera.pixel_size_um_override, Some(10.0));
++    let h = &p.film_render.halation;
++    assert_eq!(h.halation_n_bounces, 3);
++    assert_eq!(h.scatter_amount.to_bits(), b(1.0));
++    assert_eq!(h.scatter_tail_weight.map(b), [b(0.78), b(0.65), b(0.67)]);
++    let strengths = h.halation_strength.map(|a| a * h.halation_amount);
++    assert_eq!(strengths.map(b), [b(0.05), b(0.015), b(0.0)]);
++    let mut weights: Vec<f64> = (0..h.halation_n_bounces)
++        .map(|k| h.halation_bounce_decay.powi(k as i32)).collect();
++    let sum: f64 = weights.iter().sum();
++    for value in &mut weights { *value /= sum; }
++    assert_eq!(weights.iter().copied().map(b).collect::<Vec<_>>(), vec![b(4.0/7.0), b(2.0/7.0), b(1.0/7.0)]);
++    for coefficient in [0.1633, 0.6496, 0.1870].into_iter().chain(weights) {
++        assert_exact(&one(Job::weighted_accum(b(coefficient)).unwrap(), [-0.125, 0.7, 0.0]));
++    }
++    for ch in 0..3 {
++        assert_exact(&one(Job::scatter(b(h.scatter_amount), b(h.scatter_tail_weight[ch])).unwrap(), [0.3, -0.1, 0.4]));
++        // Zero-strength primitive coverage does not assert that CPU schedules a blue bounce.
++        assert_exact(&one(Job::bounce_add(b(strengths[ch])).unwrap(), [0.3, 0.4, 0.0]));
++        assert_exact(&one(Job::divide(b(1.0 + strengths[ch])).unwrap(), [0.3, 0.0, 0.0]));
++    }
++}
++
++#[test]
++fn signed_zero_point_results_match_native_words_not_only_numeric_values() {
++    for x0 in [0.0, -0.0] { for x1 in [0.0, -0.0] { for x2 in [0.0, -0.0] {
++        for k in [0.0, -0.0, 1.0, -1.0, 0.05] {
++            assert_exact(&one(Job::weighted_accum(b(k)).unwrap(), [x0, x1, 0.0]));
++            assert_exact(&one(Job::bounce_add(b(k)).unwrap(), [x0, x1, 0.0]));
++            for w in [0.0, -0.0, 1.0, -1.0, 0.78] {
++                assert_exact(&one(Job::scatter(b(k), b(w)).unwrap(), [x0, x1, x2]));
++            }
++        }
++        for d in [1.0, -1.0, 1.05, -1.015] {
++            assert_exact(&one(Job::divide(b(d)).unwrap(), [x0, 0.0, 0.0]));
++        }
++    }}}
++    assert_eq!(guarded_model(&one(Job::clear(), [0.0; 3])).unwrap(), vec![0]);
++}
++
++#[test]
++fn local_zero_wrappers_validate_operands_before_zero_shortcuts() {
++    let invalid = [f64::NAN.to_bits(), f64::INFINITY.to_bits(), f64::NEG_INFINITY.to_bits(), 1,
++        SIGN | 1, BOUND_BITS + 1];
++    for bad in invalid {
++        for z in [0, SIGN] {
++            let mut g = Guard::default(); g.mul(z, bad); assert!(g.failed);
++            let mut g = Guard::default(); g.mul(bad, z); assert!(g.failed);
++            let mut g = Guard::default(); g.add(z, bad); assert!(g.failed);
++            let mut g = Guard::default(); g.div(z, bad); assert!(g.failed);
++        }
++    }
++    for a in [0, SIGN] { for d in [0, SIGN] {
++        let mut g = Guard::default(); g.div(a, d); assert!(g.failed);
++    }}
++    for z in [0, SIGN] {
++        let mut g = Guard::default(); assert_eq!(g.div(z, b(-1.0)), z ^ SIGN); assert!(!g.failed);
++    }
++}
++
++#[test]
++fn gpu_bound_and_divisor_floor_are_exact_conservative_subset() {
++    assert_eq!((1e15f32 as f64).to_bits(), BOUND_BITS);
++    assert_eq!((1e-15f32 as f64).to_bits(), DIVISOR_FLOOR_BITS);
++    for sign in [0, SIGN] {
++        assert!(admitted(BOUND_BITS | sign));
++        assert!(!admitted((BOUND_BITS + 1) | sign));
++        assert!(admitted(f64::MIN_POSITIVE.to_bits() | sign));
++        assert!(!admitted((f64::MIN_POSITIVE.to_bits() - 1) | sign));
++        assert!(Job::divide(DIVISOR_FLOOR_BITS | sign).is_ok());
++        assert!(Job::divide((DIVISOR_FLOOR_BITS - 1) | sign).is_err());
++        let mut g = Guard::default(); g.div(0, (DIVISOR_FLOOR_BITS - 1) | sign);
++        assert!(g.failed, "floor must precede zero numerator");
++        let d = f64::from_bits(DIVISOR_FLOOR_BITS | sign);
++        assert_exact(&one(Job::divide(d.to_bits()).unwrap(), [1e-16, 0.0, 0.0]));
++    }
++    // Native CPU can divide by a value that this existing GPU subset rejects.
++    assert!((1e-16f64 / 1e-16f64).is_finite());
++    assert!(Job::divide(b(1e-16)).is_err());
++}
++
++#[test]
++fn intermediate_bound_failures_cannot_be_hidden_by_final_arithmetic() {
++    let bound = f64::from_bits(BOUND_BITS);
++    let p = one(Job::weighted_accum(b(2.0)).unwrap(), [-bound, bound, 0.0]);
++    assert_eq!(native_oracle(&p).unwrap(), vec![BOUND_BITS]);
++    assert!(guarded_model(&p).is_err());
++    // CPU ultimately gives source1, but core*2 exceeds the guarded bound first.
++    let p = one(Job::scatter(b(0.0), b(-1.0)).unwrap(), [1.0, bound, bound]);
++    assert_eq!(native_oracle(&p).unwrap(), vec![b(1.0)]);
++    assert!(guarded_model(&p).is_err());
++    assert_exact(&one(Job::scatter(b(0.0), b(-1.0)).unwrap(), [1.0, 2.0, 2.0]));
++}
++
++#[test]
++fn conservative_underflow_boundary_and_masked_underflow_remain_rejected() {
++    let below_one = f64::from_bits(b(1.0) - 1);
++    let minimum = f64::MIN_POSITIVE;
++    for (a, value) in [(below_one, minimum), (minimum, below_one)] {
++        assert_eq!((a * value).to_bits(), minimum.to_bits());
++        let mut g = Guard::default(); let result = g.mul(b(a), b(value));
++        assert!(g.failed);
++        assert_eq!(result, crate::research_grain::soft64::NAN);
++    }
++    let p = one(Job::weighted_accum(b(0.1633)).unwrap(), [1.0, minimum, 0.0]);
++    assert_eq!(native_oracle(&p).unwrap(), vec![b(1.0)]);
++    assert!(guarded_model(&p).is_err());
++    let p = one(Job::divide(b(1.05)).unwrap(), [minimum, 0.0, 0.0]);
++    assert!(!admitted(native_oracle(&p).unwrap()[0]));
++    assert!(guarded_model(&p).is_err());
++    assert_exact(&one(Job::weighted_accum(b(1.0)).unwrap(), [0.0, minimum, 0.0]));
++}
++
++#[test]
++fn literal_original_trees_match_for_deterministic_full_capacity_vectors() {
++    // Private deterministic test-data generator, unrelated to the film RNG.
++    let mut state = 0x52d0_5f9a_6713_228bu64;
++    let values: Vec<[u64; 3]> = (0..CAPACITY).map(|i| std::array::from_fn(|lane| {
++        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
++        if (i + lane) % 17 == 0 { return if i % 2 == 0 { 0 } else { SIGN }; }
++        let x = (state >> 11) as f64 / 9007199254740992.0 - 0.5;
++        (x * 4.0).to_bits()
++    })).collect();
++    for job in jobs() {
++        let rows: Vec<_> = values.iter().copied().map(|v| row_for(job, v)).collect();
++        assert_exact(&Packet::new(job, &rows).unwrap());
++    }
++}
++
++#[test]
++fn cancellation_and_half_ulp_rounding_keep_original_operation_tree() {
++    let next = f64::from_bits(b(1.0) + 1);
++    for acc in [1.0, -1.0, next, -next, 0.0, -0.0] {
++        for value in [1.0, -1.0, f64::EPSILON / 2.0, -f64::EPSILON / 2.0] {
++            assert_exact(&one(Job::weighted_accum(b(1.0)).unwrap(), [acc, value, 0.0]));
++            assert_exact(&one(Job::bounce_add(b(-1.0)).unwrap(), [acc, value, 0.0]));
++            assert_exact(&one(Job::divide(b(1.015)).unwrap(), [acc, 0.0, 0.0]));
++        }
++    }
++}

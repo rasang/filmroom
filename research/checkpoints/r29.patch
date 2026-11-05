@@ -1,0 +1,290 @@
+diff --git a/native/crates/film-engine/src/research_exposure64_real_faults.rs b/native/crates/film-engine/src/research_exposure64_real_faults.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c7d55efc08d79670bf1ea2da22aff4443fe50110
+--- /dev/null
++++ b/native/crates/film-engine/src/research_exposure64_real_faults.rs
+@@ -0,0 +1,89 @@
++//! Expected-rejection gates, one fault per fresh externally guarded process.
++use super::*;
++use crate::{gpu_session as session,gpu_session_contract::StageTicket,gpu_phase_diagnostics as trace,research_exposure64_threepass::gpu};
++use std::{cell::Cell,rc::Rc};
++fn rejected(label:&str,plan:gpu::TestFault,root:&Path)->Value{
++ let seen=Rc::new(Cell::new(0u64));let callback_seen=seen.clone();
++ let mut diagnostics=trace::TaskScope::for_test(0x455850364641554c,29,move|snapshot|{callback_seen.set(callback_seen.get()+1);let Ok(mut line)=serde_json::to_vec(&json!({"event":"real_fault_phase","observationOnly":true,"snapshot":snapshot}))else{return false;};line.push(b'\n');let stderr=std::io::stderr();let mut sink=stderr.lock();sink.write_all(&line).and_then(|_|sink.flush()).is_ok()});
++ let e=evidence();host_receipt(&e);persist_identity(root,&e);
++ let p=Packet::new(e.descriptor.clone(),&[[0f32;3]],1).unwrap();let original=p.oracle().unwrap();assert_eq!(original,vec![0u64;3]);save_words(root,"baseline-original-cpu.rgb.f64le",&original);save_words(root,"baseline-input.rgb.f64le",&p.input);
++ let external=e.caller_bytes()+original.capacity()as u64*8+MIB+65536;
++ let estimate=2*p.descriptor.table.capacity()as u64*8+p.input.capacity()as u64*8+48+MIB+65536;assert!(external+estimate<=HOST);
++ let epoch=0x4558503646410001;session::activate(epoch,TOTAL,FIXED,3).unwrap();session::begin_frame(epoch,1).unwrap();let baseline_ticket=StageTicket{epoch,generation:1,sequence:1};session::begin_stage(baseline_ticket,FAMILY).unwrap();
++ // Positive baseline always uses the original public run, default None.
++ let baseline=gpu::run(&p,epoch,&mut||false).unwrap();save_words(root,"baseline-candidate.rgb.f64le",&baseline.raw64);
++ let seal=session::complete_stage(baseline_ticket).unwrap();save_json(root,"baseline-seal.json",&serde_json::to_value(&seal).unwrap());
++ assert_eq!(baseline.raw64,original);assert_eq!(seal.pipeline_slots,3);assert_eq!(seal.pool_bytes,885200);assert_eq!(seal.charged_bytes,369983952);assert_eq!(seal.fixed_bytes,FIXED);assert_eq!(seal.prepaid_bytes,TOTAL);assert_eq!(seal.pipeline_hits,0);assert_eq!(seal.buffer_hits,0);
++ assert_eq!((baseline.stats.dispatches,baseline.stats.readbacks,baseline.stats.releases),(3,1,1));assert!(!baseline.stats.host_image_arithmetic);assert!(external+baseline.stats.known_host_payload_bytes<=HOST);assert!(seal.pool_bytes+baseline.stats.upload_staging_bytes+baseline.stats.device_margin_bytes<=DEVICE);
++ save_json(root,"baseline-stats.json",&json!({"adapter":baseline.stats.adapter,"sourceSha256":baseline.stats.source_sha256,"compileFamilyMs":baseline.stats.compile_family_ms,"dispatchReadbackMs":baseline.stats.dispatch_readback_ms,"knownHostPayloadBytes":baseline.stats.known_host_payload_bytes,"externalCallerBytes":external,"hostTotalBytes":external+baseline.stats.known_host_payload_bytes,"hostAllowanceBytes":HOST,"dispatches":baseline.stats.dispatches,"readbacks":baseline.stats.readbacks,"releases":baseline.stats.releases,"hostImageArithmetic":false}));drop(baseline);
++ let ticket=StageTicket{epoch,generation:1,sequence:2};session::begin_stage(ticket,FAMILY).unwrap();let control=gpu::FaultControl::new(plan);
++ let result=gpu::run_with_test_fault(&p,epoch,&mut||false,&control);let observed=control.snapshot();save_json(root,"fault-observations.json",&serde_json::to_value(&observed).unwrap());
++ // Preserve any unexpected success before failing, never turn it into rejection.
++ let error=match result{Ok(unexpected)=>{save_words(root,"UNEXPECTED-candidate.rgb.f64le",&unexpected.raw64);panic!("fault returned an accepted Output");},Err(e)=>e};
++ save_json(root,"fault-error.json",&json!({"case":label,"plan":plan,"error":error,"noAcceptedOutput":true}));
++ assert_eq!(observed.encoded_passes,if matches!(plan,gpu::TestFault::PreCancel){0}else{3});assert_eq!(observed.triggers,1);assert_eq!(observed.returned_error.as_deref(),Some(error.as_str()));assert_eq!(observed.release_reached,0);assert_eq!(observed.releases,0);
++ match plan{
++  gpu::TestFault::PreCancel=>{assert_eq!(error,"CANCELLED");assert_eq!((observed.packet_validations,observed.acquires,observed.pipelines,observed.submits,observed.maps_requested,observed.unmaps,observed.owner_drops),(0,0,0,0,0,0,0));assert!(observed.events.contains(&"before_initial_check"));},
++  gpu::TestFault::AfterSubmitCancel=>{assert_eq!(error,"CANCELLED");assert_eq!(observed.maps_succeeded,0);assert_eq!(observed.numeric_flag,None);assert_eq!(observed.decoded_words,None);assert!(observed.events.contains(&"after_submit"));},
++  gpu::TestFault::AfterUnmapCancel|gpu::TestFault::AfterUnmapDeviceError=>{assert_eq!(error,if matches!(plan,gpu::TestFault::AfterUnmapCancel){"CANCELLED"}else{"GPU_DEVICE_FAILED"});assert_eq!(observed.maps_succeeded,1);assert_eq!(observed.numeric_flag,Some(0));assert_eq!(observed.decoded_words,Some(3));},
++  gpu::TestFault::SerializedTableWord{index,raw64}=>{
++   assert_eq!(index,p.descriptor.table.len()-1);assert_eq!(error,"GPU_EXPOSURE64_THREEPASS_NUMERIC_DOMAIN");assert_eq!(observed.maps_succeeded,1);assert_ne!(observed.numeric_flag.unwrap(),0);assert_eq!(observed.decoded_words,None);
++   let patch=observed.table_patch.as_ref().unwrap();assert_eq!(patch["index"],index);assert_eq!(patch["beforeSha256"],TABLE_SHA);assert_eq!(patch["beforeBits"],format!("{:016x}",p.descriptor.table[index].to_bits()));assert_eq!(patch["afterBits"],format!("{raw64:016x}"));assert_eq!(patch["changedRaw64Words"],1);
++   // Reconstruct exact serialized upload without retaining an additional table.
++   let mut f=BufWriter::with_capacity(65536,output_file(root,"fault-upload-table.f64le"));for(i,v)in p.descriptor.table.iter().enumerate(){f.write_all(&(if i==index{raw64}else{v.to_bits()}).to_le_bytes()).unwrap();}f.flush().unwrap();f.get_ref().sync_all().unwrap();drop(f);assert_eq!(hash_file(&root.join("fault-upload-table.f64le")),patch["afterSha256"].as_str().unwrap());
++  }
++ }
++ if !matches!(plan,gpu::TestFault::PreCancel){assert_eq!((observed.packet_validations,observed.acquires,observed.pipelines,observed.submits,observed.maps_requested,observed.unmaps,observed.owner_drops),(1,1,3,1,1,1,1));}
++ assert!(session::is_cancelled(epoch));control.clear_caller_cancel();assert!(!control.cancelled());
++ // A new ordinary run, with no fault object and an always-false caller cancel,
++ // must fail before Prepare/Device telemetry. It cannot be the old latch.
++ let retry_seen=Rc::new(Cell::new(0u64));let retry_callback_seen=retry_seen.clone();
++ // New diagnostic identity resets only telemetry edge deduplication. The GPU
++ // session epoch and its poisoned state are unchanged. Count excludes finish.
++ let retry_token=0x4558503652545259;
++ let mut retry_scope=trace::TaskScope::for_test(retry_token,29,move|snapshot|{retry_callback_seen.set(retry_callback_seen.get()+1);let Ok(mut line)=serde_json::to_vec(&json!({"event":"retired_retry_phase","observationOnly":true,"snapshot":snapshot}))else{return false;};line.push(b'\n');let stderr=std::io::stderr();let mut sink=stderr.lock();sink.write_all(&line).and_then(|_|sink.flush()).is_ok()});
++ let phase_before=retry_seen.get();let retry=gpu::run(&p,epoch,&mut||false);let phase_after=retry_seen.get();
++ if let Ok(unexpected)=&retry{save_words(root,"UNEXPECTED-retry.rgb.f64le",&unexpected.raw64);panic!("retired epoch reused");}
++ assert_eq!(phase_before,phase_after,"retired retry reached a new GPU preparation/device phase");
++ retry_scope.finish(&retry.as_ref().map(|_|()).map_err(Clone::clone));drop(retry_scope);
++ let retry_error=match retry{Ok(unexpected)=>{save_words(root,"UNEXPECTED-retry.rgb.f64le",&unexpected.raw64);panic!("retired epoch reused");},Err(e)=>e};
++ let seal_error=session::complete_stage(ticket).expect_err("fault stage cannot seal");let next_error=session::begin_stage(StageTicket{epoch,generation:1,sequence:3},FAMILY).expect_err("retired epoch cannot begin next stage");let frame_error=session::finish_frame(epoch,1).expect_err("retired frame cannot finish");
++ save_json(root,"retirement-checks.json",&json!({"callerCancelCleared":true,"ordinaryRunError":retry_error,"faultSealError":seal_error,"nextStageError":next_error,"finishFrameError":frame_error,"retryDiagnosticToken":retry_token,"phaseEventsBeforeRetry":phase_before,"phaseEventsAfterRetry":phase_after,"noSuccessfulFaultSeal":true,"resourceRefundClaim":false,"processDeathClaim":false}));
++ for value in [&retry_error,&seal_error,&next_error,&frame_error]{assert_eq!(value.as_str(),"GPU_SESSION_RECYCLE_REQUIRED");}assert_eq!(phase_before,phase_after);assert!(session::is_cancelled(epoch));
++ let mut names=vec!["descriptor.json","input-full384.rgb.f32le","table.f64le","provenance.json","baseline-original-cpu.rgb.f64le","baseline-input.rgb.f64le","baseline-candidate.rgb.f64le","baseline-seal.json","baseline-stats.json","fault-observations.json","fault-error.json","retirement-checks.json"];
++ if matches!(plan,gpu::TestFault::SerializedTableWord{..}){names.push("fault-upload-table.f64le");}
++ let artifacts:Vec<_>=names.into_iter().map(|n|artifact(root,n)).collect();diagnostics.finish(&Ok::<(),String>(()));json!({"plan":plan,"baselineExact":true,"baselineWords":3,"expectedRejection":error,"faultTrace":observed,"artifacts":artifacts,"scope":"synthetic test fault safety only; no device loss or successful image claim"})
++}
++fn fault_case(label:&str,plan:gpu::TestFault){
++ let root=PathBuf::from(std::env::var_os("FILM_GPU_EXPOSURE64_REAL_OUTPUT").expect("new exclusive directory required"));assert!(root.is_absolute());fs::create_dir(&root).unwrap();assert_eq!(root.canonicalize().unwrap(),root);
++ let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||{disk_check(&root,DISK_NEW_ALLOWANCE);let v=rejected(label,plan,&root);disk_check(&root,0);v}));
++ match result{Ok(mut v)=>{v["status"]=json!("PASS_EXPECTED_REJECTION_SCOPED");v["case"]=json!(label);v["binarySha256"]=json!(binary_sha());v["r23IndexSha256"]=json!(R23_SHA);v["r22IndexSha256"]=json!(R22_SHA);v["inputSha256"]=json!(INPUT_SHA);v["tableSha256"]=json!(TABLE_SHA);save_json(&root,"SUCCESS.json",&v);},Err(p)=>{let detail=p.downcast_ref::<String>().cloned().or_else(||p.downcast_ref::<&str>().map(|s|s.to_string())).unwrap_or_else(||"non-string panic".into());save_json(&root,"FAILURE.json",&json!({"status":"FAIL","case":label,"detail":detail,"preservedArtifacts":true}));std::panic::resume_unwind(p);}}
++}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_pre_cancel(){fault_case("pre_cancel",gpu::TestFault::PreCancel);}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_postsubmit_cancel(){fault_case("postsubmit_cancel",gpu::TestFault::AfterSubmitCancel);}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_postunmap_cancel(){fault_case("postunmap_cancel",gpu::TestFault::AfterUnmapCancel);}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_postunmap_device_error(){fault_case("postunmap_device_error",gpu::TestFault::AfterUnmapDeviceError);}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_unused_table_nan(){fault_case("unused_table_nan",gpu::TestFault::SerializedTableWord{index:110591,raw64:0x7ff8000000000001});}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_unused_table_inf(){fault_case("unused_table_inf",gpu::TestFault::SerializedTableWord{index:110591,raw64:0x7ff0000000000000});}
++
++#[test]
++#[ignore="Fresh guarded process with same-binary host receipt; normal baseline then one fault"]
++fn actual_exposure64_fault_unused_table_subnormal(){fault_case("unused_table_subnormal",gpu::TestFault::SerializedTableWord{index:110591,raw64:1});}
+diff --git a/native/crates/film-engine/src/research_exposure64_real_fixture.rs b/native/crates/film-engine/src/research_exposure64_real_fixture.rs
+index 3e166cf5af961dfe01a845fbce42cf55a71220bd..ae5d58796d5da622137f756360291b62782a011e 100644
+--- a/native/crates/film-engine/src/research_exposure64_real_fixture.rs
++++ b/native/crates/film-engine/src/research_exposure64_real_fixture.rs
+@@ -175,3 +175,7 @@ mod bounded_caps;
+ #[cfg(feature="gpu-diffusion-research")]
+ #[path="research_exposure64_real_full.rs"]
+ mod full_fixture;
++
++#[cfg(feature="gpu-diffusion-research")]
++#[path="research_exposure64_real_faults.rs"]
++mod fault_gates;
+diff --git a/native/crates/film-engine/src/research_exposure64_threepass/fault.rs b/native/crates/film-engine/src/research_exposure64_threepass/fault.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb53c92cac06cc6960e583f6cad5c5213d618ea5
+--- /dev/null
++++ b/native/crates/film-engine/src/research_exposure64_threepass/fault.rs
+@@ -0,0 +1,47 @@
++//! Deterministic test-only fault state. No GPU callback is exposed to callers.
++#![cfg(test)]
++use std::cell::{Cell,RefCell};
++use std::sync::atomic::{AtomicBool,Ordering};
++use sha2::{Digest,Sha256};
++#[derive(Clone,Copy,Debug,serde::Serialize)]
++pub(crate) enum TestFault{PreCancel,AfterSubmitCancel,AfterUnmapCancel,AfterUnmapDeviceError,SerializedTableWord{index:usize,raw64:u64}}
++#[derive(Clone,Debug,Default,serde::Serialize)]
++pub(crate) struct FaultTrace{
++ pub events:Vec<&'static str>,pub triggers:u32,pub packet_validations:u32,pub acquires:u32,pub pipelines:u32,pub encoded_passes:u32,pub submits:u32,pub maps_requested:u32,pub maps_succeeded:u32,pub numeric_flag:Option<u32>,pub decoded_words:Option<usize>,pub unmaps:u32,pub release_reached:u32,pub releases:u32,pub owner_drops:u32,pub returned_error:Option<String>,pub table_patch:Option<serde_json::Value>,
++}
++pub(crate) struct FaultControl{plan:TestFault,cancel:Cell<bool>,trace:RefCell<FaultTrace>}
++impl FaultControl{
++ pub(crate) fn new(plan:TestFault)->Self{Self{plan,cancel:Cell::new(false),trace:RefCell::new(FaultTrace::default())}}
++ pub(crate) fn snapshot(&self)->FaultTrace{self.trace.borrow().clone()}
++ pub(crate) fn clear_caller_cancel(&self){self.cancel.set(false);}
++ pub(crate) fn cancelled(&self)->bool{self.cancel.get()}
++ pub(super) fn event(&self,name:&'static str){let mut t=self.trace.borrow_mut();assert!(t.events.len()<32);t.events.push(name);match name{"validated"=>t.packet_validations+=1,"acquired"=>t.acquires+=1,"pipeline"=>t.pipelines+=1,"encoded_pass"=>t.encoded_passes+=1,"submit"=>t.submits+=1,"map_requested"=>t.maps_requested+=1,"map_succeeded"=>t.maps_succeeded+=1,"unmap"=>t.unmaps+=1,"release_reached"=>t.release_reached+=1,"released"=>t.releases+=1,"owner_dropped"=>t.owner_drops+=1,_=>{}}}
++ fn trigger(&self,name:&'static str){self.event(name);let mut t=self.trace.borrow_mut();t.triggers+=1;assert_eq!(t.triggers,1);}
++ pub(super) fn initial(&self){self.event("entry");if matches!(self.plan,TestFault::PreCancel){self.trigger("before_initial_check");self.cancel.set(true);}}
++ pub(super) fn submitted(&self){self.event("submit");if matches!(self.plan,TestFault::AfterSubmitCancel){self.trigger("after_submit");self.cancel.set(true);}}
++ pub(super) fn unmapped(&self,error:&AtomicBool){self.event("unmap");match self.plan{TestFault::AfterUnmapCancel=>{self.trigger("after_unmap_cancel");self.cancel.set(true);},TestFault::AfterUnmapDeviceError=>{self.trigger("after_unmap_device_error");error.store(true,Ordering::Release);},_=>{}}}
++ pub(super) fn flag(&self,v:u32){self.trace.borrow_mut().numeric_flag=Some(v);}
++ pub(super) fn decoded(&self,n:usize){self.trace.borrow_mut().decoded_words=Some(n);}
++ pub(super) fn returned(&self,error:Option<&String>){self.trace.borrow_mut().returned_error=error.cloned();}
++ pub(super) fn table(&self,words:&mut[u32]){
++  if let TestFault::SerializedTableWord{index,raw64}=self.plan{
++   assert!(index<words.len()/2);let before=format!("{:x}",Sha256::digest(bytemuck::cast_slice(words)));
++   let old=u64::from(words[index*2])|(u64::from(words[index*2+1])<<32);assert_ne!(old,raw64);
++   words[index*2]=raw64 as u32;words[index*2+1]=(raw64>>32)as u32;
++   let after=format!("{:x}",Sha256::digest(bytemuck::cast_slice(words)));
++   self.trigger("serialized_table_ready");self.trace.borrow_mut().table_patch=Some(serde_json::json!({"index":index,"beforeBits":format!("{old:016x}"),"afterBits":format!("{raw64:016x}"),"beforeSha256":before,"afterSha256":after,"changedRaw64Words":1}));
++  }
++ }
++}
++
++#[test]
++fn named_fault_controls_are_single_shot_and_table_patch_is_local(){
++ let pre=FaultControl::new(TestFault::PreCancel);pre.initial();assert!(pre.cancelled());assert_eq!(pre.snapshot().triggers,1);pre.clear_caller_cancel();assert!(!pre.cancelled());
++ let table=FaultControl::new(TestFault::SerializedTableWord{index:1,raw64:0x7ff8000000000001});let mut words=[0u32,0x3ff00000,0,0x40000000,0,0x40080000];let old=words;table.table(&mut words);assert_eq!(&words[..2],&old[..2]);assert_eq!(&words[4..],&old[4..]);assert_eq!((words[2],words[3]),(1,0x7ff80000));assert_eq!(table.snapshot().triggers,1);assert!(!table.cancelled());
++}
++#[test]
++fn normal_entry_delegates_none_and_timeout_origin_is_preserved(){
++ let source=include_str!("gpu.rs");assert!(source.contains("run_impl(packet, epoch, c, None)"));
++ assert!(source.contains("let started = Instant::now();\n        let command = encoder.finish();"));
++ let unmap=source.find("readback.unmap();").unwrap();let injection=source.find("f.unmapped(&context.error)").unwrap();let decode=source.find("let raw64 = mapped_result?;").unwrap();let release=source.find("context.release_transients_after_fence()?").unwrap();assert!(unmap<injection&&injection<decode&&decode<release);
++}
+diff --git a/native/crates/film-engine/src/research_exposure64_threepass/gpu.rs b/native/crates/film-engine/src/research_exposure64_threepass/gpu.rs
+index 5b6ee78a18791ff7434a5d8bee0735309464cce8..4b638fe31cb5c05acce62812f23779b89c64d117 100644
+--- a/native/crates/film-engine/src/research_exposure64_threepass/gpu.rs
++++ b/native/crates/film-engine/src/research_exposure64_threepass/gpu.rs
+@@ -8,6 +8,9 @@ use crate::{gpu_session as session, gpu_phase_diagnostics::{self as trace, Phase
+ use std::{sync::{atomic::{AtomicU64, Ordering}, mpsc}, time::{Duration, Instant}};
+ 
+ type R<T> = Result<T, String>;
++#[path="fault.rs"]
++mod fault;
++pub(crate) use fault::{FaultControl,TestFault};
+ const MIB: u64 = 1024 * 1024;
+ const HOST_BYTES: u64 = 96 * MIB;
+ const FIXED_BYTES: u64 = HOST_BYTES + 64 * MIB; // Host payload + isolated helper.
+@@ -90,8 +93,17 @@ fn healthy(context: &session::Context, epoch: u64, c: &mut impl FnMut() -> bool)
+ /// Exactly one bounded batch in the caller's already-begun session. Failures
+ /// retire that epoch; neither cancellation nor partial results permit reuse.
+ pub(crate) fn run(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Output> {
+-    let result = run_inner(packet, epoch, c);
++    run_impl(packet, epoch, c, None)
++}
++pub(crate) fn run_with_test_fault(packet:&Packet,epoch:u64,c:&mut impl FnMut()->bool,fault:&FaultControl)->R<Output>{
++    run_impl(packet,epoch,c,Some(fault))
++}
++fn run_impl(packet:&Packet,epoch:u64,c:&mut impl FnMut()->bool,fault:Option<&FaultControl>)->R<Output>{
++    if let Some(f)=fault { f.initial(); }
++    let mut effective_cancel=||{if fault.is_some_and(|f|f.cancelled()){true}else{c()}};
++    let result = run_inner(packet, epoch, &mut effective_cancel, fault);
+     if result.is_err() { session::retire_current(); }
++    if let Some(f)=fault { f.returned(result.as_ref().err()); }
+     result
+ }
+ // Exact-size pool reuse only. Never silently admit another allocation shape in
+@@ -99,9 +111,10 @@ pub(crate) fn run(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) ->
+ thread_local! {
+     static SHAPE: std::cell::Cell<Option<(u64, u64, u64)>> = const { std::cell::Cell::new(None) };
+ }
+-fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Output> {
++fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool, fault:Option<&FaultControl>) -> R<Output> {
+     check(c)?;
+     packet.validate()?;
++    if let Some(f)=fault { f.event("validated"); }
+     // This preflight must precede acquire: acquire alone permits standalone use.
+     session::validate_fixed_reserve(epoch, FIXED_BYTES)?;
+     if session::is_cancelled(epoch) { return Err("GPU_DEVICE_FAILED".into()); }
+@@ -146,6 +159,7 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+     let context = trace::phase_result(Phase::Device, || {
+         session::Context::acquire(map_bytes.max(table_bytes).max(intermediate_bytes).max(256), 4, true)
+     })?;
++    if let Some(f)=fault { f.event("acquired"); }
+     // All GPU resources live inside this closure, and die before Context does.
+     let result = (|| {
+         healthy(&context, epoch, c)?;
+@@ -177,6 +191,7 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+             let (mut one, _) = compiled?;
+             if one.len() != 1 { return Err("GPU_EXPOSURE64_THREEPASS_PIPELINE_COUNT".into()); }
+             pipelines.push(one.pop().ok_or("GPU_EXPOSURE64_THREEPASS_PIPELINE")?);
++            if let Some(f)=fault { f.event("pipeline"); }
+         }
+         let compile_ms = compile_family_ms.iter().sum();
+         healthy(&context, epoch, c)?;
+@@ -200,6 +215,7 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+                 input_bytes, source_bytes, HOST_METADATA_MARGIN])? > HOST_BYTES {
+             return Err("GPU_EXPOSURE64_THREEPASS_HOST_BUDGET".into());
+         }
++        if let Some(f)=fault { f.table(&mut table_words); }
+         let init = |label, words: &[u32], usage| context.buffer_init(&wgpu::util::BufferInitDescriptor {
+             label: Some(label), contents: bytemuck::cast_slice(words), usage,
+         }, true);
+@@ -253,6 +269,7 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+                 pass.dispatch_workgroups(lanes[i].div_ceil(64), 1, 1);
+             }
+             edge("encode_pass_end", Some(family));
++            if let Some(f)=fault { f.event("encoded_pass"); }
+         }
+         encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, input_bytes);
+         encoder.copy_buffer_to_buffer(&error, 0, &readback, input_bytes, 4);
+@@ -264,11 +281,13 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+         edge("submit_begin", None);
+         context.queue.submit([command]);
+         edge("submit_end", None);
++        if let Some(f)=fault { f.submitted(); }
+         submit_phase.finish();
+         let readback_phase = trace::PhaseGuard::begin(Phase::Readback);
+         let (tx, rx) = mpsc::channel();
+         edge("map_begin", None);
+         readback.slice(0..mapped_bytes).map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
++        if let Some(f)=fault { f.event("map_requested"); }
+         let mapped_result: R<Vec<u64>> = (|| {
+             loop {
+                 healthy(&context, epoch, c)?;
+@@ -283,24 +302,30 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+                 std::thread::sleep(Duration::from_millis(1));
+             }
+             edge("map_end", None);
++            if let Some(f)=fault { f.event("map_succeeded"); }
+             if started.elapsed() > Duration::from_secs(5) { return Err("GPU_EXPOSURE64_THREEPASS_TIMEOUT".into()); }
+             let mapped = readback.slice(0..mapped_bytes).get_mapped_range();
+             let flag = u32::from_le_bytes(mapped[input_bytes as usize..].try_into().unwrap());
++            if let Some(f)=fault { f.flag(flag); }
+             if flag != 0 { return Err("GPU_EXPOSURE64_THREEPASS_NUMERIC_DOMAIN".into()); }
+             let raw64: Vec<u64> = mapped[..input_bytes as usize].chunks_exact(8)
+                 .map(|v| u64::from_le_bytes(v.try_into().unwrap())).collect();
+             if raw64.iter().any(|v| !super::admitted(*v)) { return Err("GPU_EXPOSURE64_THREEPASS_OUTPUT_DOMAIN".into()); }
++            if let Some(f)=fault { f.decoded(raw64.len()); }
+             Ok(raw64)
+         })();
+         // All mapped views are dropped even on decode/numeric/cancel errors.
+         edge("unmap_begin", None);
+         readback.unmap();
+         edge("unmap_end", None);
++        if let Some(f)=fault { f.unmapped(&context.error); }
+         let raw64 = mapped_result?;
+         if started.elapsed() > Duration::from_secs(5) { return Err("GPU_EXPOSURE64_THREEPASS_TIMEOUT".into()); }
+         readback_phase.finish();
+         healthy(&context, epoch, c)?;
++        if let Some(f)=fault { f.event("release_reached"); }
+         context.release_transients_after_fence()?;
++        if let Some(f)=fault { f.event("released"); }
+         healthy(&context, epoch, c)?;
+         Ok(Output { raw64, stats: Stats {
+             adapter: context.info.name.clone(), compile_ms, compile_family_ms, source_sha256,
+@@ -315,6 +340,7 @@ fn run_inner(packet: &Packet, epoch: u64, c: &mut impl FnMut() -> bool) -> R<Out
+     edge("owner_drop_begin", None);
+     drop(context);
+     edge("owner_drop_end", None);
++    if let Some(f)=fault { f.event("owner_dropped"); }
+     // The caller's complete_stage provides the final queue fence and checks
+     // device/retirement state after this Context has gone away. It must also
+     // recheck its cancellation token after that fence before accepting output.
