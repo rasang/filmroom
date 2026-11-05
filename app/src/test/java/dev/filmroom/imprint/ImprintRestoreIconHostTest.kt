@@ -48,6 +48,9 @@ class ImprintRestoreIconHostTest {
             assertTrue(restore.right <= row.width)
             assertTrue(restore.contentDescription.isNotBlank())
             assertEquals(restore.contentDescription, restore.tooltipText)
+            assertTrue(restore.background is android.graphics.drawable.RippleDrawable)
+            assertTrue(restore.isClickable)
+            assertTrue(restore.isFocusable)
             assertEquals(24, restore.drawable.intrinsicWidth)
             assertEquals(24, restore.drawable.intrinsicHeight)
             System.getProperty("filmroom.imprint.evidenceDir")?.let { path ->
@@ -59,6 +62,18 @@ class ImprintRestoreIconHostTest {
                     assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
                 bitmap.recycle()
+                // Draw the actual native dialog content, not a vector mock-up, at narrow width.
+                val content = root.findViewWithTag<android.widget.ScrollView>("imprint-scroll").getChildAt(0)
+                content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                content.layout(0, 0, content.measuredWidth, content.measuredHeight)
+                val full = Bitmap.createBitmap(content.width, content.height, Bitmap.Config.ARGB_8888)
+                full.eraseColor(dev.filmroom.ui.FilmroomPalette.surface)
+                content.draw(Canvas(full))
+                File(directory, "date-reset-dialog-$fontScale.png").outputStream().use {
+                    assertTrue(full.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                full.recycle()
             }
             dialog.dismiss()
         } finally {

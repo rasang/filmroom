@@ -29,7 +29,7 @@ internal enum class ImprintText(val zh:String,val en:String,val ja:String,val ko
     CAPTURE("日期默认读取原图；参数只读取原图拍摄元信息","Date defaults to the original; capture data uses original metadata only","日付の初期値と撮影情報は元画像の記録を使用","날짜 기본값과 촬영 정보는 원본 메타데이터를 사용합니다"),
     PLACEMENT("日期区域","Date area","日付の領域","날짜 영역"),
     IN_PHOTO("照片内","Inside photo","写真内","사진 안"),
-    EDGE_SIZE_FIXED("片边日期使用固定字号；关闭后可调整照片上的日期字号。","Film-edge dates use a fixed size. Turn this off to adjust the date size on the photo.","フィルム端の日付は固定サイズです。オフにすると写真内の日付サイズを調整できます。","필름 가장자리 날짜는 고정 크기입니다. 끄면 사진 안의 날짜 크기를 조절할 수 있습니다."),
+    EDGE_SIZE_FIXED("关闭片边日期后可调整字号","Turn off film-edge dates to adjust the text size.","フィルム端の日付をオフにすると文字サイズを調整できます。","필름 가장자리 날짜를 끄면 글자 크기를 조절할 수 있습니다."),
     ON_EDGE("片边日期","Date on film edge","フィルム端の日付","필름 가장자리 날짜"),
     POSITION("日期位置 · 原片方向","Date position · native orientation","日付の位置・元の向き","날짜 위치 · 원본 방향"),
     BR("右下","Bottom right","右下","오른쪽 아래"),BL("左下","Bottom left","左下","왼쪽 아래"),

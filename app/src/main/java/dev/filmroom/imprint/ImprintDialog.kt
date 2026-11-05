@@ -158,6 +158,12 @@ internal object ImprintDialog {
         val restore = ImageButton(context).apply {
             tag = "imprint-restore-capture"
             setImageResource(dev.filmroom.R.drawable.ic_restore_capture_date)
+            // Keep the adjacent secondary action visually light, without a second filled box.
+            // The framework ripple still supplies pressed/focused feedback across the 48dp target.
+            val ripple = android.util.TypedValue()
+            if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
+                setBackgroundResource(ripple.resourceId)
+            }
             imageTintList = android.content.res.ColorStateList.valueOf(dev.filmroom.ui.FilmroomPalette.muted)
             contentDescription = t(ImprintText.RESTORE_CAPTURE)
             tooltipText = contentDescription

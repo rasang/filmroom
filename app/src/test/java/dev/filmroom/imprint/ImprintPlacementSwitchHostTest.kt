@@ -22,6 +22,13 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk=[35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ImprintPlacementSwitchHostTest {
+    @Test fun edgeSizeTipUsesTheApprovedConciseCopy() {
+        assertEquals("关闭片边日期后可调整字号", ImprintText.EDGE_SIZE_FIXED.zh)
+        assertEquals("Turn off film-edge dates to adjust the text size.", ImprintText.EDGE_SIZE_FIXED.en)
+        assertEquals("フィルム端の日付をオフにすると文字サイズを調整できます。", ImprintText.EDGE_SIZE_FIXED.ja)
+        assertEquals("필름 가장자리 날짜를 끄면 글자 크기를 조절할 수 있습니다.", ImprintText.EDGE_SIZE_FIXED.ko)
+    }
+
     private val metadata = PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2026:11:05 12:34:56"))
     private val medium = EditorState(filmBorder=true, mediumFormat=MediumFormat.MF66)
     private fun toggle(dialog: AlertDialog) = dialog.window!!.decorView.findViewWithTag<Switch>("imprint-placement")
