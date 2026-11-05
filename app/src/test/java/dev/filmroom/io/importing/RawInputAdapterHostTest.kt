@@ -94,7 +94,7 @@ class RawInputAdapterHostTest {
         assertEquals(1,decoder.probes);assertEquals(0,decoder.decodes)
     }
     @Test fun cameraRawFormatsUseNativeIdentityDespiteMisleadingJpegName()=runBlocking {
-        for((format,mime) in mapOf("NEF" to "image/x-nikon-nef", "CR2" to "image/x-canon-cr2", "ARW" to "image/x-sony-arw")) {
+        for((format,mime) in mapOf("NEF" to "image/x-nikon-nef", "CR2" to "image/x-canon-cr2", "ARW" to "image/x-sony-arw", "RW2" to "image/x-panasonic-rw2", "CR3" to "image/x-canon-cr3", "ORF" to "image/x-olympus-orf", "PEF" to "image/x-pentax-pef")) {
             val decoder=Decoder{metadata().put("format",format)}
             val loaded=RawInputAdapter(decoder).load(request(temp.newFolder()),header)
             try {
@@ -106,7 +106,7 @@ class RawInputAdapterHostTest {
         }
     }
     @Test fun unsupportedNativeIdentityNeverFallsBackToPreview()=runBlocking {
-        for(format in listOf("TIFF","CR3","JPEG","NEF_PRIVATE","nef")) {
+        for(format in listOf("TIFF","CR3_PRIVATE","JPEG","NEF_PRIVATE","nef")) {
             val decoder=Decoder{metadata().put("format",format)}
             try { RawInputAdapter(decoder).load(request(temp.newFolder()),header);fail("Unsupported identity $format") }
             catch(e:PhotoException){assertEquals(PhotoException.Reason.UNREADABLE,e.reason)}

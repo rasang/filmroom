@@ -1,11 +1,12 @@
 //! Standard List2 GainMap execution on normalized single-plane CFA samples.
 //! Adobe DNG SDK pixel centers reference the full stage image, not tile/phase extents.
-//! Narrow plan admission: four disjoint 2x2 phases, full image, one sample plane.
+//! Generic bounded area/pitch maps on one sample plane, in declared list order.
 use crate::error::{Result, err};
 use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone, Debug)]
 pub struct CfaGainMap {
-    phase: [usize; 2],
+    area: [usize; 4],
+    pitch: [usize; 2],
     rows: usize,
     cols: usize,
     spacing: [f64; 2],
@@ -40,40 +41,42 @@ impl<'a> Read<'a> {
         Ok(f64::from_be_bytes(self.take(8)?.try_into().unwrap()))
     }
 }
-pub fn parse_four_phase(bytes: &[u8], width: usize, height: usize) -> Result<Vec<CfaGainMap>> {
-    let mut r = Read { b: bytes, at: 0 };
-    if r.u32()? != 4 {
-        return Err(unsupported());
-    }
+/// Generic single-plane List2 GainMaps. Area/pitch selects sensor positions in
+/// the active-area stage image; it is not a camera-brand capability gate.
+pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<CfaGainMap>, bool)> {
+    let records = crate::opcodes::records(bytes)?;
     let mut maps = Vec::new();
-    let mut phases = [false; 4];
+    let mut skipped = false;
     let mut total = 0usize;
-    for _ in 0..4 {
-        let id = r.u32()?;
-        let version = r.u32()?;
-        let flags = r.u32()?;
-        let size = r.u32()? as usize;
-        let payload = r.take(size)?;
-        if id == 0 || version == 0 || flags & !3 != 0 {
-            return Err(invalid());
-        }
-        if id != 9 || version != 0x01030000 || flags & !1 != 0 {
+    for record in records {
+        if record.id != 9 || !crate::opcodes::supported_version(record.version) {
+            if record.flags & 1 != 0 {
+                skipped = true;
+                continue;
+            }
             return Err(unsupported());
         }
+        if maps.len() >= 4 {
+            return Err(unsupported());
+        }
+        let payload = record.payload;
         let mut p = Read { b: payload, at: 0 };
         let mut area = [0u32; 8];
-        for v in &mut area {
-            *v = p.u32()?
+        for value in &mut area {
+            *value = p.u32()?;
         }
-        if area[0] > 1 || area[1] > 1 || area[2..] != [height as u32, width as u32, 0, 1, 2, 2] {
-            return Err(unsupported());
-        }
-        let phase = [area[0] as usize, area[1] as usize];
-        let phase_index = phase[0] * 2 + phase[1];
-        if phases[phase_index] {
+        if area[0] >= area[2] || area[1] >= area[3] || area[6] == 0 || area[7] == 0 {
             return Err(invalid());
         }
-        phases[phase_index] = true;
+        if area[2] > height as u32
+            || area[3] > width as u32
+            || area[4] != 0
+            || area[5] != 1
+            || area[6] > 32768
+            || area[7] > 32768
+        {
+            return Err(unsupported());
+        }
         let rows = p.u32()? as usize;
         let cols = p.u32()? as usize;
         let spacing = [p.f64()?, p.f64()?];
@@ -96,7 +99,7 @@ pub fn parse_four_phase(bytes: &[u8], width: usize, height: usize) -> Result<Vec
         if total > 262144 {
             return Err(unsupported());
         }
-        if size
+        if payload.len()
             != 76usize
                 .checked_add(values.checked_mul(4).ok_or_else(invalid)?)
                 .ok_or_else(invalid)?
@@ -105,20 +108,23 @@ pub fn parse_four_phase(bytes: &[u8], width: usize, height: usize) -> Result<Vec
         }
         let mut gains = Vec::with_capacity(values);
         for _ in 0..values {
-            let g = f32::from_bits(p.u32()?);
-            if !g.is_finite() || g <= 0. {
+            let gain = f32::from_bits(p.u32()?);
+            if !gain.is_finite() || gain <= 0. {
                 return Err(invalid());
             }
-            if g > 64. {
+            if gain > 64. {
                 return Err(unsupported());
             }
-            gains.push(g)
-        }
-        if p.at != size {
-            return Err(invalid());
+            gains.push(gain);
         }
         maps.push(CfaGainMap {
-            phase,
+            area: [
+                area[0] as usize,
+                area[1] as usize,
+                area[2] as usize,
+                area[3] as usize,
+            ],
+            pitch: [area[6] as usize, area[7] as usize],
             rows,
             cols,
             spacing,
@@ -126,8 +132,29 @@ pub fn parse_four_phase(bytes: &[u8], width: usize, height: usize) -> Result<Vec
             gains,
         });
     }
-    if r.at != bytes.len() || !phases.iter().all(|p| *p) {
-        return Err(invalid());
+    Ok((maps, skipped))
+}
+/// Compatibility entry point for callers explicitly testing the original
+/// four-disjoint-phase plan. Main DNG admission uses generic parse().
+pub fn parse_four_phase(bytes: &[u8], width: usize, height: usize) -> Result<Vec<CfaGainMap>> {
+    let (maps, skipped) = parse(bytes, width, height)?;
+    if maps.len() != 4 || skipped {
+        return Err(unsupported());
+    }
+    let mut phases = [false; 4];
+    for map in &maps {
+        if map.area[0] > 1
+            || map.area[1] > 1
+            || map.area[2..] != [height, width]
+            || map.pitch != [2, 2]
+        {
+            return Err(unsupported());
+        }
+        let phase = map.area[0] * 2 + map.area[1];
+        if phases[phase] {
+            return Err(invalid());
+        }
+        phases[phase] = true;
     }
     Ok(maps)
 }
@@ -158,34 +185,54 @@ pub fn apply(
     y: usize,
     cancel: &AtomicBool,
 ) -> Result<()> {
+    apply_region(maps, pixels, width, height, 0, y, width, cancel)
+}
+/// Coordinates are local to the stage-2 active image, before DefaultCrop and
+/// orientation. Every overlapping map runs in list order, including unit maps:
+/// a unit map still clips above-white values, and must not be dropped as a NOP.
+pub fn apply_region(
+    maps: &[CfaGainMap],
+    pixels: &mut [f32],
+    width: usize,
+    height: usize,
+    x: usize,
+    y: usize,
+    region_width: usize,
+    cancel: &AtomicBool,
+) -> Result<()> {
     if maps.is_empty() {
         return Ok(());
     }
-    if maps.len() != 4
-        || width == 0
+    if width == 0
         || height == 0
-        || pixels.len() % width != 0
-        || y.checked_add(pixels.len() / width)
-            .filter(|n| *n <= height)
-            .is_none()
+        || region_width == 0
+        || pixels.len() % region_width != 0
+        || x.checked_add(region_width).is_none_or(|n| n > width)
+        || y.checked_add(pixels.len() / region_width)
+            .is_none_or(|n| n > height)
     {
         return Err(err("INVALID_INPUT", "develop"));
     }
-    for (row, line) in pixels.chunks_exact_mut(width).enumerate() {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(err("CANCELLED", "develop"));
-        }
-        let sy = y + row;
-        for (x, value) in line.iter_mut().enumerate() {
-            let map = maps
-                .iter()
-                .find(|m| m.phase == [sy % 2, x % 2])
-                .ok_or_else(|| err("INVALID_INPUT", "develop"))?;
-            let value_out = value.clamp(0., 1.) * map.gain(x, sy, width, height);
-            if !value.is_finite() || !value_out.is_finite() {
-                return Err(err("INVALID_INPUT", "develop"));
+    for map in maps {
+        for (row, line) in pixels.chunks_exact_mut(region_width).enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(err("CANCELLED", "develop"));
             }
-            *value = value_out.min(1.)
+            let sy = y + row;
+            if sy < map.area[0] || sy >= map.area[2] || (sy - map.area[0]) % map.pitch[0] != 0 {
+                continue;
+            }
+            for (column, value) in line.iter_mut().enumerate() {
+                let sx = x + column;
+                if sx < map.area[1] || sx >= map.area[3] || (sx - map.area[1]) % map.pitch[1] != 0 {
+                    continue;
+                }
+                let value_out = value.clamp(0., 1.) * map.gain(sx, sy, width, height);
+                if !value.is_finite() || !value_out.is_finite() {
+                    return Err(err("INVALID_INPUT", "develop"));
+                }
+                *value = value_out.min(1.);
+            }
         }
     }
     Ok(())

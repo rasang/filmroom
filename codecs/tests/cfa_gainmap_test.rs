@@ -143,7 +143,7 @@ fn path(n: &str) -> PathBuf {
     std::env::temp_dir().join(format!("cfa-gain-{}-{n}", std::process::id()))
 }
 #[test]
-fn branded_capability_applies_after_sensor_normalization_before_demosaic_once() {
+fn generic_capability_applies_after_sensor_normalization_before_demosaic_once() {
     let old = path("old.dng");
     fs::write(&old, fixture()).unwrap();
     let d = Dng::read(&mut fs::File::open(&old).unwrap()).unwrap();
@@ -182,36 +182,39 @@ fn branded_capability_applies_after_sensor_normalization_before_demosaic_once() 
     }
 }
 #[test]
-fn other_brands_optional_unchanged_required_unknown_and_incomplete_failclosed() {
+fn all_brands_share_supported_capabilities_and_unknown_required_failclosed() {
     let tmp = path("cap.dng");
     fs::write(&tmp, fixture()).unwrap();
     let d = Dng::read(&mut fs::File::open(&tmp).unwrap()).unwrap();
-    for make in [b"OPPO\0" as &[u8], b"Xiaomi 13 Ultra\0", b"Xiaomi\0"] {
-        for required in [false, true] {
-            let mut op = list(
-                d.width as u32,
-                d.height as u32,
-                if required { 0 } else { 1 },
-            );
-            if make == b"Xiaomi\0" {
-                op[4..8].copy_from_slice(&77u32.to_be_bytes());
-            }
+    for make in [
+        b"OPPO\0" as &[u8],
+        b"Xiaomi 13 Ultra\0",
+        b"Xiaomi\0",
+        b"Unlisted camera\0",
+    ] {
+        for flags in [0, 1, 2] {
+            let op = list(d.width as u32, d.height as u32, flags);
             fs::write(&tmp, inject(fixture(), make, &op)).unwrap();
+            let n = Dng::read(&mut fs::File::open(&tmp).unwrap()).unwrap();
+            assert_eq!(n.cfa_gain_maps.len(), 4);
+            let mut unknown = op;
+            unknown[4..8].copy_from_slice(&77u32.to_be_bytes());
+            fs::write(&tmp, inject(fixture(), make, &unknown)).unwrap();
             let r = Dng::read(&mut fs::File::open(&tmp).unwrap());
-            if required {
-                assert_eq!(r.unwrap_err().code, "UNSUPPORTED_DNG_OPCODE")
+            if flags & 1 == 0 {
+                assert_eq!(r.unwrap_err().code, "UNSUPPORTED_DNG_OPCODE");
             } else {
                 let n = r.unwrap();
-                assert!(n.cfa_gain_maps.is_empty());
+                assert_eq!(n.cfa_gain_maps.len(), 3);
                 assert!(
                     n.warnings
                         .iter()
                         .any(|w| w.code == "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED")
-                )
+                );
             }
         }
     }
-    fs::remove_file(tmp).unwrap()
+    fs::remove_file(tmp).unwrap();
 }
 
 #[test]
@@ -231,13 +234,22 @@ fn stage2_range_clips_before_subunity_gain() {
     assert_eq!(p[1], 0.);
 }
 #[test]
-fn non_xiaomi_optional_map_developed_bytes_match_legacy_base() {
+fn different_make_same_maps_produce_identical_developed_bytes() {
     let p = path("other-brand.dng");
     let old = path("base-no-maps.dng");
     let a = path("other.f32");
     let b = path("base.f32");
     fs::write(&old, fixture()).unwrap();
     let d = Dng::read(&mut fs::File::open(&old).unwrap()).unwrap();
+    fs::write(
+        &old,
+        inject(
+            fixture(),
+            b"New vendor\0",
+            &list(d.width as u32, d.height as u32, 1),
+        ),
+    )
+    .unwrap();
     fs::write(
         &p,
         inject(
@@ -256,27 +268,17 @@ fn non_xiaomi_optional_map_developed_bytes_match_legacy_base() {
     }
 }
 #[test]
-fn incomplete_optional_set_is_not_partially_applied_and_required_still_rejects() {
-    let p = path("incomplete.dng");
+fn any_declared_phase_subset_runs_in_order_without_four_map_brand_requirement() {
+    let p = path("subset.dng");
     fs::write(&p, fixture()).unwrap();
     let d = Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();
     for flags in [0, 1] {
         let mut op = list(d.width as u32, d.height as u32, flags);
         op.truncate(4 + 3 * 108);
         op[..4].copy_from_slice(&3u32.to_be_bytes());
-        fs::write(&p, inject(fixture(), b"Xiaomi\0", &op)).unwrap();
-        let r = Dng::read(&mut fs::File::open(&p).unwrap());
-        if flags == 0 {
-            assert_eq!(r.unwrap_err().code, "UNSUPPORTED_DNG_OPCODE")
-        } else {
-            let n = r.unwrap();
-            assert!(n.cfa_gain_maps.is_empty());
-            assert!(
-                n.warnings
-                    .iter()
-                    .any(|w| w.code == "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED")
-            );
-        }
+        fs::write(&p, inject(fixture(), b"Any vendor\0", &op)).unwrap();
+        let n = Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();
+        assert_eq!(n.cfa_gain_maps.len(), 3);
     }
     fs::remove_file(p).unwrap();
 }

@@ -6,9 +6,9 @@ import java.util.UUID
 import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 
-/** TIFF is only a routing hint. The native content parser must validate the RAW format. */
+/** TIFF/ORF/CR3 signatures are only routing hints. The native content parser must validate the RAW format. */
 internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInputAdapter {
-    override fun accepts(header: PhotoInputHeader) = (header.isClassicTiff || header.isPanasonicRw2)
+    override fun accepts(header: PhotoInputHeader) = (header.isClassicTiff || header.isPanasonicRw2 || header.isOlympusRaw || header.isCanonCr3)
     override suspend fun load(request: PhotoImportRequest, header: PhotoInputHeader): LoadedPhoto = with(request) {
         val metadata:JSONObject
         val raw:File

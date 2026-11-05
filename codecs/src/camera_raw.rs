@@ -40,6 +40,7 @@ mod integer_spool;
 mod sony_tiles;
 mod canon_stream;
 mod panasonic;
+pub(crate) mod additional;
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_CAMERA_RAW_VARIANT", "probe")
 }

@@ -27,3 +27,9 @@ debug = 0
 
 [dev-dependencies]
 image = { version = "=0.25.10", default-features = false, features = ["jpeg"] }
+
+# Entropy and wavelet coefficients are untrusted. Keep arithmetic failure
+# deterministic in release; the RAW boundary catches it and deletes partials.
+# Codec-defined wrapping remains explicit through wrapping_* operations.
+[profile.release.package.rawler]
+overflow-checks = true

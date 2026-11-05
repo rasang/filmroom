@@ -45,6 +45,19 @@ class CameraRawMemoryBudgetTest {
    assertEquals(listOf(256,256,256,256,128),api.decode.toList());assertEquals(listOf(128),api.encode.toList());assertEquals(listOf(256,128),api.probe.toList());assertEquals(6,calls.get())
   }finally{root.deleteRecursively()}
  }
+ @Test fun cr3OrfAndOriSignaturesUse256DecodeAnd32MetadataLease()=runBlocking {
+  val root=kotlin.io.path.createTempDirectory("additional-camera-budget").toFile();val api=Api()
+  val codec=PhotoCodecs(root,api,memorySnapshot=high,memoryBudgetMiB={512})
+  val metadataCodec=PhotoCodecs(root,api,memorySnapshot={NativeMemorySnapshot(320*mib,128*mib,false)},memoryBudgetMiB={error("metadata must not ask decode preference")})
+  try {
+   val signatures=listOf("IIRO".toByteArray(),"IIRS".toByteArray(),"MMOR".toByteArray(),byteArrayOf(0,0,0,32)+"ftypcrx ".toByteArray())
+   for((i,signature) in signatures.withIndex()) {
+    val input=File(root,"$i.jpeg").apply{writeBytes(signature+ByteArray(16))}
+    codec.decode(input,File(root,"out"));metadataCodec.probe(input)
+   }
+   assertEquals(List(4){256},api.decode.toList());assertEquals(List(4){256},api.probe.toList())
+  }finally{root.deleteRecursively()}
+ }
  @Test fun frozenRequestAndSharedLedgerChargeTheSame256()=runBlocking {
   val root=kotlin.io.path.createTempDirectory("frozen-budget").toFile();val api=Api();val calls=AtomicInteger();val memory={NativeMemorySnapshot(1024*mib,128*mib,false)}
   val codec=PhotoCodecs(root,api,memorySnapshot=memory,memoryBudgetMiB={if(calls.incrementAndGet()==1)256 else 128})

@@ -7,7 +7,6 @@
 
 use super::{
   BandParam, CodecParams, CrxError, Result,
-  decoder::constrain,
   mdat::{Subband, Tile},
 };
 use crate::decompressors::crx::{decoder::error_code_signed, rice::RiceDecoder};
@@ -78,29 +77,25 @@ impl CodecParams {
         let q_step_tbl_ptr = &q_step.q_step_tbl[(q_step.width * band.get_subband_row(param.cur_line - 1))..];
 
         for i in 0..band.col_start_addon {
-          let quant_val = band.q_step_base + ((q_step_tbl_ptr[0] * band.q_step_multi as u32) >> 3) as i32;
-          param.decoded_buf_mut()[i] *= constrain(quant_val, 1, 0x168000);
+          param.decoded_buf_mut()[i] = super::bounded_math::quantized(param.decoded_buf()[i], band.q_step_base, q_step_tbl_ptr[0], band.q_step_multi as u32).ok_or_else(|| CrxError::Overflow("CRX quantized coefficient".into()))?;
         }
 
         for i in band.col_start_addon..(band.width - band.col_end_addon) {
           let idx = (i - band.col_start_addon) >> band.level_shift;
-          let quant_val = band.q_step_base + ((q_step_tbl_ptr[idx] * band.q_step_multi as u32) >> 3) as i32;
-          //eprintln!("{}", quant_val);
-          param.decoded_buf_mut()[i] *= constrain(quant_val, 1, 0x168000);
+          param.decoded_buf_mut()[i] = super::bounded_math::quantized(param.decoded_buf()[i], band.q_step_base, q_step_tbl_ptr[idx], band.q_step_multi as u32).ok_or_else(|| CrxError::Overflow("CRX quantized coefficient".into()))?;
         }
 
         let last_idx = (band.width - band.col_end_addon - band.col_start_addon - 1) >> band.level_shift;
 
         for i in (band.width - band.col_end_addon)..band.width {
-          let quant_val = band.q_step_base + ((q_step_tbl_ptr[last_idx] * band.q_step_multi as u32) >> 3) as i32;
-          param.decoded_buf_mut()[i] *= constrain(quant_val, 1, 0x168000);
+          param.decoded_buf_mut()[i] = super::bounded_math::quantized(param.decoded_buf()[i], band.q_step_base, q_step_tbl_ptr[last_idx], band.q_step_multi as u32).ok_or_else(|| CrxError::Overflow("CRX quantized coefficient".into()))?;
         }
       }
       None => {
         //eprintln!("q-param: {}", param.q_param);
         // prev. version
         let q_scale = if param.q_param / 6 >= 6 {
-          Q_STEP_TBL[param.q_param as usize % 6] * (1 << (param.q_param / 6 + 26))
+          Q_STEP_TBL[param.q_param as usize % 6].wrapping_shl(param.q_param / 6 + 26)
         } else {
           Q_STEP_TBL[param.q_param as usize % 6] >> (6 - param.q_param / 6)
         };
@@ -108,7 +103,7 @@ impl CodecParams {
         if q_scale != 1 {
           //println!("scale width: {}", band.width);
           for i in 0..band.width {
-            param.decoded_buf_mut()[i] *= q_scale as i32;
+            param.decoded_buf_mut()[i] = super::bounded_math::scaled(param.decoded_buf()[i], i64::from(q_scale)).ok_or_else(|| CrxError::Overflow("CRX scaled coefficient".into()))?;
           }
         }
       }
@@ -233,6 +228,9 @@ impl Tile {
   }
 
   pub(super) fn generate_qstep_table(&mut self, params: &CodecParams, data: &[u8]) -> Result<()> {
+    self.generate_qstep_table_cancel(params, data, &|| false)
+  }
+  pub(super) fn generate_qstep_table_cancel(&mut self, params: &CodecParams, data: &[u8], cancel:&dyn Fn()->bool) -> Result<()> {
     match self.qp_data.as_ref() {
       Some(qp_data) => {
         //println!("generate: size: {}", qp_data.mdat_qp_data_size);
@@ -253,6 +251,7 @@ impl Tile {
         let mut qp_table = vec![0; total_qp];
 
         for qp_row in 0..qp_height {
+          if cancel(){return Err(CrxError::General("Decode cancelled".into()));}
           let mut line_pos = 1; // start at first real coeff x (skip a)
           if qp_row == 0 {
             // For first top row
