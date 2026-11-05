@@ -253,7 +253,7 @@
     <string name="text_646130986822" formatted="false">色域圧縮</string>
     <string name="text_192216b8cb6d" formatted="false">sRGB色域外の色を表示可能な範囲に圧縮します。広色域で書き出す場合は自動的にオフになります。</string>
     <string name="text_6f16843acab7" formatted="false">GPUアクセラレーション</string>
-    <string name="text_8d80b85bbd7f" formatted="false">Adrenoで密度処理の一部の高速化を自動的に試みます。他の段階はCPUで処理します。利用できない場合はCPUに戻ります。高速化を保証するものではありません。</string>
+    <string name="text_8d80b85bbd7f" formatted="false">実験的なGPU常駐・分割処理です。一部の効果は近似計算のためCPU出力と異なる場合があります。メモリ予算や機器の条件を満たさない場合はCPUに戻ります。高速化は保証されません。</string>
     <string name="text_683099bf5b6c" formatted="false">フィルム標準</string>
     <string name="text_789f61dbfcc7" formatted="false">赤</string>
     <string name="text_d5234258fd84" formatted="false">アンバー</string>
@@ -440,7 +440,7 @@
     <string name="text_0e898ec43b0b" formatted="false">；継続的な監視ではありません。\n</string>
     <string name="text_fa1c6dd0bfc3" formatted="false">今回の起動中に確認した破棄数：期限切れ </string>
     <string name="text_6e94c47fde22" formatted="false">、容量による入れ替え </string>
-    <string name="text_4af5bd6fb80e" formatted="false">、破損または書き込み未完了 </string>
+    <string name="text_4af5bd6fb80e" formatted="false">、読み取り時の除外 </string>
     <string name="text_e9d6840052fc" formatted="false">、未来の時刻で確認不能 </string>
     <string name="text_1701c7739625" formatted="false">。起動をまたいだ累計は不明です。\n</string>
     <string name="text_5bf7bab64ce3" formatted="false">直近の失敗／中断記録：</string>
@@ -461,7 +461,7 @@
     <string name="text_bf7b123c114d" formatted="false">；イベント間を継続的に監視しているわけではありません。\n</string>
     <string name="text_ccc4edebf400" formatted="false">今回の起動中に確認できた破棄数：期限切れ=</string>
     <string name="text_1a58fbf44b39" formatted="false">、容量による入れ替え=</string>
-    <string name="text_4e203ca8ccb7" formatted="false">、破損／書き込み未完了=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">、読み取り時の除外=</string>
     <string name="text_338aa9ce6405" formatted="false">、未来の時刻で確認不能=</string>
     <string name="text_b028650697a5" formatted="false">。起動をまたいだ累計は確定できません。\n</string>
     <string name="text_bbbde15a1296" formatted="false">端末内でのみ記録します。共有をタップした後、受信アプリを選択します。このアプリがアップロードすることはありません。\n</string>
@@ -777,4 +777,13 @@
     <string name="toast_edge_limit_30000">辺が過大：上限30000px</string>
     <string name="toast_edge_limit_32768">辺が過大：上限32768px</string>
     <string name="toast_metadata_limit">メタデータが安全上限を超過</string>
+    <string name="gpu_phase_full_chain" formatted="false">GPU画像処理</string>
+    <string name="gpu_phase_banded_chain" formatted="false">GPU分割処理</string>
+    <string name="gpu_phase_prepass" formatted="false">GPU全体の事前計算</string>
+    <string name="gpu_completion_uncertain" formatted="false">GPU処理の完了を確認できません。メモリの重複使用を防ぐため処理を停止しました。アプリを完全に終了してから開き直してください。</string>
+    <string name="diagnostics_read_rejections_detail">読み取り時の除外回数：起動時 %1$d、容量ローテーション時 %2$d。バージョン非互換、検証失敗、書き込み未完了を含み、今回の実行で失われたイベント数ではありません。\n</string>
+    <string name="gpu_phase_tiled_chain" formatted="false">GPUタイル処理</string>
+    <string name="gpu_progress_processing">GPU画像処理</string>
+    <string name="gpu_progress_tile">タイル %1$d/%2$d</string>
+    <string name="gpu_progress_last_completed">完了した処理：%1$s（%2$d ms）</string>
 </resources>

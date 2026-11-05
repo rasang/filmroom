@@ -25,6 +25,17 @@ import java.nio.file.Files
 class ExportQueueHostTest {
     private fun job(order:Long)=ExportJob(ExportJobStore.newId(),order,EditorState(),2,2,ExportFormat.PNG,95)
     private fun temp(block:(File)->Unit) {val dir=Files.createTempDirectory("queue-host").toFile();try{block(dir)}finally{dir.deleteRecursively()}}
+    @Test fun gpuCompletedBatchDisplaySurvivesQueueRestartWithoutChangingJobGeometry()=temp {dir->
+        val work=GpuWorkProgress(phase=dev.filmroom.diagnostics.GpuWorkPhase.GRAIN,
+            tileIndex=3,tileTotal=20,batchIndex=7,batchElapsedMs=42.5,completedSubmits=61)
+        val a=job(1).copy(state=ExportJobState.RUNNING,progress=ExportDisplayProgress(6,3,20,work,ExportVisualProgress(3,60)))
+        ExportJobStore(dir).update(a)
+        val recovered=checkNotNull(ExportJobStore(dir).get(a.id))
+        assertEquals(ExportJobState.PAUSED,recovered.state)
+        assertEquals(a.progress,recovered.progress)
+        assertEquals(a.width,recovered.width);assertEquals(a.height,recovered.height)
+        assertEquals(a.parameters,recovered.parameters)
+    }
     @Test fun fifoAndRetryOrderAreDurable()=temp {dir->
         val store=ExportJobStore(dir);val b=job(2);val a=job(1)
         store.update(b);store.update(a)

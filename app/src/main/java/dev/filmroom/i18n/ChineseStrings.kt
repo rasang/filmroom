@@ -1,6 +1,15 @@
 package dev.filmroom.i18n
 internal object ChineseStrings {
     val values:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.diagnostics_read_rejections_detail to "读取拒绝次数：启动 %1\$d，容量轮替 %2\$d；包括版本不兼容、校验失败或未写完，不等于当前运行丢失的事件数。\\n",
+        dev.filmroom.R.string.gpu_progress_last_completed to "刚完成：%1\$s（%2\$d ms）",
+        dev.filmroom.R.string.gpu_progress_tile to "块 %1\$d/%2\$d",
+        dev.filmroom.R.string.gpu_progress_processing to "GPU 图像处理",
+        dev.filmroom.R.string.gpu_phase_prepass to "GPU 全图预计算",
+        dev.filmroom.R.string.gpu_phase_tiled_chain to "GPU 二维分块计算",
+        dev.filmroom.R.string.gpu_phase_banded_chain to "GPU 分带计算",
+        dev.filmroom.R.string.gpu_phase_full_chain to "GPU 整链计算",
+        dev.filmroom.R.string.gpu_completion_uncertain to "GPU任务未确认结束，为避免内存重叠已暂停处理。请完全关闭并重新打开应用。",
         dev.filmroom.R.string.export_background_verified_toast to "Android 后台检测已通过",
         dev.filmroom.R.string.bw_film_development to "胶片显影时间",
         dev.filmroom.R.string.bw_print_development to "印相显影时间",
@@ -500,7 +509,7 @@ internal object ChineseStrings {
         dev.filmroom.R.string.text_0e898ec43b0b to "；不是连续监测。\n",
         dev.filmroom.R.string.text_fa1c6dd0bfc3 to "本次运行观测到的丢弃：过期 ",
         dev.filmroom.R.string.text_6e94c47fde22 to "，容量轮替 ",
-        dev.filmroom.R.string.text_4af5bd6fb80e to "，损坏或未写完 ",
+        dev.filmroom.R.string.text_4af5bd6fb80e to "，读取时拒绝 ",
         dev.filmroom.R.string.text_e9d6840052fc to "，未来时间不确定 ",
         dev.filmroom.R.string.text_1701c7739625 to "。跨运行累计未知。\n",
         dev.filmroom.R.string.text_5bf7bab64ce3 to "最近的失败/中断记录：",
@@ -521,7 +530,7 @@ internal object ChineseStrings {
         dev.filmroom.R.string.text_bf7b123c114d to "；事件之间并非连续监测。\n",
         dev.filmroom.R.string.text_ccc4edebf400 to "本次运行可观测的丢弃计数：过期=",
         dev.filmroom.R.string.text_1a58fbf44b39 to "，容量轮替=",
-        dev.filmroom.R.string.text_4e203ca8ccb7 to "，损坏/未写完=",
+        dev.filmroom.R.string.text_4e203ca8ccb7 to "，读取时拒绝=",
         dev.filmroom.R.string.text_338aa9ce6405 to "，未来时间无法确认=",
         dev.filmroom.R.string.text_b028650697a5 to "。跨运行累计不可确定。\n",
         dev.filmroom.R.string.text_bbbde15a1296 to "仅在本机记录，点击分享后由你选择接收应用；本应用不会上传。\n",

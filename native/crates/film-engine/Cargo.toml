@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-adreno-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
+adreno-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck", "spektrafilm-gpu/wgpu-backend"]
 precision-f64 = ["spektrafilm-core/precision-f64", "spektrafilm-math/precision-f64", "spektrafilm-gpu/precision-f64"]
 
 [dependencies]

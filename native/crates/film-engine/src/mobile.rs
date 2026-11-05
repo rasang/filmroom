@@ -4,7 +4,12 @@ use spektrafilm_core::{params::RuntimeParams, pipeline::Pipeline, profile::{Prof
 use spektrafilm_math::{image::ImageBuf, precision::from_f64};
 use std::{collections::HashMap, path::{Path,PathBuf}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering}}, time::Instant};
 
-pub const MAX_PIXELS: usize = 768 * 768;
+// Hard pixel cap for the direct-buffer preview path. Must match the Kotlin
+// `NativeMemoryPolicy.MAX_PREVIEW_PIXELS` and accommodate the largest REFINED
+// preview the tier policy can request (long edge DETAIL_PREVIEW_EDGE=1280, so up
+// to 1280x1280 for a square source). Original-size exports use the bounded-memory
+// streamed path instead, so they are not limited by this.
+pub const MAX_PIXELS: usize = 1280 * 1280;
 pub const MEMORY_FIXED_ESTIMATE_BYTES:u64=96*1024*1024;
 pub const MEMORY_ESTIMATE_BYTES_PER_PIXEL:u64=512;
 pub use crate::profile_catalog::{FILMS,PAPERS};
@@ -199,15 +204,15 @@ impl MobileParams {
 /// Per-handle, privacy-safe progress. Counters are local to the named stage.
 pub struct ProgressState {
     job_id:u64,operation:&'static str,stage:&'static str,status:&'static str,
-    done:u64,total:u64,pass_id:u64,display_stage:u8,stage_done:u64,stage_total:u64,started:Option<Instant>,finished_ms:Option<f64>,
+    gpu_fallback_reason:Option<&'static str>,gpu_work:Option<crate::streamed_progress::GpuWorkProgress>,done:u64,total:u64,pass_id:u64,display_stage:u8,stage_done:u64,stage_total:u64,started:Option<Instant>,finished_ms:Option<f64>,
 }
-impl Default for ProgressState {fn default()->Self{Self{job_id:0,operation:"none",stage:"idle",status:"idle",done:0,total:0,pass_id:0,display_stage:1,stage_done:0,stage_total:0,started:None,finished_ms:None}}}
+impl Default for ProgressState {fn default()->Self{Self{gpu_fallback_reason:None,gpu_work:None,job_id:0,operation:"none",stage:"idle",status:"idle",done:0,total:0,pass_id:0,display_stage:1,stage_done:0,stage_total:0,started:None,finished_ms:None}}}
 fn safe_stage(stage:&'static str)->&'static str {match stage {
-    "print_diffusion"|"auto_exposure"|"highlight_boost"|"scan_glare"|"camera_blur"|"scan_blur"|"camera_diffusion"|"scan_sharpen"|"idle"|"validate"|"setup"|"projection"|"halation"|"scatter"|"film_log"|"film_density"|"dir"|"grain"|"printing_scanning"|"output"|"flush"|"cleanup"|"complete"|"preview"|"film_exposure"|"film_scatter"|"film_halation"|"film_scatter_halation"|"film_density_dir"|"dir_diffusion"|"dir_develop"|"grain_blur"|"grain_cloud"|"grain_sampling"|"grain_microstructure"=>stage,
+    "print_diffusion"|"auto_exposure"|"highlight_boost"|"scan_glare"|"camera_blur"|"scan_blur"|"camera_diffusion"|"scan_sharpen"|"idle"|"validate"|"setup"|"projection"|"halation"|"scatter"|"film_log"|"film_density"|"dir"|"grain"|"printing_scanning"|"output"|"flush"|"cleanup"|"complete"|"preview"|"film_exposure"|"film_scatter"|"film_halation"|"film_scatter_halation"|"film_density_dir"|"dir_diffusion"|"dir_develop"|"grain_blur"|"grain_cloud"|"grain_sampling"|"grain_microstructure"|"gpu_full_chain"|"gpu_tiled_chain"|"gpu_banded_chain"|"gpu_diffusion_prepass"=>stage,
     _=>"processing",
 }}
 pub fn progress_begin(engine:&Engine,operation:&'static str)->u64 {
-    if let Ok(mut p)=engine.progress.lock(){p.job_id=p.job_id.wrapping_add(1);p.operation=operation;p.stage="setup";p.status="running";p.done=0;p.total=0;p.pass_id=1;p.display_stage=1;p.stage_done=0;p.stage_total=0;p.started=Some(Instant::now());p.finished_ms=None;p.job_id}else{0}
+    if let Ok(mut p)=engine.progress.lock(){p.job_id=p.job_id.wrapping_add(1);p.operation=operation;p.stage="setup";p.status="running";p.done=0;p.total=0;p.pass_id=1;p.display_stage=1;p.stage_done=0;p.stage_total=0;p.started=Some(Instant::now());p.finished_ms=None;p.gpu_fallback_reason=None;p.gpu_work=None;p.job_id}else{0}
 }
 pub fn progress_update(engine:&Engine,stage:&'static str,done:u64,total:u64) {
     if let Ok(mut p)=engine.progress.lock(){let stage=safe_stage(stage);let done=done.min(total);if p.stage!=stage||done<p.done {p.pass_id=p.pass_id.saturating_add(1);}p.stage=stage;p.done=done;p.total=total;}
@@ -215,6 +220,10 @@ pub fn progress_update(engine:&Engine,stage:&'static str,done:u64,total:u64) {
 /// The raw pass and aggregate stage are one snapshot, even under concurrent JNI polling.
 pub fn progress_update_export(engine:&Engine,event:crate::streamed_progress::ExportProgress) {
     if let Ok(mut p)=engine.progress.lock(){
+        if matches!(event.phase,"gpu_memory_budget_fallback"|"gpu_binding_limit_fallback"|"gpu_unavailable_fallback"|"gpu_execution_fallback"|"unsupported_adapter"|"cpu_checkpoint_resume") {
+            p.gpu_fallback_reason=Some(event.phase);return;
+        }
+        if let Some(gpu)=event.gpu {p.gpu_work=Some(gpu);}
         let stage=safe_stage(event.phase);let done=event.done.min(event.total);
         if p.stage!=stage||done<p.done {p.pass_id=p.pass_id.saturating_add(1);}
         p.stage=stage;p.done=done;p.total=event.total;
@@ -226,11 +235,14 @@ pub fn progress_finish(engine:&Engine,job_id:u64,code:Option<&str>)->Option<&'st
 }
 pub fn progress_json(engine:&Engine)->Result<String> {
     let p=engine.progress.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Progress unavailable"))?;
-    Ok(serde_json::json!({"ok":true,"schemaVersion":1,"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running"}).to_string())
+    Ok(serde_json::json!({"ok":true,"schemaVersion":1,"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running","gpuFallbackReason":p.gpu_fallback_reason,
+        "gpuPhase":p.gpu_work.and_then(|g|g.phase),"gpuTileIndex":p.gpu_work.map(|g|g.tile_index),"gpuTileTotal":p.gpu_work.map(|g|g.tile_total),
+        "gpuBatchIndex":p.gpu_work.map(|g|g.batch_index),"gpuBatchElapsedMs":p.gpu_work.map(|g|g.batch_elapsed_ms),"gpuChainWaitMs":p.gpu_work.map(|g|g.chain_wait_ms),"gpuCompletedSubmits":p.gpu_work.map(|g|g.completed_submits),
+        "gpuFailedPhase":p.gpu_work.and_then(|g|g.failed_phase),"gpuFailedElapsedMs":p.gpu_work.and_then(|g|g.failed_elapsed_ms)}).to_string())
 }
 #[derive(Debug,Serialize)]
 #[serde(rename_all="camelCase")]
-pub struct ExportPlan {pub checkpoint_reserve_bytes:u64,pub width:u32,pub height:u32,pub pixels:u64,pub input_bytes:u64,pub output_bytes:u64,pub estimated_scratch_bytes:u64,pub estimated_total_local_bytes:u64,pub memory_budget_mi_b:u32,pub pointwise_chunk_pixels:u32,pub estimated_native_working_bytes:u64,pub spatial_working_buffer_bytes:u64,pub estimate_policy:&'static str}
+pub struct ExportPlan {pub checkpoint_reserve_bytes:u64,pub width:u32,pub height:u32,pub pixels:u64,pub input_bytes:u64,pub output_bytes:u64,pub estimated_scratch_bytes:u64,pub estimated_total_local_bytes:u64,pub memory_budget_mi_b:u32,pub pointwise_chunk_pixels:u32,pub estimated_native_working_bytes:u64,pub background_preview_lease_bytes:u64,pub spatial_working_buffer_bytes:u64,pub estimate_policy:&'static str}
 pub fn plan_export(width:i32,height:i32,params:&MobileParams)->Result<ExportPlan>{
     params.validate()?;
     if width<=0||height<=0||width>40000||height>40000{return Err(EngineError::new("INVALID_DIMENSIONS","Export dimensions must be 1..40000"));}
@@ -238,7 +250,13 @@ pub fn plan_export(width:i32,height:i32,params:&MobileParams)->Result<ExportPlan
     let input_bytes=pixels.checked_mul(12).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Byte count overflow"))?;
     let estimated_scratch_bytes=crate::streamed::estimated_scratch_with_diffusion(width as u32,height as u32,(params.diffusion_filter!="off"&&params.diffusion_strength>0.)||(params.output_route=="print"&&params.print_diffusion_filter!="off"&&params.print_diffusion_strength>0.))?;
     let estimated_total_local_bytes=estimated_scratch_bytes.checked_add(input_bytes).and_then(|v|v.checked_add(input_bytes)).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Total byte count overflow"))?;
-    Ok(ExportPlan{checkpoint_reserve_bytes:pixels*48+1024*1024,width:width as u32,height:height as u32,pixels,input_bytes,output_bytes:input_bytes,estimated_scratch_bytes,estimated_total_local_bytes,memory_budget_mi_b:params.memory_budget_mi_b,pointwise_chunk_pixels:(width as u32).max(32768),estimated_native_working_bytes:115*1024*1024+256*(width as u64).max(32768)+crate::export_execution::EXPORT_STACK_RESERVE_BYTES,spatial_working_buffer_bytes:16*1024*1024,estimate_policy:"Conservative disk reservation: max of 128 bytes/pixel plus64MiB and exact active-diffusion FFT workspace; total includes linear input and output, excludes encoded image and source private copy. Persistent queue jobs additionally reserve checkpointReserveBytes (48 bytes/pixel plus1MiB). Not measured actual usage or a whole-process RAM guarantee."})
+    #[cfg(feature="adreno-gpu")]
+    let background_preview_lease_bytes=crate::early_negative_preview::active_reservation_bytes();
+    #[cfg(not(feature="adreno-gpu"))]
+    let background_preview_lease_bytes=0;
+    let own_working=(115*1024*1024+256*(width as u64).max(32768)+crate::export_execution::EXPORT_STACK_RESERVE_BYTES).max(params.memory_budget_mi_b as u64*1024*1024);
+    let estimated_native_working_bytes=own_working.checked_add(background_preview_lease_bytes).ok_or_else(||EngineError::new("INVALID_BUDGET","Memory reservation overflow"))?;
+    Ok(ExportPlan{checkpoint_reserve_bytes:pixels*48+1024*1024,width:width as u32,height:height as u32,pixels,input_bytes,output_bytes:input_bytes,estimated_scratch_bytes,estimated_total_local_bytes,memory_budget_mi_b:params.memory_budget_mi_b,pointwise_chunk_pixels:(width as u32).max(32768),estimated_native_working_bytes,background_preview_lease_bytes,spatial_working_buffer_bytes:16*1024*1024,estimate_policy:"Conservative disk and native-work admission estimate; native work includes any prior process-level background preview lease once. Not measured RSS or a per-job hard memory cap."})
 }
 
 pub struct Engine {
@@ -247,7 +265,23 @@ pub struct Engine {
     pub destroyed: AtomicBool,
     pub render_lock: Mutex<()>,
     pub progress:Mutex<ProgressState>,
+    /// Session profile cache. Profiles are immutable on-disk data, so re-reading
+    /// and re-parsing them on every preview frame is pure I/O overhead. Keyed by
+    /// stock name; the bundled catalog is small and bounded.
+    profile_cache:Mutex<HashMap<String,Arc<Profile>>>,
+    cache_revision:Mutex<Option<String>>,
+    /// Session pipeline cache. `Pipeline::new_with_spectral` rebuilds the spectral
+    /// tc LUT and per-stock calibration on every call, which is the dominant
+    /// per-frame CPU cost when scrubbing. The built pipeline is a pure function of
+    /// (film stock, paper stock, RuntimeParams) for a fixed data_dir, so keying by
+    /// that exact fingerprint keeps color bit-identical while letting a
+    /// QUICK->REFINED pair (identical params) share one build. Resolution is NOT
+    /// part of the key: `pixel_size_um` is derived per-stage from the image dims in
+    /// `Pipeline::process`, so one pipeline serves every preview size.
+    pipeline_cache:Mutex<Option<CachedPipeline>>,
 }
+/// One most-recently-used pipeline plus the exact fingerprint that produced it.
+struct CachedPipeline { key:String, pipeline:Arc<Pipeline> }
 static ENGINES: OnceLock<Mutex<HashMap<i64, Arc<Engine>>>>=OnceLock::new();
 static NEXT_HANDLE: AtomicI64=AtomicI64::new(1);
 fn engines()->&'static Mutex<HashMap<i64,Arc<Engine>>> { ENGINES.get_or_init(||Mutex::new(HashMap::new())) }
@@ -260,7 +294,7 @@ pub fn create(data_dir: &str)->Result<i64> {
     let id=NEXT_HANDLE.fetch_add(1,Ordering::Relaxed);
     if id<=0 {return Err(EngineError::new("INTERNAL_ERROR","Handle space exhausted"));}
     let mut registry=engines().lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Handle registry unavailable"))?;
-    registry.insert(id,Arc::new(Engine {data_dir:path,cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())}));
+    registry.insert(id,Arc::new(Engine {data_dir:path,cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)}));
     Ok(id)
 }
 pub fn get(id:i64)->Result<Arc<Engine>> {
@@ -277,9 +311,101 @@ pub fn required_bytes(width:i32,height:i32)->Result<usize> {
     pixels.checked_mul(12).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Byte count overflow"))
 }
 pub fn check_cancellation(engine:&Engine,generation:u64)->Result<()> {
+    gpu_completion_guard()?;
     if engine.destroyed.load(Ordering::Acquire) || engine.cancel_generation.load(Ordering::Acquire)!=generation {Err(EngineError::new("CANCELLED","Result cancelled; output is not valid"))} else {Ok(())}
 }
 pub struct RenderOutput {pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub pixels:Vec<f32>,pub elapsed_ms:f64,pub warnings:Vec<&'static str>}
+
+/// A submitted GPU operation with unconfirmed completion may retain driver memory.
+/// Do not allocate another CPU/GPU image working set until the process restarts.
+fn completion_guard_for(uncertain:bool)->Result<()> {
+    if uncertain {Err(EngineError::new("GPU_COMPLETION_UNCERTAIN","GPU completion could not be confirmed; restart the app before rendering again"))} else {Ok(())}
+}
+pub(crate) fn gpu_completion_guard()->Result<()> {
+    #[cfg(feature="adreno-gpu")]
+    let uncertain=FULL_CHAIN_GPU.get().and_then(Option::as_ref).is_some_and(|gpu|gpu.completion_uncertain());
+    #[cfg(not(feature="adreno-gpu"))]
+    let uncertain=false;
+    completion_guard_for(uncertain)
+}
+#[cfg(feature="adreno-gpu")]
+static FULL_CHAIN_GPU: OnceLock<Option<spektrafilm_gpu::wgpu_backend::WgpuBackend>>=OnceLock::new();
+#[cfg(feature="adreno-gpu")]
+static FULL_CHAIN_UNSUPPORTED: std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+#[cfg(feature="adreno-gpu")]
+pub(crate) fn full_chain_unsupported()->bool { FULL_CHAIN_UNSUPPORTED.load(Ordering::Acquire) }
+#[cfg(feature="adreno-gpu")]
+fn full_chain_unavailable_reason(unsupported:bool)->&'static str {
+    if unsupported { "unsupported_adapter" } else { "gpu_unavailable_fallback" }
+}
+/// Lazily initialized process-wide backend. Unavailable before submission permits
+/// ordinary CPU fallback; uncertain submitted work is blocked by the guard above.
+#[cfg(feature = "adreno-gpu")]
+pub(crate) fn full_chain_gpu() -> Option<&'static spektrafilm_gpu::wgpu_backend::WgpuBackend> {
+    FULL_CHAIN_GPU.get_or_init(||std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        #[cfg(target_os="android")]
+        { spektrafilm_gpu::wgpu_backend::WgpuBackend::new_with_adapter_filter(|info| {
+            let eligible=crate::adreno::eligible_adapter(info.vendor,&info.name,info.backend==wgpu::Backend::Vulkan,info.device_type==wgpu::DeviceType::IntegratedGpu);
+            if !eligible { FULL_CHAIN_UNSUPPORTED.store(true,Ordering::Release); }
+            eligible
+        }) }
+        #[cfg(not(target_os="android"))]
+        { spektrafilm_gpu::wgpu_backend::WgpuBackend::new() }
+    })).ok().flatten()).as_ref()
+}
+
+/// Counts belong to this caller thread; the backend serializes each GPU submission.
+/// A submitted command alone is not success: only validated completed output is active.
+#[cfg(feature = "adreno-gpu")]
+pub(crate) fn resident_diagnostics(gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,batches:u64,stage:&'static str)->crate::adreno::GpuDiagnostics {
+    crate::adreno::GpuDiagnostics {requested:true,active:batches>0,available:gpu.is_healthy(),adapter:gpu.adapter_name().to_owned(),backend:"wgpu",accelerated_stage:stage,gpu_batches:batches,cpu_fallbacks:0,reason:if stage=="tiled-chain"{"approximate_tiled_chain"}else if stage=="banded-chain"{"approximate_banded_chain"}else{"approximate_resident_chain"}.into(),startup_self_test_passed:false,numeric_guard_passed:true}
+}
+/// Metadata revisions are cheap to verify and prevent reusing cached scientific
+/// assets after an installer has replaced the data snapshot on this handle.
+fn refresh_cache_revision(engine:&Engine,params:&MobileParams)->Result<()> {
+    let files=[format!("profiles/{}.json",params.film_stock),format!("profiles/{}.json",params.paper_stock),"luts/spectral_upsampling/irradiance_xy_tc.npy".into(),"filters/neutral_print_filters.json".into()];
+    let mut revision=String::new();
+    for name in files {
+        let meta=std::fs::metadata(engine.data_dir.join(&name)).map_err(|_|EngineError::new("MISSING_DATA","Bundled data revision is unavailable"))?;
+        let changed=meta.modified().ok().and_then(|v|v.duration_since(std::time::UNIX_EPOCH).ok()).map(|v|v.as_nanos());
+        use std::fmt::Write;write!(&mut revision,"{name}:{}:{changed:?};",meta.len()).map_err(|_|EngineError::new("INTERNAL_ERROR","Cache revision unavailable"))?;
+    }
+    let mut prior=engine.cache_revision.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Cache revision unavailable"))?;
+    if prior.as_ref()!=Some(&revision) {
+        engine.profile_cache.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Profile cache unavailable"))?.clear();
+        *engine.pipeline_cache.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Pipeline cache unavailable"))?=None;
+        *prior=Some(revision);
+    }
+    Ok(())
+}
+/// Load a stock profile, serving repeats from the per-engine session cache so a
+/// slider scrub does not re-read and re-parse the same JSON every frame.
+fn cached_profile(engine:&Engine,stock:&str)->Result<Profile> {
+    if let Ok(cache)=engine.profile_cache.lock(){if let Some(p)=cache.get(stock){return Ok((**p).clone());}}
+    let loaded=load_profile_by_name(&engine.data_dir,stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
+    if let Ok(mut cache)=engine.profile_cache.lock(){
+        // The bundled catalog is tiny; this bound only guards a pathological caller.
+        if cache.len()>=16 {cache.clear();}
+        cache.insert(stock.to_string(),Arc::new(loaded.clone()));
+    }
+    Ok(loaded)
+}
+/// Build (or reuse) the spectral pipeline for these exact params. The fingerprint
+/// covers the film/paper stocks and the full resolved RuntimeParams, so a cache hit
+/// is guaranteed to produce identical color to a fresh build.
+fn cached_pipeline(engine:&Engine,params:&MobileParams)->Result<Arc<Pipeline>> {
+    refresh_cache_revision(engine,params)?;
+    let film=cached_profile(engine,&params.film_stock)?;
+    let print=cached_profile(engine,&params.paper_stock)?;
+    let runtime=params.runtime_for_film(&film);
+    // RuntimeParams serializes deterministically (serde field order + shortest
+    // round-trip floats), so an identical slider state yields an identical key.
+    let key=serde_json::to_string(&(params.film_stock.as_str(),params.paper_stock.as_str(),&runtime)).map_err(|_|EngineError::new("INVALID_PARAMS","Pipeline fingerprint serialization failed"))?;
+    if let Ok(cache)=engine.pipeline_cache.lock(){if let Some(c)=cache.as_ref(){if c.key==key{return Ok(c.pipeline.clone());}}}
+    let pipeline=Arc::new(Pipeline::new_with_spectral(film,print,runtime,&engine.data_dir).map_err(|e|EngineError::new("PIPELINE_ERROR",e))?);
+    if let Ok(mut cache)=engine.pipeline_cache.lock(){*cache=Some(CachedPipeline{key,pipeline:pipeline.clone()});}
+    Ok(pipeline)
+}
 pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,params:&MobileParams)->Result<RenderOutput> {
     let bytes=required_bytes(width as i32,height as i32)?;
     params.validate()?;
@@ -289,19 +415,35 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     check_cancellation(engine,generation)?;
     let _interactive=crate::export_execution::interactive_work();
     let start=Instant::now();
-    let film=load_profile_by_name(&engine.data_dir,&params.film_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
-    let print=load_profile_by_name(&engine.data_dir,&params.paper_stock).map_err(|e|EngineError::new("PROFILE_ERROR",e.to_string()))?;
-    let runtime=params.runtime_for_film(&film);
-    let pipe=Pipeline::new_with_spectral(film,print,runtime,&engine.data_dir).map_err(|e|EngineError::new("PIPELINE_ERROR",e))?;
+    // Session-cached pipeline: identical params (e.g. the QUICK->REFINED pair)
+    // reuse one spectral build instead of reconstructing the tc LUT every frame.
+    let pipe=cached_pipeline(engine,params)?;
     check_cancellation(engine,generation)?;
     let image=ImageBuf::from_data(width,height,input.iter().map(|&x|from_f64(x as f64)).collect());
-    let backend=crate::adreno::AdrenoDensityBackend::with_enabled(params.use_gpu);
-    check_cancellation(engine,generation)?;
     let metered_ev=if pipe.params.camera.auto_exposure {
         let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);
         Some(spektrafilm_core::stages::filming::measure_autoexposure_ev(&image,&matrix,&pipe.params.camera.auto_exposure_method))
     }else{None};
-    let output=pipe.process(image,&backend);
+    let mut gpu_note=None;
+    #[allow(unused_mut)] let mut accelerated:Option<(ImageBuf,crate::adreno::GpuDiagnostics)>=None;
+    #[cfg(feature = "adreno-gpu")]
+    if params.use_gpu {
+        if let Some(gpu)=full_chain_gpu().filter(|gpu|gpu.is_healthy()) {
+            let before=gpu.thread_submits();
+            let attempt=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||pipe.process_resident_borrowed_controlled(&image,gpu,||check_cancellation(engine,generation).is_ok())));
+            check_cancellation(engine,generation)?;
+            match attempt {
+                Ok(Some(output))=>accelerated=Some((output,resident_diagnostics(gpu,gpu.thread_submits().saturating_sub(before),"full-resident-chain"))),
+                _=>gpu_note=Some("gpu_execution_fallback"),
+            }
+        }else {gpu_note=Some(full_chain_unavailable_reason(full_chain_unsupported()));}
+    }
+    let (output,gpu)=if let Some(done)=accelerated {done}else {
+        let backend=crate::adreno::AdrenoDensityBackend::with_enabled(params.use_gpu&&gpu_note.is_none());
+        let output=pipe.process(image,&backend);let mut diagnostics=backend.diagnostics();
+        if let Some(reason)=gpu_note {diagnostics.requested=params.use_gpu;diagnostics.cpu_fallbacks+=1;diagnostics.reason=reason.into();}
+        (output,diagnostics)
+    };
     check_cancellation(engine,generation)?;
     if output.width != width || output.height != height || output.data.len() != bytes/4 {
         return Err(EngineError::new("INVALID_OUTPUT_SHAPE", "Physical pipeline returned dimensions or buffer length different from the requested image"));
@@ -312,7 +454,120 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
         rgb.into_iter().map(|x|(x*exposure)as f32)
     }).collect();
     if pixels.iter().any(|x|!x.is_finite()) {return Err(EngineError::new("NONFINITE_OUTPUT","Rendering produced a nonfinite sample"));}
-    Ok(RenderOutput {metered_ev,gpu:backend.diagnostics(),pixels,elapsed_ms:start.elapsed().as_secs_f64()*1000.,warnings:vec!["Direct-buffer preview: maximum 589824 pixels. Use nativeExportFile for original-size export; never silently reduce the original.","Float32 input/output ABI is not a bit-exact float64 Python reference; see precision for internal arithmetic.","The same seed is deterministic within each path, but preview and full-size export use different grain sampling layouts and need not match pixel-for-pixel.","Cancellation is cooperative before/after the pipeline, not immediate."]})
+    Ok(RenderOutput {metered_ev,gpu,pixels,elapsed_ms:start.elapsed().as_secs_f64()*1000.,warnings:vec!["Preview size is explicitly bounded by the native memory budget. Use nativeExportFile for original-size export; never silently reduce the original.","GPU path uses v41 f32 spatial/grain and cap64 six-Gaussian diffusion approximations; CPU fallback is not pixel-identical.","The same seed is deterministic within each path, but preview and full-size export use different grain sampling layouts and need not match pixel-for-pixel.","Cancellation is cooperative before/after the pipeline, not immediate."]})
+}
+
+/// sRGB EOTF-encode one linear sample to an 8-bit channel, matching the Kotlin
+/// preview compositor's `encode()` exactly (`coerceIn(0,1)` -> EOTF ->
+/// `(x*255).roundToInt().coerceIn(0,255)`; `roundToInt` is `floor(x+0.5)`).
+fn encode_srgb8(v:f32)->u8 {
+    let x=(v as f64).clamp(0.0,1.0);
+    let s=if x<=0.0031308 {x*12.92} else {1.055*x.powf(1.0/2.4)-0.055};
+    ((s*255.0+0.5) as i32).clamp(0,255) as u8
+}
+/// sRGB-encode linear-sRGB preview pixels (already exposure-adjusted, in the
+/// requested output color space) to packed RGBA8, matching the Kotlin preview
+/// compositor's per-pixel `encode()` exactly. Doing this in native code lets
+/// the Java side hand the buffer straight to `Bitmap.copyPixelsFromBuffer`
+/// (a single JNI memcpy) instead of a per-pixel Kotlin `Double.pow` loop,
+/// without requiring a Kotlin per-pixel loop. Timings are device-dependent.
+pub fn linear_srgb_to_rgba8(pixels:&[f32])->Vec<u8> {
+    let mut out=Vec::with_capacity(pixels.len()/3*4);
+    for rgb in pixels.chunks_exact(3) {
+        out.push(encode_srgb8(rgb[0]));
+        out.push(encode_srgb8(rgb[1]));
+        out.push(encode_srgb8(rgb[2]));
+        out.push(0xff);
+    }
+    out
+}
+/// Strided variant of [`linear_srgb_to_rgba8`] that writes directly into a locked
+/// `ANDROID_BITMAP_FORMAT_RGBA_8888` bitmap (R,G,B,A byte order, `out_stride`
+/// bytes per row). Writing straight into the destination `Bitmap` eliminates the
+/// per-frame direct output buffer and the `copyPixelsFromBuffer` full-image memcpy.
+pub fn linear_srgb_to_rgba8_into(pixels:&[f32],out:&mut [u8],out_stride:usize,width:usize,height:usize) {
+    debug_assert_eq!(pixels.len(),width*height*3);
+    debug_assert!(out_stride>=width*4 && out.len()>=out_stride*(height-1)+width*4);
+    for y in 0..height {
+        let row=&mut out[y*out_stride..y*out_stride+width*4];
+        for x in 0..width {
+            let i=(y*width+x)*3;
+            row[x*4]=encode_srgb8(pixels[i]);
+            row[x*4+1]=encode_srgb8(pixels[i+1]);
+            row[x*4+2]=encode_srgb8(pixels[i+2]);
+            row[x*4+3]=0xff;
+        }
+    }
+}
+/// sRGB 8-bit -> linear-light, the continuous form of the Kotlin preview `linear[]`
+/// LUT (`v=i/255`: `v<=0.04045 ? v/12.92 : ((v+0.055)/1.055)^2.4`). Computed in f64
+/// to match the Kotlin `Double` math bit-for-bit on exact byte inputs.
+fn srgb8_to_linear(v:f64)->f32 {
+    let x=v.clamp(0.0,1.0);
+    (if x<=0.04045 {x/12.92} else {((x+0.055)/1.055f64).powf(2.4)}) as f32
+}
+/// Read a locked `ANDROID_BITMAP_FORMAT_RGBA_8888` source bitmap, box-average
+/// (area) downsample it to `dst_w*dst_h` in sRGB space, then linearize to RGB f32.
+/// This intentionally uses area resampling in sRGB, which is not pixel-identical
+/// to the former Skia filtered resize. It moves the conversion loop into
+/// native code, eliminating the Kotlin `getPixels`/`putFloat` loop, the scaled
+/// intermediate `Bitmap`, and the input direct buffer. Alpha is ignored (display
+/// bitmaps are already alpha-composited); output is opaque linear RGB.
+///
+/// `src` is the locked bitmap memory, `src_stride` bytes per row. When
+/// `src_w==dst_w && src_h==dst_h` this reduces to a pure per-pixel linearize,
+/// bit-identical to the old `getPixels`+LUT path.
+pub fn downsample_linearize_rgba8(src:&[u8],src_w:usize,src_h:usize,src_stride:usize,dst_w:usize,dst_h:usize)->Vec<f32> {
+    assert!(src_w>0 && src_h>0 && dst_w>0 && dst_h>0 && src_stride>=src_w*4 && src.len()>=src_stride*(src_h-1)+src_w*4);
+    let mut out=vec![0f32;dst_w*dst_h*3];
+    // Fast path: no resampling — linearize each pixel directly (exact LUT match).
+    if src_w==dst_w && src_h==dst_h {
+        for y in 0..dst_h {
+            let row=&src[y*src_stride..y*src_stride+src_w*4];
+            for x in 0..dst_w {
+                let p=&row[x*4..x*4+4];let o=(y*dst_w+x)*3;
+                out[o]=srgb8_to_linear(p[0] as f64/255.0);
+                out[o+1]=srgb8_to_linear(p[1] as f64/255.0);
+                out[o+2]=srgb8_to_linear(p[2] as f64/255.0);
+            }
+        }
+        return out;
+    }
+    // Area (box) downsample: each destination pixel averages the source rectangle
+    // it covers, weighted by partial coverage at the edges.
+    for dy in 0..dst_h {
+        let sy0=dy as f64*src_h as f64/dst_h as f64;
+        let sy1=(dy+1) as f64*src_h as f64/dst_h as f64;
+        let iy0=sy0.floor() as usize;
+        let iy1=(sy1.ceil() as usize).min(src_h);
+        for dx in 0..dst_w {
+            let sx0=dx as f64*src_w as f64/dst_w as f64;
+            let sx1=(dx+1) as f64*src_w as f64/dst_w as f64;
+            let ix0=sx0.floor() as usize;
+            let ix1=(sx1.ceil() as usize).min(src_w);
+            let mut acc=[0f64;3];let mut wsum=0f64;
+            for iy in iy0..iy1 {
+                let wy=(sy1.min((iy+1) as f64)-sy0.max(iy as f64)).max(0.0);
+                if wy<=0.0 {continue;}
+                let row=&src[iy*src_stride..iy*src_stride+src_w*4];
+                for ix in ix0..ix1 {
+                    let wx=(sx1.min((ix+1) as f64)-sx0.max(ix as f64)).max(0.0);
+                    let w=wx*wy;
+                    if w<=0.0 {continue;}
+                    let p=&row[ix*4..ix*4+4];
+                    acc[0]+=w*p[0] as f64;acc[1]+=w*p[1] as f64;acc[2]+=w*p[2] as f64;
+                    wsum+=w;
+                }
+            }
+            let o=(dy*dst_w+dx)*3;
+            if wsum>0.0 {
+                out[o]=srgb8_to_linear(acc[0]/wsum/255.0);
+                out[o+1]=srgb8_to_linear(acc[1]/wsum/255.0);
+                out[o+2]=srgb8_to_linear(acc[2]/wsum/255.0);
+            }
+        }
+    }
+    out
 }
 /// Never expose arbitrary upstream errors: they can contain paths or input text.
 pub fn public_error_message(code:&str)->&'static str {match code {
@@ -326,6 +581,7 @@ pub fn public_error_message(code:&str)->&'static str {match code {
     "INVALID_OUTPUT_SHAPE"=>"Rendered dimensions do not match the request",
     "NONFINITE_OUTPUT"=>"Rendering produced a nonfinite sample",
     "INVALID_HANDLE"=>"Engine handle is absent or destroyed",
+    "GPU_COMPLETION_UNCERTAIN"=>"GPU completion could not be confirmed; restart the app before rendering again",
     "ENGINE_BUSY"=>"One render or export is already active on this handle",
     "CANCELLED"=>"Operation cancelled; output is invalid",
     "INVALID_PATH"|"EXPORT_PATH_POLICY"=>"Spool path violates the private app file policy",
@@ -341,6 +597,7 @@ pub fn public_error_message(code:&str)->&'static str {match code {
     _=>"Native engine operation failed",
 }}
 pub fn error_json(error:EngineError,operation:&'static str,stage:&'static str,elapsed_ms:f64)->String {
+    let stage=if error.code=="GPU_COMPLETION_UNCERTAIN"{"scientific_pipeline"}else{stage};
     serde_json::json!({"ok":false,"schemaVersion":1,"code":error.code,"message":public_error_message(error.code),"outputValid":false,"operation":operation,"stage":stage,"elapsedMs":elapsed_ms}).to_string()
 }
 
@@ -421,10 +678,69 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         let p=MobileParams::parse(r#"{"diffusionFilter":"glimmerglass","diffusionStrength":0.75,"diffusionSize":1.5,"warmth":1,"printYellow":4,"printMagenta":-7,"preflash":0.1,"scanSharpenAmount":1.2,"scanSharpenRadius":2}"#).unwrap().runtime();
         assert!(p.camera.diffusion_filter.active);assert_eq!(p.camera.diffusion_filter.filter_family,"glimmerglass");assert_eq!(p.camera.diffusion_filter.strength,0.75);assert_eq!(p.camera.diffusion_filter.spatial_scale,1.5);assert_eq!(p.enlarger.y_filter_shift,-11.);assert_eq!(p.enlarger.m_filter_shift,-7.);assert_eq!(p.enlarger.preflash_exposure,0.1);assert_eq!(p.scanner.unsharp_mask,[2.,1.2]);
     }
-    #[test] fn checked_dimensions() {assert_eq!(required_bytes(16,16).unwrap(),3072);assert!(required_bytes(0,1).is_err());assert!(required_bytes(i32::MAX,i32::MAX).is_err());assert_eq!(required_bytes(768,768).unwrap(),768*768*12);assert!(required_bytes(769,768).is_err());}
+    #[cfg(feature="adreno-gpu")]
+    #[test] fn unsupported_adapter_has_explicit_fallback_reason() {
+        assert_eq!(full_chain_unavailable_reason(true),"unsupported_adapter");
+        assert_eq!(full_chain_unavailable_reason(false),"gpu_unavailable_fallback");
+    }
+    #[test] fn checked_dimensions() {assert_eq!(required_bytes(16,16).unwrap(),3072);assert!(required_bytes(0,1).is_err());assert!(required_bytes(i32::MAX,i32::MAX).is_err());assert_eq!(required_bytes(768,768).unwrap(),768*768*12);assert_eq!(required_bytes(1280,1280).unwrap(),1280*1280*12);assert!(required_bytes(1281,1280).is_err());}
+    #[test] fn rgba8_encode_matches_kotlin_srgb8() {
+        // Kotlin LinearRgb.toSrgb8: coerceIn(0,1) -> EOTF -> (x*255).roundToInt().coerceIn(0,255)
+        // Double.roundToInt() == Math.round == floor(x+0.5) for non-negative x.
+        fn kotlin(v:f32)->u8 {let l=(v as f64).clamp(0.0,1.0);let e=if l<=0.0031308 {12.92*l} else {1.055*l.powf(1.0/2.4)-0.055};((e*255.0)+0.5).floor().clamp(0.0,255.0) as u8}
+        let px=[0.0f32,1.0,0.5, 0.0031308,0.0031309,0.04045, -0.25,2.0,f32::NAN, f32::INFINITY,f32::NEG_INFINITY,0.5];
+        let out=linear_srgb_to_rgba8(&px);
+        assert_eq!(out.len(),px.len()/3*4);
+        for (i,v) in px.iter().enumerate() {assert_eq!(out[i/3*4+i%3],kotlin(*v),"sample {i}={v}");}
+        for a in [3usize,7,11,15] {assert_eq!(out[a],0xff,"alpha byte {a}");}
+        // Exact codes: 0->0, 1->255, 0.5->188, EOTF knee samples, clamps, NaN->0, +-inf
+        assert_eq!(&out[0..4],&[0,255,188,0xff]);
+        assert_eq!(&out[4..8],&[10,10,57,0xff]);
+        assert_eq!(&out[8..12],&[0,255,0,0xff]);
+        assert_eq!(&out[12..16],&[255,0,188,0xff]);
+    }
+    #[test] fn rgba8_into_matches_vec_and_respects_stride() {
+        let w=3usize;let h=2usize;let stride=w*4+8; // padded stride
+        let px:Vec<f32>=(0..w*h*3).map(|i|i as f32/ (w*h*3) as f32).collect();
+        let mut out=vec![0xabu8;stride*h];
+        linear_srgb_to_rgba8_into(&px,&mut out,stride,w,h);
+        let vec=linear_srgb_to_rgba8(&px);
+        for y in 0..h {assert_eq!(&out[y*stride..y*stride+w*4],&vec[y*w*4..(y+1)*w*4],"row {y}");}
+        // Padding bytes between rows must be untouched.
+        for y in 0..h {assert!(out[y*stride+w*4..(y+1)*stride].iter().all(|&b|b==0xab),"padding row {y}");}
+    }
+    #[test] fn downsample_identity_is_exact_lut() {
+        // No resampling: each output pixel is the linearized source byte.
+        let w=4usize;let h=3usize;let stride=w*4+4;
+        let mut src=vec![0u8;stride*h];
+        for y in 0..h {for x in 0..w {let p=y*stride+x*4;src[p]=(x*40) as u8;src[p+1]=(y*70) as u8;src[p+2]=200;src[p+3]=255;}}
+        let out=downsample_linearize_rgba8(&src,w,h,stride,w,h);
+        fn lut(b:u8)->f32 {let v=b as f64/255.0;(if v<=0.04045 {v/12.92} else {((v+0.055)/1.055f64).powf(2.4)}) as f32}
+        for y in 0..h {for x in 0..w {let o=(y*w+x)*3;
+            assert_eq!(out[o],lut((x*40) as u8),"r {x},{y}");
+            assert_eq!(out[o+1],lut((y*70) as u8),"g {x},{y}");
+            assert_eq!(out[o+2],lut(200),"b {x},{y}");}}
+    }
+    #[test] fn downsample_2x_box_averages() {
+        // 2x2 -> 1x1: the single output is the average of the four source pixels.
+        let src=[10u8,20,30,255, 20,30,40,255, 30,40,50,255, 40,50,60,255];
+        let out=downsample_linearize_rgba8(&src,2,2,8,1,1);
+        fn lut(avg:f64)->f32 {let v=avg/255.0;(if v<=0.04045 {v/12.92} else {((v+0.055)/1.055f64).powf(2.4)}) as f32}
+        assert_eq!(out[0],lut((10.0+20.0+30.0+40.0)/4.0));
+        assert_eq!(out[1],lut((20.0+30.0+40.0+50.0)/4.0));
+        assert_eq!(out[2],lut((30.0+40.0+50.0+60.0)/4.0));
+    }
+    #[test] fn downsample_uniform_is_constant() {
+        // A uniform field must stay uniform under any downsample ratio.
+        let sw=8usize;let sh=6usize;let dw=3usize;let dh=2usize;
+        let src=vec![128u8;sw*sh*4];
+        let out=downsample_linearize_rgba8(&src,sw,sh,sw*4,dw,dh);
+        let expect={let v=128.0f64/255.0;(if v<=0.04045 {v/12.92} else {((v+0.055)/1.055f64).powf(2.4)}) as f32};
+        for (i,&v) in out.iter().enumerate() {assert!((v-expect).abs()<1e-6,"sample {i}: {v} != {expect}");}
+    }
     #[test] fn rejects_invalid_parameters() {for j in [r#"{"unknown":1}"#,r#"{"filmStock":"../../secret"}"#,r#"{"grainAmount":-1}"#,r#"{"schemaVersion":2}"#,r#"{"contrast":2}"#] {assert!(MobileParams::parse(j).is_err(),"{j}");}}
     #[test] fn accepts_documented_defaults() {let p=MobileParams::parse("{}").unwrap();assert_eq!(p.seed,42);assert_eq!(p.film_stock,"kodak_portra_400");}
-    #[test] fn cancelled_generation_does_not_poison_next_job() {let e=Engine {data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())};let old=e.cancel_generation.load(Ordering::Acquire);e.cancel_generation.fetch_add(1,Ordering::AcqRel);assert!(check_cancellation(&e,old).is_err());let new=e.cancel_generation.load(Ordering::Acquire);assert!(check_cancellation(&e,new).is_ok());}
+    #[test] fn cancelled_generation_does_not_poison_next_job() {let e=Engine {data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)};let old=e.cancel_generation.load(Ordering::Acquire);e.cancel_generation.fetch_add(1,Ordering::AcqRel);assert!(check_cancellation(&e,old).is_err());let new=e.cancel_generation.load(Ordering::Acquire);assert!(check_cancellation(&e,new).is_ok());}
     #[test] fn missing_data_cannot_create_engine() {assert!(create("/does/not/exist/film-engine-data").is_err());assert!(get(-1).is_err());destroy(-1);cancel(-1);}
     #[test] fn public_errors_do_not_leak_upstream_text() {
         let result=error_json(EngineError::new("INVALID_PARAMS","private-GPS-path-photo-sample"),"preview","validate_request",1.5);
@@ -447,19 +763,46 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         assert!(plan_export(i32::MAX,2,&p).is_err());assert!(plan_export(0,3000,&p).is_err());
     }
     #[test] fn export_progress_snapshot_is_coherent_under_concurrent_polling() {
-        let e=Arc::new(Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())});
+        let e=Arc::new(Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)});
         progress_begin(&e,"exportFile");let writer=e.clone();
         let thread=std::thread::spawn(move||for i in 1..=5000 {
             let cloud=i%2==0;
-            progress_update_export(&writer,crate::streamed_progress::ExportProgress{pass_updated:true,phase:if cloud{"grain_cloud"}else{"grain_sampling"},done:i,total:5000,display_stage:5,stage_done:i*7,stage_total:35000});
+            progress_update_export(&writer,crate::streamed_progress::ExportProgress{gpu:None,pass_updated:true,phase:if cloud{"grain_cloud"}else{"grain_sampling"},done:i,total:5000,display_stage:5,stage_done:i*7,stage_total:35000});
         });
         for _ in 0..5000 {let value:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
             if value["displayStage"]==5 {let done=value["done"].as_u64().unwrap();assert_eq!(value["stageDone"],done*7);assert_eq!(value["stageTotal"],35000);assert_eq!(value["stage"],if done%2==0{"grain_cloud"}else{"grain_sampling"});}
         }
         thread.join().unwrap();progress_begin(&e,"preview");let value:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(value["displayStage"],1);assert_eq!(value["stageDone"],0);assert_eq!(value["stageTotal"],0);
     }
+    #[test] fn gpu_batch_metadata_preserves_overall_progress_and_failed_stage() {
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)};
+        let job=progress_begin(&e,"exportFile");let mut reporter=crate::streamed_progress::Reporter::new(|event|progress_update_export(&e,event));
+        use crate::streamed_progress::{ProgressSink,GpuWorkProgress};reporter.begin_stage(6,2,"gpu_tiled_chain");reporter.begin_work("gpu_tiled_chain");reporter.pass("gpu_tiled_chain",50,100);
+        reporter.gpu_event(GpuWorkProgress{phase:Some("grain"),tile_index:2,tile_total:4,batch_index:6,batch_elapsed_ms:1.25,chain_wait_ms:4.5,completed_submits:10,..GpuWorkProgress::default()});
+        let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["done"],50);assert_eq!(json["total"],100);assert_eq!(json["gpuTileIndex"],2);assert_eq!(json["gpuTileTotal"],4);assert_eq!(json["gpuPhase"],"grain");assert_eq!(json["gpuCompletedSubmits"],10);
+        reporter.gpu_failure("print",5000.);drop(reporter);let _=progress_finish(&e,job,Some("GPU_COMPLETION_UNCERTAIN"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["gpuFailedPhase"],"print");assert_eq!(json["gpuFailedElapsedMs"],5000.);assert_eq!(json["gpuCompletedSubmits"],10);
+        progress_begin(&e,"preview");let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(json["gpuPhase"].is_null());assert!(json["gpuFailedPhase"].is_null());
+    }
+    #[test] fn fallback_reason_survives_cpu_progress_cancel_and_resets_next_job() {
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)};
+        let job=progress_begin(&e,"exportFile");
+        progress_update_export(&e,crate::streamed_progress::ExportProgress{gpu:None,pass_updated:false,phase:"gpu_memory_budget_fallback",done:0,total:0,display_stage:1,stage_done:0,stage_total:0});
+        progress_update(&e,"film_exposure",1,9);progress_update(&e,"camera_diffusion",3,9);
+        let _=progress_finish(&e,job,Some("CANCELLED"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        assert_eq!(json["gpuFallbackReason"],"gpu_memory_budget_fallback");assert_eq!(json["stage"],"camera_diffusion");assert_eq!(json["status"],"cancelled");
+        progress_begin(&e,"preview");let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(json["gpuFallbackReason"].is_null());
+    }
+    #[test] fn unsupported_adapter_reason_survives_cpu_progress_cancel_and_resets_next_job() {
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)};
+        let job=progress_begin(&e,"exportFile");
+        progress_update_export(&e,crate::streamed_progress::ExportProgress{gpu:None,pass_updated:false,phase:"unsupported_adapter",done:0,total:0,display_stage:1,stage_done:0,stage_total:0});
+        progress_update(&e,"film_exposure",1,9);progress_update(&e,"camera_diffusion",3,9);
+        let _=progress_finish(&e,job,Some("CANCELLED"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        assert_eq!(json["gpuFallbackReason"],"unsupported_adapter");assert_eq!(json["stage"],"camera_diffusion");assert_eq!(json["status"],"cancelled");
+        progress_begin(&e,"preview");let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(json["gpuFallbackReason"].is_null());
+    }
     #[test] fn progress_is_safe_and_resets_only_when_next_job_begins() {
-        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default())};
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None)};
         let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["jobId"],0);assert_eq!(json["status"],"idle");
         let job=progress_begin(&e,"exportFile");progress_update(&e,"private-path-secret",9,10);let j=progress_json(&e).unwrap();assert!(!j.contains("private-path-secret"));
         let before:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();progress_update(&e,"private-path-secret",1,10);let reset:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(reset["passId"].as_u64().unwrap()>before["passId"].as_u64().unwrap());let _=progress_finish(&e,job,Some("CANCELLED"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["status"],"cancelled");assert_eq!(json["active"],false);assert_eq!(json["jobId"],1);
@@ -574,5 +917,17 @@ mod bw_mobile_tests {
             if film=="kodak_doublex" {p.film_development_time=12.;p.paper_development_time=9.;let changed=render(&engine,0,&input,17,13,&p).unwrap();assert!(first.pixels.iter().zip(&changed.pixels).any(|(a,b)|(a-b).abs()>1e-5));}
         }
         destroy(id);
+    }
+}
+
+#[cfg(test)] mod gpu_completion_contract_tests {
+    #[test] fn gpu_uncertain_blocks_subsequent_work_without_gpu_request() {
+        assert!(super::completion_guard_for(false).is_ok());
+        for _use_gpu in [true,false,false,true] {
+            let error=super::completion_guard_for(true).unwrap_err();
+            assert_eq!(error.code,"GPU_COMPLETION_UNCERTAIN");
+            let json:serde_json::Value=serde_json::from_str(&super::error_json(error,"preview","validate_request",0.)).unwrap();
+            assert_eq!(json["stage"],"scientific_pipeline");assert_eq!(json["outputValid"],false);
+        }
     }
 }

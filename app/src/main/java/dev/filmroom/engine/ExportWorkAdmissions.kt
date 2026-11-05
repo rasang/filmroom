@@ -1,5 +1,7 @@
 package dev.filmroom.engine
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -10,9 +12,15 @@ import kotlinx.coroutines.sync.withLock
  */
 internal class ExportWorkAdmission {
     private val mutex=Mutex()
-    suspend fun <T> run(work:suspend ()->T):T=mutex.withLock { work() }
+    private val mutableActive=MutableStateFlow(false)
+    val active=mutableActive.asStateFlow()
+    suspend fun <T> run(work:suspend ()->T):T=mutex.withLock {
+        mutableActive.value=true
+        try { work() } finally { mutableActive.value=false }
+    }
 }
 internal object ExportWorkAdmissions {
     private val admission=ExportWorkAdmission()
+    val active=admission.active
     suspend fun <T> run(work:suspend ()->T):T=admission.run(work)
 }

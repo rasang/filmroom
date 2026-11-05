@@ -253,7 +253,7 @@
     <string name="text_646130986822" formatted="false">Gamut compression</string>
     <string name="text_192216b8cb6d" formatted="false">Compresses colors outside the sRGB gamut into the displayable range. Automatically disabled for wide-gamut export.</string>
     <string name="text_6f16843acab7" formatted="false">GPU acceleration</string>
-    <string name="text_8d80b85bbd7f" formatted="false">Automatically attempts Adreno acceleration for some density stages; other stages remain on the CPU. Falls back to the CPU when unavailable. Faster processing is not guaranteed.</string>
+    <string name="text_8d80b85bbd7f" formatted="false">Experimental resident or banded GPU rendering. Some effects use approximations and may differ from CPU output. Falls back to CPU when budgets or device support are insufficient. Speed gains are not guaranteed.</string>
     <string name="text_683099bf5b6c" formatted="false">Film default</string>
     <string name="text_789f61dbfcc7" formatted="false">Red</string>
     <string name="text_d5234258fd84" formatted="false">Amber</string>
@@ -440,7 +440,7 @@
     <string name="text_0e898ec43b0b" formatted="false">; not continuous monitoring.\n</string>
     <string name="text_fa1c6dd0bfc3" formatted="false">Discards observed in this run: expired </string>
     <string name="text_6e94c47fde22" formatted="false">, capacity rotation </string>
-    <string name="text_4af5bd6fb80e" formatted="false">, damaged or incomplete </string>
+    <string name="text_4af5bd6fb80e" formatted="false">, rejected on read </string>
     <string name="text_e9d6840052fc" formatted="false">, uncertain future timestamp </string>
     <string name="text_1701c7739625" formatted="false">. Totals across runs are unknown.\n</string>
     <string name="text_5bf7bab64ce3" formatted="false">Most recent failure/interruption record: </string>
@@ -461,7 +461,7 @@
     <string name="text_bf7b123c114d" formatted="false">; no continuous monitoring between events.\n</string>
     <string name="text_ccc4edebf400" formatted="false">Discard counts observable in this run: expired=</string>
     <string name="text_1a58fbf44b39" formatted="false">, capacity rotation=</string>
-    <string name="text_4e203ca8ccb7" formatted="false">, damaged/incomplete=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">, rejected on read=</string>
     <string name="text_338aa9ce6405" formatted="false">, unconfirmed future timestamp=</string>
     <string name="text_b028650697a5" formatted="false">. Totals across runs cannot be determined.\n</string>
     <string name="text_bbbde15a1296" formatted="false">Recorded only on your device. After tapping Share, you choose the receiving app. This app does not upload logs.\n</string>
@@ -777,4 +777,13 @@
     <string name="toast_edge_limit_30000">Edge too long: max 30000 px</string>
     <string name="toast_edge_limit_32768">Edge too long: max 32768 px</string>
     <string name="toast_metadata_limit">Metadata exceeds safe limits</string>
+    <string name="gpu_phase_full_chain" formatted="false">GPU image pipeline</string>
+    <string name="gpu_phase_banded_chain" formatted="false">GPU banded rendering</string>
+    <string name="gpu_phase_prepass" formatted="false">GPU global prepass</string>
+    <string name="gpu_completion_uncertain" formatted="false">GPU completion could not be confirmed. Processing is paused to prevent overlapping memory use. Fully close and reopen the app.</string>
+    <string name="diagnostics_read_rejections_detail">Read rejections: startup %1$d, rotation %2$d. Includes incompatible versions, failed validation or incomplete writes; not a count of current-run events lost.\n</string>
+    <string name="gpu_phase_tiled_chain" formatted="false">GPU tiled rendering</string>
+    <string name="gpu_progress_processing">GPU image processing</string>
+    <string name="gpu_progress_tile">Tile %1$d/%2$d</string>
+    <string name="gpu_progress_last_completed">Last completed: %1$s (%2$d ms)</string>
 </resources>

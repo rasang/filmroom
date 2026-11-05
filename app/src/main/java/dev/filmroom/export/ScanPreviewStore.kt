@@ -16,13 +16,14 @@ internal object ScanPreviewStore {
     private const val TOKEN="scan-preview-attempt"
     private val uuid=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
     private val source=Regex("scan-source-([0-9a-f-]{36})\\.png")
-    fun clear(dir:File) {dir.listFiles()?.filter{it.name==TOKEN||it.name=="$TOKEN.part"||it.name.startsWith("scan-source-")||it.name.startsWith("scan-preview-")}.orEmpty().forEach{if(it.isFile)it.delete()}}
+    fun clear(dir:File) {NegativePreviewStore.clear(dir);dir.listFiles()?.filter{it.name==TOKEN||it.name=="$TOKEN.part"||it.name.startsWith("scan-source-")||it.name.startsWith("scan-preview-")}.orEmpty().forEach{if(it.isFile)it.delete()}}
     fun begin(dir:File):String {
-        clear(dir);val id=UUID.randomUUID().toString();val part=File(dir,"$TOKEN.part")
+        clear(dir);File(dir,"negative-preview.png").delete();val id=UUID.randomUUID().toString();val part=File(dir,"$TOKEN.part")
         try {FileOutputStream(part).use{it.write(id.toByteArray(Charsets.US_ASCII));it.fd.sync()};Files.move(part.toPath(),File(dir,TOKEN).toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}finally{part.delete()}
+        NegativePreviewStore.begin(id)
         return id
     }
-    private fun token(dir:File):String?=runCatching {File(dir,TOKEN).takeIf{it.isFile&&it.length()==36L}?.readText(Charsets.US_ASCII)?.takeIf{uuid.matches(it)}}.getOrNull()
+    internal fun token(dir:File):String?=runCatching {File(dir,TOKEN).takeIf{it.isFile&&it.length()==36L}?.readText(Charsets.US_ASCII)?.takeIf{uuid.matches(it)}}.getOrNull()
     fun select(dir:File):File? {
         val id=token(dir)?:return null
         return File(dir,"scan-preview-$id.jpg").takeIf{it.isFile&&it.length() in 1..524288L && token(dir)==id}

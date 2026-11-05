@@ -148,12 +148,18 @@ fn reply(
     operation: &str,
     f: impl FnOnce(&mut JNIEnv<'_>) -> Result<Value, &'static str>,
 ) -> jstring {
-    let result = catch_unwind(AssertUnwindSafe(|| f(&mut env)));
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        if matches!(operation,"create"|"build"|"tile"|"region") {
+            crate::mobile::gpu_completion_guard().map_err(|e|e.code)?;
+        }
+        f(&mut env)
+    }));
     let mut value = match result {
         Ok(Ok(value)) => value,
         Ok(Err(code)) => json!({"ok":false,"code":code,"outputValid":false}),
         Err(_) => json!({"ok":false,"code":"INTERNAL_ERROR","outputValid":false}),
     };
+    if value["code"]=="GPU_COMPLETION_UNCERTAIN" { value["stage"]=json!("scientific_pipeline"); }
     value["schemaVersion"] = json!(1);
     value["operation"] = json!(operation);
     // Clear low-level JNI exceptions before returning a sanitized typed status.
@@ -176,7 +182,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabil
     reply(env, "capabilities", |_| {
         let profiles:Vec<Value>=crate::profile_catalog::FILMS.iter().map(|film|json!({"filmStock":film,"printSupported":!crate::profile_catalog::is_reversal(film),"directSupported":crate::profile_catalog::is_reversal(film),"reason":"SUPPORTED_ROUTE_FINITE_GRAIN_ONLY"})).collect();
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
+            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"outputRgba8":true,"outputRgba8Abi":1,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
         )
     })
 }
@@ -368,6 +374,133 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion(
         result.check_publish().map_err(|e| e.code())?;
         Ok(
             json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
+        )
+    })
+}
+/// RGBA8 variant of `nativeTile`: identical tile render and metadata, but the
+/// output buffer receives packed sRGB-encoded RGBA8 (`sample.w*sample.h*4`
+/// bytes) instead of linear RGB float32, so the Java side can hand it straight
+/// to `Bitmap.copyPixelsFromBuffer` instead of a per-pixel Kotlin encode loop.
+/// Replies keep the "tile" operation name so existing response validation applies.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeTileRgba8(
+    env: JNIEnv<'_>,
+    _: JObject<'_>,
+    session: jlong,
+    operation: jlong,
+    cell_x: jint,
+    cell_y: jint,
+    buffer: JByteBuffer<'_>,
+) -> jstring {
+    reply(env, "tile", |env| {
+        let session = id(session)?;
+        let operation = id(operation)?;
+        let validated = (|| {
+            if cell_x < 0 || cell_y < 0 {
+                return Err("INVALID_REQUEST");
+            };
+            let (_, sample) = bridge::tile_layout(session, cell_x as usize, cell_y as usize)
+                .map_err(|e| e.code())?;
+            let bytes = sample
+                .w
+                .checked_mul(sample.h)
+                .and_then(|v| v.checked_mul(4))
+                .ok_or("INVALID_REQUEST")?;
+            let ptr = output(env, &buffer, bytes)?;
+            Ok::<_, &'static str>((ptr, bytes))
+        })();
+        let (ptr, bytes) = match validated {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = bridge::release_operation(session, operation);
+                return Err(e);
+            }
+        };
+        let result = bridge::tile(session, operation, cell_x as usize, cell_y as usize)
+            .map_err(|e| e.code())?;
+        result.check_publish().map_err(|e| e.code())?;
+        // Preserve the legacy Kotlin contract: non-finite output invalidates the tile.
+        if result.tile.rgb.iter().any(|v| !v.is_finite()) {
+            return Err("INVALID_RESULT");
+        }
+        let rgba8 = crate::mobile::linear_srgb_to_rgba8(&result.tile.rgb);
+        if rgba8.len() != bytes {
+            return Err("INTERNAL_ERROR");
+        }
+        // Java local buffer reference remains alive; capacity/alignment/order/writability
+        // checked before computation. Caller must not concurrently use this buffer/aliases.
+        unsafe { std::ptr::copy_nonoverlapping(rgba8.as_ptr(), ptr, bytes) };
+        // Cancellation may race commit: an invalid result must be ignored by the UI;
+        // generation guards remain necessary even after this final operation check.
+        result.check_publish().map_err(|e| e.code())?;
+        Ok(
+            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":"ExactSameWorkingGrid"}),
+        )
+    })
+}
+/// RGBA8 variant of `nativeRegion`: renders into a temporary linear RGB float32
+/// working buffer via the same `region_into` path, then sRGB-encodes to packed
+/// RGBA8 (`sample.w*sample.h*4` bytes) before committing to the Java buffer.
+/// Replies keep the "region" operation name so existing response validation applies.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegionRgba8(
+    env: JNIEnv<'_>,
+    _: JObject<'_>,
+    session: jlong,
+    operation: jlong,
+    x: jint,
+    y: jint,
+    width: jint,
+    height: jint,
+    buffer: JByteBuffer<'_>,
+) -> jstring {
+    reply(env, "region", |env| {
+        let session = id(session)?;
+        let operation = id(operation)?;
+        let validated = (|| {
+            if x < 0 || y < 0 || width <= 0 || height <= 0 {
+                return Err("INVALID_REQUEST");
+            };
+            let (_, sample) = bridge::region_layout(session, super::Rect{x:x as usize,y:y as usize,w:width as usize,h:height as usize})
+                .map_err(|e| e.code())?;
+            let floats = sample
+                .w
+                .checked_mul(sample.h)
+                .and_then(|v| v.checked_mul(3))
+                .ok_or("INVALID_REQUEST")?;
+            let bytes = sample
+                .w
+                .checked_mul(sample.h)
+                .and_then(|v| v.checked_mul(4))
+                .ok_or("INVALID_REQUEST")?;
+            let ptr = output(env, &buffer, bytes)?;
+            Ok::<_, &'static str>((ptr, floats, bytes))
+        })();
+        let (ptr, floats, bytes) = match validated {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = bridge::release_operation(session, operation);
+                return Err(e);
+            }
+        };
+        let mut rgb = vec![0f32; floats];
+        let result=bridge::region_into(session,operation,super::Rect{x:x as usize,y:y as usize,w:width as usize,h:height as usize},&mut rgb)
+            .map_err(|e|e.code())?;
+        result.check_publish().map_err(|e| e.code())?;
+        // Preserve the legacy Kotlin contract: non-finite output invalidates the region.
+        if rgb.iter().any(|v| !v.is_finite()) {
+            return Err("INVALID_RESULT");
+        }
+        let rgba8 = crate::mobile::linear_srgb_to_rgba8(&rgb);
+        if rgba8.len() != bytes {
+            return Err("INTERNAL_ERROR");
+        }
+        // The validated direct buffer remains strongly held by the JNI local ref.
+        // Caller promises exclusive access until this synchronous operation returns.
+        unsafe { std::ptr::copy_nonoverlapping(rgba8.as_ptr(), ptr, bytes) };
+        result.check_publish().map_err(|e| e.code())?;
+        Ok(
+            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
         )
     })
 }

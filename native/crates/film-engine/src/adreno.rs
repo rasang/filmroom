@@ -28,6 +28,7 @@ pub struct GpuDiagnostics {
     pub cpu_fallbacks: u64,
     pub reason: String,
     pub startup_self_test_passed: bool,
+    pub numeric_guard_passed: bool,
 }
 pub struct AdrenoDensityBackend {
     #[cfg(feature = "adreno-gpu")]
@@ -62,6 +63,7 @@ impl AdrenoDensityBackend {
             }
             .into(),
             startup_self_test_passed: false,
+            numeric_guard_passed: false,
         };
         #[allow(unused_mut)]
         let mut backend = Self {
@@ -665,6 +667,8 @@ mod tests {
     #[test]
     fn strict_adreno_vendor_gate() {
         assert!(eligible_adapter(0x5143, "Adreno (TM) 830", true, true));
+        assert!(eligible_adapter(0x5143, "adreno (tm) 830", true, true));
+        assert!(!eligible_adapter(0x13b5, "Mali-G715", true, true));
         assert!(!eligible_adapter(0x5143, "Adreno", false, true));
         assert!(!eligible_adapter(0x10de, "Adreno", true, true));
         assert!(!eligible_adapter(0x5143, "llvmpipe", true, true));

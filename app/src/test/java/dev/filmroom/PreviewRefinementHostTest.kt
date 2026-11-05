@@ -45,9 +45,9 @@ class PreviewRefinementHostTest {
             val calls=mutableListOf<Boolean>()
             vm.detailPreviewEdge={768}
             vm.renderPreview={_,_,_,detail->calls+=detail;Bitmap.createBitmap(if(detail)768 else 512,1,Bitmap.Config.ARGB_8888)}
-            vm.parameters(EditorState(brightness=0.2f));advanceTimeBy(121);runCurrent()
+            vm.parameters(EditorState(brightness=0.2f));advanceTimeBy(EditorViewModel.SCIENCE_DEBOUNCE_MS+1);runCurrent()
             assertEquals(listOf(false),calls);assertEquals(512,s.value.rendered!!.width);assertTrue(s.value.canExport)
-            advanceTimeBy(350);runCurrent();assertEquals(listOf(false,true),calls);assertEquals(768,s.value.rendered!!.width)
+            advanceTimeBy(EditorViewModel.REFINEMENT_SETTLE_MS);runCurrent();assertEquals(listOf(false,true),calls);assertEquals(768,s.value.rendered!!.width)
             vm.parameters(EditorState(brightness=0.3f),commit=false);advanceUntilIdle()
             assertEquals(listOf(false,true,false),calls);vm.cancel()
         }finally{Dispatchers.resetMain()}

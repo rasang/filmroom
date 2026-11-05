@@ -266,10 +266,12 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         if(detail==null)viewport.restore(previous[0].toDouble(),previous[1].toDouble(),previous[2].toDouble())
         applyPendingTransform();if(compositionEditing)viewport.reset();changed()
     }
+    var onNextPreviewDraw:((Bitmap)->Unit)?=null
     override fun onDraw(canvas:Canvas) {
         super.onDraw(canvas);val b=bitmap?.takeUnless{it.isRecycled} ?: return
         target.set(viewport.left.toFloat(),viewport.top.toFloat(),(viewport.left+viewport.imageWidth).toFloat(),(viewport.top+viewport.imageHeight).toFloat())
         canvas.drawBitmap(b,null,target,paint)
+        onNextPreviewDraw?.also{onNextPreviewDraw=null}?.invoke(b)
         if(isLiveComposition || freeEdit || (imprintDraftPreview && usableInteractiveFrame() && compositionGeometryReady)){
             val p=presentation;val aperture=if(freeEdit)viewportRect()else compositionAperture()!!
             val photo=compositionPhotoRect()!!
@@ -388,7 +390,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
             MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{finishCompositionGesture();handle=0;moving=false;changed();parent?.requestDisallowInterceptTouchEvent(false);if(e.actionMasked==MotionEvent.ACTION_UP)performClick()}
         };return true
     }
-    override fun onDetachedFromWindow(){finishCompositionGesture();detail?.foreground(false);super.onDetachedFromWindow()}
+    override fun onDetachedFromWindow(){onNextPreviewDraw=null;finishCompositionGesture();detail?.foreground(false);super.onDetachedFromWindow()}
     override fun onAttachedToWindow(){super.onAttachedToWindow();if(!disposed)detail?.foreground(foreground)}
     override fun close(){if(disposed)return;finishCompositionGesture();disposed=true;bindImprint(null);compositionChanged=null;compositionSource=null;interactiveFrame=null;liveComposition=false;detail?.close();detail=null;bitmap=null}
     override fun performClick():Boolean {super.performClick();return true}

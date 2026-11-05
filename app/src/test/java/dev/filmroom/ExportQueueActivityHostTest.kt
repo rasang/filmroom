@@ -78,7 +78,7 @@ class ExportQueueActivityHostTest {
     }
     @Test fun compactProgressSurvivesDetailToggleAndRowsAreReused(){
         Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use{c->
-            val a=c.get();val job=job(ExportJobState.RUNNING);render(a,listOf(job))
+            val a=c.get();a.previewSequenceEnabled=false;val job=job(ExportJobState.RUNNING);render(a,listOf(job))
             val before=views(a.window.decorView).filterIsInstance<TextView>().single{it.text.toString()=="生成颗粒\n第 5/7 步 · 65%"}
             views(a.window.decorView).filterIsInstance<Button>().single{it.text=="详情"}.performClick()
             assertTrue(before.isShown)
@@ -190,6 +190,7 @@ class ExportQueueActivityHostTest {
                 org.robolectric.RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-mdpi")
                 org.robolectric.RuntimeEnvironment.setFontScale(scale)
                 Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use{c->
+                    c.get().previewSequenceEnabled=false
                     render(c.get(),listOf(job(ExportJobState.RUNNING),job(ExportJobState.PENDING),job(ExportJobState.COMPLETED).copy(progress=ExportDisplayProgress(8,1,1),mediaUri="content://media/external/images/media/42")))
                     val root=c.get().findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
                     root.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));root.layout(0,0,w,h)

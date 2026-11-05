@@ -19,6 +19,10 @@ import kotlin.math.pow
 /** No fallback cosmetic filter: absent native engine is an explicit unavailable state. */
 object NativeFilmBridge {
     val loadError: String? = try { System.loadLibrary("film_engine"); null } catch (e: LinkageError) { e.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6c9f62a53f72) }
+    external fun nativeCapabilities(): String
+    external fun nativeRenderBitmap(handle: Long, source: Bitmap, dest: Bitmap, width: Int, height: Int, paramsJson: String): String
+    external fun nativeRenderLinearBitmap(handle: Long, input: ByteBuffer, dest: Bitmap, width: Int, height: Int, paramsJson: String): String
+    external fun nativeRenderRgba8(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String): String
     external fun nativeCreate(dataDirectory: String): Long
     external fun nativeRender(handle: Long, input: ByteBuffer, output: ByteBuffer, width: Int, height: Int, paramsJson: String): String
     external fun nativeExportFile(handle: Long, inputPath: String, outputPath: String, width: Int, height: Int, paramsJson: String): String
@@ -28,11 +32,12 @@ object NativeFilmBridge {
     external fun nativeDestroy(handle: Long)
 }
 
-enum class EngineFailure { UNAVAILABLE, CANCELLED, IMAGE_SIZE, BUDGET, PROFILE, PARAMETERS, STORAGE, INCOMPLETE, PATH, INTERNAL }
+enum class EngineFailure { GPU_COMPLETION_UNCERTAIN, UNAVAILABLE, CANCELLED, IMAGE_SIZE, BUDGET, PROFILE, PARAMETERS, STORAGE, INCOMPLETE, PATH, INTERNAL }
 class EngineException(val failure:EngineFailure, val nativeEngineCode:NativeEngineCode?=null, val nativeEngineStage:NativeEngineStage?=null):java.io.IOException(engineFailureMessage(failure).render()) {
     val uiMessage get()=engineFailureMessage(failure)
 }
 private fun engineFailureMessage(failure:EngineFailure):dev.filmroom.i18n.UiMessage=when(failure){
+    EngineFailure.GPU_COMPLETION_UNCERTAIN->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.gpu_completion_uncertain)
     EngineFailure.UNAVAILABLE->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a4ca69371996)
     EngineFailure.CANCELLED->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_6c0813b39bb5)
     EngineFailure.IMAGE_SIZE->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d5113f613aad)
@@ -51,88 +56,89 @@ class FilmEngine(private val context: Context) {
     @Volatile private var handle = 0L
     private val handleLock = Any()
     fun cancel() { synchronized(handleLock) { if(handle != 0L) NativeFilmBridge.nativeCancel(handle) } }
-    private suspend fun copyData(): File {
-        val copyJob = currentCoroutineContext()
-        val root = File(context.filesDir, "engine-data")
-        fun copy(asset: String, dest: File) {
-            val children = context.assets.list(asset) ?: emptyArray()
-            if(children.isNotEmpty()) { dest.mkdirs(); children.forEach { copy("$asset/$it", File(dest,it)) } }
-            else {
-                if(asset == PackedSpectralLut.ASSET) {
-                    context.assets.open(asset).use { PackedSpectralLut.install(it, File(dest.parentFile, PackedSpectralLut.ORIGINAL_NAME), context.filesDir, { copyJob.ensureActive() }) }
-                    return
-                }
-                dest.parentFile?.mkdirs()
-                val bytes=context.assets.open(asset).use { it.readBytes() }
-                if(!dest.exists() || !dest.readBytes().contentEquals(bytes)) {
-                    val temporary=File.createTempFile("asset-", ".tmp", dest.parentFile)
-                    try { temporary.outputStream().use { it.write(bytes); it.flush() }; check(temporary.renameTo(dest)) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4c0c1ba5f426) } }
-                    finally { temporary.delete() }
-                }
-            }
+    @Volatile private var closed=false
+    private var preparedHandleDirectory:String?=null
+    private fun ensureHandle(data:File):Long=synchronized(handleLock) {
+        check(!closed) { "Engine owner closed" }
+        if(handle!=0L && preparedHandleDirectory!=data.absolutePath)resetHandle()
+        if(handle==0L){
+            val created=NativeFilmBridge.nativeCreate(data.absolutePath)
+            if(created==0L)throw EngineException(EngineFailure.UNAVAILABLE)
+            handle=created;preparedHandleDirectory=data.absolutePath
         }
-        copy("engine-data",root)
-        return root
+        handle
     }
+    private fun resetHandle()=synchronized(handleLock) {
+        val previous=handle;handle=0L;preparedHandleDirectory=null
+        if(previous!=0L)NativeFilmBridge.nativeDestroy(previous)
+    }
+    /** Retire only once the serialized native call has returned; never free a running engine. */
+    fun close() {
+        synchronized(handleLock){if(closed)return;closed=true;if(handle!=0L)NativeFilmBridge.nativeCancel(handle)}
+        CoroutineScope(Dispatchers.IO).launch { renderMutex.withLock { resetHandle() } }
+    }
+    private suspend fun copyData():File=VersionedEngineAssets.prepare(context)
     internal fun previewEdge(settled:Boolean)=NativeMemoryPolicy.previewEdge(memoryBudgetMiB(),settled)
-    suspend fun render(source: Bitmap, parameters: EditorState, mode: String, photo:PhotoSource?=null,settled:Boolean=false): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.PREVIEW_RENDER,parameters.safeInfo(source.width,source.height)) { trace -> renderMutex.withLock { withContext(Dispatchers.Default) {
-        check(unavailable == null) { unavailable!! }
-        val contextJob = currentCoroutineContext()
+    suspend fun render(source: Bitmap, parameters: EditorState, mode: String, photo:PhotoSource?=null,settled:Boolean=false): Bitmap = ownedBitmap { capture -> OperationTrace.run(Operation.PREVIEW_RENDER,parameters.safeInfo(source.width,source.height)) { trace ->
+        val timing=currentCoroutineContext()[PreviewDiagnosticContext]?.timing
+        timing?.operation(trace.id.value);timing?.mark(PreviewTimingPoint.RENDER_QUEUED)
+        renderMutex.withLock { timing?.mark(PreviewTimingPoint.MUTEX_ACQUIRED);withContext(Dispatchers.Default) {
+        timing?.mark(PreviewTimingPoint.WORKER_STARTED)
+        if(unavailable!=null || closed)throw EngineException(EngineFailure.UNAVAILABLE)
+        val job=currentCoroutineContext()
+        val preparationStart=System.nanoTime()
         val budget=memoryBudgetMiB()
         val edge=NativeMemoryPolicy.previewEdge(budget,settled)
-        // RAW uses its unclipped linear spool. The display Bitmap is only a comparison
-        // image; decoding it here would irreversibly clip highlights before metering.
         val raw=photo?.linearPreview(edge)
-        val effective=if(raw==null && maxOf(source.width,source.height)>edge){val scale=edge.toDouble()/maxOf(source.width,source.height);Bitmap.createScaledBitmap(source,(source.width*scale).toInt().coerceAtLeast(1),(source.height*scale).toInt().coerceAtLeast(1),true)}else source
-        try {
-        val width=raw?.width ?: effective.width; val height=raw?.height ?: effective.height
+        val scale=if(raw==null && maxOf(source.width,source.height)>edge)edge.toDouble()/maxOf(source.width,source.height) else 1.0
+        val width=raw?.width ?: (source.width*scale).toInt().coerceAtLeast(1)
+        val height=raw?.height ?: (source.height*scale).toInt().coerceAtLeast(1)
         val count=Math.multiplyExact(width,height)
-        require(count <= NativeMemoryPolicy.DETAIL_PREVIEW_EDGE*NativeMemoryPolicy.DETAIL_PREVIEW_EDGE) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c7b93a82c0c6) }
-        val input=raw?.buffer() ?: ByteBuffer.allocateDirect(count*12).order(ByteOrder.nativeOrder())
-        val output=ByteBuffer.allocateDirect(count*12).order(ByteOrder.nativeOrder())
-        val ints=IntArray(width)
-        val linear=FloatArray(256) { i -> val v=i/255.0; (if(v<=0.04045) v/12.92 else ((v+0.055)/1.055).pow(2.4)).toFloat() }
-        try {if(raw==null)for(y in 0 until height) {
-            contextJob.ensureActive(); effective.getPixels(ints,0,width,0,y,width,1)
-            for(c in ints) { input.putFloat(linear[(c ushr 16) and 255]); input.putFloat(linear[(c ushr 8) and 255]); input.putFloat(linear[c and 255]) }
-        }}finally{if(effective!==source)effective.recycle()}
-        input.rewind(); output.rewind()
-        val data=copyData(); contextJob.ensureActive()
-        trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget))
-        val created=NativeFilmBridge.nativeCreate(data.absolutePath)
-        check(created != 0L) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595) }
-        synchronized(handleLock) { check(handle==0L); handle=created }
-        val result: String
-        try { contextJob.ensureActive(); result=withNativeReservation(NativeWorkReservations.previewEstimate(width,height)){NativeFilmBridge.nativeRender(created,input,output,width,height,nativeParameters(parameters,mode,budget))} }
-        finally { synchronized(handleLock) { NativeFilmBridge.nativeDestroy(created); handle=0L } }
-        contextJob.ensureActive()
-        val metadata=JSONObject(result)
-        trace.mark(Stage.NATIVE_EXIT,GpuRuntimeInfo.fromNativeResult(metadata))
-        checkNativeResult(metadata)
+        require(count<=NativeMemoryPolicy.DETAIL_PREVIEW_EDGE*NativeMemoryPolicy.DETAIL_PREVIEW_EDGE)
+        val data=copyData();job.ensureActive()
+        timing?.handle(synchronized(handleLock){handle==0L})
+        val created=ensureHandle(data)
+        val caps=try { JSONObject(NativeFilmBridge.nativeCapabilities()) } catch(_:UnsatisfiedLinkError) { throw EngineException(EngineFailure.UNAVAILABLE) }
+        if(!PreviewNativeContract.supportsBitmap(caps))throw EngineException(EngineFailure.UNAVAILABLE)
+        val preparationMs=(System.nanoTime()-preparationStart)/1_000_000
+        // Never pool a displayed Bitmap: stale View/StateFlow readers may still own it.
+        val allocationStart=System.nanoTime()
         val rendered=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
+        val allocationMs=(System.nanoTime()-allocationStart)/1_000_000
+        timing?.mark(PreviewTimingPoint.PREPARED)
+        var delivered=false
         try {
-            output.rewind()
-            fun encode(v: Float): Int { check(v.isFinite()) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1c50d5872b77) }; val x=v.coerceIn(0f,1f).toDouble(); return ((if(x<=0.0031308) x*12.92 else 1.055*x.pow(1.0/2.4)-0.055)*255.0+0.5).toInt().coerceIn(0,255) }
-            for(y in 0 until height) {
-                contextJob.ensureActive()
-                for(x in 0 until width) { val r=encode(output.float); val g=encode(output.float); val b=encode(output.float); ints[x]=(0xff shl 24) or (r shl 16) or (g shl 8) or b }
-                rendered.setPixels(ints,0,width,0,y,width,1)
+            job.ensureActive()
+            trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,previewPreparationMs=preparationMs,previewAllocationMs=allocationMs))
+            var jniWallMs:Long?=null
+            timing?.mark(PreviewTimingPoint.RESERVATION_REQUESTED)
+            val result=withNativeReservation(NativeWorkReservations.previewEstimate(width,height)) {
+                timing?.mark(PreviewTimingPoint.JNI_ENTER)
+                val jniStart=System.nanoTime()
+                try {
+                    if(raw==null)NativeFilmBridge.nativeRenderBitmap(created,source,rendered,width,height,nativeParameters(parameters,mode,budget))
+                    else NativeFilmBridge.nativeRenderLinearBitmap(created,raw.buffer(),rendered,width,height,nativeParameters(parameters,mode,budget))
+                } finally { jniWallMs=(System.nanoTime()-jniStart)/1_000_000;timing?.mark(PreviewTimingPoint.JNI_EXIT) }
             }
-            rendered.also(capture)
-        } catch(t: Throwable) { rendered.recycle(); throw t }
-        } finally {if(effective!==source&&!effective.isRecycled)effective.recycle()}
+            job.ensureActive()
+            val metadata=JSONObject(result)
+            trace.mark(Stage.NATIVE_EXIT,GpuRuntimeInfo.fromNativeResult(metadata).copy(previewJniWallMs=jniWallMs))
+            checkNativeResult(metadata)
+            check(PreviewNativeContract.outputMatches(metadata,width,height)) { "Invalid native preview result" }
+            capture(rendered);delivered=true;rendered
+        } catch(t:Throwable) { resetHandle();throw t }
+        finally { if(!delivered && !rendered.isRecycled)rendered.recycle() }
     } } } }
     suspend fun planExport(width:Int,height:Int,parameters:EditorState):NativeExportPlan = OperationTrace.run(Operation.EXPORT_PLAN,parameters.safeInfo(width,height)) { trace ->
         renderMutex.withLock { withContext(Dispatchers.IO) {
             if(unavailable!=null)throw EngineException(EngineFailure.UNAVAILABLE)
             val job=currentCoroutineContext();val budget=memoryBudgetMiB();val data=copyData();job.ensureActive()
-            val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
-            synchronized(handleLock){check(handle==0L);handle=created}
+            val created=ensureHandle(data)
             try {
                 job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget)
                 trace.mark(Stage.NATIVE_EXIT,SafeInfo(width=width,height=height,memoryBudgetMiB=budget,estimatedWorkingBytes=plan.workingBytes))
                 plan
-            } finally {synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L}}
+            } catch(t:Throwable){resetHandle();throw t}
         } }
     }
     private fun planForHandle(created:Long,width:Int,height:Int,parameters:EditorState,budget:Int):NativeExportPlan {
@@ -145,25 +151,47 @@ class FilmEngine(private val context: Context) {
         val needed=Math.addExact(if(inputExists)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan),if(workspace!=null)plan.checkpointReserveBytes else 0L)
         if(!ExportStoragePolicy.hasSpace(android.os.StatFs(context.cacheDir.absolutePath).availableBytes,needed))throw EngineException(EngineFailure.STORAGE)
     }
-    private fun progress(created:Long):EngineProgress? = runCatching {
+    private fun progressPacket(created:Long):JSONObject? = runCatching {
         val raw=synchronized(handleLock){if(handle!=created)return null;NativeFilmBridge.nativeGetProgress(created)}
-        val data=JSONObject(raw)
+        JSONObject(raw)
+    }.getOrNull()
+    private fun progress(data:JSONObject):EngineProgress? = runCatching {
         if(!data.optBoolean("ok")||!data.optBoolean("active")||data.optString("counterScope")!="current-pass")return null
         val phase=NativePhase.fromId(data.optString("stage"))?:return null
         EngineProgress(data.getLong("jobId"),data.getLong("passId"),phase,data.getLong("done"),data.getLong("total"),
             if(data.optString("stageCounterScope")=="stage-work" && data.optInt("displayStage") in 1..6)ExportDisplayProgress(data.getInt("displayStage"),data.getLong("stageDone"),data.getLong("stageTotal"))
-            else ExportDisplayProgress.forNativePhase(phase.id))
+            else ExportDisplayProgress.forNativePhase(phase.id)).let { value ->
+                if(phase in setOf(NativePhase.GPU_FULL_CHAIN,NativePhase.GPU_BANDED_CHAIN,NativePhase.GPU_TILED_CHAIN,NativePhase.GPU_DIFFUSION_PREPASS))
+                    value.copy(display=value.display.copy(gpu=(GpuWorkProgress.fromJson(data)?:GpuWorkProgress()).copy(prepass=phase==NativePhase.GPU_DIFFUSION_PREPASS)))
+                else value
+            }
     }.getOrNull()
     private suspend fun exportWithProgress(created:Long,input:File,output:File,width:Int,height:Int,parameters:EditorState,budget:Int,trace:OperationTrace,onProgress:((EngineProgress)->Unit)?,workspace:File?=null,progressOnMain:Boolean=true):String = coroutineScope {
-        // Each call owns a new handle (initial jobId0), so positive IDs identify this export.
+        // A warmed handle has monotonic native job IDs; only active progress is published.
         // Filename derives exclusively from this Kotlin-owned output, never a native supplied path.
         val scanPreview=scanPreviewForOutput(output,workspace)
+        val priorJobId=(progressPacket(created)?.opt("jobId") as? Number)?.toLong()?:-1L
         var latest:EngineProgress?=null
+        val presentation=GpuExportPresentation()
+        var lastFallback:GpuReason?=null
+        var lastGpuWork:SafeInfo?=null
+        suspend fun recordGpuMetadata(data:JSONObject) {
+            // Never attach a warmed handle's previous job to this export.
+            GpuRuntimeInfo.fallbackFromProgress(data,priorJobId)?.let { info ->
+                if(info.gpuReason!=lastFallback){trace.mark(Stage.NATIVE_PROGRESS,info);lastFallback=info.gpuReason}
+            }
+            GpuRuntimeInfo.workFromProgress(data,priorJobId)?.let { info ->
+                if(info!=lastGpuWork){trace.mark(Stage.NATIVE_PROGRESS,info);lastGpuWork=info}
+            }
+        }
         val polling=launch(Dispatchers.IO) {
             var lastPass=-1L;var lastPhase:NativePhase?=null
             while(isActive) {
                 delay(400)
-                val value=(progress(created)?:continue).let{it.copy(scanPreview=scanPreview?.takeIf{file->file.isFile&&file.length()>0})}
+                val packet=progressPacket(created)?:continue
+                recordGpuMetadata(packet)
+                if((packet.opt("jobId") as? Number)?.toLong()?.let{it>priorJobId}!=true)continue
+                val value=presentation.project(progress(packet)?:continue).let{it.copy(scanPreview=scanPreview?.takeIf{file->file.isFile&&file.length()>0})}
                 latest=value
                 if(value.passId!=lastPass||value.phase!=lastPhase){
                     trace.mark(Stage.NATIVE_PROGRESS,SafeInfo(nativePhase=value.phase,nativePass=value.passId,completedUnits=value.done,totalUnits=value.total))
@@ -173,7 +201,12 @@ class FilmEngine(private val context: Context) {
             }
         }
         val result=try {currentCoroutineContext().ensureActive();NativeFilmBridge.nativeExportFile(created,input.absolutePath,output.absolutePath,width,height,JSONObject(nativeParameters(parameters,"export",budget)).apply{workspace?.let{put("checkpointDirectory",File(it,"checkpoint").absolutePath)}}.toString())}
-        finally {withContext(NonCancellable){polling.cancelAndJoin()}}
+        finally {withContext(NonCancellable){
+            polling.cancelAndJoin()
+            // A short/failed/cancelled job can end before the first 400ms poll.
+            // The native job retains its route decision until the next begin.
+            progressPacket(created)?.let { recordGpuMetadata(it) }
+        }}
         // A short stage or checkpoint restore can finish between400ms polls. No new render.
         if(onProgress!=null && JSONObject(result).optBoolean("ok") && scanPreview!=null && scanPreview.isFile && scanPreview.length()>0){
             val ready=(latest ?: EngineProgress(1,1,dev.filmroom.diagnostics.NativePhase.PRINTING_SCANNING,1,1)).copy(display=ExportDisplayProgress(6,1,1),scanPreview=scanPreview)
@@ -207,11 +240,10 @@ class FilmEngine(private val context: Context) {
             source.recycle()
             val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
             trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget))
-            val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
-            synchronized(handleLock){check(handle==0L);handle=created}
+            val created=ensureHandle(data)
             val result:String
             try {job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget);requireExportSpace(plan,true);result=withExportReservation(plan.workingBytes){exportWithProgress(created,input,output,width,height,parameters,budget,trace,onProgress)}}
-            finally { synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L} }
+            catch(t:Throwable){resetHandle();throw t}
             job.ensureActive()
             val metadata=JSONObject(result)
             trace.mark(Stage.NATIVE_EXIT,ExportExecutionInfo.fromNativeResult(metadata))
@@ -250,11 +282,10 @@ class FilmEngine(private val context: Context) {
                 produced=output
                 val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
                 trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget))
-                val created=NativeFilmBridge.nativeCreate(data.absolutePath);check(created!=0L){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba4205340595)}
-                synchronized(handleLock){check(handle==0L);handle=created}
+                val created=ensureHandle(data)
                 val raw:String
                 try {job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget);requireExportSpace(plan,true,workspace);raw=withExportReservation(plan.workingBytes){exportWithProgress(created,input,output,width,height,parameters,budget,trace,onProgress,workspace,progressOnMain)}}
-                finally {synchronized(handleLock){NativeFilmBridge.nativeDestroy(created);handle=0L}}
+                catch(t:Throwable){resetHandle();throw t}
                 job.ensureActive()
                 val result=JSONObject(raw)
                 trace.mark(Stage.NATIVE_EXIT,ExportExecutionInfo.fromNativeResult(result))
@@ -272,7 +303,9 @@ class FilmEngine(private val context: Context) {
     }
     internal fun checkNativeResult(result:JSONObject) {
         if(result.optBoolean("ok"))return
+        resetHandle()
         throw EngineException(when(result.optString("code")){
+            "GPU_COMPLETION_UNCERTAIN"->EngineFailure.GPU_COMPLETION_UNCERTAIN
             "CANCELLED"->EngineFailure.CANCELLED
             "IMAGE_TOO_LARGE","INVALID_DIMENSIONS","INVALID_INPUT"->EngineFailure.IMAGE_SIZE
             "MEMORY_BUDGET_TOO_SMALL","MEMORY_BUDGET","BUDGET_EXCEEDED"->EngineFailure.BUDGET

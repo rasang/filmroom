@@ -35,6 +35,7 @@ class ExportQueueActivity : ComponentActivity() {
         const val EXTRA_JOB_ID="export_job_id"
         // Presentation memory only; never part of durable export state or image data.
         private val seenIntro=android.util.LruCache<String,Boolean>(256)
+        private val previewSequences=android.util.LruCache<String,dev.filmroom.ui.ExportPreviewSequence>(256)
     }
     private val exportNotifications=dev.filmroom.ui.ExportNotificationPermission(this)
     private val ink=FilmroomPalette.ink
@@ -46,12 +47,18 @@ class ExportQueueActivity : ComponentActivity() {
     }.getOrDefault(emptyMap())}
     private var queue:ExportQueue?=null
     private val historyFlow=ExportHistoryRemovalController(this){queue?.jobs?.value?.let(::render)}
+    internal var previewSequenceEnabled=true
+    internal var previewClock:()->Long = { android.os.SystemClock.elapsedRealtime() }
     internal var thumbnailDecoder:suspend (File)->android.graphics.Bitmap? = { decodeThumbnail(it) }
     private lateinit var rows:LinearLayout
     private lateinit var empty:TextView
     private lateinit var clearHistory:Button
     private lateinit var summary:TextView
     private lateinit var scroll:ScrollView
+    // Presentation recovery is separate from export completion/read-notification state.
+    private fun presentationAttempt(id:String):String = queue?.store?.directory(id)?.let{ScanPreviewStore.token(it)} ?: "legacy"
+    private fun pendingPresentation(id:String)=ExportPresentationStore.pending(this,id,presentationAttempt(id))
+    private fun rememberPresentation(id:String,active:Boolean)=ExportPresentationStore.remember(this,id,presentationAttempt(id),active)
     private val cards=linkedMapOf<String,JobCard>()
     private data class LeavingCard(val createdAt:Long,val view:View,val animator:android.animation.Animator)
     private val leavingCards=linkedMapOf<String,LeavingCard>()
@@ -199,7 +206,7 @@ class ExportQueueActivity : ComponentActivity() {
         empty.visibility=if(jobs.isEmpty() && leavingCards.isEmpty())View.VISIBLE else View.GONE
         empty.text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b331b1884a29)
         val ids=jobs.map{it.id}.toSet()
-        cards.keys.filter{it !in ids}.toList().forEach{id->cards.remove(id)?.let{card->ExportContourCache.removeJob(id);if(!animateRemovedCard(id,card,previousJobs.firstOrNull{it.id==id}?.createdAt ?: 0L)){card.pauseVisuals();rows.removeView(card.container)}}}
+        cards.keys.filter{it !in ids}.toList().forEach{id->cards.remove(id)?.let{card->ExportPresentationStore.clear(this,id);ExportContourCache.removeJob(id);if(!animateRemovedCard(id,card,previousJobs.firstOrNull{it.id==id}?.createdAt ?: 0L)){card.pauseVisuals();rows.removeView(card.container)}}}
         empty.visibility=if(jobs.isEmpty() && leavingCards.isEmpty())View.VISIBLE else View.GONE
         jobs.forEachIndexed{index,job->cards.getOrPut(job.id){JobCard(job.id,index+1).also{rows.addView(it.container)}}.bind(job)}
         // Display newest additions first without changing the store's FIFO processing order.
@@ -291,7 +298,39 @@ class ExportQueueActivity : ComponentActivity() {
         private var previewCheckedAt=0L
         private var previewTask:Job?=null
         private var previewGeneration=0L
+        private val sequence=previewSequences.get(id) ?: dev.filmroom.ui.ExportPreviewSequence().also{previewSequences.put(id,it)}
+        private var sequenceTask:Job?=null
         private var introPending=false
+        private fun presentVisuals(job:ExportJob) {
+            rememberPresentation(id,sequence.active)
+            val (stage,percent)=sequence.constrain(job.progress.displayStage,job.progress.displayPercent)
+            val finishing=sequence.active && job.state==ExportJobState.COMPLETED
+            val visibility=if(finishing || job.state in setOf(ExportJobState.RUNNING,ExportJobState.PAUSED,ExportJobState.FAILED))View.VISIBLE else View.GONE
+            if(bar.visibility!=visibility)bar.visibility=visibility
+            bar.bind(stage,percent,!sequence.active && job.state==ExportJobState.COMPLETED && job.progress.stage==8 && job.progress.percent==100,job.state==ExportJobState.RUNNING || finishing)
+            // Real completed/failed/paused status never waits for the presentation queue.
+            val text=if(sequence.active && job.state==ExportJobState.RUNNING)
+                dev.filmroom.engine.ExportDisplayProgress(stage,visual=dev.filmroom.engine.ExportVisualProgress(stage,percent)).compactText
+                else ExportJobPresentation.from(job).progress
+            // Called by layout/viewport observers: rewriting identical text would request
+            // another layout and feed the observer forever, even with no progress change.
+            if(progress.text.toString()!=text)progress.text=android.text.SpannableString(text).apply {
+                val line=indexOf('\n')
+                if(line>=0){setSpan(android.text.style.RelativeSizeSpan(.65f),line+1,length,0);setSpan(android.text.style.ForegroundColorSpan(muted),line+1,length,0)}
+            }
+        }
+        private fun scheduleSequence(visible:Boolean) {
+            sequenceTask?.cancel();sequenceTask=null
+            if(!visible || !sequence.active)return
+            val remaining=sequence.remaining(previewClock())
+            sequenceTask=lifecycleScope.launch {
+                // Poll genuine late previews while visible, including after actual completion.
+                delay(if(remaining>0)remaining else 300)
+                sequenceTask=null;sequence.finish(previewClock());previewKey=null
+                latest?.let{presentVisuals(it)}
+                updateThumbnailVisibility()
+            }
+        }
         private lateinit var previewFrame:FrameLayout
         private lateinit var info:LinearLayout
         private lateinit var body:LinearLayout
@@ -329,8 +368,19 @@ class ExportQueueActivity : ComponentActivity() {
         fun bind(job:ExportJob) {
             val previous=latest
             latest=job
-            if(job.state==ExportJobState.RUNNING && job.progress.stage==1 && seenIntro.get(id)!=true){introPending=true;seenIntro.put(id,true)}
-            if(job.progress.stage>1)introPending=false
+            if(previous==null && sequence.active && !pendingPresentation(id))sequence.reset()
+            if(job.state in setOf(ExportJobState.PENDING,ExportJobState.RETRY) ||
+                (previous!=null && job.progress.stage<previous.progress.stage))sequence.reset()
+            if(previewSequenceEnabled && (job.state==ExportJobState.RUNNING ||
+                    (job.state==ExportJobState.COMPLETED && (!job.completionViewed || pendingPresentation(id)))))sequence.start()
+            if(!previewSequenceEnabled || job.state in setOf(ExportJobState.FAILED,ExportJobState.CANCELLED,ExportJobState.PAUSED)) {
+                sequence.stop();sequenceTask?.cancel();sequenceTask=null
+                if(job.state in setOf(ExportJobState.FAILED,ExportJobState.CANCELLED,ExportJobState.PAUSED)) {
+                    previewGeneration++;previewTask?.cancel();previewKey=null
+                }
+            }
+            if(job.state==ExportJobState.RUNNING && job.progress.displayStage==1 && seenIntro.get(id)!=true){introPending=true;seenIntro.put(id,true)}
+            if(job.progress.displayStage>1)introPending=false
             if(previous!=null && previous!=job && previous.copy(completionViewed=job.completionViewed)==job)return
             val presentation=ExportJobPresentation.from(job)
             val concise=job.state in setOf(ExportJobState.PENDING,ExportJobState.RETRY,ExportJobState.COMPLETED,ExportJobState.CANCELLED) && id !in expandedIds
@@ -356,8 +406,7 @@ class ExportQueueActivity : ComponentActivity() {
                 val line=presentation.progress.indexOf('\n')
                 if(line>=0){setSpan(android.text.style.RelativeSizeSpan(.65f),line+1,length,0);setSpan(android.text.style.ForegroundColorSpan(muted),line+1,length,0)}
             }
-            bar.visibility=if(job.state in setOf(ExportJobState.RUNNING,ExportJobState.PAUSED,ExportJobState.FAILED))View.VISIBLE else View.GONE
-            bar.bind(job.progress.displayStage,job.progress.displayPercent,job.state==ExportJobState.COMPLETED && job.progress.stage==8 && job.progress.percent==100,job.state==ExportJobState.RUNNING)
+            presentVisuals(job)
             progress.setTextColor(if(job.state==ExportJobState.FAILED)Color.rgb(239,181,157)else ink)
             message.setTextColor(if(job.state==ExportJobState.FAILED)ink else muted)
             message.text=job.localizedMessage ?: ""
@@ -392,7 +441,7 @@ class ExportQueueActivity : ComponentActivity() {
             if(!progress.getGlobalVisibleRect(visible) || !scroll.getGlobalVisibleRect(viewport))return null
             return job.takeIf{visible.intersect(viewport) && visible.width()>0 && visible.height()>=minOf(progress.height,dp(16))}
         }
-        fun pauseVisuals(){bar.pause();image.setForeground(false);previewGeneration++;previewTask?.cancel();previewKey=null}
+        fun pauseVisuals(){sequence.visibility(false,previewClock());sequenceTask?.cancel();sequenceTask=null;bar.pause();image.setForeground(false);previewGeneration++;previewTask?.cancel();previewKey=null}
         fun updateThumbnailVisibility() {
             val job=latest ?: return
             if(container.height==0)return
@@ -401,12 +450,21 @@ class ExportQueueActivity : ComponentActivity() {
             val visible=container.bottom>scroll.scrollY && container.top<scroll.scrollY+scroll.height && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
             bar.setViewportVisible(visible)
             image.setForeground(visible)
-            image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && previewVersion?.contains("negative-preview")!=true,job.progress.stage==3)
+            sequence.visibility(visible,previewClock())
+            sequence.finish(previewClock());presentVisuals(job);scheduleSequence(visible)
+            val visibleStage=sequence.constrain(job.progress.displayStage,job.progress.displayPercent).first
+            image.setBreathing((job.state==ExportJobState.RUNNING || sequence.active) && visibleStage in 2..4 && previewVersion?.contains("negative-preview")!=true,visibleStage==3)
             if(!near){previewGeneration++;previewTask?.cancel();image.release();previewPlaceholder.visibility=View.VISIBLE;previewVersion=null;previewKey=null;return}
             if(!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))return
+            if(job.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED) && previewVersion!=null)return
             val dir=queue?.store?.directory(id) ?: return
-            val stageFourComplete=job.progress.stage==4 && job.progress.total>0 && job.progress.done==job.progress.total
-            val key="${job.state}:${job.progress.stage}:$stageFourComplete"
+            val stageFourComplete=job.progress.displayStage==4 && job.progress.displayPercent==100
+            val sequenceActive=sequence.active
+            val sequencePhase=sequence.phase
+            val negativeName=sequence.negativeName
+            val sequenceHolding=sequence.remaining(previewClock())>0
+            val previewAttempt=ScanPreviewStore.token(dir)
+            val key="${job.state}:${job.progress.displayStage}:$stageFourComplete:$sequenceActive:$sequencePhase:$sequenceHolding:$previewAttempt"
             val now=android.os.SystemClock.elapsedRealtime()
             if(previewKey!=key || now-previewCheckedAt>=1000){
                 previewKey=key;previewCheckedAt=now;previewTask?.cancel()
@@ -416,8 +474,19 @@ class ExportQueueActivity : ComponentActivity() {
                     var ownedBitmap:android.graphics.Bitmap?=null
                     try {
                     val (selection,version,bitmap)=withContext(Dispatchers.IO){
-                        val selected=ExportPreviewSelection.select(dir,job.state,job.progress.stage,stageFourComplete)
-                        val contour=selected.file?.name=="original-preview.jpg" && job.progress.stage>=1 && job.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY,ExportJobState.COMPLETED)
+                        val newest=ExportPreviewSelection.select(dir,job.state,job.progress.displayStage,stageFourComplete,negativeName)
+                        val original=ExportPreviewSelection.select(dir,ExportJobState.RUNNING,1)
+                        val negative=ExportPreviewSelection.select(dir,ExportJobState.RUNNING,5,negativeName=negativeName)
+                        val pendingNegative= !NegativePreviewStore.isNegative(negative.file) && (NegativePreviewStore.pending(dir) || job.state==ExportJobState.RUNNING)
+                        val selected=when {
+                            sequenceActive && sequencePhase<=1 && pendingNegative && original.file?.name=="original-preview.jpg"->original
+                            sequenceActive && sequencePhase<=1 && (sequencePhase==0 || sequenceHolding) && original.file?.name=="original-preview.jpg"->original
+                            sequenceActive && sequencePhase<=2 && NegativePreviewStore.isNegative(negative.file) &&
+                                ((sequencePhase==2 && sequenceHolding) || (sequencePhase<2 && (newest.file?.name=="final-preview.jpg" || newest.file?.name?.startsWith("scan-preview-")==true)))->negative
+                            else->newest
+                        }
+                        suspend fun load(selected:ExportPreviewSelection):Triple<ExportPreviewSelection,String,android.graphics.Bitmap?> {
+                        val contour=selected.file?.name=="original-preview.jpg" && job.progress.displayStage>=1 && (sequenceActive || job.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY,ExportJobState.COMPLETED))
                         val version=selected.file?.let{"${it.name}:${it.lastModified()}:${it.length()}:${if(contour)"v${ExportContourCache.VERSION}:contour" else "photo"}"} ?: "absent"
                         currentCoroutineContext().ensureActive()
                         val cachedContour=if(contour && version!=knownVersion)ExportContourCache.find("$id:$version")else null
@@ -433,20 +502,44 @@ class ExportQueueActivity : ComponentActivity() {
                                 } finally {source.recycle()} else source.also{ownedBitmap=it}
                             }}catch(c:CancellationException){throw c}catch(_:OutOfMemoryError){null}catch(_:Exception){null}
                         }else null
-                        Triple(selected,version,bitmap)
+                        return Triple(selected,version,bitmap)
+                        }
+                        val alternatives=if(sequenceActive && sequencePhase<=2)NegativePreviewStore.alternatives(dir).map{ExportPreviewSelection(it,negative.label)}else emptyList()
+                        val candidates=(listOf(selected)+alternatives+listOfNotNull(newest.takeUnless{sequenceActive && sequencePhase<=1 && (pendingNegative || NegativePreviewStore.pending(dir))})).distinctBy{it.file}
+                        var loaded=load(candidates.first())
+                        for(candidate in candidates.drop(1)) {
+                            if(loaded.third!=null || loaded.second==knownVersion)break
+                            loaded=load(candidate)
+                        }
+                        loaded
                     }
-                    val scanStillCurrent=selection.file?.let { file ->
-                        !file.name.startsWith("scan-preview-") || ScanPreviewStore.select(dir)?.name==file.name
-                    } ?: true
-                    if(scanStillCurrent && previewGeneration==generation && previewKey==key && version!=previewVersion && bitmap!=null){
-                        val intro=introPending && job.state==ExportJobState.RUNNING && job.progress.stage==1
+                    val scanStillCurrent=ScanPreviewStore.token(dir)==previewAttempt && (selection.file?.let { file ->
+                        when {NegativePreviewStore.isNegative(file)->NegativePreviewStore.current(dir,file)
+                            file.name.startsWith("scan-preview-")->ScanPreviewStore.select(dir)?.name==file.name
+                            else->true}
+                    } ?: true)
+                    val selectedPhase=when {version.endsWith(":contour")->1;NegativePreviewStore.isNegative(selection.file)->2;else->3}
+                    if(scanStillCurrent && previewGeneration==generation && previewKey==key && version!=previewVersion && bitmap!=null && (!sequence.active || selectedPhase>=sequence.phase)){
+                        val intro=(introPending || (sequence.active && sequence.phase==0)) && version.endsWith(":contour")
+                        val hadImage=previewVersion!=null
                         introPending=false;previewVersion=version
                         image.show(bitmap,version,intro)
+                        val shownPhase=selectedPhase
+                        val fadeMs=if(!android.animation.ValueAnimator.areAnimatorsEnabled())0L else if(intro)1000L else if(hadImage)450L else 0L
+                        if(shownPhase==2)selection.file?.name?.let{sequence.rememberNegative(it)}
+                        sequence.shown(shownPhase,fadeMs,previewClock())
+                        presentVisuals(latest ?: job);scheduleSequence(visible)
                         ownedBitmap=null // Ownership transferred only after acceptance; cached contours are never owned.
-                        image.setBreathing(job.state==ExportJobState.RUNNING && job.progress.stage in 2..4 && selection.file?.name!="negative-preview.png",job.progress.stage==3)
+                        val shownStage=sequence.constrain(job.progress.displayStage,job.progress.displayPercent).first
+                        image.setBreathing((job.state==ExportJobState.RUNNING || sequence.active) && shownStage in 2..4 && !NegativePreviewStore.isNegative(selection.file),shownStage==3)
                         previewPlaceholder.visibility=View.GONE
                         image.contentDescription=if(version.endsWith(":contour"))dev.filmroom.i18n.L10n.text(R.string.export_progress_preview)else selection.label
                         // Fixed slot; a failed or cancelled load never clears an already visible frame.
+                    }
+                    val noPositive=job.state==ExportJobState.COMPLETED && sequence.phase>=2 && sequence.remaining(previewClock())==0L &&
+                        selection.file?.name!="final-preview.jpg" && selection.file?.name?.startsWith("scan-preview-")!=true
+                    if((noPositive || (bitmap==null && version!=previewVersion)) && job.state==ExportJobState.COMPLETED && !NegativePreviewStore.pending(dir)) {
+                        sequence.stop();sequenceTask?.cancel();sequenceTask=null;presentVisuals(job)
                     }
                     } finally {ownedBitmap?.recycle()}
                 }
@@ -480,13 +573,13 @@ internal data class ExportJobPresentation(val status:String,val progress:String,
 }
 internal data class ExportPreviewSelection(val file:File?,val label:String) {
     companion object {
-        fun select(dir:File,state:ExportJobState,stage:Int=8,stageFourComplete:Boolean=false):ExportPreviewSelection {
+        fun select(dir:File,state:ExportJobState,stage:Int=8,stageFourComplete:Boolean=false,negativeName:String?=null):ExportPreviewSelection {
             val scan=if(state==ExportJobState.RUNNING && stage>=6)ScanPreviewStore.select(dir)else null
-            val final=File(dir,"final-preview.jpg");val negative=File(dir,"negative-preview.png");val original=File(dir,"original-preview.jpg")
+            val final=File(dir,"final-preview.jpg");val negative=NegativePreviewStore.select(dir,negativeName);val original=File(dir,"original-preview.jpg")
             return when {
                 state==ExportJobState.COMPLETED && final.isFile && final.length()>0->ExportPreviewSelection(final,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1a418b9270f7))
                 scan!=null->ExportPreviewSelection(scan,dev.filmroom.i18n.L10n.text(R.string.export_progress_preview))
-                (stage>=5 || (stage==4 && stageFourComplete)) && state!=ExportJobState.CANCELLED && negative.isFile && negative.length()>0->ExportPreviewSelection(negative,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_37eb7c18d5ef))
+                (stage>=5 || (stage==4 && stageFourComplete)) && state!=ExportJobState.CANCELLED && negative!=null->ExportPreviewSelection(negative,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_37eb7c18d5ef))
                 original.isFile && original.length()>0->ExportPreviewSelection(original,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b00a78a5faa))
                 else->ExportPreviewSelection(null,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e3c1f7706839))
             }

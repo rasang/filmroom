@@ -139,6 +139,66 @@ class DiagnosticStoreTest {
         assertTrue(reopened.events.any { it.operation == Operation.IMPORT })
     }
 
+    @Test fun readRejectionsSeparateOldCompatibilityFromDamageAndDoNotRepeatOnSnapshots() {
+        val directory = folder(); val clock = Clock()
+        fun line(version: String = "1", stage: String = "START"): String {
+            val body = "$version\t${clock.wall}\t${clock.elapsed}\t$runA\t1\t0\tSESSION\t$stage\t-\t-\t"
+            return body + "\t" + CRC32().apply { update(body.toByteArray(Charsets.UTF_8)) }.value.toString(16) + "\n"
+        }
+        val good = line()
+        assertNotNull(DiagnosticEvent.parse(good))
+        File(directory, "events.0.log").writeText(
+            good + line(version = "2") + line(stage = "FUTURE_STAGE") +
+                good.replace("SESSION", "IMPORT") + "bad_fields\n" + "x".repeat(5000) + "\n" +
+                "invalid\u0000byte\n" + "unfinished")
+        val store = DiagnosticStore(directory, clock, runB)
+        repeat(3) {
+            val snapshot = store.snapshot(1)
+            assertEquals(7L, snapshot.malformedDiscarded)
+            assertEquals(7L, snapshot.startupReadRejected)
+            assertEquals(0L, snapshot.rotationReadRejected)
+            assertEquals(DiagnosticReadRejection.entries.associateWith { 1L }, snapshot.readRejections)
+            assertTrue(snapshot.events.any { it.run == runA })
+            assertTrue(snapshot.storageHealthy)
+            val json = ChineseDiagnostics.json(snapshot, DiagnosticMetadata())
+            assertTrue(json.contains("\"startupReadRejectedThisRun\":7"))
+            assertTrue(json.contains("\"UNSUPPORTED_ENUM\":1"))
+            assertFalse(json.contains("FUTURE_STAGE"))
+        }
+        // Startup compaction removes rejected bytes; reopening cannot recount them.
+        assertEquals(0L, DiagnosticStore(directory, clock, "c".repeat(32)).snapshot(1).malformedDiscarded)
+    }
+
+    @Test fun cleanRotationAndConcurrentWritesReopenWithoutReadRejections() {
+        val directory = folder(); val clock = Clock()
+        val store = DiagnosticStore(directory, clock, runA, 8192)
+        val pool = Executors.newFixedThreadPool(4)
+        try {
+            val futures = (0 until 4).map {
+                pool.submit {
+                    repeat(20) {
+                        val id = store.begin(Operation.PREVIEW_RENDER, SafeInfo(width = 512, height = 384))
+                        store.event(id, Stage.NATIVE_EXIT, SafeInfo(gpuRequested = true, gpuActive = true,
+                            gpuBackend = GpuBackend.WGPU_CHAIN, gpuStage = GpuStage.FULL_RESIDENT_CHAIN,
+                            gpuBatches = 1, gpuNumericGuard = true), null)
+                        store.snapshot(1)
+                        store.end(id, Outcome.SUCCESS)
+                    }
+                }
+            }
+            futures.forEach { it.get(30, TimeUnit.SECONDS) }
+        } finally { pool.shutdownNow() }
+        val before = store.snapshot(1)
+        assertTrue(before.capacityDiscarded > 0)
+        assertEquals(0L, before.malformedDiscarded)
+        val after = DiagnosticStore(directory, clock, runB, 8192).snapshot(1)
+        assertEquals(0L, after.malformedDiscarded)
+        val recovered = after.events.filter { it.run == runA }
+        assertTrue(recovered.isNotEmpty())
+        assertTrue(before.events.containsAll(recovered))
+        assertEquals(before.events.last(), recovered.last())
+    }
+
     @Test fun invalidMinutesAreRejected() {
         val store = DiagnosticStore(folder(), Clock(), runA)
         for (minutes in listOf(-1, 0, 1441, Int.MAX_VALUE)) {

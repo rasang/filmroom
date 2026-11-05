@@ -108,13 +108,14 @@ class ExportQueue internal constructor(private val context:Context,private val p
         store.beginHistory(targets.filter{it.id!=activeId && !captures.containsKey(it.id)},deletePhotos)
     }}}
     suspend fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
-        if(snapshot.id==activeId || captures.containsKey(snapshot.id))false else store.removeHistoryRecord(op,snapshot)
+        if(snapshot.id==activeId || captures.containsKey(snapshot.id))false else store.removeHistoryRecord(op,snapshot).also{if(it)ExportPresentationStore.clear(context,snapshot.id)}
     }}}
     suspend fun restoreHistoryReservation(op:ExportHistoryOperation):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
         if(op.remaining.any{it.id==activeId || captures.containsKey(it.id)})false else store.restoreHistoryReservation(op)
     }}}
     fun start(context:Context) {context.startForegroundService(Intent(context,ExportService::class.java))}
     fun retry(id:String,generation:Long=pauseGeneration.get()) {
+        if(store.get(id)?.let{it.canRetry && it.state in setOf(ExportJobState.PAUSED,ExportJobState.FAILED)}==true)ExportPresentationStore.clear(context,id)
         val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
         store.change(id){if(it.canRetry && it.state in setOf(ExportJobState.PAUSED,ExportJobState.FAILED))it.copy(
             state=if(!startupBlocked && generation==pauseGeneration.get())ExportJobState.RETRY else ExportJobState.PAUSED,
@@ -193,6 +194,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
         var output:File?=null
         var framedOutput:File?=null
         val previewContext=currentCoroutineContext()
+        var negativeDiagnostics:NegativePreviewDiagnostics?=null
         var previewAttempt:String?=null
         var previewAttempted=false
         try {
@@ -202,6 +204,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 else {previewAttempt=runCatching{ScanPreviewStore.begin(dir)}.getOrNull();update{it.copy(state=ExportJobState.RUNNING,message=null,messageUi=null)};true}
             }
             if(!accepted)return
+            previewAttempt?.let{negativeDiagnostics=NegativePreviewDiagnostics(dir,it)}
             val existing=initial.mediaUri?.let{repository.committedExport(it,initial.outputWidth,initial.outputHeight,initial.format)}
             if(existing==null) {
                 val input=File(dir,"input.rgb")
@@ -289,7 +292,8 @@ class ExportQueue internal constructor(private val context:Context,private val p
             val clean=cleanup(id)
             update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
         } catch(c:CancellationException) {
-            ScanPreviewStore.clear(dir)
+            negativeDiagnostics?.cancel()
+            ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id)
             withContext(NonCancellable+Dispatchers.IO) {
                 val current=store.get(id)!!
                 val committed=current.mediaUri?.let{runCatching{repository.committedExport(it,current.outputWidth,current.outputHeight,current.format)}.getOrNull()}
@@ -298,13 +302,13 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 else update{it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3df4e91da12d),messageUi=UiMessage.of(R.string.text_3df4e91da12d))}
             }
             throw c
-        } catch(t:Exception) {ScanPreviewStore.clear(dir);update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
+        } catch(t:Exception) {negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
             EngineFailure.INCOMPLETE->UiMessage.of(R.string.text_801eccbf436d)
             EngineFailure.STORAGE->UiMessage.of(R.string.text_a3290bb56b7f)
             else->(t as? EngineException)?.uiMessage ?: (t as? PhotoException)?.uiMessage ?: UiMessage.of(R.string.text_c42a34760d85)
         })}}
-        catch(t:OutOfMemoryError){ScanPreviewStore.clear(dir);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
-        finally {reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete()}}
+        catch(t:OutOfMemoryError){negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
+        finally {negativeDiagnostics?.jobTerminal();reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete()}}
     }
     private fun saveFinalThumbnail(uri:String,dir:File) {
         val bitmap=android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver,android.net.Uri.parse(uri))) {decoder,info,_->
@@ -316,8 +320,9 @@ class ExportQueue internal constructor(private val context:Context,private val p
         try {FileOutputStream(File(dir,"final-preview.jpg")).use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,88,it));it.fd.sync()}}finally{bitmap.recycle()}
     }
     private fun cleanup(id:String):Boolean {
+        if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)
         val dir=store.directory(id)
-        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg")}
+        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !NegativePreviewStore.retain(dir,it)}
             ?.map{if(it.isDirectory)it.deleteRecursively()else it.delete()}?.all{it} ?: false
     }
     class IntakeLease internal constructor(val generation:Long,private val release:()->Unit):java.io.Closeable {

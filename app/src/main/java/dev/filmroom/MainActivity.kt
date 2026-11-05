@@ -367,6 +367,10 @@ class MainActivity:ComponentActivity() {
         badge.visibility=if(hasPhoto)View.VISIBLE else View.GONE
         val shown=if(s.compare)s.original else s.rendered ?: s.original
         if(lastBitmap!==shown){
+            photo.onNextPreviewDraw=null
+            if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let { diagnostic ->
+                photo.onNextPreviewDraw={drawn->if(drawn===shown)diagnostic.timing?.nextDraw(diagnostic)}
+            }
             photo.bitmap=shown;lastBitmap=shown
             if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let(model::previewBound)
         }

@@ -253,7 +253,7 @@
     <string name="text_646130986822" formatted="false">色域压缩</string>
     <string name="text_192216b8cb6d" formatted="false">将超出 sRGB 色域的颜色压缩到可显示范围；宽色域导出会自动关闭。</string>
     <string name="text_6f16843acab7" formatted="false">GPU加速</string>
-    <string name="text_8d80b85bbd7f" formatted="false">自动尝试 Adreno 部分密度阶段加速，其余阶段仍在 CPU。不可用时回退 CPU，不保证更快。</string>
+    <string name="text_8d80b85bbd7f" formatted="false">实验性 GPU 常驻或分带计算，部分效果采用近似算法，可能与 CPU 出图不同。预算不足或设备不支持时回退 CPU；不保证更快。</string>
     <string name="text_683099bf5b6c" formatted="false">胶片默认</string>
     <string name="text_789f61dbfcc7" formatted="false">红色</string>
     <string name="text_d5234258fd84" formatted="false">琥珀色</string>
@@ -440,7 +440,7 @@
     <string name="text_0e898ec43b0b" formatted="false">；不是连续监测。\n</string>
     <string name="text_fa1c6dd0bfc3" formatted="false">本次运行观测到的丢弃：过期 </string>
     <string name="text_6e94c47fde22" formatted="false">，容量轮替 </string>
-    <string name="text_4af5bd6fb80e" formatted="false">，损坏或未写完 </string>
+    <string name="text_4af5bd6fb80e" formatted="false">，读取时拒绝 </string>
     <string name="text_e9d6840052fc" formatted="false">，未来时间不确定 </string>
     <string name="text_1701c7739625" formatted="false">。跨运行累计未知。\n</string>
     <string name="text_5bf7bab64ce3" formatted="false">最近的失败/中断记录：</string>
@@ -461,7 +461,7 @@
     <string name="text_bf7b123c114d" formatted="false">；事件之间并非连续监测。\n</string>
     <string name="text_ccc4edebf400" formatted="false">本次运行可观测的丢弃计数：过期=</string>
     <string name="text_1a58fbf44b39" formatted="false">，容量轮替=</string>
-    <string name="text_4e203ca8ccb7" formatted="false">，损坏/未写完=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">，读取时拒绝=</string>
     <string name="text_338aa9ce6405" formatted="false">，未来时间无法确认=</string>
     <string name="text_b028650697a5" formatted="false">。跨运行累计不可确定。\n</string>
     <string name="text_bbbde15a1296" formatted="false">仅在本机记录，点击分享后由你选择接收应用；本应用不会上传。\n</string>
@@ -777,4 +777,13 @@
     <string name="toast_metadata_limit">元数据超出安全限制</string>
     <string name="toast_raster_pixel_limit">图片太大：上限1.5亿像素</string>
     <string name="toast_raw_pixel_limit">图片太大：上限5200万像素</string>
+    <string name="gpu_phase_full_chain" formatted="false">GPU 整链计算</string>
+    <string name="gpu_phase_banded_chain" formatted="false">GPU 分带计算</string>
+    <string name="gpu_phase_prepass" formatted="false">GPU 全图预计算</string>
+    <string name="gpu_completion_uncertain" formatted="false">GPU任务未确认结束，为避免内存重叠已暂停处理。请完全关闭并重新打开应用。</string>
+    <string name="diagnostics_read_rejections_detail">读取拒绝次数：启动 %1$d，容量轮替 %2$d；包括版本不兼容、校验失败或未写完，不等于当前运行丢失的事件数。\n</string>
+    <string name="gpu_phase_tiled_chain" formatted="false">GPU 二维分块计算</string>
+    <string name="gpu_progress_processing">GPU 图像处理</string>
+    <string name="gpu_progress_tile">块 %1$d/%2$d</string>
+    <string name="gpu_progress_last_completed">刚完成：%1$s（%2$d ms）</string>
 </resources>

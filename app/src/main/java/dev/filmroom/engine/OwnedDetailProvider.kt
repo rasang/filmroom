@@ -74,7 +74,9 @@ class OwnedDetailProvider internal constructor(
             },retain={ bytes -> NativeWorkReservations.retainForDetail(bytes,memory){pressureRequested.set(true);pressureOwner.get()?.close()} })
             retained=admission.reservation
             sessionId=positiveId(status(api.nativeCreate(root.path),"create"),"sessionId")
-            session=OwnedDetailSession(api,sessionId,key,parameters.useGpu,retained,source,memory,regionOutput=admission.regionOutput)
+            val capabilities=status(api.nativeCapabilities(),"capabilities")
+            val rgba8=DetailNativeContract.rgba8Available(capabilities)
+            session=OwnedDetailSession(api,sessionId,key,parameters.useGpu,retained,source,memory,regionOutput=admission.regionOutput,rgba8Output=rgba8)
             pressureOwner.set(session)
             retained=null // ownership transferred, including failures/cancellation during build
             owned=session
@@ -101,7 +103,9 @@ class OwnedDetailSession internal constructor(
     private val requestedGpu:Boolean,private val reservation:RetainedNativeWork,
     private val source:DetailSource,private val memory:()->NativeMemorySnapshot,
     private val conversionDispatcher:CoroutineDispatcher=Dispatchers.Default,
-    val regionOutput:Boolean=false
+    val regionOutput:Boolean=false,
+    internal val rgba8Output:Boolean=false,
+    private val outputPool:PreviewBufferPool=PreviewBufferPool(32L*1024*1024)
 ):AutoCloseable {
     private val lock=Any()
     @Volatile private var closed=false
@@ -119,7 +123,7 @@ class OwnedDetailSession internal constructor(
     private var destroyed=false
     private var identity:String?=null
     private fun releaseIfDone(){if(closed && destroyed && workers==0 && !released){released=true;CoroutineScope(Dispatchers.IO).launch{
-        try{runCatching{source.close()}}finally{try{runCatching{reservation.close()}}finally{retirementComplete.complete(Unit)}}
+        try{outputPool.close();runCatching{source.close()}}finally{try{runCatching{reservation.close()}}finally{retirementComplete.complete(Unit)}}
     }}}
     override fun close(){
         var listener:(()->Unit)?=null
@@ -148,12 +152,20 @@ class OwnedDetailSession internal constructor(
         val sx=(core.x-1).coerceAtLeast(0);val sy=(core.y-1).coerceAtLeast(0)
         val sample=DetailRect(sx,sy,minOf(key.width,core.x+core.width+1)-sx,minOf(key.height,core.y+core.height+1)-sy)
         lateinit var output:ByteBuffer
+        var outputLease:PreviewBufferPool.Lease?=null
         var ownedBitmap:Bitmap?=null
         try { return operationWithResult(if(cancelled==null)"tile" else "region",cancelled,work={ op,enter ->
-            output=ByteBuffer.allocateDirect(sample.width*sample.height*12).order(ByteOrder.nativeOrder())
-            enter();if(cancelled==null)api.nativeTile(id,op,core.x/256,core.y/256,output) else api.nativeRegion(id,op,core.x,core.y,core.width,core.height,output)
+            val bytes=Math.multiplyExact(Math.multiplyExact(sample.width,sample.height),if(rgba8Output)4 else 12)
+            outputLease=outputPool.acquire(if(rgba8Output)PreviewBufferPool.Kind.RGBA8_OUTPUT else PreviewBufferPool.Kind.LINEAR_OUTPUT,bytes)
+                ?: throw DetailUnavailable("RESOURCE_PRESSURE")
+            output=checkNotNull(outputLease).buffer
+            enter()
+            if(rgba8Output){
+                if(cancelled==null)api.nativeTileRgba8(id,op,core.x/256,core.y/256,output) else api.nativeRegionRgba8(id,op,core.x,core.y,core.width,core.height,output)
+            }else if(cancelled==null)api.nativeTile(id,op,core.x/256,core.y/256,output) else api.nativeRegion(id,op,core.x,core.y,core.width,core.height,output)
         }) { response ->
             validateIdentity(response)
+            if(rgba8Output && response.optString("outputFormat")!="srgb-rgba8")throw DetailUnavailable("INVALID_RESULT")
             if(!response.getBoolean("outputValid") || response.getLong("bytesWritten")!=output.capacity().toLong() || rect(response.getJSONObject("coreRect"))!=core || rect(response.getJSONObject("sampleRect"))!=sample || canonical(response.getJSONObject("identity"))!=identity)throw DetailUnavailable("INVALID_RESULT")
             // Keep session workers and the retained-work slot through postprocessing,
             // not merely through JNI: direct RGB, IntArray and bitmap still overlap.
@@ -163,11 +175,15 @@ class OwnedDetailSession internal constructor(
                     synchronized(lock){if(closed)throw CancellationException("Detail retired")}
                 }
                 currentCoroutineContext().ensureActive();checkCurrent()
-                val rowCount=minOf(16,sample.height)
-                val pixels=IntArray(sample.width*rowCount)
                 val bitmap=Bitmap.createBitmap(sample.width,sample.height,Bitmap.Config.ARGB_8888)
                 ownedBitmap=bitmap
                 output.rewind()
+                if(rgba8Output){
+                    val conversionContext=currentCoroutineContext()
+                    PreviewDisplay.copyRgba8(bitmap,output){conversionContext.ensureActive();checkCurrent()}
+                }else {
+                val rowCount=minOf(16,sample.height)
+                val pixels=IntArray(sample.width*rowCount)
                 for(y in 0 until sample.height step rowCount){
                     val rows=minOf(rowCount,sample.height-y)
                     for(i in 0 until sample.width*rows){
@@ -178,10 +194,12 @@ class OwnedDetailSession internal constructor(
                     }
                     bitmap.setPixels(pixels,0,sample.width,0,y,sample.width,rows)
                 }
+                }
                 currentCoroutineContext().ensureActive();checkCurrent()
                 DetailTile(key,core,sample,bitmap,requestedGpu)
             }
-        }}catch(t:Throwable){ownedBitmap?.takeUnless{it.isRecycled}?.recycle();throw t}
+        }}catch(t:Throwable){outputLease?.discard();ownedBitmap?.takeUnless{it.isRecycled}?.recycle();throw t}
+        finally {outputLease?.close()}
     }
     private fun validateIdentity(response:JSONObject) {
         val j=response.getJSONObject("identity");val backend=response.getJSONObject("backend")

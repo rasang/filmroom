@@ -91,6 +91,23 @@ class LocaleHostTest {
         }
         assertEquals(4,labels.size)
     }
+    @Test fun gpuCompletionUncertainMessageSurvivesLocaleAndDescriptorRoundTrip(){
+        val error=dev.filmroom.engine.EngineException(dev.filmroom.engine.EngineFailure.GPU_COMPLETION_UNCERTAIN)
+        val message=error.uiMessage
+        val restored=checkNotNull(dev.filmroom.i18n.UiMessage.fromJson(message.toJson()))
+        val instructions=mapOf("zh" to "完全关闭并重新打开", "en" to "Fully close and reopen",
+            "ja" to "完全に終了してから開き直し", "ko" to "완전히 종료한 뒤 다시 열어")
+        val rendered=mutableSetOf<String>()
+        for(tag in L10n.supported){
+            L10n.choose(app,tag)
+            val text=checkNotNull(restored.render())
+            assertTrue("Restart instruction missing in $tag: $text",text.contains(checkNotNull(instructions[tag])))
+            assertEquals(L10n.text(R.string.gpu_completion_uncertain),text)
+            assertEquals(text,error.uiMessage.render())
+            rendered+=text
+        }
+        assertEquals(4,rendered.size)
+    }
     @Test fun retainedTypedMessagesAndMalformedDescriptorsAreSafe(){
         val message=dev.filmroom.i18n.UiMessage.of(R.string.text_1663134e88db)
         val state=EditorUiState(busy="读取照片",busyUi=message,message="读取照片",messageUi=message)

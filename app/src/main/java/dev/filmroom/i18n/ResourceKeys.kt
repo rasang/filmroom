@@ -1,6 +1,7 @@
 package dev.filmroom.i18n
 internal object ResourceKeys {
     val names:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.gpu_completion_uncertain to "gpu_completion_uncertain",
         dev.filmroom.R.string.image_edge_limit_32768 to "image_edge_limit_32768",
         dev.filmroom.R.string.image_edge_limit_30000 to "image_edge_limit_30000",
         dev.filmroom.R.string.camera_raw_profile_unsupported to "camera_raw_profile_unsupported",
@@ -730,6 +731,7 @@ internal object ResourceKeys {
     )
     val ids:Map<String,Int> = names.entries.associate { it.value to it.key }
     val arities:Map<String,Int> = mapOf(
+        "gpu_completion_uncertain" to 0,
         "image_edge_limit_32768" to 0,
         "image_edge_limit_30000" to 0,
         "camera_raw_profile_unsupported" to 0,

@@ -23,30 +23,54 @@ internal data class DiagnosticEvent(
     }
 
     companion object {
-        fun parse(line: String): DiagnosticEvent? = runCatching {
-            if (line.length > 4096) return null
+        fun parse(line: String): DiagnosticEvent? = inspect(line).event
+
+        fun inspect(line: String): DiagnosticLineRead {
+            fun rejected(reason: DiagnosticReadRejection) = DiagnosticLineRead(rejection = reason)
+            if (line.length > 4096) return rejected(DiagnosticReadRejection.OVERSIZED)
             val split = line.trimEnd('\r', '\n').split('\t')
-            if (split.size != 12 || split[0] != "1") return null
+            if (split.size != 12) return rejected(DiagnosticReadRejection.INVALID_FIELDS)
+            if (split[0] != "1") return rejected(
+                if (split[0].toIntOrNull() != null) DiagnosticReadRejection.UNSUPPORTED_VERSION else DiagnosticReadRejection.INVALID_FIELDS)
             val body = split.take(11).joinToString("\t")
-            if (split[11].toLongOrNull(16) != CRC32().apply { update(body.toByteArray(Charsets.UTF_8)) }.value) return null
-            val wall = split[1].toLong(); val elapsed = split[2].toLong()
-            val sequence = split[4].toLong(); val id = split[5].toLong()
-            if (wall !in 0..253402300799999L || elapsed < 0 || sequence < 0 || id < 0 || !split[3].matches(Regex("[0-9a-f]{32}"))) return null
-            val fields = split[10].split(';').mapNotNull {
-                val at = it.indexOf('='); if (at > 0) it.substring(0, at) to it.substring(at + 1) else null
-            }.toMap()
-            DiagnosticEvent(wall, elapsed, split[3], sequence, id, Operation.valueOf(split[6]), Stage.valueOf(split[7]),
-                split[8].takeUnless { it == "-" }?.let(Outcome::valueOf),
-                split[9].takeUnless { it == "-" }?.let(ErrorCode::valueOf), SafeInfo.parse(fields))
-        }.getOrNull()
+            if (split[11].toLongOrNull(16) != CRC32().apply { update(body.toByteArray(Charsets.UTF_8)) }.value)
+                return rejected(DiagnosticReadRejection.CHECKSUM)
+            val operation = Operation.entries.firstOrNull { it.name == split[6] }
+                ?: return rejected(DiagnosticReadRejection.UNSUPPORTED_ENUM)
+            val stage = Stage.entries.firstOrNull { it.name == split[7] }
+                ?: return rejected(DiagnosticReadRejection.UNSUPPORTED_ENUM)
+            val outcome = if (split[8] == "-") null else Outcome.entries.firstOrNull { it.name == split[8] }
+                ?: return rejected(DiagnosticReadRejection.UNSUPPORTED_ENUM)
+            val error = if (split[9] == "-") null else ErrorCode.entries.firstOrNull { it.name == split[9] }
+                ?: return rejected(DiagnosticReadRejection.UNSUPPORTED_ENUM)
+            return runCatching {
+                val wall = split[1].toLong(); val elapsed = split[2].toLong()
+                val sequence = split[4].toLong(); val id = split[5].toLong()
+                if (wall !in 0..253402300799999L || elapsed < 0 || sequence < 0 || id < 0 || !split[3].matches(Regex("[0-9a-f]{32}")))
+                    return rejected(DiagnosticReadRejection.INVALID_FIELDS)
+                val fields = split[10].split(';').mapNotNull {
+                    val at = it.indexOf('='); if (at > 0) it.substring(0, at) to it.substring(at + 1) else null
+                }.toMap()
+                DiagnosticLineRead(event = DiagnosticEvent(wall, elapsed, split[3], sequence, id, operation, stage,
+                    outcome, error, SafeInfo.parse(fields)))
+            }.getOrElse { rejected(DiagnosticReadRejection.INVALID_FIELDS) }
+        }
     }
 }
+
+/** Counts read rejections, not proven lost events; never retains rejected payloads. */
+internal enum class DiagnosticReadRejection {
+    UNSUPPORTED_VERSION, UNSUPPORTED_ENUM, INVALID_FIELDS, CHECKSUM, INVALID_BYTE, OVERSIZED, INCOMPLETE
+}
+internal data class DiagnosticLineRead(val event: DiagnosticEvent? = null, val rejection: DiagnosticReadRejection? = null)
 
 internal data class DiagnosticSnapshot(
     val minutes: Int, val snapshotWallMs: Long, val snapshotElapsedMs: Long,
     val events: List<DiagnosticEvent>, val effectiveWallTimes: List<Long>,
     val crossRunCount: Int, val recoveredIncomplete: Boolean, val storageHealthy: Boolean,
     val expiredDiscarded: Long = 0, val capacityDiscarded: Long = 0, val malformedDiscarded: Long = 0, val futureDiscarded: Long = 0,
+    val startupReadRejected: Long = 0, val rotationReadRejected: Long = 0,
+    val readRejections: Map<DiagnosticReadRejection, Long> = emptyMap(),
 ) {
     fun text(metadata: String): String = buildString {
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1c751a529433)).append(minutes).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5b3a75c53bbd))
@@ -58,6 +82,7 @@ internal data class DiagnosticSnapshot(
             .append(Instant.ofEpochMilli(effectiveWallTimes.max())).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bf7b123c114d))
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ccc4edebf400)).append(expiredDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1a58fbf44b39)).append(capacityDiscarded)
             .append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4e203ca8ccb7)).append(malformedDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_338aa9ce6405)).append(futureDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b028650697a5))
+        append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.diagnostics_read_rejections_detail, startupReadRejected, rotationReadRejected))
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bbbde15a1296))
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e78eb8f72096))
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0cbe74b0ae0a))
@@ -105,6 +130,9 @@ internal class DiagnosticStore(
     private var capacityDiscarded = 0L
     private var malformedDiscarded = 0L
     private var futureDiscarded = 0L
+    private var startupReadRejected = 0L
+    private var rotationReadRejected = 0L
+    private val readRejections = java.util.EnumMap<DiagnosticReadRejection, Long>(DiagnosticReadRejection::class.java)
 
     init {
         require(maxRecordBytes >= 4096 && run.matches(Regex("[0-9a-f]{32}")))
@@ -112,7 +140,7 @@ internal class DiagnosticStore(
             runCatching {
                 check(directory.isDirectory || directory.mkdirs())
                 listOf("events.0.new", "events.1.new").forEach { File(directory, it).delete() }
-                records += readSegments()
+                records += readSegments(startup = true)
                 prune()
                 // Only the immediately preceding retained run can describe "last
                 // operation". An ancient unresolved run must not be re-reported
@@ -170,7 +198,8 @@ internal class DiagnosticStore(
         }
         DiagnosticSnapshot(minutes, wall, elapsed, selected.map { it.first }, selected.map { it.second },
             selected.count { it.first.run != run }, selected.any { it.first.run == run && it.first.stage == Stage.PREVIOUS_UNFINISHED }, healthy,
-            expiredDiscarded, capacityDiscarded, malformedDiscarded, futureDiscarded)
+            expiredDiscarded, capacityDiscarded, malformedDiscarded, futureDiscarded,
+            startupReadRejected, rotationReadRejected, readRejections.toMap())
     }
 
     private fun append(id: OperationId, operation: Operation, stage: Stage, info: SafeInfo = SafeInfo(), outcome: Outcome? = null, error: ErrorCode? = null) {
@@ -204,29 +233,39 @@ internal class DiagnosticStore(
         }
     }
 
-    private fun readSegments(): List<DiagnosticEvent> {
+    private fun readSegments(startup: Boolean = false): List<DiagnosticEvent> {
+        fun rejected(reason: DiagnosticReadRejection) {
+            malformedDiscarded++ // Legacy aggregate retained for report consumers.
+            if (startup) startupReadRejected++ else rotationReadRejected++
+            readRejections[reason] = (readRejections[reason] ?: 0L) + 1
+        }
         val found = LinkedHashMap<Pair<String, Long>, DiagnosticEvent>()
         for (name in listOf("events.1.log", "events.0.log")) {
             val file = File(directory, name)
             if (!file.isFile) continue
             file.inputStream().buffered().use { input ->
                 val line = StringBuilder()
-                var discard = false
+                var discard: DiagnosticReadRejection? = null
                 var read = 0
                 while (read < segmentBytes) {
                     val value = input.read(); if (value < 0) break
                     read++
                     if (value == 10) {
-                        val parsed = if (discard) null else DiagnosticEvent.parse(line.toString())
-                        if (parsed == null) malformedDiscarded++ else found[parsed.run to parsed.sequence] = parsed
-                        line.setLength(0); discard = false
-                    } else if (!discard) {
-                        if (line.length >= 4096 || value !in 9..126) { discard = true; line.setLength(0) }
-                        else line.append(value.toChar())
+                        val result = discard?.let { DiagnosticLineRead(rejection = it) } ?: DiagnosticEvent.inspect(line.toString())
+                        val parsed = result.event
+                        if (parsed == null) rejected(checkNotNull(result.rejection)) else found[parsed.run to parsed.sequence] = parsed
+                        line.setLength(0); discard = null
+                    } else if (discard == null) {
+                        discard = when {
+                            line.length >= 4096 -> DiagnosticReadRejection.OVERSIZED
+                            value !in 9..126 -> DiagnosticReadRejection.INVALID_BYTE
+                            else -> null
+                        }
+                        if (discard != null) line.setLength(0) else line.append(value.toChar())
                     }
                 }
                 // Unterminated last line is deliberately ignored.
-                if (line.isNotEmpty() || discard) malformedDiscarded++
+                if (line.isNotEmpty() || discard != null) rejected(discard ?: DiagnosticReadRejection.INCOMPLETE)
             }
         }
         return found.values.toList()

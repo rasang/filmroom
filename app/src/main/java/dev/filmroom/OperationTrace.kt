@@ -44,9 +44,9 @@ class OperationTrace private constructor(val id:OperationId) {
             codecStage = (t as? PhotoException)?.codecStage,
             rawTechnical = (t as? PhotoException)?.rawTechnical,
         )
-        private fun errorCode(t:Throwable):ErrorCode=when(t){
+        internal fun errorCode(t:Throwable):ErrorCode=when(t){
             is OutOfMemoryError->ErrorCode.MEMORY_LIMIT
-            is EngineException->when(t.failure){EngineFailure.BUDGET->ErrorCode.MEMORY_LIMIT;EngineFailure.STORAGE->ErrorCode.DISK_SPACE;EngineFailure.UNAVAILABLE->ErrorCode.ENGINE_UNAVAILABLE;EngineFailure.PARAMETERS,EngineFailure.PROFILE,EngineFailure.IMAGE_SIZE->ErrorCode.INVALID_ARGUMENT;EngineFailure.CANCELLED->ErrorCode.CANCELLED;else->ErrorCode.RENDER_FAILED}
+            is EngineException->when(t.failure){EngineFailure.GPU_COMPLETION_UNCERTAIN->ErrorCode.GPU_COMPLETION_UNCERTAIN;EngineFailure.BUDGET->ErrorCode.MEMORY_LIMIT;EngineFailure.STORAGE->ErrorCode.DISK_SPACE;EngineFailure.UNAVAILABLE->ErrorCode.ENGINE_UNAVAILABLE;EngineFailure.PARAMETERS,EngineFailure.PROFILE,EngineFailure.IMAGE_SIZE->ErrorCode.INVALID_ARGUMENT;EngineFailure.CANCELLED->ErrorCode.CANCELLED;else->ErrorCode.RENDER_FAILED}
             is PhotoException->when(t.reason){PhotoException.Reason.TOO_LARGE->ErrorCode.MEMORY_LIMIT;PhotoException.Reason.UNSUPPORTED->ErrorCode.UNSUPPORTED_FORMAT;PhotoException.Reason.STORAGE->ErrorCode.DISK_SPACE;PhotoException.Reason.EXPORT->ErrorCode.ENCODE_FAILED;else->ErrorCode.DECODE_FAILED}
             is SecurityException->ErrorCode.PERMISSION_LOST
             else->ErrorCode.UNKNOWN

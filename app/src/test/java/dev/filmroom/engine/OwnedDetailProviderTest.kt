@@ -232,4 +232,48 @@ class OwnedDetailProviderTest {
         withTimeout(2000){while(clean.get()!=2)delay(5)}
     }
 
+    @Test fun rgba8UsesNegotiatedAbiAndReleasesScratchAfterCopy()=runBlocking {
+        val f=object:Fake(key){
+            override fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String=error("Legacy conversion should not run")
+            override fun nativeTileRgba8(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String {
+                val x=cellX*256;val y=cellY*256;val w=minOf(256,key.width-x);val h=minOf(256,key.height-y)
+                val sx=maxOf(0,x-1);val sy=maxOf(0,y-1);val sw=minOf(key.width,x+w+1)-sx;val sh=minOf(key.height,y+h+1)-sy
+                repeat(sw*sh){output.put(188.toByte());output.put(64.toByte());output.put(32.toByte());output.put(255.toByte())}
+                fun rect(x:Int,y:Int,w:Int,h:Int)=JSONObject().put("x",x).put("y",y).put("w",w).put("h",h)
+                return result("tile").put("outputValid",true).put("outputFormat","srgb-rgba8").put("bytesWritten",sw*sh*4).put("coreRect",rect(x,y,w,h)).put("sampleRect",rect(sx,sy,sw,sh)).toString()
+            }
+        }
+        val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,rgba8Output=true,outputPool=pool)
+        session.build("{}")
+        try {repeat(20){val tile=session.tile(1,1);assertEquals(DetailRect(255,255,45,5),tile.sample);assertEquals(0L,pool.usage().borrowedBytes);assertEquals(900L,pool.usage().allocatedBytes);tile.bitmap.recycle()}}
+        finally{session.close();session.awaitRetired()}
+        assertEquals(0L,pool.usage().allocatedBytes)
+    }
+    @Test fun cancellationCannotReturnScratchWhileNativeStillBorrowsIt()=runBlocking {
+        val f=Fake(key).apply{block=true};val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,outputPool=pool)
+        session.build("{}")
+        val worker=launch(Dispatchers.Default){session.tile(0,0)}
+        assertTrue(f.entered.await(5,TimeUnit.SECONDS));val bytes=pool.usage().borrowedBytes;assertTrue(bytes>0)
+        worker.cancel();session.close();delay(30)
+        assertEquals(bytes,pool.usage().borrowedBytes);assertEquals(0,pool.usage().idleCount)
+        f.exit.countDown();worker.join();session.awaitRetired()
+        assertEquals(0L,pool.usage().borrowedBytes);assertEquals(0L,pool.usage().allocatedBytes)
+    }
+    @Test fun advertisedRgbaAbiMissingSymbolFailsExplicitlyWithoutLegacyRetry()=runBlocking {
+        val f=object:Fake(key){override fun nativeTileRgba8(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String=throw UnsatisfiedLinkError("mismatched RGBA8 library")}
+        val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,rgba8Output=true,outputPool=pool)
+        session.build("{}")
+        try{session.tile(0,0);fail()}catch(e:DetailUnavailable){assertEquals("UNAVAILABLE",e.code)}
+        assertEquals(1,f.released.get());assertEquals(0L,pool.usage().borrowedBytes)
+        session.close();session.awaitRetired()
+    }
+
+    @Test fun rgba8CapabilityMustExplicitlyMatchSupportedAbi(){
+        assertTrue(DetailNativeContract.rgba8Available(JSONObject().put("outputRgba8",true).put("outputRgba8Abi",1)))
+        for(capabilities in listOf(JSONObject(),JSONObject().put("outputRgba8",true),JSONObject().put("outputRgba8",true).put("outputRgba8Abi",2),JSONObject().put("outputRgba8","true").put("outputRgba8Abi",1),JSONObject().put("outputRgba8",true).put("outputRgba8Abi","1")))assertFalse(DetailNativeContract.rgba8Available(capabilities))
+    }
+
 }

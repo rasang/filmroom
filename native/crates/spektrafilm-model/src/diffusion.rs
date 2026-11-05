@@ -737,14 +737,30 @@ fn upsample_bilinear(
 
 /// Max working-resolution σ for the sum-of-Gaussians path; the downsample
 /// factor is `ceil(σ_max / SIGMA_CAP)` so every blur stays at or below it.
-const DIFFUSION_SIGMA_CAP: f64 = 32.0;
+/// Raised 32 → 64 so the GPU export downsamples less aggressively and keeps
+/// the sharper halo/core structure closer to the CPU exact-FFT reference
+/// (at the cost of larger blur kernels on the GPU).
+const DIFFUSION_SIGMA_CAP: f64 = 64.0;
 
-/// 3-Gaussian fit of a 2D exponential (matches `exponential_filter_channel`).
-const DIFFUSION_EXP_FIT: [(f64, f64); 3] = [(0.1633, 0.5360), (0.6496, 1.5236), (0.1870, 2.7684)];
+/// 6-Gaussian fit of a 2D isotropic exponential PSF `exp(-r/λ)/(2πλ²)`,
+/// fitted against its MTF `(1+u²)^(-3/2)` (amplitude, σ/λ). The CPU export
+/// convolves the exact exponential via FFT; the previous 3-term fit
+/// (`_EXPONENTIAL_GAUSSIAN_FITS[3]`, shared with `exponential_filter_channel`)
+/// approximates that MTF to ~1.6e-2 max error, while this 6-term fit reaches
+/// ~2.3e-4 (≈70× closer) so the GPU halo shape tracks the CPU FFT reference.
+/// Amplitudes sum to ≈1 (energy-preserving); do not renormalize.
+const DIFFUSION_EXP_FIT: [(f64, f64); 6] = [
+    (0.007123, 0.201227),
+    (0.049170, 0.467520),
+    (0.176079, 0.843033),
+    (0.359777, 1.367643),
+    (0.331874, 2.091448),
+    (0.075958, 3.113154),
+];
 
 /// Decompose the (resolved) diffusion PSF into Gaussian blur components.
 /// Returns parallel vectors of (full-resolution σ in px, per-channel
-/// coefficient); each PSF sub-component exponential contributes 3 Gaussians.
+/// coefficient); each PSF sub-component exponential contributes 6 Gaussians.
 /// Shared by the CPU-blur and GPU-resident-plan paths.
 fn diffusion_components(
     cfg: &FamilyShape,
@@ -904,6 +920,151 @@ pub fn apply_diffusion_filter_blur(
     out
 }
 
+/// Whole-frame downsample accumulator for the banded diffusion pre-pass.
+///
+/// The banded GPU chain cannot run a diffusion filter's large-radius blur
+/// directly (it is a global, non-bandable effect), so the export taps the
+/// chain state at the filter's input point band by band and accumulates the
+/// 1/d box downsample here — the exact `downsample_area` semantics (edge
+/// blocks are partial), assembled from per-band core rows. At 1/d resolution
+/// the whole frame is a few MB, so the subsequent multi-Gaussian blur runs
+/// as one small whole-frame operation.
+pub struct DownsampleAccumulator {
+    sums: Vec<f64>,
+    small_w: usize,
+    small_h: usize,
+    d: usize,
+    full_w: usize,
+    full_h: usize,
+}
+
+impl DownsampleAccumulator {
+    /// Zeroed accumulator for a `full_w × full_h` frame downsampled by `d`.
+    pub fn new(full_w: usize, full_h: usize, d: usize) -> Self {
+        let d = d.max(1);
+        let small_w = full_w.div_ceil(d);
+        let small_h = full_h.div_ceil(d);
+        Self {
+            sums: vec![0.0; small_w * small_h * 3],
+            small_w,
+            small_h,
+            d,
+            full_w,
+            full_h,
+        }
+    }
+
+    /// Accumulate the core rows of one band tap. `tap` holds global rows
+    /// `[tap_y0, tap_y0 + tap.height)`; only `[core_y0, core_y1)` are summed
+    /// (the halo rows belong to the neighbouring bands). Core row ranges
+    /// across the bands must partition `[0, full_h)` and align to `d` (the
+    /// last band may be short), so every small row is fully inside one band.
+    pub fn add_band(&mut self, tap: &ImageBuf, tap_y0: usize, core_y0: usize, core_y1: usize) {
+        let w = self.full_w;
+        let d = self.d;
+        let sw = self.small_w;
+        for gy in core_y0..core_y1 {
+            let sy = gy / d;
+            let local = gy - tap_y0;
+            debug_assert!(local < tap.height as usize, "tap band does not cover core row");
+            let src_row = &tap.data[local * w * 3..(local + 1) * w * 3];
+            let dst_row = &mut self.sums[sy * sw * 3..(sy + 1) * sw * 3];
+            for x in 0..w {
+                let sx = x / d;
+                let s = src_row[x * 3..x * 3 + 3].as_ref();
+                let dst = &mut dst_row[sx * 3..sx * 3 + 3];
+                dst[0] += s[0] as f64;
+                dst[1] += s[1] as f64;
+                dst[2] += s[2] as f64;
+            }
+        }
+    }
+
+    /// Add a rectangular core [x0,y0,x1,y1] in global coordinates.
+    /// Cores must partition the full image; cell boundaries need not align.
+    pub fn add_tile(&mut self, tap: &ImageBuf, tap_x: usize, tap_y: usize,
+        core: [usize; 4]) -> Option<()> {
+        let [x0, y0, x1, y1] = core;
+        let tw = tap.width as usize;
+        let th = tap.height as usize;
+        if x0 > x1 || y0 > y1 || x0 < tap_x || y0 < tap_y
+            || x1 > self.full_w || y1 > self.full_h
+            || x1 > tap_x.checked_add(tw)? || y1 > tap_y.checked_add(th)?
+            || tap.data.len() != tw.checked_mul(th)?.checked_mul(3)? { return None; }
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let src = ((y - tap_y) * tw + x - tap_x) * 3;
+                let dst = ((y / self.d) * self.small_w + x / self.d) * 3;
+                for c in 0..3 { self.sums[dst + c] += tap.data[src + c] as f64; }
+            }
+        }
+        Some(())
+    }
+
+    /// Box-average the sums into the small image, mirroring `downsample_area`
+    /// (each small pixel is the mean of its `d×d` block; edge blocks are
+    /// partial). Must only be called after every frame row was accumulated
+    /// exactly once.
+    pub fn finish(&self) -> ImageBuf {
+        use rayon::prelude::*;
+        let d = self.d;
+        let sw = self.small_w;
+        let mut out = vec![ZERO; self.small_w * self.small_h * 3];
+        out.par_chunks_mut(sw * 3)
+            .enumerate()
+            .for_each(|(sy, row)| {
+                let rows = ((sy + 1) * d).min(self.full_h) - sy * d;
+                for sx in 0..sw {
+                    let cols = ((sx + 1) * d).min(self.full_w) - sx * d;
+                    let cnt = (rows * cols) as f64;
+                    let i = (sy * sw + sx) * 3;
+                    row[sx * 3] = from_f64(self.sums[i] / cnt);
+                    row[sx * 3 + 1] = from_f64(self.sums[i + 1] / cnt);
+                    row[sx * 3 + 2] = from_f64(self.sums[i + 2] / cnt);
+                }
+            });
+        ImageBuf::from_data(sw as u32, self.small_h as u32, out)
+    }
+}
+
+/// Blur the downsampled whole-frame image per the plan and accumulate the
+/// weighted scattered field — the `small_acc` of the GPU-resident chain,
+/// computed here from the banded pre-pass taps. Returns `small_w*small_h*3`
+/// interleaved f32, ready to upload as a `DiffusionScatteredGpu` field.
+pub fn blur_scattered_field(
+    backend: &dyn ComputeBackend,
+    small: &ImageBuf,
+    plan: &spektrafilm_gpu::DiffusionGpuPlan,
+) -> Vec<f32> {
+    blur_scattered_field_controlled(backend, small, plan, || true).expect("uncancelled diffusion")
+}
+
+/// Bounded prepass accumulation: releases each component before dispatching
+/// the next and honors cooperative cancellation at every safe boundary.
+pub fn blur_scattered_field_controlled(
+    backend: &dyn ComputeBackend,
+    small: &ImageBuf,
+    plan: &spektrafilm_gpu::DiffusionGpuPlan,
+    mut checkpoint: impl FnMut() -> bool,
+) -> Option<Vec<f32>> {
+    use rayon::prelude::*;
+    if plan.sigmas.len() != plan.coeffs.len() || !checkpoint() { return None; }
+    let mut acc = vec![0.0f64; small.data.len()];
+    for (&sigma, cf) in plan.sigmas.iter().zip(plan.coeffs.iter()) {
+        if !checkpoint() { return None; }
+        let blur = backend.gaussian_blur(small, sigma);
+        acc.par_chunks_mut(3)
+            .zip(blur.data.par_chunks(3))
+            .for_each(|(a, b)| {
+                a[0] += cf[0] as f64 * (b[0] as f64);
+                a[1] += cf[1] as f64 * (b[1] as f64);
+                a[2] += cf[2] as f64 * (b[2] as f64);
+            });
+    }
+    if !checkpoint() { return None; }
+    Some(acc.iter().map(|&v| v as f32).collect())
+}
+
 /// Exact, row-generated PSF for out-of-core convolution. Normalization follows
 /// the same row-major f64 sum as `diffusion_filter_psf`; no Gaussian fit or resize.
 /// Exact, collision-free identity for the row generator, not a sampled/hash key.
@@ -1001,5 +1162,72 @@ mod exact_descriptor_tests {
         assert_ne!(baseline,ExactDiffusionKernel::new(&config(),11.,47,29).unwrap().descriptor());
         assert_ne!(baseline,ExactDiffusionKernel::new(&config(),10.,48,29).unwrap().descriptor());
         assert_eq!(baseline,ExactDiffusionKernel::new(&config(),10.,47,29).unwrap().descriptor());
+    }
+}
+
+#[cfg(test)]
+mod resident_prepass_tests {
+    use super::*;
+    use spektrafilm_gpu::cpu_backend::CpuBackend;
+
+    #[test]
+    fn irregular_bands_accumulate_partial_cells_without_budget_roundup() {
+        for (w, h, d, step) in [(7, 11, 4, 1), (1, 9, 3, 2), (9, 1, 4, 1), (13, 17, 5, 3)] {
+            let image = ImageBuf::from_data(w, h, (0..w * h * 3).map(|v| from_f64(v as f64 * 0.125)).collect());
+            let mut acc = DownsampleAccumulator::new(w as usize, h as usize, d);
+            let mut y = 0usize;
+            while y < h as usize {
+                let end = (y + step).min(h as usize);
+                let tap = ImageBuf::from_data(w, (end-y) as u32, image.data[y*w as usize*3..end*w as usize*3].to_vec());
+                acc.add_band(&tap, y, y, end);
+                y = end;
+            }
+            let out = acc.finish();
+            for sy in 0..h as usize / d + usize::from(h as usize % d != 0) {
+                for sx in 0..w as usize / d + usize::from(w as usize % d != 0) {
+                    for ch in 0..3 {
+                        let mut sum=0.0; let mut count=0;
+                        for y in sy*d..((sy+1)*d).min(h as usize) { for x in sx*d..((sx+1)*d).min(w as usize) {
+                            sum += image.data[(y*w as usize+x)*3+ch] as f64; count += 1;
+                        }}
+                        assert!((out.data[(sy*out.width as usize+sx)*3+ch] as f64-sum/count as f64).abs()<1e-6);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rectangular_cores_partition_partial_cells_in_both_axes() {
+        let (w,h,d)=(13usize,17usize,5usize);
+        let image=ImageBuf::from_data(w as u32,h as u32,
+            (0..w*h*3).map(|i|from_f64(i as f64*0.125)).collect());
+        let mut reference=DownsampleAccumulator::new(w,h,d);
+        reference.add_band(&image,0,0,h);
+        let mut actual=DownsampleAccumulator::new(w,h,d);
+        for y in (0..h).step_by(3) { for x in (0..w).step_by(4) {
+            let x1=(x+4).min(w);let y1=(y+3).min(h);
+            let tx=x.saturating_sub(1);let ty=y.saturating_sub(2);
+            let tw=(x1+1).min(w)-tx;let th=(y1+2).min(h)-ty;
+            let mut values=Vec::new();
+            for row in ty..ty+th {values.extend_from_slice(&image.data[(row*w+tx)*3..(row*w+tx+tw)*3]);}
+            let tap=ImageBuf::from_data(tw as u32,th as u32,values);
+            actual.add_tile(&tap,tx,ty,[x,y,x1,y1]).unwrap();
+        }}
+        assert_eq!(actual.finish().data,reference.finish().data);
+        assert!(actual.add_tile(&image,1,0,[0,0,w,h]).is_none());
+    }
+
+    #[test]
+    fn scattered_components_cancel_at_safe_boundaries() {
+        let small=ImageBuf::from_data(3, 2, vec![from_f64(0.5); 18]);
+        let plan=spektrafilm_gpu::DiffusionGpuPlan { d:1,small_w:3,small_h:2,p_s:0.2,sigmas:vec![1.,2.],coeffs:vec![[0.5;3],[0.5;3]] };
+        assert!(blur_scattered_field_controlled(&CpuBackend,&small,&plan,||false).is_none());
+        let mut checks=0;
+        assert!(blur_scattered_field_controlled(&CpuBackend,&small,&plan,||{checks+=1;checks<3}).is_none());
+        assert_eq!(checks,3);
+        let out=blur_scattered_field_controlled(&CpuBackend,&small,&plan,||true).unwrap();
+        assert_eq!(out.len(),18);
+        assert!(out.iter().all(|v|(*v-0.5).abs()<1e-6));
     }
 }

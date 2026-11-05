@@ -1,10 +1,17 @@
 //! Stage-local work progress. Work units are completed image operations, not time.
 //! Boundaries are emitted by the executing loops; never inferred from polling.
 const UNIT: u64 = 1_000_000;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GpuWorkProgress {
+    pub phase:Option<&'static str>, pub tile_index:u32, pub tile_total:u32,
+    pub batch_index:u32, pub batch_elapsed_ms:f64, pub chain_wait_ms:f64,
+    pub completed_submits:u64, pub failed_phase:Option<&'static str>, pub failed_elapsed_ms:Option<f64>,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct ExportProgress {
     /// True only for an original algorithm pass callback; stage/work boundaries are false.
     pub pass_updated: bool,
+    pub gpu:Option<GpuWorkProgress>,
     pub phase: &'static str,
     pub done: u64,
     pub total: u64,
@@ -28,6 +35,7 @@ pub(crate) trait ProgressSink {
     }
     fn begin_work(&mut self, phase: &'static str);
     fn end_work(&mut self);
+    fn gpu_event(&mut self, _value:GpuWorkProgress) {}
 }
 pub(crate) struct Reporter<F: FnMut(ExportProgress)> {
     emit: F,
@@ -41,7 +49,7 @@ impl<F: FnMut(ExportProgress)> Reporter<F> {
         Self {
             emit,
             state: ExportProgress {
-                pass_updated: false,
+                pass_updated: false, gpu:None,
                 phase: "setup",
                 done: 0,
                 total: 0,
@@ -61,7 +69,7 @@ impl<F: FnMut(ExportProgress)> Reporter<F> {
         // One final unit represents successful stage finalization. Until it has
         // happened the percentage cannot claim a completed stage.
         self.state = ExportProgress {
-            pass_updated: false,
+            pass_updated: false, gpu:None,
             phase,
             done: 0,
             total: 0,
@@ -70,6 +78,16 @@ impl<F: FnMut(ExportProgress)> Reporter<F> {
             stage_total: (work + 1) * UNIT,
         };
         (self.emit)(self.state);
+    }
+    /// Out-of-band execution decision. This is not work or a completed pass.
+    /// Emit before CPU setup so cancellation never erases the fallback reason.
+    pub fn diagnostic(&mut self, phase: &'static str) {
+        (self.emit)(ExportProgress { pass_updated:false, gpu:None, phase, done:0, total:0,
+            display_stage:1, stage_done:0, stage_total:0 });
+    }
+    pub fn gpu_failure(&mut self, phase:&'static str, elapsed_ms:f64) {
+        let mut value=self.state.gpu.unwrap_or_default();value.failed_phase=Some(phase);value.failed_elapsed_ms=Some(elapsed_ms);
+        self.gpu_event(value);
     }
     pub fn finish_stage(&mut self) {
         self.state.pass_updated = false;
@@ -89,6 +107,9 @@ impl<F: FnMut(ExportProgress)> Reporter<F> {
     }
 }
 impl<F: FnMut(ExportProgress)> ProgressSink for Reporter<F> {
+    fn gpu_event(&mut self, value:GpuWorkProgress) {
+        self.state.gpu=Some(value);let mut event=self.state;event.pass_updated=false;(self.emit)(event);
+    }
     fn begin_stage(&mut self, stage: u8, work: u64, phase: &'static str) {
         Reporter::begin_stage(self, stage, work, phase);
     }

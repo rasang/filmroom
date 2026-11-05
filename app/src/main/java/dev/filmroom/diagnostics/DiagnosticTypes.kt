@@ -3,8 +3,9 @@ package dev.filmroom.diagnostics
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
 enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
 enum class Stage { START, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
+enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
-enum class ErrorCode { ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
+enum class ErrorCode { GPU_COMPLETION_UNCERTAIN, ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
 enum class FilmProfile(val id: String) {
     KODAK_DOUBLEX_5222("kodak_doublex"),
     KODAK_TRIX_7266("kodak_trix"),
@@ -57,7 +58,7 @@ enum class NativePhase(val id:String,private val labelId:Int) {
     FILM_LOG("film_log",dev.filmroom.R.string.text_a3a8c53854e3), FILM_DENSITY("film_density",dev.filmroom.R.string.text_e010cca5a693),
     DIR_DIFFUSION("dir_diffusion",dev.filmroom.R.string.text_c3d62fb6dc52), DIR_DEVELOP("dir_develop",dev.filmroom.R.string.text_63dc46ef8527),
     GRAIN_SAMPLING("grain_sampling",dev.filmroom.R.string.text_6817024599e0), GRAIN_CLOUD("grain_cloud",dev.filmroom.R.string.text_b6ccbb59ff43),
-    GRAIN_BLUR("grain_blur",dev.filmroom.R.string.text_465b9d003092), PRINTING_SCANNING("printing_scanning",dev.filmroom.R.string.text_6534faa7428f), SCAN_SHARPEN("scan_sharpen",dev.filmroom.R.string.text_6fb121b28fdd), COMPLETE("complete",dev.filmroom.R.string.text_93b5664a205f);
+    GRAIN_BLUR("grain_blur",dev.filmroom.R.string.text_465b9d003092), PRINTING_SCANNING("printing_scanning",dev.filmroom.R.string.text_6534faa7428f), SCAN_SHARPEN("scan_sharpen",dev.filmroom.R.string.text_6fb121b28fdd), GPU_FULL_CHAIN("gpu_full_chain",dev.filmroom.R.string.gpu_phase_full_chain), GPU_BANDED_CHAIN("gpu_banded_chain",dev.filmroom.R.string.gpu_phase_banded_chain), GPU_TILED_CHAIN("gpu_tiled_chain",dev.filmroom.R.string.gpu_phase_tiled_chain), GPU_DIFFUSION_PREPASS("gpu_diffusion_prepass",dev.filmroom.R.string.gpu_phase_prepass), COMPLETE("complete",dev.filmroom.R.string.text_93b5664a205f);
     val chinese:String get()=dev.filmroom.i18n.L10n.text(labelId)
     companion object {fun fromId(id:String):NativePhase?=entries.firstOrNull{it.id==id}}
 }
@@ -67,6 +68,9 @@ class OperationId internal constructor(val value: Long)
 data class SafeInfo(
     val width: Int? = null, val height: Int? = null,
     val durationMs: Long? = null,
+    val previewTiming: PreviewTimingSnapshot? = null,
+    val negativePreviewOutcome: NegativePreviewOutcome? = null,
+    val previewPreparationMs: Long? = null, val previewAllocationMs: Long? = null, val previewJniWallMs: Long? = null,
     val javaUsedBytes: Long? = null, val javaMaxBytes: Long? = null, val nativeAllocatedBytes: Long? = null,
     val completedUnits: Long? = null, val totalUnits: Long? = null,
     val cleanupRemoved: Long? = null, val cleanupUnresolved: Long? = null,
@@ -158,9 +162,15 @@ data class SafeInfo(
     val gpuStage: GpuStage? = null,
     val gpuAdapterModel: Int? = null,
     val gpuBatches: Long? = null,
+    val gpuTileCoreWidth:Long?=null, val gpuTileCoreHeight:Long?=null,
+    val gpuTileExpandedWidth:Long?=null, val gpuTileExpandedHeight:Long?=null,
     val gpuFallbacks: Long? = null,
     val gpuReason: GpuReason? = null,
     val gpuSelfTest: Boolean? = null,
+    val gpuNumericGuard: Boolean? = null,
+    val gpuWorkPhase:GpuWorkPhase?=null, val gpuFailedPhase:GpuWorkPhase?=null,
+    val gpuTileIndex:Long?=null, val gpuTileTotal:Long?=null, val gpuBatchIndex:Long?=null, val gpuCompletedSubmits:Long?=null,
+    val gpuBatchElapsedMs:Double?=null, val gpuChainWaitMs:Double?=null, val gpuFailedElapsedMs:Double?=null,
     val seed: Long? = null,
     val previousOperation: Operation? = null,
     val nativePhase: NativePhase? = null,
@@ -204,6 +214,11 @@ data class SafeInfo(
         previewNativeCompleted?.let{put("previewNativeCompleted",it)}
         integer("width", width?.toLong(), 30_000, 1); integer("height", height?.toLong(), 30_000, 1)
         integer("durationMs", durationMs, 7L * 24 * 60 * 60 * 1000)
+        previewTiming?.fields()?.let { putAll(it) }
+        negativePreviewOutcome?.let{put("negativePreviewOutcome",it.name)}
+        integer("previewPreparationMs", previewPreparationMs, 604_800_000)
+        integer("previewAllocationMs", previewAllocationMs, 604_800_000)
+        integer("previewJniWallMs", previewJniWallMs, 604_800_000)
         integer("javaUsedBytes", javaUsedBytes, 1L shl 40); integer("javaMaxBytes", javaMaxBytes, 1L shl 40)
         integer("nativeAllocatedBytes", nativeAllocatedBytes, 1L shl 40)
         integer("completedUnits", completedUnits, 1_800_000_000L); integer("totalUnits", totalUnits, 1_800_000_000L)
@@ -298,9 +313,24 @@ data class SafeInfo(
         gpuStage?.let{put("gpuStage",it.id)}
         integer("gpuAdapterModel",gpuAdapterModel?.toLong(),9999, 100)
         integer("gpuBatches",gpuBatches,1_800_000_000)
+        integer("gpuTileCoreWidth",gpuTileCoreWidth,40000,1)
+        integer("gpuTileCoreHeight",gpuTileCoreHeight,40000,1)
+        integer("gpuTileExpandedWidth",gpuTileExpandedWidth,40000,1)
+        integer("gpuTileExpandedHeight",gpuTileExpandedHeight,40000,1)
         integer("gpuFallbacks",gpuFallbacks,1_800_000_000)
         gpuReason?.let{put("gpuReason",it.id)}
         gpuSelfTest?.let{put("gpuSelfTest",it)}
+        gpuNumericGuard?.let{put("gpuNumericGuard",it)}
+        gpuWorkPhase?.let{put("gpuWorkPhase",it.id)}
+        gpuFailedPhase?.let{put("gpuFailedPhase",it.id)}
+        integer("gpuTileIndex",gpuTileIndex,1_800_000_000)
+        integer("gpuTileTotal",gpuTileTotal,1_800_000_000)
+        integer("gpuBatchIndex",gpuBatchIndex,1_800_000_000)
+        integer("gpuCompletedSubmits",gpuCompletedSubmits,1_800_000_000)
+        decimal("gpuBatchElapsedMs",gpuBatchElapsedMs,0.0,604_800_000.0)
+        decimal("gpuChainWaitMs",gpuChainWaitMs,0.0,604_800_000.0)
+        decimal("gpuFailedElapsedMs",gpuFailedElapsedMs,0.0,604_800_000.0)
+
         integer("seed", seed, 0xffffffffL)
         previousOperation?.let { put("previousOperation", it.name) }
         nativePhase?.let { put("nativePhase", it.id) }
@@ -336,6 +366,11 @@ data class SafeInfo(
             previewDisposition=fields["previewDisposition"]?.let{v->PreviewDisposition.entries.firstOrNull{it.name==v}},
             previewNativeCompleted=fields["previewNativeCompleted"]?.toBooleanStrictOrNull(),
             width = fields["width"]?.toIntOrNull(), height = fields["height"]?.toIntOrNull(),
+            previewTiming=PreviewTimingSnapshot.parse(fields),
+            negativePreviewOutcome=NegativePreviewOutcome.entries.firstOrNull{it.name==fields["negativePreviewOutcome"]},
+            previewPreparationMs=fields["previewPreparationMs"]?.toLongOrNull(),
+            previewAllocationMs=fields["previewAllocationMs"]?.toLongOrNull(),
+            previewJniWallMs=fields["previewJniWallMs"]?.toLongOrNull(),
             durationMs = fields["durationMs"]?.toLongOrNull(), javaUsedBytes = fields["javaUsedBytes"]?.toLongOrNull(),
             javaMaxBytes = fields["javaMaxBytes"]?.toLongOrNull(), nativeAllocatedBytes = fields["nativeAllocatedBytes"]?.toLongOrNull(),
             completedUnits = fields["completedUnits"]?.toLongOrNull(), totalUnits = fields["totalUnits"]?.toLongOrNull(),
@@ -429,9 +464,24 @@ data class SafeInfo(
             gpuStage=fields["gpuStage"]?.let{id->GpuStage.entries.firstOrNull{it.id==id}},
             gpuAdapterModel=fields["gpuAdapterModel"]?.toIntOrNull(),
             gpuBatches=fields["gpuBatches"]?.toLongOrNull(),
+            gpuTileCoreWidth=fields["gpuTileCoreWidth"]?.toLongOrNull(),
+            gpuTileCoreHeight=fields["gpuTileCoreHeight"]?.toLongOrNull(),
+            gpuTileExpandedWidth=fields["gpuTileExpandedWidth"]?.toLongOrNull(),
+            gpuTileExpandedHeight=fields["gpuTileExpandedHeight"]?.toLongOrNull(),
             gpuFallbacks=fields["gpuFallbacks"]?.toLongOrNull(),
             gpuReason=fields["gpuReason"]?.let{id->GpuReason.entries.firstOrNull{it.id==id}},
             gpuSelfTest=fields["gpuSelfTest"]?.toBooleanStrictOrNull(),
+            gpuNumericGuard=fields["gpuNumericGuard"]?.toBooleanStrictOrNull(),
+            gpuWorkPhase=GpuWorkPhase.fromId(fields["gpuWorkPhase"]),
+            gpuFailedPhase=GpuWorkPhase.fromId(fields["gpuFailedPhase"]),
+            gpuTileIndex=fields["gpuTileIndex"]?.toLongOrNull(),
+            gpuTileTotal=fields["gpuTileTotal"]?.toLongOrNull(),
+            gpuBatchIndex=fields["gpuBatchIndex"]?.toLongOrNull(),
+            gpuCompletedSubmits=fields["gpuCompletedSubmits"]?.toLongOrNull(),
+            gpuBatchElapsedMs=fields["gpuBatchElapsedMs"]?.toDoubleOrNull(),
+            gpuChainWaitMs=fields["gpuChainWaitMs"]?.toDoubleOrNull(),
+            gpuFailedElapsedMs=fields["gpuFailedElapsedMs"]?.toDoubleOrNull(),
+
             seed = fields["seed"]?.toLongOrNull(), previousOperation = fields["previousOperation"]?.let { runCatching { Operation.valueOf(it) }.getOrNull() },
         )
     }

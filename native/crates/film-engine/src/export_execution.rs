@@ -10,6 +10,15 @@ use spektrafilm_math::precision::Scalar;
 pub const MAX_EXPORT_WORKERS: usize = 4;
 pub const EXPORT_STACK_RESERVE_BYTES: u64 = MAX_EXPORT_WORKERS as u64 * 2 * 1024 * 1024;
 const WAIT: Duration = Duration::from_millis(5);
+/// Dedicated export workers only. Linux/Android nice is per-thread here; never
+/// lower a shared preview/UI thread or require permission to raise it later.
+pub(crate) fn lower_export_thread_priority() {
+    #[cfg(target_os="android")]
+    unsafe {
+        unsafe extern "C" {fn setpriority(which:i32,who:u32,priority:i32)->i32;}
+        let _=setpriority(0,0,10);
+    }
+}
 fn worker_cap(available: Option<usize>) -> usize {
     available.unwrap_or(1).saturating_sub(2).clamp(1, MAX_EXPORT_WORKERS)
 }
@@ -37,6 +46,7 @@ impl Coordinator {
             ThreadPoolBuilder::new().num_threads(self.workers)
                 .stack_size(2 * 1024 * 1024)
                 .thread_name(|n| format!("film-export-{n}"))
+                .start_handler(|_|lower_export_thread_priority())
                 .build().ok()
         }).as_ref()
     }

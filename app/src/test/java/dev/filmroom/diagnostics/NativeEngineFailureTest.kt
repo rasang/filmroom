@@ -47,6 +47,24 @@ class NativeEngineFailureTest {
         assertEquals("unknown",restored.fields()["nativeEngineStage"])
         assertFalse(restored.fields().toString().contains(secret))
     }
+    @Test fun uncertainGpuCompletionRetainsItsOwnFailureAndRestartInstruction() {
+        val error=failure("GPU_COMPLETION_UNCERTAIN","scientific_pipeline")
+        assertEquals(EngineFailure.GPU_COMPLETION_UNCERTAIN,error.failure)
+        assertEquals(ErrorCode.GPU_COMPLETION_UNCERTAIN,OperationTrace.errorCode(error))
+        assertEquals(NativeEngineCode.GPU_COMPLETION_UNCERTAIN,error.nativeEngineCode)
+        assertEquals(NativeEngineStage.SCIENTIFIC_PIPELINE,error.nativeEngineStage)
+        assertEquals("gpu_completion_uncertain",error.uiMessage.key)
+        assertTrue(error.message!!.contains("完全关闭并重新打开"))
+        assertFalse(error.message!!.contains("/private"))
+        val safe=OperationTrace.failureInfo(error,1)
+        assertEquals(safe,SafeInfo.parse(safe.fields()))
+        val event=DiagnosticEvent(1000,10,"a".repeat(32),1,1,Operation.EXPORT_RENDER,Stage.ERROR,
+            error=OperationTrace.errorCode(error),info=safe)
+        assertEquals(event,DiagnosticEvent.parse(event.line()))
+        assertTrue(event.line().contains("GPU_COMPLETION_UNCERTAIN"))
+        // Genuine memory failures keep their separate remedy; uncertain GPU work is not OOM.
+        assertEquals(ErrorCode.MEMORY_LIMIT,OperationTrace.errorCode(failure("MEMORY_BUDGET_TOO_SMALL","render_pipeline")))
+    }
     @Test fun successfulNativeResponseAndLegacyDiagnosticsRemainCompatible() {
         engine.checkNativeResult(JSONObject().put("ok",true))
         assertNull(SafeInfo.parse(emptyMap()).nativeEngineCode)

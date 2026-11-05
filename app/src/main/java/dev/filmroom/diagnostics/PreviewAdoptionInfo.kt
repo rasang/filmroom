@@ -14,6 +14,7 @@ import kotlin.coroutines.CoroutineContext
 enum class PreviewFrameKind { QUICK, REFINED, CACHED }
 enum class PreviewDisposition { BOUND, ADOPTED, CACHE_ONLY, CANCELLED, FAILED, STALE_SOURCE, STALE_GENERATION }
 class PreviewDiagnosticContext(val sourceToken:Long,val generation:Long,val scienceFingerprint:Long,val kind:PreviewFrameKind,val originGeneration:Long=generation,val originKind:PreviewFrameKind=kind):AbstractCoroutineContextElement(Key) {
+    var timing:PreviewTiming?=null
     companion object Key:CoroutineContext.Key<PreviewDiagnosticContext> {
         private val tokens=AtomicLong()
         fun nextSourceToken()=tokens.incrementAndGet()
@@ -24,8 +25,8 @@ class PreviewDiagnosticContext(val sourceToken:Long,val generation:Long,val scie
     }
     fun enrich(info:SafeInfo)=info.copy(previewSourceToken=sourceToken,previewGeneration=generation,previewOriginGeneration=originGeneration,previewOriginKind=originKind,previewScienceFingerprint=scienceFingerprint,previewKind=kind)
 }
-data class PreviewAdoptionRecord(val context:PreviewDiagnosticContext,val disposition:PreviewDisposition,val nativeCompleted:Boolean,val observedElapsedMs:Long=android.os.SystemClock.elapsedRealtime()) {
-    fun safeInfo()=context.enrich(SafeInfo(previewDisposition=disposition,previewObservedElapsedMs=observedElapsedMs,previewNativeCompleted=if(disposition==PreviewDisposition.BOUND)null else nativeCompleted))
+data class PreviewAdoptionRecord(val context:PreviewDiagnosticContext,val disposition:PreviewDisposition,val nativeCompleted:Boolean,val observedElapsedMs:Long=android.os.SystemClock.elapsedRealtime(),val timing:PreviewTimingSnapshot?=null) {
+    fun safeInfo()=context.enrich(SafeInfo(previewTiming=timing,previewDisposition=disposition,previewObservedElapsedMs=observedElapsedMs,previewNativeCompleted=if(disposition==PreviewDisposition.BOUND)null else nativeCompleted))
 }
 /** At most eight terminal presentation records/second; store has its existing hard capacity.
  * Native render traces still retain correlation fields when a presentation record is rate limited. */
@@ -43,12 +44,13 @@ internal class PreviewDiagnosticRateGate {
 }
 internal object PreviewAdoptionDiagnostics {
     private val rate=PreviewDiagnosticRateGate()
+    private val timingRate=PreviewDiagnosticRateGate()
     private val dropped=AtomicLong()
     private val queue=Channel<PreviewAdoptionRecord>(16)
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
     init { scope.launch {
         for(record in queue) runCatching {
-            val suppressed=rate.accept(android.os.SystemClock.elapsedRealtime()) ?: return@runCatching
+            val suppressed=(if(record.timing!=null)timingRate else rate).accept(android.os.SystemClock.elapsedRealtime()) ?: return@runCatching
             val info=record.safeInfo().copy(previewSuppressed=(suppressed+dropped.getAndSet(0)).coerceAtMost(1_000_000))
             val id=Diagnostics.begin(Operation.PREVIEW_PRESENTATION,info)
             Diagnostics.end(id,if(record.disposition==PreviewDisposition.CANCELLED)Outcome.CANCELLED else if(record.disposition==PreviewDisposition.FAILED)Outcome.FAILED else Outcome.SUCCESS)

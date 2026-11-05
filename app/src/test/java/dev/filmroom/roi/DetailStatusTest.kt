@@ -29,6 +29,15 @@ class DetailStatusTest {
             assertTrue(label.startsWith("普通预览"));assertFalse(label.contains(secret));assertFalse(label.contains("private-user"));assertFalse(label.contains(".heic"))
         }
     }
+    @Test fun uncertainGpuCompletionShowsRestartInsteadOfOrdinaryFallback(){
+        val failure=detailFailure(DetailUnavailable("GPU_COMPLETION_UNCERTAIN"))
+        assertEquals(DetailFailure.GpuCompletionUncertain,failure)
+        val label=DetailStatus(DetailPhase.Fallback,failure=failure).label()
+        assertTrue(label.contains("完全关闭并重新打开"))
+        assertFalse(label.startsWith("普通预览"))
+        assertFalse(label.contains("重试"))
+        assertFalse(failure in setOf(DetailFailure.MemoryAdmission,DetailFailure.MemoryPressure))
+    }
     @Test fun readyLabelIsTruthfulAboutActualGridCpuAndNotOriginalResolution(){
         val label=DetailStatus(DetailPhase.Ready,1152,1536,4).label()
         assertTrue(label.contains("1536"));assertTrue(label.contains("非原尺寸"));assertTrue(label.contains("CPU"))
