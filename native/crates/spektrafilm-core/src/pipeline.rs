@@ -238,7 +238,8 @@ impl Pipeline {
             || image.data.iter().any(|v| !v.is_finite()) {
             return Err("Invalid early negative dimensions or input".into());
         }
-        if self.film.info.film_type != "negative" || self.params.camera.auto_exposure {
+        if self.film.info.film_type != "negative"
+            || (self.params.camera.auto_exposure && !self.params.camera.preview_metered_ev.is_some_and(|ev|ev.is_finite() && 2.0f32.powf(ev).is_finite())) {
             return Err("Early negative requires resolved negative film and actual export AE".into());
         }
         // expose() currently derives its global highlight maximum from the

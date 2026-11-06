@@ -28,6 +28,10 @@ import dev.filmroom.diagnostics.MetadataField
 import dev.filmroom.diagnostics.MetadataIssueReason
 import dev.filmroom.diagnostics.MetadataIssuePhase
 import dev.filmroom.diagnostics.Diagnostics
+import dev.filmroom.diagnostics.ImportDiagnosticInfo
+import dev.filmroom.diagnostics.ImportOrigin
+import dev.filmroom.diagnostics.ImportPhase
+import dev.filmroom.diagnostics.ImportRoute
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
@@ -44,6 +48,7 @@ private fun deviceCodecs(context:Context):PhotoCodecs {
     return PhotoCodecs(app.cacheDir,exportJobsRoot=File(app.filesDir,"export-jobs"),memorySnapshot={dev.filmroom.engine.NativeWorkReservations.snapshot(app)},memoryBudgetMiB={
         val manager=app.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memory=android.app.ActivityManager.MemoryInfo();manager.getMemoryInfo(memory)
+        runCatching { dev.filmroom.diagnostics.ImportObservation.current()?.budgetSnapshot=dev.filmroom.engine.NativeMemorySnapshot(memory.availMem,memory.threshold,memory.lowMemory) }
         dev.filmroom.engine.NativeMemoryPolicy.chooseBudgetMiB(memory.availMem,memory.threshold,memory.lowMemory) ?: 0
     },rawBatchPreference={dev.filmroom.model.RawBatchPreferences(app).mode})
 }
@@ -145,6 +150,7 @@ class PhotoException(
     val codecStage: dev.filmroom.diagnostics.CodecStage? = null,
     val rawTechnical: dev.filmroom.diagnostics.RawTechnicalInfo? = null,
     val uiMessage:dev.filmroom.i18n.UiMessage? = null,
+    val importDiagnostic: ImportDiagnosticInfo? = null,
 ) : IOException(message, cause) {
     constructor(reason:Reason,message:dev.filmroom.i18n.UiMessage,cause:Throwable?=null,cleanupUncertain:Boolean=false,
         codecCode:dev.filmroom.diagnostics.CodecErrorCode?=null,codecStage:dev.filmroom.diagnostics.CodecStage?=null,
@@ -172,6 +178,7 @@ data class PendingCleanupReport(val removed: Int, val preservedFinalized: Int, v
 class PhotoRepository internal constructor(context: Context, private val codecs:PhotoCodecs, heicImport:HeicImport?) {
     constructor(context:Context, codecs:PhotoCodecs = deviceCodecs(context)):this(context,codecs,null)
     val availableExportFormats: List<ExportFormat> get() = if(codecs.available) ExportFormat.entries else listOf(ExportFormat.PNG)
+    private val importMemorySnapshot = { dev.filmroom.engine.NativeWorkReservations.snapshot(context.applicationContext) }
     private val heicImporter = heicImport ?: HeicImport({ dev.filmroom.engine.NativeWorkReservations.snapshot(context.applicationContext) })
     private val inputAdapters = PhotoInputAdapters(listOf(
         RasterInputAdapter(RasterPreviewDecoder { file, maxEdge, job ->
@@ -228,13 +235,41 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         PendingCleanupReport(removed, finalized, unresolved)
     }
 
-    suspend fun import(uri: Uri, previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE): LoadedPhoto {
+    suspend fun import(uri: Uri, previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
+        origin: ImportOrigin = ImportOrigin.UNKNOWN,
+        onStage: suspend (ImportDiagnosticInfo) -> Unit = {}): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
         var handedOff = false
+        var phase = ImportPhase.PREPARE
+        var copiedBytes = 0L
+        var sourceBytes:Long?=null
+        var sizeHintBytes:Long?=null
+        var suffix:dev.filmroom.diagnostics.ImportSuffix?=dev.filmroom.diagnostics.ImportSuffix.UNKNOWN
+        val observation=dev.filmroom.diagnostics.ImportObservation()
+        var format: dev.filmroom.io.formats.PhotoFormat? = null
+        var route: ImportRoute? = null
+        fun facts(failure: Throwable? = null) = ImportDiagnosticInfo(origin, phase, copiedBytes,
+            format, route, failure?.let(::classifyImportCause),suffix,sourceBytes,sizeHintBytes,
+            observation.width,observation.height,observation.memoryStage,
+            if(failure?.let(::classifyImportCause)==dev.filmroom.diagnostics.ImportFailure.MEMORY_ALLOCATION && observation.memory?.failure==null)
+                (observation.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(failure=dev.filmroom.diagnostics.ImportMemoryFailure.JVM_ALLOCATION) else observation.memory,observation.rawFormat)
+        fun enrich(error: PhotoException):PhotoException = try {
+            // Best-effort terminal observation, separately named from decision-time facts.
+            runCatching { importMemorySnapshot() }.getOrNull()?.let { snapshot ->
+                observation.memory=(observation.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(
+                    failureAvailableBytes=snapshot.availableBytes,failureThresholdBytes=snapshot.thresholdBytes,failureLowMemory=snapshot.lowMemory)
+            }
+            PhotoException(error.reason, error.message.orEmpty(), error,
+                error.cleanupUncertain, error.codecCode, error.codecStage, error.rawTechnical,
+                error.uiMessage, error.importDiagnostic ?: facts(error))
+        } catch(_:Throwable) { error }
+        suspend fun emitStage(){
+            try { onStage(facts()) } catch(c:CancellationException){throw c} catch(_:Throwable){}
+        }
         try {
             val rawBatch=codecs.snapshotRawBatch()
-            val result = withContext(Dispatchers.IO+rawBatch) {
+            val result = withContext(Dispatchers.IO+rawBatch+observation) {
                 val job = currentCoroutineContext()
                 job.ensureActive()
                 if (uri.scheme != "content") {
@@ -249,38 +284,64 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 var retained = false
                 try {
                     val name = queryName(uri)
+                    suffix=if(name.length>=160)dev.filmroom.diagnostics.ImportSuffix.UNKNOWN else dev.filmroom.diagnostics.ImportSuffix.fromName(name)
                     val sizeHint = querySizeHint(uri)
+                    sizeHintBytes=sizeHint
                     val sourceModified = SourcePhotoTime.modified(resolver, uri)
                     if (!PhotoLimits.hasImportSpace(sourceDirectory.usableSpace, sizeHint)) {
                         throw PhotoException(PhotoException.Reason.STORAGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_9392b8f7c99e))
                     }
                     var remainingCopyWindow = PhotoLimits.copyWindowBytes(sourceDirectory.usableSpace)
-                    var copied = 0L
+                    observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.SOURCE_COPY
+                    phase = ImportPhase.SOURCE_OPEN
+                    emitStage()
                     resolver.openInputStream(uri)?.use { input ->
+                        phase = ImportPhase.PRIVATE_OPEN
                         privateCopy.outputStream().buffered().use { output ->
+                            phase = ImportPhase.SOURCE_READ
+                            emitStage()
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
                                 job.ensureActive()
+                                phase = ImportPhase.SOURCE_READ
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 if (count == 0) continue
-                                if (!PhotoLimits.acceptsCopiedBytes(copied, count)) {
+                                phase = ImportPhase.COPY_ADMISSION
+                                if (!PhotoLimits.acceptsCopiedBytes(copiedBytes, count)) {
                                     throw PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_2673ef9ba447))
                                 }
                                 if (count.toLong() > remainingCopyWindow) remainingCopyWindow = PhotoLimits.copyWindowBytes(sourceDirectory.usableSpace)
                                 if (count.toLong() > remainingCopyWindow) {
                                     throw PhotoException(PhotoException.Reason.STORAGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_276ad5585012))
                                 }
+                                phase = ImportPhase.PRIVATE_WRITE
                                 output.write(buffer, 0, count)
-                                copied += count
+                                copiedBytes += count
                                 remainingCopyWindow -= count
                             }
+                            phase = ImportPhase.PRIVATE_CLOSE
                         }
+                        phase = ImportPhase.SOURCE_CLOSE
                     } ?: throw FileNotFoundException("Photo provider returned no stream")
                     job.ensureActive()
+                    sourceBytes=copiedBytes
                     sourceModified?.let { File(privateCopy.path+".imprint-time").writeText(it) }
-                    val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null) { rawSpool = it }
+                    observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.INPUT_METADATA
+                    phase = ImportPhase.INPUT_PROBE
+                    emitStage()
+                    val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null,
+                        onInput = { header, selectedRoute ->
+                            format = header.identified.format
+                            route = selectedRoute
+                            phase = if (selectedRoute == null) ImportPhase.INPUT_PROBE else ImportPhase.INPUT_PROCESS
+                            emitStage()
+                        }) { rawSpool = it }
                     preview = loaded.preview
+                    observation.dimensions(loaded.source.originalWidth,loaded.source.originalHeight)
+                    observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.COMPLETE
+                    phase = ImportPhase.COMPLETE
+                    emitStage()
                     produced = loaded
                     retained = true
                     loaded
@@ -298,13 +359,13 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         } catch (e: CancellationException) {
             throw e
         } catch (e: PhotoException) {
-            throw e
+            throw enrich(e)
         } catch (e: OutOfMemoryError) {
-            throw PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c2432fd4e78), e)
+            throw enrich(PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c2432fd4e78), e))
         } catch (e: SecurityException) {
-            throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a064cfbab736), e)
+            throw enrich(PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a064cfbab736), e))
         } catch (e: Exception) {
-            throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a428b047ad8e), e)
+            throw enrich(PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_a428b047ad8e), e))
         } finally {
             // withContext can be cancelled after the worker produced a result but
             // before the main dispatcher delivers it. Do not leak that result.
@@ -385,20 +446,22 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }
     }
 
-    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,onNewRaw:(File)->Unit={}):LoadedPhoto {
+    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,onInput:suspend (PhotoInputHeader,ImportRoute?)->Unit={_,_->},onNewRaw:(File)->Unit={}):LoadedPhoto {
         val header=ByteArray(dev.filmroom.io.formats.PhotoHeaders.MAX_PREFIX_BYTES)
         val count=file.inputStream().use { input ->
             var n=0
             while(n<header.size){job.ensureActive();val read=input.read(header,n,header.size-n);if(read<0)break;if(read==0)continue;n+=read}
             n
         }
+        val inputHeader=PhotoInputHeader(header,count)
+        onInput(inputHeader,null)
         // Read the original encoded file before HEIC/RAW linearization loses its metadata.
         val sourceTime=File(file.path+".imprint-time").takeIf{it.isFile && it.length() in 1..64}?.let{runCatching{it.readText()}.getOrNull()}
         val captureMetadata=PhotoMetadata.read(file).withImprintFallback(sourceTime,"modified")
-        return inputAdapters.load(
-            PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata),
-            PhotoInputHeader(header,count),
-        )
+        val adapter=inputAdapters.select(inputHeader)
+        val route=when(adapter){is RasterInputAdapter->ImportRoute.RASTER;is RawInputAdapter->ImportRoute.RAW;is HeicInputAdapter->ImportRoute.HEIC;else->ImportRoute.OTHER}
+        onInput(inputHeader,route)
+        return adapter.load(PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata),inputHeader)
     }
 
     /** Returns a NEW owned spool for standard output. Original linear-source callers may borrow linearFile separately. */
@@ -857,10 +920,12 @@ internal fun decodeFile(
     job.ensureActive()
     var decoded: Bitmap? = null
     try {
+        job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.RASTER_PLATFORM
         decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
             job.ensureActive()
             val width = info.size.width
             val height = info.size.height
+            job[dev.filmroom.diagnostics.ImportObservation]?.dimensions(width,height)
             PhotoLimits.sourceFailure(width.toLong(), height.toLong())?.let { failure ->
                 val invalid = failure == PhotoLimits.SourceFailure.INVALID
                 val resource = when(failure) {

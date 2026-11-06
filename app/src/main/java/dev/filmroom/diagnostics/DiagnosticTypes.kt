@@ -2,7 +2,7 @@ package dev.filmroom.diagnostics
 
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
 enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
-enum class Stage { START, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
+enum class Stage { START, IMPORT_INPUT, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
 enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
 enum class ErrorCode { GPU_COMPLETION_UNCERTAIN, ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
@@ -209,6 +209,7 @@ data class SafeInfo(
     val codecCode: CodecErrorCode? = null,
     val codecStage: CodecStage? = null,
     val rawTechnical: RawTechnicalInfo? = null,
+    val importDiagnostic: ImportDiagnosticInfo? = null,
     val metadataIssues: List<MetadataIssue> = emptyList(),
     val metadataPhase: MetadataIssuePhase? = null,
     val captureTimeBasis: MetadataDateBasis? = null,
@@ -408,6 +409,7 @@ data class SafeInfo(
         codecCode?.let { put("codecCode", it.name) }
         codecStage?.let { put("codecStage", it.id) }
         rawTechnical?.let { putAll(it.fields()) }
+        importDiagnostic?.let { putAll(it.fields()) }
         captureTimeBasis?.let{put("captureTimeBasis",it.name)}
         MetadataIssues.encode(metadataIssues).takeIf{it.isNotEmpty()}?.let{put("metadataIssues",it);metadataPhase?.let{phase->put("metadataPhase",phase.name)}}
     }
@@ -420,6 +422,7 @@ data class SafeInfo(
             codecCode = fields["codecCode"]?.let(CodecErrorCode::fromId),
             codecStage = fields["codecStage"]?.let(CodecStage::fromId),
             rawTechnical = RawTechnicalInfo.fromFields(fields),
+            importDiagnostic = ImportDiagnosticInfo.fromFields(fields),
             metadataIssues = MetadataIssues.parse(fields["metadataIssues"].orEmpty()),
             metadataPhase = MetadataIssuePhase.entries.firstOrNull{it.name==fields["metadataPhase"]},
             captureTimeBasis = MetadataDateBasis.entries.firstOrNull{it.name==fields["captureTimeBasis"]},

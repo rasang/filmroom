@@ -22,6 +22,7 @@ internal class HeicInputAdapter(private val heicImporter: HeicImport): PhotoInpu
         }
         prepared.use { input ->
             val info=input.info
+            job[dev.filmroom.diagnostics.ImportObservation]?.dimensions(info.displayWidth,info.displayHeight)
             HeicMemoryPolicy.estimatedBytes(info,file.length()) // Same size limit on restore; no allocation here.
             val linear=if(existingRaw!=null && existingRaw.isFile && existingRaw.canonicalFile.parentFile==sourceDirectory.canonicalFile){
                 existingRaw
@@ -35,6 +36,7 @@ internal class HeicInputAdapter(private val heicImporter: HeicImport): PhotoInpu
             }
             if(linear.length()!=LinearRgb.byteCount(info.displayWidth,info.displayHeight))
                 throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_662817bc355b))
+            job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_PREVIEW
             val preview=LinearSpool.preview(linear,info.displayWidth,info.displayHeight,maxEdge,job)
             return@with LoadedPhoto(PhotoSource(file,name,"image/heif",info.displayWidth,info.displayHeight,file.length(),
                 linearFile=linear,photoMetadata=captureMetadata,developmentMessages=listOf(dev.filmroom.i18n.UiMessage.of(if(info.sourceColor==HeicIccProfile.ColorIdentity.DISPLAY_P3)

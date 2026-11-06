@@ -54,3 +54,5 @@ mod cache_root_owner;
 #[cfg(test)] #[path="../tests/gpu_grain_sublayers.rs"] mod gpu_grain_sublayers_tests;
 #[cfg(test)] #[path="../tests/gpu_point_shaders.rs"] mod gpu_point_shaders_tests;
 #[cfg(test)] #[path="../tests/gpu_resident_chain.rs"] mod gpu_resident_chain_tests;
+
+#[cfg(test)] mod gpu_ae_ownership_tests;

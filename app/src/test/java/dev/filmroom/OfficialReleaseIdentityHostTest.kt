@@ -18,14 +18,14 @@ class OfficialReleaseIdentityHostTest {
     @Test fun applicationAndGeneratedMetadataUseOfficialUpgradeIdentity() {
         assertEquals("dev.filmroom",app.packageName)
         assertEquals("dev.filmroom",BuildConfig.APPLICATION_ID)
-        assertEquals(51,BuildConfig.VERSION_CODE)
-        assertEquals("0.1.21",BuildConfig.VERSION_NAME)
+        assertEquals(52,BuildConfig.VERSION_CODE)
+        assertEquals("0.1.21.1",BuildConfig.VERSION_NAME)
     }
 
     @Test fun manifestVersionAndApplicationLabelMatchOfficialRelease() {
         val info=app.packageManager.getPackageInfo(app.packageName,0)
-        assertEquals(51L,info.longVersionCode)
-        assertEquals("0.1.21",info.versionName)
+        assertEquals(52L,info.longVersionCode)
+        assertEquals("0.1.21.1",info.versionName)
         assertEquals("Filmroom",app.getString(R.string.app_name))
         assertEquals("Filmroom",app.applicationInfo.loadLabel(app.packageManager).toString())
     }

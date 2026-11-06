@@ -40,7 +40,7 @@ class OperationTrace private constructor(val id:OperationId) {
                 throw t
             }
         }
-        internal fun failureInfo(t: Throwable, durationMs: Long, previewStage:PreviewFailureStage?=null): SafeInfo = SafeInfo(
+        internal fun failureInfo(t: Throwable, durationMs: Long, previewStage:PreviewFailureStage?=null): SafeInfo = (if((t as? PhotoException)?.importDiagnostic!=null)Diagnostics.memoryInfo() else SafeInfo()).copy(
             durationMs = durationMs,
             previewFailureStage = previewStage,
             previewExceptionType = previewStage?.let { PreviewFailure.type(t) },
@@ -51,6 +51,7 @@ class OperationTrace private constructor(val id:OperationId) {
             codecCode = (t as? PhotoException)?.codecCode,
             codecStage = (t as? PhotoException)?.codecStage,
             rawTechnical = (t as? PhotoException)?.rawTechnical,
+            importDiagnostic = (t as? PhotoException)?.importDiagnostic,
         )
         internal fun errorCode(t:Throwable,operation:Operation?=null):ErrorCode=when(t){
             is OutOfMemoryError->ErrorCode.MEMORY_LIMIT

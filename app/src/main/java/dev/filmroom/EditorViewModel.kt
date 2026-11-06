@@ -132,7 +132,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         }
     }
     fun retryRecovery(){if(mutable.value.recoveryFailed)recoveryGate?.retry()}
-    fun importPhoto(uri: Uri) {
+    fun importPhoto(uri: Uri, origin: dev.filmroom.diagnostics.ImportOrigin = dev.filmroom.diagnostics.ImportOrigin.UNKNOWN) {
         compositionGestureActive=false
         if(!mutable.value.startupReady||mutable.value.busy!=null) return
         detailInvalidator?.invoke()
@@ -148,8 +148,8 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             var adopted=false
             idlePrewarmer.begin(importParameters)
             try {
-                OperationTrace.run(Operation.IMPORT) { trace ->
-                val newPhoto=repository.import(uri,ENGINE_EDGE);loaded=newPhoto
+                OperationTrace.run(Operation.IMPORT,SafeInfo(importDiagnostic=dev.filmroom.diagnostics.ImportDiagnosticInfo(origin))) { trace ->
+                val newPhoto=repository.import(uri,ENGINE_EDGE,origin) { info -> trace.mark(Stage.IMPORT_INPUT,SafeInfo(importDiagnostic=info)) };loaded=newPhoto
                 idlePrewarmer.end()
                 trace.mark(Stage.DECODE_HEADER,SafeInfo(width=newPhoto.source.originalWidth,height=newPhoto.source.originalHeight,metadataIssues=newPhoto.source.photoMetadata.issues,metadataPhase=dev.filmroom.diagnostics.MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=newPhoto.source.photoMetadata.diagnosticDateBasis))
                 pendingScientificRender=null;pendingRefinement=null;scientificGestureAwaitingCommit=false

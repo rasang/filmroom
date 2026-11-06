@@ -107,8 +107,8 @@ class MainActivity:ComponentActivity() {
     private var restoredViewer:FloatArray?=null;private var restoredZoom:FloatArray?=null;private var restoredSource:String?=null
     private var compositionReturnTool:String?=null;private var compositionReturnGroup:String?=null
     private var builtCompositionEditing=false;private var builtCompositionAspect:Double?=null;private var boundCompositionEditing:Boolean?=null;private var boundCompare:Boolean?=null;private var builtParameters:EditorState?=null;private var shownSource:String?=null;private var lastBitmap:android.graphics.Bitmap?=null
-    private val picker=registerForActivityResult(ActivityResultContracts.PickVisualMedia()){uri->if(uri!=null)model.importPhoto(uri)}
-    private val filePicker=registerForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)model.importPhoto(uri)}
+    private val picker=registerForActivityResult(ActivityResultContracts.PickVisualMedia()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.PHOTO_PICKER)}
+    private val filePicker=registerForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.FILES_PICKER)}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).roundToInt()
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)

@@ -4,7 +4,9 @@ use std::{fs::{self,File,OpenOptions},io::{Read,Seek,SeekFrom,Write},path::{Path
 use spektrafilm_core::{params::RuntimeParams,pipeline::Pipeline,profile::Profile};
 use crate::{mobile::{EngineError,Result},streamed::{StreamedMetrics,StageMetrics},streamed_progress::{ProgressSink,GpuWorkProgress}};
 
-pub(crate) const ALGORITHM:&str=spektrafilm_gpu::RESIDENT_APPROXIMATION_VERSION;
+// Export ownership semantics are independent of the preview/detail protocol.
+// Every export checkpoint, global-field/FilmLog reuse key, and reuse probe uses this ID.
+pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1";
 const FIXED_BYTES:u64=96*1024*1024;
 const BAND_BYTES_PER_PIXEL:u64=256;
 #[derive(Clone,Copy,Debug)]
@@ -272,7 +274,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         let config=serde_json::to_string(&(ALGORITHM,film_stock,paper_stock,params,brightness)).map_err(|_|err("INVALID_PARAMETERS"))?;
         let identity=crate::checkpoint::Identity::new(data_dir,input,width,height,config,cancelled).map_err(io)?;
         current_identity=Some(identity.clone());
-        Some(crate::checkpoint::Checkpoints::open(&root.join("gpu-v41-approx-filmlog-v3"),identity,cancelled).map_err(io)?)
+        Some(crate::checkpoint::Checkpoints::open(&root.join("gpu-v41-approx-filmlog-ae-v4"),identity,cancelled).map_err(io)?)
     }else{None};
     if let Some(c)=checkpoints.as_ref().filter(|c|c.stage()==6) {
         progress.begin_stage(6,1,"output");progress.begin_work("output");
@@ -292,7 +294,12 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&p.io.input_color_space);
         let ev=crate::streamed_global::auto_exposure_ev(input,width,height,&p.camera.auto_exposure_method,&matrix,&mut *cancelled).map_err(io)?;
         if !ev.is_finite(){return Err(err("NONFINITE_OUTPUT"));}
-        p.camera.exposure_compensation_ev+=ev;p.camera.auto_exposure=false;
+        // Keep automatic metering distinct from the user's manual exposure.
+        // Pipeline construction uses only manual compensation to calibrate
+        // print exposure. Folding AE into it changes the final print brightness.
+        // This internal override is the freshly measured full-source EV, not a
+        // caller-provided preview measurement (exports reject that override).
+        p.camera.preview_metered_ev=Some(ev);
         progress.end_work();progress.finish_stage();stages.push(StageMetrics{stage:"auto_exposure",elapsed_ms:at.elapsed().as_secs_f64()*1000.});Some(ev)
     }else{None};
     cancel(cancelled)?;

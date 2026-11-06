@@ -76,7 +76,8 @@ pub struct CameraParams {
     pub exposure_compensation_ev: f32,
     #[serde(default = "default_true")]
     pub auto_exposure: bool,
-    /// Validated full-photo preview AE. None preserves original/export measurement.
+    /// Validated full-photo AE from preview ownership or an export full-source pass.
+    /// None requests measurement from the current image; exports reject external overrides.
     /// Separate from user compensation because print calibration depends on that value.
     #[serde(default, skip_serializing_if="Option::is_none")]
     pub preview_metered_ev: Option<f32>,

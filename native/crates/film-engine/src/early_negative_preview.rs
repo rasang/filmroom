@@ -145,7 +145,7 @@ fn lower_priority() {
 }
 /// Starts at most one worker process-wide. `None` means unsupported, busy, or
 /// no budget; caller may use its authoritative density-tap fallback. Requires
-/// actual export AE already folded into pipe.params (auto_exposure=false).
+/// actual export AE resolved in pipe.params, separate from manual exposure.
 /// Share the existing Pipeline via Arc to avoid a duplicate TC LUT/profile.
 /// Input FD is opened before spawn so ordinary export cleanup cannot unlink
 /// the source out from under us. Attempt token is the sole publication owner.
@@ -174,7 +174,7 @@ fn spawn_for_attempt(input: &Path, dir: &Path, pipe: Arc<Pipeline>, width: u32, 
         crate::negative_preview::write_early_attempt_status(dir, &attempt, "skipped_budget")?;
         return Ok(None);
     }
-    if pipe.film.info.film_type != "negative" || pipe.params.camera.auto_exposure || pipe.params.film_render.halation.boost_ev != 0.
+    if pipe.film.info.film_type != "negative" || (pipe.params.camera.auto_exposure && !pipe.params.camera.preview_metered_ev.is_some_and(|ev|ev.is_finite() && 2.0f32.powf(ev).is_finite())) || pipe.params.film_render.halation.boost_ev != 0.
         || !bounded_settings(&pipe, width, height, w, h) {
         crate::negative_preview::write_early_attempt_status(dir, &attempt, "failed")?;
         return Ok(None);

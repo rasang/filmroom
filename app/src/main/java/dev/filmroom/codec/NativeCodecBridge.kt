@@ -71,6 +71,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
     private fun budget(metadataOnly:Boolean=false,cameraRaw:Boolean=false,jxlDng:Boolean=false):JSONObject {
         val cap=if(jxlDng)384 else if(cameraRaw)256 else 128
         val requested=if(metadataOnly)cap else memoryBudgetMiB()
+        dev.filmroom.diagnostics.ImportObservation.current()?.budget(requested,minOf(cap,requested))
         if(requested<128)throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_df30ae362f2b))
         return JSONObject().put("memoryBudgetMiB",minOf(cap,requested)).put("diskBudgetBytes",(root.usableSpace-16L*1024*1024).coerceAtLeast(0))
     }
@@ -78,7 +79,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
         if (!available) throw PhotoException(PhotoException.Reason.UNSUPPORTED,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_2c28d802618b))
         ensureActive()
         val handle = api.nativeCreate(operationRoot.canonicalPath)
-        if(handle==0L) throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_41db58446aa4))
+        if(handle==0L) throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_41db58446aa4),codecCode=CodecErrorCode.NATIVE_HANDLE_CREATE_FAILED,codecStage=CodecStage.NATIVE_CREATE)
         // UNDISTPATCHED installs the cancellation hook before worker dispatch. The
         // watcher always cancels on scope cancellation, even while JNI is blocking.
         val watcher=launch(Dispatchers.Default,start=CoroutineStart.UNDISPATCHED) {
@@ -91,7 +92,11 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                     // The native JSON and ledger share one frozen per-operation budget.
                     // Content-confirmed JXL DNG caps at 384 MiB; camera RAW at 256; others at 128.
                     val bytes=if(heavyBytes>0)heavyBytes else metadataBytes
-                    try {NativeWorkReservations.run(bytes,memorySnapshot){work(handle)}}
+                    dev.filmroom.diagnostics.ImportObservation.current()?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.CODEC_ADMISSION
+                    try {NativeWorkReservations.run(bytes,memorySnapshot){
+                        dev.filmroom.diagnostics.ImportObservation.current()?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.CODEC_NATIVE
+                        work(handle)
+                    }}
                     catch(_:NativeWorkUnavailable){throw PhotoException(PhotoException.Reason.TOO_LARGE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_93313da164ac))}
                 }else work(handle)
                 ensureActive();JSONObject(text)
@@ -102,6 +107,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                 val safeCode=CodecErrorCode.fromId(error.optString("code"))
                 val safeStage=CodecStage.fromId(error.optString("stage"))
                 val code=safeCode.name
+                if(code=="MEMORY_BUDGET")dev.filmroom.diagnostics.ImportObservation.current()?.failure(dev.filmroom.diagnostics.ImportMemoryFailure.NATIVE_CODEC_BUDGET)
                 if(code=="CANCELLED")throw CancellationException(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c2145ea571e4))
                 val message=when(code){
                     "UNSUPPORTED_CAMERA_RAW_VARIANT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.camera_raw_variant_unsupported)

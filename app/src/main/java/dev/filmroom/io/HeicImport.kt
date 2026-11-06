@@ -34,7 +34,10 @@ internal object HeicMemoryPolicy {
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56e47360aaca))
         // Original output + decoder frame + orientation intermediate + YUV/reference buffers.
         // Budget for full image even if a platform advertises region/subsample decoding.
+        dev.filmroom.diagnostics.ImportObservation.current()?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_ESTIMATE
         val estimate = Math.addExact(Math.addExact(FIXED_BYTES, Math.multiplyExact(pixels, 32L)),encodedBytes)
+        runCatching { dev.filmroom.diagnostics.ImportObservation.current()?.let { it.memory=(it.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(estimatedBytes=estimate)
+            if(estimate>2L*1024*1024*1024)it.failure(dev.filmroom.diagnostics.ImportMemoryFailure.HEIC_ESTIMATE_LIMIT) } }
         if(estimate>2L*1024*1024*1024)throw PhotoException(PhotoException.Reason.TOO_LARGE,
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_9ff6012fdde9))
         return estimate
@@ -196,9 +199,12 @@ internal class HeicImport(
         var created = false
         var completed = false
         try {
+            job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_ADMISSION
             NativeWorkReservations.run(estimate, memory) {
                 job.ensureActive()
+                job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_PLATFORM
                 backend.decode(file, info, job).use { pixels ->
+                    job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_SPOOL
                     job.ensureActive()
                     if (pixels.width != info.displayWidth || pixels.height != info.displayHeight)
                         throw IOException("HEIC decoder changed dimensions")
@@ -234,6 +240,7 @@ internal class HeicImport(
             throw PhotoException(PhotoException.Reason.TOO_LARGE,
                 dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_f1632bf9ae5b))
         } catch (error: OutOfMemoryError) {
+            job[dev.filmroom.diagnostics.ImportObservation]?.let { it.failure(if(it.memoryStage==dev.filmroom.diagnostics.ImportMemoryStage.HEIC_PLATFORM)dev.filmroom.diagnostics.ImportMemoryFailure.HEIC_PLATFORM_ALLOCATION else dev.filmroom.diagnostics.ImportMemoryFailure.JVM_ALLOCATION) }
             throw PhotoException(PhotoException.Reason.TOO_LARGE,
                 dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_389695202ee7), error)
         } finally { if (!completed && created) target.delete() }

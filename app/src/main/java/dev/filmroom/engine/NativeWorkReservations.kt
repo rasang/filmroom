@@ -137,8 +137,10 @@ internal class NativeWorkLimiter(private val idleAllowed:()->Boolean = {true}) {
         if(memory.lowMemory || count>=2 || charge>capacity || reserved>capacity-charge) {
             val callbacks=passive.filterKeys { it !in evicting }
             if(callbacks.isNotEmpty()){evicting.addAll(callbacks.keys);return@synchronized Attempt.Evict(callbacks.values.toList())}
+            if(count==0 && evicting.isEmpty())dev.filmroom.diagnostics.ImportObservation.current()?.admission(estimate,memory,capacity,reserved,count,true)
             return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait else Attempt.Reject
         }
+        dev.filmroom.diagnostics.ImportObservation.current()?.admission(estimate,memory,capacity,reserved,count,false)
         count++;reserved+=charge
         Attempt.Ready(Lease {synchronized(lock){count--;reserved-=charge;check(count>=0&&reserved>=0)}})
     }
