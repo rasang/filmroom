@@ -1,6 +1,7 @@
 package dev.filmroom.roi
 
 import android.graphics.Bitmap
+import dev.filmroom.diagnostics.*
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.Executor
@@ -66,11 +67,13 @@ class RegionScheduler(
         val sample=rect.sampleRect(k)
         if(sample.width.toLong()*sample.height*4>byteBudget){failed=rect;lastFailure=dev.filmroom.engine.DetailUnavailable("BUDGET_EXCEEDED");lastError="Region bitmap budget";onChanged();return}
         val cancellation=token
+        val timing=provider.startTiming()?.also{it.mark(DetailTimingPoint.RENDER_QUEUED)}
         running=true
         try {worker.execute {
             var result:TileResult?=null;var error:Throwable?=null
-            try {check(Looper.myLooper()!=Looper.getMainLooper());result=provider.render(k,rect){cancellation.get()}}
+            try {check(Looper.myLooper()!=Looper.getMainLooper());result=provider.renderTimed(k,rect,{cancellation.get()},timing)}
             catch(t:Exception){error=t}catch(t:LinkageError){error=t}catch(t:OutOfMemoryError){error=t}
+            if(error!=null)timing?.failed(error!!)
             val completed=result;val failure=error
             main.post {
                 running=false
@@ -78,17 +81,19 @@ class RegionScheduler(
                 val accepted=completed!=null && completed.key==k && completed.coreRect==rect && completed.sampleRect==sample && completed.quality==TileQuality.Exact &&
                     !completed.bitmap.isRecycled && completed.bitmap.width==sample.width && completed.bitmap.height==sample.height && completed.bitmap.config==Bitmap.Config.ARGB_8888 && completed.bitmap.allocationByteCount.toLong()==sample.width.toLong()*sample.height*4
                 if(valid && accepted){
+                    completed!!.diagnosticTiming?.mark(DetailTimingPoint.ADOPTED)
                     val bytes=completed!!.bitmap.allocationByteCount.toLong()
                     while(cacheBytes+bytes>byteBudget && cache.isNotEmpty()){val old=cache.entries.first();cacheBytes-=old.value.bitmap.allocationByteCount;cache.remove(old.key)}
                     cache.put(rect,completed)?.let{cacheBytes-=it.bitmap.allocationByteCount};cacheBytes+=bytes
                 }else{
+                    completed?.diagnosticTiming?.finish(DetailTimingTerminal.STALE)
                     completed?.bitmap?.takeUnless{it.isRecycled}?.recycle()
                     if(valid){failed=rect;lastFailure=failure;lastError=failure?.message ?: "Rejected region contract"}
                 }
                 onChanged();pump()
             }
-        }}catch(t:RuntimeException){running=false;failed=rect;lastFailure=t;lastError="Worker unavailable";onChanged()}
-        catch(t:OutOfMemoryError){running=false;failed=rect;lastFailure=t;lastError="Worker memory";onChanged()}
+        }}catch(t:RuntimeException){timing?.failed(t);running=false;failed=rect;lastFailure=t;lastError="Worker unavailable";onChanged()}
+        catch(t:OutOfMemoryError){timing?.failed(t);running=false;failed=rect;lastFailure=t;lastError="Worker memory";onChanged()}
     }
     override fun close(){mainOnly();closed=true;token.set(true);cache.clear();cacheBytes=0;demand=null;ownedWorker?.shutdown()}
 }

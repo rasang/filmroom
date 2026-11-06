@@ -169,7 +169,7 @@ pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->C
 /// Robertson CIE 1960 UCS isotherm interpolation, implemented independently
 /// from the line-distance geometry. The data's BSD notice follows below.
 pub fn robertson_cct(xy:[f64;2])->ColorResult<f64> {robertson_from_table(xy,false)}
-fn robertson_from_table(xy:[f64;2],dng_reference:bool)->ColorResult<f64> {
+pub(crate) fn robertson_from_table(xy:[f64;2],dng_reference:bool)->ColorResult<f64> {
     xyz(xy)?;let denom=-2.*xy[0]+12.*xy[1]+3.;
     let u=4.*xy[0]/denom;let v=6.*xy[1]/denom;
     // A single numerical compatibility datum, not imported SDK implementation:

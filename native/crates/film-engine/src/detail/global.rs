@@ -60,7 +60,7 @@ fn write_image_planes(files:&mut [File],img:&ImageBuf)->Result<()> {for ch in 0.
 fn expose(input:&Path,pipe:&Pipeline,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<([PathBuf;3],Option<f32>)> {
  let paths=std::array::from_fn(|_|s.path("film-raw"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut f=File::open(input).map_err(io)?;let rows=rows_per_chunk(w);let lut=pipe.tc_lut().ok_or_else(||error("UNSUPPORTED_EXPORT_OPTIONS","Streamed exposure requires Hanatos spectral upsampling"))?;
  let exposure=from_f32(2.0f32.powf(pipe.params.camera.exposure_compensation_ev));
- let metered_ev=if pipe.params.camera.auto_exposure {p.begin_work("auto_exposure");p.pass("auto_exposure",0,1);let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);let ev=crate::streamed_global::auto_exposure_ev(input,w,h,&pipe.params.camera.auto_exposure_method,&matrix,&mut *c).map_err(io)?;p.pass("auto_exposure",1,1);p.end_work();Some(ev)}else{None};
+ let metered_ev=if !pipe.params.camera.auto_exposure {None}else if let Some(ev)=pipe.params.camera.preview_metered_ev {Some(ev)}else {p.begin_work("auto_exposure");p.pass("auto_exposure",0,1);let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);let ev=crate::streamed_global::auto_exposure_ev(input,w,h,&pipe.params.camera.auto_exposure_method,&matrix,&mut *c).map_err(io)?;p.pass("auto_exposure",1,1);p.end_work();Some(ev)};
  let ae=metered_ev.map(|ev|from_f32(2.0f32.powf(ev))).unwrap_or(from_f64(1.));
  p.begin_work("film_exposure");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut bytes=vec![0u8;w as usize*hh as usize*12];f.read_exact(&mut bytes).map_err(io)?;let mut v=Vec::with_capacity(bytes.len()/4);for b in bytes.chunks_exact(4){let x=f32::from_le_bytes(b.try_into().unwrap());if !x.is_finite(){return Err(error("INVALID_PIXELS","Nonfinite input spool"));}v.push((from_f64(x as f64)*ae)*exposure);}let rgb=ImageBuf::from_data(w,hh,v);let raw=CpuBackend.hanatos2025_rgb_to_raw(&rgb,lut,&pipe.params.io.input_color_space,pipe.front_illuminant_spd(),pipe.params.settings.use_cat16);write_image_planes(&mut out,&raw)?;p.pass("film_exposure",(y+hh) as u64,h as u64);}
  drop(out);s.observe()?;p.end_work();Ok((paths,metered_ev))
@@ -242,6 +242,54 @@ mod tests {
    assert_eq!(planes.disk_bytes(),w as u64*h as u64*24);assert_eq!(fs::read_dir(&dir).unwrap().count(),3);assert!(planes.metrics.peak_logical_scratch_bytes>=planes.disk_bytes());
    token.cancel();assert!(matches!(planes.read_rect(Rect{x:0,y:0,w:1,h:1},&token),Err(DetailError::Cancelled)));
    drop(planes);assert!(!dir.exists());assert!(input.exists());
+  }
+ }
+ #[cfg(feature="precision-f64")]
+ #[test]
+ fn shared_ev_detail_planes_match_single_scale_and_ordinary_metadata_without_remetering(){
+  use crate::mobile::{self,MobileParams,PreviewMetering,PREVIEW_METERING_ALGORITHM};
+  let root=root();let(w,h)=(31u32,23u32);let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+  let mut controls=MobileParams::default();controls.use_gpu=false;controls.auto_exposure=true;controls.film_exposure_ev=0.5;controls.grain_amount=0.;
+  controls.preview_metering=Some(PreviewMetering{algorithm:PREVIEW_METERING_ALGORITHM.into(),source_revision:"owned-source-test".into(),mapping_revision:"oriented-original-v1:snapshot=owned-source-test:meter-grid:test".into(),data_revision:"fixture".into(),owner:"detail-test".into(),method:controls.metering.clone(),width:w,height:h,ev:1.});
+  controls.validate().unwrap();
+  let film=load_profile_by_name(&data,&controls.film_stock).unwrap();let paper=load_profile_by_name(&data,&controls.paper_stock).unwrap();
+  let runtime=controls.preview_runtime_for_film(&film);
+  assert_eq!(runtime.camera.exposure_compensation_ev,0.5);
+  let pipe=Pipeline::new_with_spectral(film,paper,runtime,&data).unwrap();
+  let prepared=pipe.prepare_streamed_finish_spatial(&CpuBackend).unwrap();
+  let mut reference_params=pipe.params.clone();reference_params.camera.auto_exposure=false;reference_params.camera.preview_metered_ev=None;
+  let reference=pipe.clone().with_params(reference_params);
+  let reference_prepared=reference.prepare_streamed_finish_spatial(&CpuBackend).unwrap();
+  assert_eq!(prepared.filming_exposure_correction,reference_prepared.filming_exposure_correction);
+  struct Handle(i64);impl Drop for Handle{fn drop(&mut self){mobile::destroy(self.0);}}
+  let handle=Handle(mobile::create(data.to_str().unwrap()).unwrap());let engine=mobile::get(handle.0).unwrap();
+  // Different full working inputs deliberately meter differently. Both must
+  // consume the canonical owner EV rather than measuring their own grid.
+  for variant in 0..2 {
+   let input_values:Vec<f32>=(0..w*h*3).map(|i|{let x=i/3%w;let base=if x<w/2{0.01}else{0.2};(base+(i%3)as f32*0.005)*if variant==0{1.}else{0.125}}).collect();
+   assert!((mobile::measure_preview(&input_values,w,h,&controls.metering).unwrap()-1.).abs()>0.1);
+   let input=root.0.join(format!("shared-input-{variant}.f32le"));fs::write(&input,input_values.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+   let token=CancellationToken::new();let dir=root.0.join(format!("shared-planes-{variant}"));
+   let planes=build_pregrain_with_correction(&pipe,&input,w,h,&dir,prepared.filming_exposure_correction,&token).unwrap();
+   let ordinary=mobile::render(&engine,0,&input_values,w,h,&controls).unwrap();
+   assert_eq!(ordinary.metered_ev,Some(1.));assert_eq!(planes.metered_ev,ordinary.metered_ev);
+   assert!(!ordinary.gpu.active);
+   let scaled=ImageBuf::from_data(w,h,input_values.iter().map(|v|from_f64((*v*2.)as f64)).collect());
+   let logs=filming::expose(&scaled,&reference.film,&reference.params,&CpuBackend,reference.tc_lut(),None,reference.front_illuminant_spd(),reference_prepared.filming_exposure_correction);
+   let expected=filming::develop(&logs,&reference.film,&reference.params,&CpuBackend);
+   let actual=planes.read_rect(Rect{x:0,y:0,w:w as usize,h:h as usize},&token).unwrap();
+   assert_eq!(actual.data.len(),expected.data.len());
+   let error=actual.data.iter().zip(&expected.data).map(|(a,b)|(a-b).abs()as f64).fold(0.,f64::max);
+   assert!(error<1e-8,"detail shared AE applied differently from one input scale: {error}");
+   for rect in [Rect{x:0,y:0,w:9,h:11},Rect{x:22,y:12,w:9,h:11}] {
+    let tile=planes.read_rect(rect,&token).unwrap();
+    for y in 0..rect.h {for x in 0..rect.w {for ch in 0..3 {
+     assert_eq!(tile.data[(y*rect.w+x)*3+ch],actual.data[((y+rect.y)*w as usize+x+rect.x)*3+ch]);
+    }}}
+    assert_eq!(planes.metered_ev,Some(1.),"region read cannot remeter");
+   }
+   drop(planes);assert!(!dir.exists());assert!(input.exists());
+   eprintln!("SHARED_AE_DETAIL_PASS variant={variant} metered_ev=1 max_pregrain_abs={error}");
   }
  }
  #[test]

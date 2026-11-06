@@ -1,3 +1,4 @@
+mod bounded;
 use std::cmp;
 use std::io::Read;
 use std::io::Seek;
@@ -140,6 +141,9 @@ impl<'a> OrfDecoder<'a> {
 }
 
 impl<'a> Decoder for OrfDecoder<'a> {
+  fn bounded_bayer_plan(&self,file:&RawSource)->Result<Option<super::BoundedBayerPlan>>{bounded::plan(self,file)}
+  fn bounded_bayer_segments(&self,file:&RawSource,sink:&mut dyn FnMut(usize,usize,&[u16])->Result<()>,cancel:&dyn Fn()->bool)->Result<()>{bounded::segments(self,file,sink,cancel)}
+
   fn raw_image(&self, file: &RawSource, _params: &RawDecodeParams, dummy: bool) -> Result<RawImage> {
     let raw = self
       .tiff
@@ -172,7 +176,7 @@ impl<'a> Decoder for OrfDecoder<'a> {
       self.camera.clone()
     };
 
-    let src = file.subview_padded(offset as u64, size as u64)?; // TODO add size and check all samples
+    let src = if dummy { crate::buffer::PaddedBuf::new_ref(&[],0) } else { file.subview_padded(offset as u64, size as u64)? }; // TODO add size and check all samples
 
     log::debug!(
       "ORF raw image size: {}, dim: {}x{}, total mp: {}, strip counts: {}",

@@ -1,3 +1,4 @@
+mod bounded;
 use image::DynamicImage;
 use log::debug;
 use log::warn;
@@ -91,6 +92,9 @@ pub struct PefFormat {
 }
 
 impl<'a> Decoder for PefDecoder<'a> {
+  fn bounded_bayer_plan(&self,file:&RawSource)->Result<Option<super::BoundedBayerPlan>>{bounded::plan(self,file)}
+  fn bounded_bayer_segments(&self,file:&RawSource,sink:&mut dyn FnMut(usize,usize,&[u16])->Result<()>,cancel:&dyn Fn()->bool)->Result<()>{bounded::segments(self,file,sink,cancel)}
+
   fn format_dump(&self) -> FormatDump {
     FormatDump::Pef(PefFormat { tiff: self.tiff.clone() })
   }

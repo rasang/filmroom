@@ -10,7 +10,9 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-adreno-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
+# Dedicated native/JNI census build only; never enabled by the ordinary APK.
+resource-audit = ["adreno-gpu", "spektrafilm-gpu/resource-audit"]
+adreno-gpu = ["dep:libc", "dep:wgpu", "dep:pollster", "dep:bytemuck", "spektrafilm-gpu/wgpu-backend"]
 precision-f64 = ["spektrafilm-core/precision-f64", "spektrafilm-math/precision-f64", "spektrafilm-gpu/precision-f64"]
 
 [dependencies]
@@ -28,6 +30,8 @@ rayon.workspace = true
 wgpu = { version = "24", optional = true, default-features = false, features = ["wgsl", "vulkan-portability"] }
 pollster = { version = "0.4", optional = true }
 bytemuck = { version = "1.25", optional = true }
+
+libc = { version = "=0.2.186", optional = true }
 
 [dev-dependencies]
 naga = { version = "24", features = ["wgsl-in"] }

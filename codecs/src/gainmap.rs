@@ -7,6 +7,7 @@ use crate::error::{Result, err};
 use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone, Debug)]
 pub struct GainMap {
+    area: [usize; 4],
     rows: usize,
     cols: usize,
     spacing: [f64; 2],
@@ -43,7 +44,7 @@ impl<'a> Cursor<'a> {
     }
 }
 /// Returns ordered supported maps and whether an explicitly optional record was skipped.
-/// Initially admit full-image, all-three-plane, unit-pitch List3 only. No silent
+/// Admit bounded rectangular, all-three-plane, unit-pitch List3 maps. No silent
 /// approximation of CFA/List1/List2, cropped stage images, or geometric transforms.
 pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>, bool)> {
     let mut c = Cursor { bytes, pos: 0 };
@@ -68,7 +69,7 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
             skipped = true;
             continue;
         }
-        if version != 0x01030000 || flags != 0 {
+        if !crate::opcodes::supported_version(version) {
             return Err(unsupported());
         }
         let mut p = Cursor {
@@ -84,7 +85,10 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
                 for x in &mut area {
                     *x = p.u32()?;
                 }
-                if area != [0, 0, height as u32, width as u32, 0, 3, 1, 1] {
+                if area[0] >= area[2] || area[1] >= area[3] {
+                    return Err(invalid());
+                }
+                if area[2] > height as u32 || area[3] > width as u32 || area[4..] != [0, 3, 1, 1] {
                     return Err(unsupported());
                 }
                 let rows = p.u32()? as usize;
@@ -133,6 +137,12 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
                     gains.push(gain);
                 }
                 maps.push(GainMap {
+                    area: [
+                        area[0] as usize,
+                        area[1] as usize,
+                        area[2] as usize,
+                        area[3] as usize,
+                    ],
                     rows,
                     cols,
                     spacing,
@@ -141,22 +151,8 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
                 });
             }
             1 => {
-                if size != 164 || p.u32()? != 3 {
-                    return Err(unsupported());
-                }
-                for _ in 0..3 {
-                    for expected in [1., 0., 0., 0., 0., 0.] {
-                        if p.f64()? != expected {
-                            return Err(unsupported());
-                        }
-                    }
-                }
-                for _ in 0..2 {
-                    let center = p.f64()?;
-                    if !center.is_finite() || !(0.0..=1.0).contains(&center) {
-                        return Err(unsupported());
-                    }
-                }
+                crate::opcodes::identity_warp(payload, 3)?;
+                p.pos = size;
             }
             _ => return Err(unsupported()),
         }
@@ -211,7 +207,14 @@ pub fn apply(
             if cancel.load(Ordering::Relaxed) {
                 return Err(err("CANCELLED", "develop"));
             }
+            let sy = y + row;
+            if sy < map.area[0] || sy >= map.area[2] {
+                continue;
+            }
             for (x, pixel) in line.iter_mut().enumerate() {
+                if x < map.area[1] || x >= map.area[3] {
+                    continue;
+                }
                 for (ch, value) in pixel.iter_mut().enumerate() {
                     if !value.is_finite() {
                         return Err(err("INVALID_INPUT", "develop"));

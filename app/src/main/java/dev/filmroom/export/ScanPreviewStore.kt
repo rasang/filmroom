@@ -16,13 +16,21 @@ internal object ScanPreviewStore {
     private const val TOKEN="scan-preview-attempt"
     private val uuid=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
     private val source=Regex("scan-source-([0-9a-f-]{36})\\.png")
-    fun clear(dir:File) {dir.listFiles()?.filter{it.name==TOKEN||it.name=="$TOKEN.part"||it.name.startsWith("scan-source-")||it.name.startsWith("scan-preview-")}.orEmpty().forEach{if(it.isFile)it.delete()}}
+    fun clear(dir:File) {NegativePreviewStore.clear(dir);dir.listFiles()?.filter{it.name==TOKEN||it.name=="$TOKEN.part"||it.name.startsWith("scan-source-")||it.name.startsWith("scan-preview-")}.orEmpty().forEach{if(it.isFile)it.delete()}}
     fun begin(dir:File):String {
-        clear(dir);val id=UUID.randomUUID().toString();val part=File(dir,"$TOKEN.part")
+        clear(dir);File(dir,"negative-preview.png").delete();val id=UUID.randomUUID().toString();val part=File(dir,"$TOKEN.part")
         try {FileOutputStream(part).use{it.write(id.toByteArray(Charsets.US_ASCII));it.fd.sync()};Files.move(part.toPath(),File(dir,TOKEN).toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}finally{part.delete()}
+        NegativePreviewStore.begin(id)
         return id
     }
-    private fun token(dir:File):String?=runCatching {File(dir,TOKEN).takeIf{it.isFile&&it.length()==36L}?.readText(Charsets.US_ASCII)?.takeIf{uuid.matches(it)}}.getOrNull()
+    internal fun token(dir:File):String?=runCatching {File(dir,TOKEN).takeIf{it.isFile&&it.length()==36L}?.readText(Charsets.US_ASCII)?.takeIf{uuid.matches(it)}}.getOrNull()
+    /** The atomic attempt token is written only when this job actually starts,
+     * and retained through successful cleanup. Queue waiting time is not counted. */
+    internal fun startedAtMillis(dir:File):Long? {
+        val id=token(dir) ?: return null
+        val started=File(dir,TOKEN).lastModified().takeIf{it>0} ?: return null
+        return started.takeIf{token(dir)==id}
+    }
     fun select(dir:File):File? {
         val id=token(dir)?:return null
         return File(dir,"scan-preview-$id.jpg").takeIf{it.isFile&&it.length() in 1..524288L && token(dir)==id}
@@ -46,8 +54,13 @@ internal object ScanPreviewStore {
                         frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,checkNotNull(frozen.mediumFormat),frozen.mediumPortrait,
                         checkNotNull(frozen.stripCenterMm),frozen.featherTotalAt3072)
                     else BorderSnapshot.authored(frozen.stock,frozen.assetVersion,original.width,original.height,frozen.canonicalWidth,frozen.canonicalHeight,frozen.composition,frozen.featherTotalAt3072)).copy(appearance=frozen.appearance)
-                BorderPreview.compose(original,snapshot,raster,checkActive)
-            } ?: job.crop?.takeUnless{it.isIdentity}?.let{crop->CropPreview.compose(original,CropSnapshot.create(original.width,original.height,crop.canonicalWidth,crop.canonicalHeight,crop.settings),checkActive)} ?: original
+                val imprint=dev.filmroom.imprint.ImprintPlan.create(job.parameters.imprint,job.photoMetadata?.let(dev.filmroom.io.PhotoMetadata::fromJson) ?: dev.filmroom.io.PhotoMetadata.unavailable(),snapshot.outputWidth,snapshot.outputHeight,snapshot)
+                BorderPreview.compose(original,snapshot,raster,imprint,checkActive)
+            } ?: job.crop?.takeUnless{it.isIdentity && !job.parameters.imprint.enabled}?.let{crop->
+                val snapshot=CropSnapshot.create(original.width,original.height,crop.canonicalWidth,crop.canonicalHeight,crop.settings)
+                val imprint=dev.filmroom.imprint.ImprintPlan.create(job.parameters.imprint,job.photoMetadata?.let(dev.filmroom.io.PhotoMetadata::fromJson) ?: dev.filmroom.io.PhotoMetadata.unavailable(),snapshot.outputWidth,snapshot.outputHeight)
+                CropPreview.compose(original,snapshot,imprint,checkActive)
+            } ?: original
             val image=checkNotNull(composed);val scale=minOf(1.0,256.0/maxOf(image.width,image.height))
             small=if(scale==1.0)image else Bitmap.createScaledBitmap(image,(image.width*scale).toInt().coerceAtLeast(1),(image.height*scale).toInt().coerceAtLeast(1),true)
             FileOutputStream(part).use{check(checkNotNull(small).compress(Bitmap.CompressFormat.JPEG,88,it));it.fd.sync()}

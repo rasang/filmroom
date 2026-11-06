@@ -17,6 +17,15 @@ internal object HeicContainer {
     const val MAX_ITEMS = 1024
     const val MAX_PROPERTIES = 1024
 
+    internal fun sizeLimit(resource: Int): Nothing = throw Rejected(Failure.LIMIT, dev.filmroom.i18n.UiMessage.of(resource))
+    internal fun validateSourceSize(width: Long, height: Long) {
+        when(PhotoLimits.sourceFailure(width, height)) {
+            PhotoLimits.SourceFailure.INVALID -> throw Rejected(Failure.INVALID, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_199d9706e7a1))
+            PhotoLimits.SourceFailure.EDGE -> sizeLimit(dev.filmroom.R.string.image_edge_limit_30000)
+            PhotoLimits.SourceFailure.PIXELS -> sizeLimit(dev.filmroom.R.string.text_56e47360aaca)
+            null -> Unit
+        }
+    }
     enum class Failure { INVALID, UNSUPPORTED, LIMIT }
     class Rejected(val failure: Failure, message: String, val uiMessage:dev.filmroom.i18n.UiMessage?=null) : IOException(message) {
         constructor(failure:Failure,message:dev.filmroom.i18n.UiMessage):this(failure,
@@ -141,7 +150,7 @@ internal object HeicContainer {
 
         fun inspect(): Info {
             if (length <= 0) invalid()
-            if (length > PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+            if (length > PhotoLimits.MAX_COMPRESSED_BYTES) sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
             val top = children(0, length)
             if (top.any { it.type == "moov" || it.type == "moof" }) unsupported()
             brands(single(top, "ftyp"))
@@ -260,7 +269,7 @@ internal object HeicContainer {
                     if (v != 0 || f != 0) unsupported()
                     val width = u32(box.end); val height = u32(box.end)
                     atEnd(box.end)
-                    if (width > Int.MAX_VALUE || height > Int.MAX_VALUE || !PhotoLimits.validSource(width.toInt(), height.toInt())) limit()
+                    validateSourceSize(width, height)
                     Property(box.type, width.toInt(), height.toInt())
                 }
                 "irot" -> { val angle = u8(box.end); atEnd(box.end); if (angle and 0xfc != 0) invalid(); Property(box.type, angle = angle * 90) }

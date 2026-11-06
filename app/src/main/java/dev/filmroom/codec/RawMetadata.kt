@@ -6,7 +6,8 @@ import dev.filmroom.io.PhotoException
 
 /** Native-validated identities, not file-extension or provider-MIME guesses. */
 enum class RawFormat(val mimeType:String) {
-    DNG("image/x-adobe-dng"), NEF("image/x-nikon-nef"), CR2("image/x-canon-cr2"), ARW("image/x-sony-arw"), RW2("image/x-panasonic-rw2");
+    DNG("image/x-adobe-dng"), NEF("image/x-nikon-nef"), CR2("image/x-canon-cr2"), ARW("image/x-sony-arw"), RW2("image/x-panasonic-rw2"),
+    CR3("image/x-canon-cr3"), ORF("image/x-olympus-orf"), PEF("image/x-pentax-pef");
 }
 
 /** Exact native JNI contract: unlike CLI output, Probe fields are at the root. */

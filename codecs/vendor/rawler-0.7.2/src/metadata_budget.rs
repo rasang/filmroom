@@ -54,3 +54,16 @@ pub(crate) fn panasonic_preview_scope(is_rw2:bool)->PanasonicPreviewScope {
 pub(crate) fn omit_panasonic_preview(tag:u16)->bool {
   matches!(tag,0x002e|0x0127) && OMIT_RW2_PREVIEW.with(|s|s.get())
 }
+
+// ORF MakerNotes embed large preview payloads. Keep only the signature used to
+// locate their typed IFDs, with the full original extent checked before reading.
+thread_local! { static OLYMPUS_SOURCE_BYTES: Cell<Option<u64>> = const { Cell::new(None) }; }
+pub(crate) struct OlympusScope(Option<u64>);
+impl Drop for OlympusScope {fn drop(&mut self){OLYMPUS_SOURCE_BYTES.with(|s|s.set(self.0));}}
+pub(crate) fn olympus_scope(signature:&[u8],bytes:u64)->OlympusScope{
+ let active=BUDGET.with(|b|b.get().is_some())&&matches!(signature,b"IIRO"|b"IIRS"|b"MMOR");
+ OlympusScope(OLYMPUS_SOURCE_BYTES.with(|s|s.replace(if active{Some(bytes)}else{None})))
+}
+pub(crate) fn olympus_makernote_extent(tag:u16,typ:u16)->Option<u64>{
+ if tag==37500 && typ==7 {OLYMPUS_SOURCE_BYTES.with(|s|s.get())}else{None}
+}

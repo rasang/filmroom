@@ -96,6 +96,111 @@ pub fn load_npy_f32<R: Read>(mut reader: R) -> Result<(Vec<usize>, Vec<f32>), Np
     Ok((shape, data))
 }
 
+/// Strictly bounded, cancellable loader for optional precomputation only.
+pub fn load_npy_f32_bounded_controlled<R: Read>(mut reader: R, max_elements: usize, checkpoint: &mut dyn FnMut() -> bool) -> Result<(Vec<usize>, Vec<f32>), NpyError> {
+    // Magic: \x93NUMPY
+    let mut magic = [0u8; 6];
+    reader.read_exact(&mut magic)?;
+    if &magic != b"\x93NUMPY" {
+        return Err(NpyError::BadMagic);
+    }
+
+    // Version
+    let mut ver = [0u8; 2];
+    reader.read_exact(&mut ver)?;
+
+    // Header length
+    let header_len = if ver[0] == 1 {
+        let mut buf = [0u8; 2];
+        reader.read_exact(&mut buf)?;
+        u16::from_le_bytes(buf) as usize
+    } else {
+        let mut buf = [0u8; 4];
+        reader.read_exact(&mut buf)?;
+        u32::from_le_bytes(buf) as usize
+    };
+
+    if header_len > 4096 { return Err(NpyError::Parse("bounded NPY header limit".into())); }
+    // Read header string
+    let mut header_bytes = vec![0u8; header_len];
+    reader.read_exact(&mut header_bytes)?;
+    let header = String::from_utf8_lossy(&header_bytes);
+
+    // Parse header dict — extract descr, shape, fortran_order
+    let descr =
+        extract_field(&header, "descr").ok_or_else(|| NpyError::Parse("missing descr".into()))?;
+    let shape_str =
+        extract_field(&header, "shape").ok_or_else(|| NpyError::Parse("missing shape".into()))?;
+    let fortran_order = extract_field(&header, "fortran_order")
+        .map(|s| s.contains("True"))
+        .unwrap_or(false);
+
+    if fortran_order {
+        return Err(NpyError::Parse("Fortran order not supported".into()));
+    }
+
+    // Parse shape tuple
+    let shape: Vec<usize> = shape_str
+        .trim_matches(|c: char| c == '(' || c == ')' || c.is_whitespace())
+        .split(',')
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim().parse::<usize>())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| NpyError::Parse(format!("bad shape: {e}")))?;
+
+    let total_elements = shape.iter().try_fold(1usize, |a, b| a.checked_mul(*b)).filter(|v| *v <= max_elements).ok_or_else(|| NpyError::Parse("bounded NPY element limit".into()))?;
+    if !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+
+    // Read data based on dtype
+    let data = match descr.trim_matches('\'') {
+        "<f2" => {
+            // float16, little-endian
+            let mut raw = vec![0u8; total_elements * 2];
+            for bytes in raw.chunks_mut(64 * 1024) {
+                if !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                reader.read_exact(bytes)?;
+            }
+            raw.chunks_exact(2).enumerate().map(|(i, chunk)| {
+                    if i % 4096 == 0 && !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                    Ok(f16::from_le_bytes([chunk[0], chunk[1]]).to_f32())
+                }).collect::<Result<Vec<_>, NpyError>>()?
+        }
+        "<f4" => {
+            // float32, little-endian
+            let mut raw = vec![0u8; total_elements * 4];
+            for bytes in raw.chunks_mut(64 * 1024) {
+                if !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                reader.read_exact(bytes)?;
+            }
+            raw.chunks_exact(4).enumerate().map(|(i, chunk)| {
+                    if i % 4096 == 0 && !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                    Ok(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                }).collect::<Result<Vec<_>, NpyError>>()?
+        }
+        "<f8" => {
+            // float64, little-endian
+            let mut raw = vec![0u8; total_elements * 8];
+            for bytes in raw.chunks_mut(64 * 1024) {
+                if !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                reader.read_exact(bytes)?;
+            }
+            raw.chunks_exact(8).enumerate()
+                .map(|(i, chunk)| {
+                    if i % 4096 == 0 && !checkpoint() { return Err(NpyError::Parse("preparation cancelled".into())); }
+                    let v = f64::from_le_bytes([
+                        chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6],
+                        chunk[7],
+                    ]);
+                    Ok(v as f32)
+                })
+                .collect::<Result<Vec<_>, NpyError>>()?
+        }
+        other => return Err(NpyError::Parse(format!("unsupported dtype: {other}"))),
+    };
+
+    Ok((shape, data))
+}
+
 /// Extract a field value from a Python dict-like header string.
 fn extract_field<'a>(header: &'a str, key: &str) -> Option<String> {
     let pattern = format!("'{key}':");
@@ -142,5 +247,26 @@ impl std::fmt::Display for NpyError {
             NpyError::BadMagic => write!(f, "not a .npy file"),
             NpyError::Parse(s) => write!(f, "parse error: {s}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod bounded_prewarm_tests {
+    use super::*;
+    fn fixture(shape:&str)->Vec<u8>{
+        let header=format!("{{'descr': '<f4', 'fortran_order': False, 'shape': {shape}, }}\n");
+        let mut bytes=b"\x93NUMPY\x01\x00".to_vec();bytes.extend((header.len() as u16).to_le_bytes());bytes.extend(header.bytes());
+        for i in 0..48 {bytes.extend((i as f32/17.).to_le_bytes());}bytes
+    }
+    #[test] fn bounded_loader_matches_cold_f32_bits(){
+        let bytes=fixture("(4, 4, 3)");
+        let a=load_npy_f32(bytes.as_slice()).unwrap();let b=load_npy_f32_bounded_controlled(bytes.as_slice(),48,&mut||true).unwrap();
+        assert_eq!(a.0,b.0);assert_eq!(a.1.iter().map(|v|v.to_bits()).collect::<Vec<_>>(),b.1.iter().map(|v|v.to_bits()).collect::<Vec<_>>());
+    }
+    #[test] fn bounded_loader_rejects_geometry_before_data_allocation(){
+        assert!(load_npy_f32_bounded_controlled(fixture("(1000000, 1000000, 81)").as_slice(),48,&mut||panic!("must reject before checkpoint")).is_err());
+    }
+    #[test] fn bounded_loader_honors_cancel_before_read(){
+        assert!(load_npy_f32_bounded_controlled(fixture("(4, 4, 3)").as_slice(),48,&mut||false).is_err());
     }
 }

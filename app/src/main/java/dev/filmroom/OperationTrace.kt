@@ -11,6 +11,9 @@ import kotlinx.coroutines.*
 /** Records stage transitions only. No slider ticks, file identifiers, or exception text. */
 class OperationTrace private constructor(val id:OperationId) {
     @Volatile private var commitReached=false
+    @Volatile private var previewStage:PreviewFailureStage?=null
+    /** In-memory breadcrumb; persisted with the terminal failure, never per slider tick. */
+    fun previewStage(stage:PreviewFailureStage){previewStage=stage}
     fun commitState(){commitReached=true}
     suspend fun mark(stage:Stage,info:SafeInfo=SafeInfo(),error:ErrorCode?=null)=withContext(Dispatchers.IO){Diagnostics.event(id,stage,info,error)}
     /** Only from IO completion callbacks; no main-thread filesystem write. */
@@ -25,6 +28,7 @@ class OperationTrace private constructor(val id:OperationId) {
                 withContext(Dispatchers.IO){captured=Diagnostics.begin(operation,correlated)}
                 val id=checkNotNull(captured)
                 val trace=OperationTrace(id);active=trace
+                if(operation==Operation.PREVIEW_RENDER)trace.previewStage(PreviewFailureStage.START)
                 val result=work(trace)
                 withContext(NonCancellable+Dispatchers.IO){Diagnostics.end(id,Outcome.SUCCESS,Diagnostics.memoryInfo().copy(durationMs=(SystemClock.elapsedRealtime()-started).coerceAtLeast(0)))}
                 return result
@@ -32,24 +36,33 @@ class OperationTrace private constructor(val id:OperationId) {
                 withContext(NonCancellable+Dispatchers.IO){captured?.let{id->Diagnostics.event(id,Stage.CANCEL_REQUESTED,error=ErrorCode.CANCELLED);Diagnostics.end(id,if(active?.commitReached==true)Outcome.SUCCESS else Outcome.CANCELLED,SafeInfo(durationMs=(SystemClock.elapsedRealtime()-started).coerceAtLeast(0)))}}
                 throw c
             } catch(t:Throwable) {
-                withContext(NonCancellable+Dispatchers.IO){captured?.let{id->Diagnostics.event(id,Stage.ERROR,failureInfo(t,(SystemClock.elapsedRealtime()-started).coerceAtLeast(0)),errorCode(t));Diagnostics.end(id,Outcome.FAILED)}}
+                withContext(NonCancellable+Dispatchers.IO){captured?.let{id->Diagnostics.event(id,Stage.ERROR,failureInfo(t,(SystemClock.elapsedRealtime()-started).coerceAtLeast(0),active?.previewStage),errorCode(t,operation));Diagnostics.end(id,Outcome.FAILED)}}
                 throw t
             }
         }
-        internal fun failureInfo(t: Throwable, durationMs: Long): SafeInfo = SafeInfo(
+        internal fun failureInfo(t: Throwable, durationMs: Long, previewStage:PreviewFailureStage?=null): SafeInfo = SafeInfo(
             durationMs = durationMs,
+            previewFailureStage = previewStage,
+            previewExceptionType = previewStage?.let { PreviewFailure.type(t) },
+            previewFailureReason = previewStage?.let { PreviewFailure.reason(t) },
+            previewCleanupExceptionType = previewStage?.let { t.suppressed.firstOrNull()?.let(PreviewFailure::type) },
             nativeEngineCode = (t as? EngineException)?.nativeEngineCode,
             nativeEngineStage = (t as? EngineException)?.nativeEngineStage,
             codecCode = (t as? PhotoException)?.codecCode,
             codecStage = (t as? PhotoException)?.codecStage,
             rawTechnical = (t as? PhotoException)?.rawTechnical,
         )
-        private fun errorCode(t:Throwable):ErrorCode=when(t){
+        internal fun errorCode(t:Throwable,operation:Operation?=null):ErrorCode=when(t){
             is OutOfMemoryError->ErrorCode.MEMORY_LIMIT
-            is EngineException->when(t.failure){EngineFailure.BUDGET->ErrorCode.MEMORY_LIMIT;EngineFailure.STORAGE->ErrorCode.DISK_SPACE;EngineFailure.UNAVAILABLE->ErrorCode.ENGINE_UNAVAILABLE;EngineFailure.PARAMETERS,EngineFailure.PROFILE,EngineFailure.IMAGE_SIZE->ErrorCode.INVALID_ARGUMENT;EngineFailure.CANCELLED->ErrorCode.CANCELLED;else->ErrorCode.RENDER_FAILED}
+            is EngineException->when(t.failure){EngineFailure.GPU_COMPLETION_UNCERTAIN->ErrorCode.GPU_COMPLETION_UNCERTAIN;EngineFailure.BUDGET->ErrorCode.MEMORY_LIMIT;EngineFailure.STORAGE->ErrorCode.DISK_SPACE;EngineFailure.UNAVAILABLE->ErrorCode.ENGINE_UNAVAILABLE;EngineFailure.PARAMETERS,EngineFailure.PROFILE,EngineFailure.IMAGE_SIZE->ErrorCode.INVALID_ARGUMENT;EngineFailure.CANCELLED->ErrorCode.CANCELLED;else->ErrorCode.RENDER_FAILED}
             is PhotoException->when(t.reason){PhotoException.Reason.TOO_LARGE->ErrorCode.MEMORY_LIMIT;PhotoException.Reason.UNSUPPORTED->ErrorCode.UNSUPPORTED_FORMAT;PhotoException.Reason.STORAGE->ErrorCode.DISK_SPACE;PhotoException.Reason.EXPORT->ErrorCode.ENCODE_FAILED;else->ErrorCode.DECODE_FAILED}
             is SecurityException->ErrorCode.PERMISSION_LOST
-            else->ErrorCode.UNKNOWN
+            else->if(operation==Operation.PREVIEW_RENDER)when(t){
+                is LinkageError->ErrorCode.ENGINE_UNAVAILABLE
+                is dev.filmroom.engine.NativeWorkUnavailable->ErrorCode.MEMORY_LIMIT
+                is IllegalArgumentException->ErrorCode.INVALID_ARGUMENT
+                else->ErrorCode.RENDER_FAILED
+            }else ErrorCode.UNKNOWN
         }
     }
 }

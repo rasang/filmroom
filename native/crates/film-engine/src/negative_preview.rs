@@ -123,9 +123,225 @@ pub fn write_negative_preview(
     File::open(job_dir)?.sync_all()?;
     Ok(Some(output))
 }
-fn sample_coordinate(pixel: u32, sub: u32, source: u32, target: u32) -> u32 {
+pub(crate) fn sample_coordinate(pixel: u32, sub: u32, source: u32, target: u32) -> u32 {
     (((pixel as u64 * 4 + sub as u64 * 2 + 1) * source as u64) / (target as u64 * 4))
         .min(source as u64 - 1) as u32
+}
+
+/// Convert complete, stratified samples of genuine developed film density.
+/// Four entries per output pixel are ordered top-left, top-right, bottom-left,
+/// bottom-right. This is intentionally pure: the caller controls publication.
+pub(crate) fn render_sampled_negative(
+    profile: &Profile,
+    width: u32,
+    height: u32,
+    samples: &[[f32; 3]],
+    cancel: &mut impl FnMut() -> bool,
+) -> io::Result<Option<Vec<u8>>> {
+    cancelled(cancel)?;
+    if profile.info.film_type != "negative" { return Ok(None); }
+    if width == 0 || height == 0 || width > MAX_SOURCE_EDGE || height > MAX_SOURCE_EDGE {
+        return Err(invalid("Invalid negative preview dimensions"));
+    }
+    let edge = width.max(height);
+    let w = ((width as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
+    let h = ((height as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
+    if samples.len() != (w as usize) * (h as usize) * 4 {
+        return Err(invalid("Incomplete film density samples"));
+    }
+    let model = LightTable::new(profile)?;
+    let mut rgb = Vec::with_capacity(w as usize * h as usize * 3);
+    for row in samples.chunks_exact(w as usize * 4) {
+        cancelled(cancel)?;
+        for px in row.chunks_exact(4) {
+            let mut xyz = [0.; 3];
+            for density in px {
+                if density.iter().any(|v| !v.is_finite()) {
+                    return Err(invalid("Nonfinite film density"));
+                }
+                let light = model.xyz(density.map(f64::from))?;
+                for c in 0..3 { xyz[c] += light[c] * 0.25; }
+            }
+            rgb.extend_from_slice(&encode_srgb(xyz)?);
+        }
+    }
+    cancelled(cancel)?;
+    Ok(Some(png_rgb(w, h, &rgb)))
+}
+
+/// A low-resolution model already yields one complete developed density per
+/// preview pixel. Avoid evaluating four identical spectral samples per pixel.
+pub(crate) fn render_early_negative(profile:&Profile,width:u32,height:u32,samples:&[[f32;3]],cancel:&mut impl FnMut()->bool) -> io::Result<Option<Vec<u8>>> {
+    cancelled(cancel)?;
+    if profile.info.film_type!="negative" {return Ok(None);}
+    if width==0 || height==0 || width>MAX_EDGE || height>MAX_EDGE || samples.len()!=width as usize*height as usize {
+        return Err(invalid("Invalid low-resolution density"));
+    }
+    let model=LightTable::new(profile)?;
+    let mut rgb=Vec::with_capacity(width as usize*height as usize*3);
+    for row in samples.chunks_exact(width as usize) {
+        cancelled(cancel)?;
+        for density in row {
+            if density.iter().any(|v|!v.is_finite()) {return Err(invalid("Nonfinite film density"));}
+            rgb.extend_from_slice(&encode_srgb(model.xyz(density.map(f64::from))?)?);
+        }
+    }
+    cancelled(cancel)?;
+    Ok(Some(png_rgb(width,height,&rgb)))
+}
+
+/// Bounded, optional assembly of genuine density samples from disjoint tile
+/// cores. A NaN sentinel means missing; incomplete captures are never rendered.
+pub(crate) struct GpuDensityAssembly {
+    width: u32,
+    height: u32,
+    thumb_w: u32,
+    thumb_h: u32,
+    values: Vec<[f32; 3]>,
+    received: usize,
+}
+impl GpuDensityAssembly {
+    fn lower(source:u32, target:u32, bound:u32) -> u32 {
+        let (mut lo,mut hi) = (0,target*2);
+        while lo<hi {
+            let mid=lo+(hi-lo)/2;
+            if sample_coordinate(mid/2,mid%2,source,target)<bound {lo=mid+1;} else {hi=mid;}
+        }
+        lo
+    }
+    pub(crate) fn new(width: u32, height: u32) -> Option<Self> {
+        if width == 0 || height == 0 || width > MAX_SOURCE_EDGE || height > MAX_SOURCE_EDGE { return None; }
+        let edge = width.max(height);
+        let thumb_w = ((width as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
+        let thumb_h = ((height as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
+        let count = (thumb_w as usize).checked_mul(thumb_h as usize)?.checked_mul(4)?;
+        let mut values = Vec::new();
+        values.try_reserve_exact(count).ok()?;
+        values.resize(count, [f32::NAN; 3]);
+        Some(Self { width, height, thumb_w, thumb_h, values, received: 0 })
+    }
+    /// Conservative extra live bytes: full density samples; per-tile request,
+    /// result, GPU index/gather/readback; and space for optional image encoding.
+    pub(crate) fn peak_reservation(&self, core_w:u32, core_h:u32) -> Option<u64> {
+        if core_w==0 || core_h==0 {return None;}
+        let mut maximum=0usize;
+        let mut y=0;
+        while y<self.height {
+            let bottom=y.saturating_add(core_h).min(self.height);
+            let mut x=0;
+            while x<self.width {
+                let right=x.saturating_add(core_w).min(self.width);
+                let nx=Self::lower(self.width,self.thumb_w,right)-Self::lower(self.width,self.thumb_w,x);
+                let ny=Self::lower(self.height,self.thumb_h,bottom)-Self::lower(self.height,self.thumb_h,y);
+                maximum=maximum.max((nx as usize).checked_mul(ny as usize)?);
+                x=right;
+            }
+            y=bottom;
+        }
+        let sample_bytes=(self.values.len() as u64).checked_mul(12)?;
+        let tile_bytes=(maximum as u64).checked_mul(56)?.checked_add(16)?;
+        sample_bytes.checked_add(tile_bytes)?.checked_add(2*1024*1024)
+    }
+    /// Coordinates are local to the expanded image; ownership uses core only.
+    pub(crate) fn samples_for_core(&self, left:u32, top:u32, x:u32, y:u32, right:u32, bottom:u32)
+        -> Vec<spektrafilm_gpu::FilmDensitySample> {
+        if left>x || top>y || x>right || y>bottom || right>self.width || bottom>self.height { return Vec::new(); }
+        let (x0,x1)=(Self::lower(self.width,self.thumb_w,x),Self::lower(self.width,self.thumb_w,right));
+        let (y0,y1)=(Self::lower(self.height,self.thumb_h,y),Self::lower(self.height,self.thumb_h,bottom));
+        let mut out = Vec::new();
+        if out.try_reserve_exact((x1-x0) as usize*(y1-y0) as usize).is_err() {return out;}
+        for qy in y0..y1 { for qx in x0..x1 {
+            let (ty,sy)=(qy/2,qy%2); let (tx,sx)=(qx/2,qx%2);
+            let gx=sample_coordinate(tx,sx,self.width,self.thumb_w);
+            let gy=sample_coordinate(ty,sy,self.height,self.thumb_h);
+            let index=((ty*self.thumb_w+tx)*4)+sy*2+sx;
+            out.push(spektrafilm_gpu::FilmDensitySample { index, x:gx-left, y:gy-top });
+        }}
+        out
+    }
+    pub(crate) fn add(&mut self, expected:&[spektrafilm_gpu::FilmDensitySample], values:&[(u32,[f32;3])]) -> bool {
+        if expected.len()!=values.len() { return false; }
+        // The backend must return exactly the requested samples, in order.
+        for (request,(index,value)) in expected.iter().zip(values) {
+            if request.index != *index || value.iter().any(|v| !v.is_finite()) { return false; }
+            let Some(slot) = self.values.get_mut(*index as usize) else { return false; };
+            if slot[0].is_finite() { return false; }
+            *slot = *value;
+            self.received += 1;
+        }
+        true
+    }
+    pub(crate) fn complete(self) -> Option<Vec<[f32;3]>> {
+        (self.received == self.values.len()).then_some(self.values)
+    }
+}
+
+pub(crate) fn valid_attempt(s:&str) -> bool {
+    s.len()==36 && s.bytes().enumerate().all(|(i,b)|
+        if [8,13,18,23].contains(&i) { b==b'-' } else { b.is_ascii_digit() || (b'a'..=b'f').contains(&b) })
+}
+pub(crate) fn same_attempt(dir:&Path, attempt:&str) -> bool {
+    fs::read_to_string(dir.join("scan-preview-attempt")).ok().as_deref()==Some(attempt)
+}
+fn write_status(dir:&Path,attempt:&str,status:&str,early:bool) -> io::Result<()> {
+    if !valid_attempt(attempt) || !["pending","ready","skipped_budget","failed","cancelled"].contains(&status) || !same_attempt(dir,attempt) {
+        return Err(invalid("Expired preview attempt"));
+    }
+    let prefix=if early {"negative-preview-early-"}else{"negative-preview-"};
+    let target=dir.join(format!("{prefix}{attempt}.status"));
+    let temp=dir.join(format!("{prefix}{attempt}.status.part"));
+    let _guard=TempGuard(temp.clone());
+    let mut file=OpenOptions::new().write(true).create(true).truncate(true).open(&temp)?;
+    file.write_all(status.as_bytes())?; drop(file);
+    if !same_attempt(dir,attempt) { return Err(invalid("Expired preview attempt")); }
+    fs::rename(temp,target)
+}
+fn write_attempt_status(dir:&Path,attempt:&str,status:&str) -> io::Result<()> {write_status(dir,attempt,status,false)}
+pub(crate) fn write_early_attempt_status(dir:&Path,attempt:&str,status:&str) -> io::Result<()> {write_status(dir,attempt,status,true)}
+pub(crate) fn mark_current_status(dir:&Path,status:&str,early:bool) -> io::Result<()> {
+    let attempt=fs::read_to_string(dir.join("scan-preview-attempt"))?;
+    write_status(dir,&attempt,status,early)
+}
+
+fn publish_for_attempt(dir:&Path,attempt:&str,profile:&Profile,width:u32,height:u32,samples:&[[f32;3]],early:bool,cancel:&mut impl FnMut()->bool) -> io::Result<()> {
+    let mut cancelled=||cancel() || !same_attempt(dir,attempt);
+    let png=if early {render_early_negative(profile,width,height,samples,&mut cancelled)?}else{render_sampled_negative(profile,width,height,samples,&mut cancelled)?}
+        .ok_or_else(||invalid("Negative unavailable for this film"))?;
+    let prefix=if early {"negative-preview-early-"}else{"negative-preview-"};
+    let temp=dir.join(format!("{prefix}{attempt}.png.part"));
+    let _guard=TempGuard(temp.clone());
+    let mut file=OpenOptions::new().write(true).create_new(true).open(&temp)?;
+    file.write_all(&png)?; drop(file);
+    active_publish(&mut cancelled)?;
+    fs::rename(temp,dir.join(format!("{prefix}{attempt}.png")))?;
+    active_publish(&mut cancelled)?;
+    write_status(dir,attempt,"ready",early)
+}
+fn active_publish(cancel:&mut impl FnMut()->bool) -> io::Result<()> {
+    if cancel() {Err(io::Error::new(io::ErrorKind::Interrupted,"Negative preview cancelled"))} else {Ok(())}
+}
+pub(crate) fn publish_early_negative_for_attempt(dir:&Path,attempt:&str,profile:&Profile,width:u32,height:u32,samples:&[[f32;3]],cancel:&mut impl FnMut()->bool) -> io::Result<()> {
+    publish_for_attempt(dir,attempt,profile,width,height,samples,true,cancel)
+}
+
+/// A detached best-effort visual artifact; it neither holds the export permit
+/// nor changes rendering, saving, or terminal state. UUID-scoped names ensure
+/// a canceled/retried attempt can never be selected by a newer attempt.
+pub(crate) fn publish_sampled_negative_async(
+    dir:&Path, profile:Profile, width:u32, height:u32, samples:Vec<[f32;3]>,
+) -> io::Result<()> {
+    let attempt=fs::read_to_string(dir.join("scan-preview-attempt"))?;
+    if !valid_attempt(&attempt) {return Err(invalid("Invalid preview attempt"));}
+    write_attempt_status(dir,&attempt,"pending")?;
+    let dir=dir.to_path_buf();
+    let thread_dir=dir.clone(); let thread_attempt=attempt.clone();
+    let started=std::thread::Builder::new().name("film-negative-preview".into()).spawn(move || {
+        let result=publish_for_attempt(&thread_dir,&thread_attempt,&profile,width,height,&samples,false,&mut ||false);
+        if result.is_err() && same_attempt(&thread_dir,&thread_attempt) {
+            let _=write_attempt_status(&thread_dir,&thread_attempt,"failed");
+        }
+    });
+    match started {Ok(_) => Ok(()), Err(e) => {let _=write_attempt_status(&dir,&attempt,"failed");Err(e)}}
 }
 struct LightTable {
     dye: Vec<[f64; 3]>,
@@ -361,6 +577,69 @@ mod tests {
         }
         // A numeric inversion would give zero for density 1, not ~89.
         assert!(rgb[3] > 80);
+    }
+    #[test]
+    fn sampled_density_matches_existing_light_table_and_validates_coverage() {
+        let f = Fixture::new(3, 2, |x, y| x as f64 * 0.25 + y as f64 * 0.5);
+        let reference = write_negative_preview(&f.planes, &profile(), 3, 2, &f.dir, &mut || false)
+            .unwrap().unwrap();
+        let mut samples = Vec::new();
+        for y in 0..2 { for x in 0..3 { for sy in 0..2 { for sx in 0..2 {
+            let ix = sample_coordinate(x, sx, 3, 3);
+            let iy = sample_coordinate(y, sy, 2, 2);
+            samples.push([ix as f32 * 0.25 + iy as f32 * 0.5; 3]);
+        }}}}
+        let actual = render_sampled_negative(&profile(), 3, 2, &samples, &mut || false)
+            .unwrap().unwrap();
+        assert_eq!(actual, fs::read(reference).unwrap());
+        let one_per_pixel:Vec<_>=samples.chunks_exact(4).map(|v|v[0]).collect();
+        assert_eq!(render_early_negative(&profile(),3,2,&one_per_pixel,&mut ||false).unwrap().unwrap(),actual);
+        assert!(render_sampled_negative(&profile(), 3, 2, &samples[..samples.len()-1], &mut || false).is_err());
+        samples[0][0] = f32::NAN;
+        assert!(render_sampled_negative(&profile(), 3, 2, &samples, &mut || false).is_err());
+        let mut reversal = profile(); reversal.info.film_type = "positive".into();
+        assert!(render_sampled_negative(&reversal, 3, 2, &samples, &mut || false).unwrap().is_none());
+        assert_eq!(render_sampled_negative(&profile(), 3, 2, &samples, &mut || true).unwrap_err().kind(), io::ErrorKind::Interrupted);
+    }
+    #[test]
+    fn sampled_tile_cores_cover_each_point_once_without_halo_duplicates() {
+        let mut assembly = GpuDensityAssembly::new(17, 23).unwrap();
+        let mut count=0;
+        for y in (0u32..23).step_by(7) { for x in (0u32..17).step_by(6) {
+            let right=(x+6).min(17); let bottom=(y+7).min(23);
+            let left=x.saturating_sub(3); let top=y.saturating_sub(3);
+            let requests=assembly.samples_for_core(left,top,x,y,right,bottom);
+            let values:Vec<_>=requests.iter().map(|r| {
+                assert!(r.x+left>=x && r.x+left<right && r.y+top>=y && r.y+top<bottom);
+                (r.index,[(r.x+left) as f32,(r.y+top) as f32,0.25])
+            }).collect();
+            count+=requests.len();
+            assert!(assembly.add(&requests,&values));
+        }}
+        assert_eq!(count,17*23*4);
+        let values=assembly.complete().unwrap();
+        for ty in 0..23 { for tx in 0..17 { for sy in 0..2 { for sx in 0..2 {
+            let index=((ty*17+tx)*4+sy*2+sx) as usize;
+            assert_eq!(values[index], [sample_coordinate(tx,sx,17,17) as f32,sample_coordinate(ty,sy,23,23) as f32,0.25]);
+        }}}}
+    }
+    #[test]
+    fn async_preview_is_attempt_scoped_and_real_density() {
+        let f=Fixture::new(1,1,|_,_|1.0);
+        let id="12345678-1234-1234-1234-123456789abc";
+        fs::write(f.dir.join("scan-preview-attempt"),id).unwrap();
+        publish_sampled_negative_async(&f.dir,profile(),1,1,vec![[1.;3];4]).unwrap();
+        let status=f.dir.join(format!("negative-preview-{id}.status"));
+        let deadline=std::time::Instant::now()+std::time::Duration::from_secs(10);
+        while fs::read_to_string(&status).ok().as_deref()!=Some("ready") && std::time::Instant::now()<deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(fs::read_to_string(status).unwrap(),"ready");
+        let image=fs::read(f.dir.join(format!("negative-preview-{id}.png"))).unwrap();
+        let (_,_,rgb)=pixels(&image);
+        assert!(rgb.iter().all(|v| (88..=90).contains(v)));
+        fs::write(f.dir.join("scan-preview-attempt"),"87654321-1234-1234-1234-123456789abc").unwrap();
+        assert!(write_attempt_status(&f.dir,id,"ready").is_err());
     }
     #[test]
     fn bounded_thumbnail_averages_light_not_log_density() {

@@ -175,7 +175,9 @@ fn export_only_84mp_limit_keeps_import_52mp_and_checks_budgets_before_io() {
         let mut p=params(format);p.width=12000;p.height=7001;
         assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"PIXEL_LIMIT");
         p.width=u32::MAX;p.height=u32::MAX;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"PIXEL_LIMIT");
+        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"EDGE_LIMIT");
+        p.width=0;p.height=1;
+        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"INVALID_INPUT");
         p.width=12000;p.height=7000;p.budget.memory_budget_mi_b=1;
         assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"MEMORY_BUDGET");
         p.budget.memory_budget_mi_b=128;p.budget.disk_budget_bytes=1;

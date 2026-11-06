@@ -1,0 +1,56 @@
+// Approximate coordinate-stable microstructure lognormal field.
+struct Params {
+    n_pixels: u32,
+    base_seed: u32,
+    mu: f32,
+    sigma: f32,
+    // Global pixel index of the first pixel of this dispatch's buffer.
+    // Banded (tiled) export processes the image in horizontal bands whose
+    // `idx` is band-LOCAL; seeds must use the GLOBAL index so the noise
+    // field is continuous across bands. 0 for whole-frame dispatches.
+    pixel_offset: u32,
+    monochrome: u32,
+    tile_width: u32,
+    full_width: u32,
+}
+
+@group(0) @binding(0) var<uniform> params: Params;
+@group(0) @binding(1) var<storage, read_write> glare_buf: array<f32>;
+
+fn pcg(state: u32) -> u32 {
+    var s: u32 = state * 747796405u + 2891336453u;
+    let word: u32 = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+fn unit_f32(x: u32) -> f32 {
+    return f32(x) * (1.0 / 4294967296.0);
+}
+
+fn splitmix32(x: u32) -> u32 {
+    var z: u32 = x;
+    z = (z ^ (z >> 16u)) * 0x85ebca6bu;
+    z = (z ^ (z >> 13u)) * 0xc2b2ae35u;
+    return z ^ (z >> 16u);
+}
+
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let idx = gid.x;
+    if idx >= params.n_pixels { return; }
+    // Seed from the GLOBAL pixel index (band-local idx + band offset) so
+    // banded exports reproduce the whole-frame noise field exactly;
+    // buffer addressing below stays band-local.
+    let seed_idx = params.pixel_offset + (idx / params.tile_width) * params.full_width + idx % params.tile_width;
+    let base = idx * 3u;
+    for (var ch = 0u; ch < 3u; ch = ch + 1u) {
+        let seed_ch = select(ch, 0u, params.monochrome != 0u);
+        var rng = splitmix32(params.base_seed + seed_ch) ^ splitmix32(seed_idx);
+        rng = pcg(rng);
+        let u1 = unit_f32(rng);
+        rng = pcg(rng);
+        let u2 = unit_f32(rng);
+        let z = sqrt(-2.0 * log(max(u1, 1e-7))) * cos(6.28318530717958647 * u2);
+        glare_buf[base + ch] = exp(params.mu + params.sigma * z);
+    }
+}

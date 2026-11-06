@@ -14,6 +14,13 @@ open class FilmroomApplication:Application() {
         is StartupRecoveryGate.State.Failed->s.report
         StartupRecoveryGate.State.Running->null
     }
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // UI_HIDDEN and memory pressure are best-effort boundaries, not shutdown
+        // guarantees. The bounded timer also covers idle foreground diagnostics.
+        processScope.launch { Diagnostics.flush() }
+    }
+
     override fun onCreate(){
         super.onCreate()
         // Keep the Application base context system-owned; only UI/scoped lookup contexts override locale.

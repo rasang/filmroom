@@ -14,11 +14,13 @@ import java.nio.file.StandardCopyOption
 object BorderCompositor {
     const val MAX_ATLAS_BYTES=16L*1024*1024
     fun workingBytes(s:BorderSnapshot,raster:BorderRaster):Long=s.sourceWidth*36L+s.outputWidth*36L+raster.residentBytes+128L*1024
-    fun composite(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,checkActive:()->Unit={}) {
+    fun composite(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,imprint:dev.filmroom.imprint.ImprintPlan?=null,checkActive:()->Unit={}) {
         raster.validate(s)
+        val effective=imprint?.frameRaster(s,raster) ?: raster
         val map=BorderSampling(s)
         FinalImageRows.file(source,destination,s.sourceWidth,s.sourceHeight,s.outputWidth,s.outputHeight,map,checkActive){y,first,second,fy,row->
-            composeSampledRow(s,raster,color,y,map,first,second,fy,row)
+            composeSampledRow(s,effective,color,y,map,first,second,fy,row)
+            imprint?.blendRow(y,row,color)
         }
     }
 

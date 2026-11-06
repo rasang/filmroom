@@ -26,7 +26,10 @@ import java.util.UUID
 class CompactExportThumbnailHostTest {
  private fun views(v:View):List<View> = listOf(v)+(if(v is ViewGroup)(0 until v.childCount).flatMap{views(v.getChildAt(it))}else emptyList())
  private fun job(state:ExportJobState)=ExportJob(UUID.randomUUID().toString(),1,EditorState(),4000,3000,ExportFormat.JPEG,95,state,ExportDisplayProgress(8,1,1),mediaUri=if(state==ExportJobState.COMPLETED)"content://media/external/images/media/42" else null)
- private fun render(a:ExportQueueActivity,j:ExportJob){ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,listOf(j))}
+ private fun render(a:ExportQueueActivity,j:ExportJob){
+  // These are terminal-layout fixtures, not a live three-image presentation.
+  a.previewSequenceEnabled=false
+  ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,listOf(j))}
  private fun layout(a:ExportQueueActivity,w:Int,h:Int):View {
   val v=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
   v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h);return v

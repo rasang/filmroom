@@ -26,6 +26,7 @@ pub fn err(code: &'static str, stage: &'static str) -> CodecError {
             "UNSUPPORTED_DNG_CALIBRATION" => "暂不支持此 DNG 的相机校准矩阵",
             "INVALID_INPUT" => "照片文件损坏或格式无效",
             "INVALID_COLOR_METADATA" => "RAW 色彩矩阵、白平衡或黑白电平无效",
+            "EDGE_LIMIT" => "照片单边超过32768像素上限",
             "PIXEL_LIMIT" => "照片尺寸超出当前支持范围（最多5200万像素）",
             "MEMORY_BUDGET" => "可用内存预算不足，未开始解码",
             "DISK_BUDGET" => "本地可用空间不足，未开始解码",

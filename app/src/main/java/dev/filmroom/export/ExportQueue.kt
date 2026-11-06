@@ -26,22 +26,32 @@ class ExportIntakeGeneration(val generation:Long):kotlin.coroutines.AbstractCoro
 internal interface ExportProcessing {
     suspend fun plan(width:Int,height:Int,parameters:EditorState):NativeExportPlan
     suspend fun render(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,onProgress:(EngineProgress)->Unit):File
+    /** Scope is this render only; old adapters remain uncached. */
+    suspend fun renderReserved(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,onProgress:(EngineProgress)->Unit):File = render(input,width,height,parameters,workspace,onProgress)
+    fun trimCacheForReserve(bytes:Long) {}
+    /** Optional feature: older/fake processors never acquire a cache identity implicitly. */
+    suspend fun encodedReuseIdentity(width:Int,height:Int,parameters:EditorState):String?=null
+    fun completedEncodedReuseIdentity():EncodedReuseIdentity?=null
     fun cancel()
 }
 private class NativeExportProcessing(context:Context):ExportProcessing {
     private val engine=FilmEngine(context)
     override suspend fun plan(width:Int,height:Int,parameters:EditorState)=engine.planExport(width,height,parameters)
     override suspend fun render(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,onProgress:(EngineProgress)->Unit)=engine.exportSpool(input,width,height,parameters,workspace=workspace,progressOnMain=false,onProgress=onProgress)
+    override suspend fun renderReserved(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,onProgress:(EngineProgress)->Unit)=engine.exportSpool(input,width,height,parameters,workspace=workspace,progressOnMain=false,cacheDiskReserveBytes=diskReserveBytes,onProgress=onProgress)
+    override fun trimCacheForReserve(bytes:Long)=engine.trimExportReuse(bytes)
+    override suspend fun encodedReuseIdentity(width:Int,height:Int,parameters:EditorState)=engine.encodedReuseIdentity(width,height,parameters)
+    override fun completedEncodedReuseIdentity()=engine.completedEncodedReuseIdentity()
     override fun cancel()=engine.cancel()
 }
 enum class ExportRunOutcome { DRAINED, BLOCKED_STARTUP_RECOVERY }
-class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog) {
+class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog,private val repository:PhotoRepository=PhotoRepository(context),private val sourceHashNanoTime:()->Long=System::nanoTime) {
     val store=ExportJobStore(File(context.filesDir,"export-jobs"))
     val jobs=store.jobs
     val startupRecoveryReady get()=startupGate==null || startupGate.state.value is StartupRecoveryGate.State.Ready
     val hasPendingWorkOrIntakes get()=intakes.get()>0 || jobs.value.any{it.state in setOf(ExportJobState.PENDING,ExportJobState.RETRY)}
     init {val app=context.applicationContext;BorderCatalog.initialize(app.assets){NativeWorkReservations.snapshot(app)};jobs.value.filter{it.terminal}.forEach{cleanup(it.id)}}
-    private val repository=PhotoRepository(context)
+    private val encodedCache=EncodedPayloadCache.get(context.cacheDir)
     private val activeLock=Any()
     @Volatile private var activeId:String?=null
     @Volatile private var activeTask:Job?=null
@@ -77,7 +87,10 @@ class ExportQueue internal constructor(private val context:Context,private val p
             try {
                 store.update(draft);accepted=true;runCatching{onAccepted(draft)};beforeCapture(draft)
                 val bytes=opened.channel.size()
-                if(android.os.StatFs(dir.path).availableBytes<bytes+64L*1024*1024+reservedBytes.get())throw EngineException(EngineFailure.STORAGE)
+                val captureReserve=bytes+64L*1024*1024+reservedBytes.get()
+                encodedCache.trimForReserve(captureReserve){android.os.StatFs(dir.path).availableBytes}
+                processing.trimCacheForReserve(captureReserve)
+                if(android.os.StatFs(dir.path).availableBytes<captureReserve)throw EngineException(EngineFailure.STORAGE)
                 val linked=runCatching{Files.createLink(snapshot.toPath(),sourceFile.toPath());true}.getOrDefault(false)
                 if(!linked)FileOutputStream(snapshot).use{out->val buffer=ByteArray(256*1024);while(true){currentCoroutineContext().ensureActive();val n=opened.read(buffer);if(n<0)break;out.write(buffer,0,n)};out.fd.sync()}
                 currentCoroutineContext().ensureActive();check(snapshot.length()==bytes);if(kind!="ENCODED")check(bytes==source.originalWidth.toLong()*source.originalHeight*12)
@@ -108,13 +121,14 @@ class ExportQueue internal constructor(private val context:Context,private val p
         store.beginHistory(targets.filter{it.id!=activeId && !captures.containsKey(it.id)},deletePhotos)
     }}}
     suspend fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
-        if(snapshot.id==activeId || captures.containsKey(snapshot.id))false else store.removeHistoryRecord(op,snapshot)
+        if(snapshot.id==activeId || captures.containsKey(snapshot.id))false else store.removeHistoryRecord(op,snapshot).also{if(it)ExportPresentationStore.clear(context,snapshot.id)}
     }}}
     suspend fun restoreHistoryReservation(op:ExportHistoryOperation):Boolean=withContext(Dispatchers.IO){storageLock.withLock{synchronized(activeLock){
         if(op.remaining.any{it.id==activeId || captures.containsKey(it.id)})false else store.restoreHistoryReservation(op)
     }}}
     fun start(context:Context) {context.startForegroundService(Intent(context,ExportService::class.java))}
     fun retry(id:String,generation:Long=pauseGeneration.get()) {
+        if(store.get(id)?.let{it.canRetry && it.state in setOf(ExportJobState.PAUSED,ExportJobState.FAILED)}==true)ExportPresentationStore.clear(context,id)
         val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
         store.change(id){if(it.canRetry && it.state in setOf(ExportJobState.PAUSED,ExportJobState.FAILED))it.copy(
             state=if(!startupBlocked && generation==pauseGeneration.get())ExportJobState.RETRY else ExportJobState.PAUSED,
@@ -187,12 +201,20 @@ class ExportQueue internal constructor(private val context:Context,private val p
             return ExportRunOutcome.DRAINED
         } finally {runLock.unlock()}
     }
-    private suspend fun runOne(initial:ExportJob,onChanged:(ExportJob)->Unit) {
+    private suspend fun runOne(initial:ExportJob,onChanged:(ExportJob)->Unit):Unit =
+        ExportWorkAdmissions.withQueueActivity { runOneActive(initial,onChanged) }
+    private suspend fun runOneActive(initial:ExportJob,onChanged:(ExportJob)->Unit) {
         val id=initial.id;val dir=store.directory(id)
         fun update(transform:(ExportJob)->ExportJob){store.change(id,transform)?.let{changed->runCatching{onChanged(changed)}}}
         var output:File?=null
         var framedOutput:File?=null
+        var reusedPayload:File?=null
+        var reusedBackend:dev.filmroom.diagnostics.GpuBackend?=null
+        var cacheTicket:EncodedPayloadCache.Ticket?=null
+        var pngCacheStream:EncodedPayloadCache.StreamCandidate?=null
+        var pngCompletion:EncodedReuseIdentity?=null
         val previewContext=currentCoroutineContext()
+        var negativeDiagnostics:NegativePreviewDiagnostics?=null
         var previewAttempt:String?=null
         var previewAttempted=false
         try {
@@ -202,6 +224,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 else {previewAttempt=runCatching{ScanPreviewStore.begin(dir)}.getOrNull();update{it.copy(state=ExportJobState.RUNNING,message=null,messageUi=null)};true}
             }
             if(!accepted)return
+            previewAttempt?.let{negativeDiagnostics=NegativePreviewDiagnostics(dir,it)}
             val existing=initial.mediaUri?.let{repository.committedExport(it,initial.outputWidth,initial.outputHeight,initial.format)}
             if(existing==null) {
                 val input=File(dir,"input.rgb")
@@ -211,9 +234,38 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 }
                 initial.border?.let{BorderExportPolicy.validate(it,initial.format);borderProvider.verifySnapshot(it)}
                 dir.listFiles()?.filter{it.isFile && it.name.matches(Regex("film-result-[0-9a-f-]{36}\\.rgb(\\.part)?"))}?.forEach{check(it.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_29367795aabb) }}
+                val captureMetadata=initial.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
+                val sourceSnapshot=File(dir,when(initial.inputKind){"LINEAR"->"input.rgb";"RAW","LINEAR_SOURCE"->"source.rgb";else->"source.image"})
+                val cacheJob=currentCoroutineContext()
+                val sourceHasher=EncodedSourceHash(initial.inputKind,
+                    if(initial.inputKind=="LINEAR")initial.width else initial.sourceWidth,
+                    if(initial.inputKind=="LINEAR")initial.height else initial.sourceHeight,sourceHashNanoTime)
+                val sourceDigest=optionalCache { if(EncodedExportIdentity.supported(initial))sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()} else null }
+                val lookupIdentity=if(sourceDigest!=null)optionalCache {processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)}else null
+                if(lookupIdentity!=null)optionalCache {
+                    val key=EncodedExportIdentity.key(initial,checkNotNull(sourceDigest),lookupIdentity,captureMetadata)
+                    storageLock.withLock {
+                        encodedCache.acquire(key)?.use { lease ->
+                            // Destination, transactional metadata replacement, and MediaStore copy.
+                            val required=64L*1024*1024+3*lease.bytes+2*PhotoMetadata.BUDGET
+                            processing.trimCacheForReserve(required)
+                            if(android.os.StatFs(dir.path).availableBytes>=required) {
+                                val target=File(dir,"codec-reused-${java.util.UUID.randomUUID()}.${initial.format.extension}")
+                                lease.copyTo(target){cacheJob.ensureActive()}
+                                reusedPayload=target;reservedBytes.set(required)
+                                val backend=org.json.JSONObject(lease.receipt).optJSONObject("probe")?.optString("backend")
+                                reusedBackend=dev.filmroom.diagnostics.GpuBackend.entries.firstOrNull{it.id==backend}
+                            }
+                        }
+                    }
+                }
+                var freshlyPreparedInput=false
+                if(reusedPayload==null) {
                 storageLock.withLock {
                     val plan=processing.plan(initial.width,initial.height,initial.parameters)
-                    val required=(if(input.length()==initial.width.toLong()*initial.height*12)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan))+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it)} ?: 0L)
+                    val required=(if(input.length()==initial.width.toLong()*initial.height*12)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan))+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it,initial.parameters.imprint.enabled)} ?: 0L)
+                    encodedCache.trimForReserve(required){android.os.StatFs(dir.path).availableBytes}
+                    processing.trimCacheForReserve(required)
                     if(!ExportStoragePolicy.hasSpace(android.os.StatFs(dir.path).availableBytes,required))throw EngineException(EngineFailure.STORAGE)
                     reservedBytes.set(required)
                 }
@@ -230,10 +282,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         check(prepared.length()==initial.width.toLong()*initial.height*12)
                         FileOutputStream(prepared,true).use{it.fd.sync()}
                         Files.move(prepared.toPath(),input.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                        freshlyPreparedInput=true
                     }finally{prepared.delete()}
                 }
                 if(input.length()!=initial.width.toLong()*initial.height*12)throw EngineException(EngineFailure.INCOMPLETE)
-                output=processing.render(input,initial.width,initial.height,initial.parameters,dir){p->
+                output=processing.renderReserved(input,initial.width,initial.height,initial.parameters,dir,reservedBytes.get()){p->
                     if(!previewAttempted && p.display.stage==6 && p.scanPreview!=null && previewAttempt!=null){
                         previewAttempted=true
                         try {BorderMemoryAdmission.withBudget(4L*1024*1024,{NativeWorkReservations.snapshot(context)}){
@@ -242,43 +295,98 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     }
                     update{it.copy(progress=p.display)}
                 }
+                }
                 update{it.copy(progress=ExportDisplayProgress(7))}
                 // One persisted instant per encode attempt. A committed row is reused above;
                 // an uncommitted retry gets its actual new export time, not the failed attempt time.
-                val captureMetadata=store.get(id)?.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
                 update{it.copy(exportMillis=System.currentTimeMillis(),metadataWarning=captureMetadata.warning)}
                 val exportRecord=checkNotNull(store.get(id))
+                val prepared:(ExportResult)->Unit={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}}
+                val committed:(ExportResult)->Unit={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}}
+                if(reusedPayload!=null) {
+                    repository.exportEncodedPayload(checkNotNull(reusedPayload),initial.outputWidth,initial.outputHeight,initial.format,
+                        initial.parameters.outputColorSpace,captureMetadata,checkNotNull(exportRecord.exportMillis),prepared,committed,cacheSourceBackend=reusedBackend,
+                        onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}})
+                } else {
+                val imprintBudget=if(initial.parameters.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L
                 val encodingInput=initial.border?.let{border->
                     // Decode only after scientific rendering, never pin an atlas through the film pipeline.
                     val borderContext=currentCoroutineContext()
                     val asset=withContext(Dispatchers.IO){borderProvider.resolve(border){borderContext.ensureActive()}}
                     val memory=android.app.ActivityManager.MemoryInfo().also{(context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(it)}
-                    if(memory.lowMemory || memory.availMem-memory.threshold<BorderCompositor.workingBytes(border,asset)*4)throw OutOfMemoryError("border admission")
+                    if(memory.lowMemory || memory.availMem-memory.threshold<(BorderCompositor.workingBytes(border,asset)+imprintBudget)*4)throw OutOfMemoryError("border admission")
                     if(android.os.StatFs(dir.path).availableBytes<BorderExportPolicy.additionalDiskBytes(border)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
                     File(dir,"film-result-${java.util.UUID.randomUUID()}.rgb").also{target->
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
-                        BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset),{NativeWorkReservations.snapshot(context)}) {
-                            BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace)){coroutine.ensureActive()}
+                        BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset)+imprintBudget,{NativeWorkReservations.snapshot(context)}) {
+                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,border.outputWidth,border.outputHeight,border)
+                            BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint){coroutine.ensureActive()}
                         }
                     }
-                } ?: initial.crop?.takeUnless{it.isIdentity}?.let{crop->
-                    if(android.os.StatFs(dir.path).availableBytes<CropCompositor.additionalDiskBytes(crop)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
+                } ?: initial.crop?.takeUnless{it.isIdentity && !initial.parameters.imprint.enabled}?.let{crop->
+                    if(android.os.StatFs(dir.path).availableBytes<CropCompositor.additionalDiskBytes(crop,initial.parameters.imprint.enabled)+64L*1024*1024)throw EngineException(EngineFailure.STORAGE)
                     File(dir,"film-result-${java.util.UUID.randomUUID()}.rgb").also{target->
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
-                        BorderMemoryAdmission.withBudget(CropCompositor.workingBytes(crop),{NativeWorkReservations.snapshot(context)}){
-                            CropCompositor.composite(checkNotNull(output),target,crop){coroutine.ensureActive()}
+                        BorderMemoryAdmission.withBudget(CropCompositor.workingBytes(crop)+imprintBudget,{NativeWorkReservations.snapshot(context)}){
+                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,crop.outputWidth,crop.outputHeight)
+                            CropCompositor.composite(checkNotNull(output),target,crop,imprint,OutputColorSpace.parse(initial.parameters.outputColorSpace)){coroutine.ensureActive()}
                         }
                     }
                 } ?: checkNotNull(output)
+                if(initial.format==ExportFormat.PNG && sourceDigest!=null && (initial.inputKind=="LINEAR" || freshlyPreparedInput))optionalCache {
+                    val completion=processing.completedEncodedReuseIdentity() ?: return@optionalCache null
+                    if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)!=completion.identity)return@optionalCache null
+                    if(sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}!=sourceDigest)return@optionalCache null
+                    val key=EncodedExportIdentity.key(initial,sourceDigest,completion.identity,captureMetadata)
+                    storageLock.withLock {
+                        pngCacheStream=encodedCache.beginStream(key,completion.receipt){bytes,write->
+                            // Never wait while holding the cache monitor: intake takes these locks
+                            // in the opposite order. A busy intake merely drops this optional tee.
+                            if(!storageLock.tryLock())false else try {
+                                if(android.os.StatFs(dir.path).availableBytes<Math.addExact(reservedBytes.get(),bytes.toLong()))false
+                                else {cacheJob.ensureActive();write();true}
+                            }finally{storageLock.unlock()}
+                        }
+                        pngCompletion=completion
+                    }
+                }
                 repository.exportLinear(encodingInput,initial.outputWidth,initial.outputHeight,initial.format,initial.quality,
                     onPrepared={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}},
                     onCommitted={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}},
                     outputColorSpace=initial.parameters.outputColorSpace,
                     photoMetadata=captureMetadata,
                     exportMillis=checkNotNull(exportRecord.exportMillis),
-                    onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}})
+                    onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}},
+                    pngPixelPayload=pngCacheStream,
+                    onEncodedPayload={encoded->
+                        // Old prepared spools/checkpoint resumes are not certified as a new
+                        // decoding of source.image. Direct LINEAR is itself content-hashed.
+                        if(sourceDigest!=null && (initial.inputKind=="LINEAR" || freshlyPreparedInput))optionalCache {
+                            val completion=processing.completedEncodedReuseIdentity() ?: return@optionalCache null
+                            // Never publish a token for a different memory-budget request or a device
+                            // which became quarantined during presentation/encoding.
+                            if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)!=completion.identity)return@optionalCache null
+                            if(sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}!=sourceDigest)return@optionalCache null
+                            val key=EncodedExportIdentity.key(initial,sourceDigest,completion.identity,captureMetadata)
+                            storageLock.withLock {
+                                cacheTicket=encodedCache.stage(key,encoded,completion.receipt,reservedBytes.get(),{android.os.StatFs(dir.path).availableBytes}){cacheJob.ensureActive()}
+                            }
+                        }
+                    })
+                currentCoroutineContext().ensureActive()
+                optionalCache {
+                    if(pngCacheStream!=null && pngCompletion!=null && sourceDigest!=null) {
+                        // A complete Kotlin PNG encode proves exact RGB length and finite pixels.
+                        // Revalidate source + runtime after encoding before installing the tee.
+                        if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)==pngCompletion!!.identity &&
+                            sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}==sourceDigest)
+                            cacheTicket=pngCacheStream?.finish{cacheJob.ensureActive()}
+                    }
+                    cacheTicket?.commit{cacheJob.ensureActive()}
+                }
+                }
             }
             store.get(id)?.mediaUri?.let { uri->runCatching{saveFinalThumbnail(uri,dir)} }
             update{it.copy(progress=ExportDisplayProgress(8))}
@@ -286,7 +394,8 @@ class ExportQueue internal constructor(private val context:Context,private val p
             val clean=cleanup(id)
             update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
         } catch(c:CancellationException) {
-            ScanPreviewStore.clear(dir)
+            negativeDiagnostics?.cancel()
+            ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id)
             withContext(NonCancellable+Dispatchers.IO) {
                 val current=store.get(id)!!
                 val committed=current.mediaUri?.let{runCatching{repository.committedExport(it,current.outputWidth,current.outputHeight,current.format)}.getOrNull()}
@@ -295,14 +404,16 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 else update{it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3df4e91da12d),messageUi=UiMessage.of(R.string.text_3df4e91da12d))}
             }
             throw c
-        } catch(t:Exception) {ScanPreviewStore.clear(dir);update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
+        } catch(t:Exception) {negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=if((t as? EngineException)?.failure==EngineFailure.STORAGE)ExportJobState.PAUSED else ExportJobState.FAILED,failure=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)ExportJobFailure.RECOVERY_INVALID else ExportJobFailure.NONE,message=if((t as? EngineException)?.failure==EngineFailure.INCOMPLETE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_801eccbf436d)else if((t as? EngineException)?.failure==EngineFailure.STORAGE)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a3290bb56b7f)else (t as? EngineException)?.message ?: (t as? PhotoException)?.message ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c42a34760d85),messageUi=when((t as? EngineException)?.failure){
             EngineFailure.INCOMPLETE->UiMessage.of(R.string.text_801eccbf436d)
             EngineFailure.STORAGE->UiMessage.of(R.string.text_a3290bb56b7f)
             else->(t as? EngineException)?.uiMessage ?: (t as? PhotoException)?.uiMessage ?: UiMessage.of(R.string.text_c42a34760d85)
         })}}
-        catch(t:OutOfMemoryError){ScanPreviewStore.clear(dir);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
-        finally {reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete()}}
+        catch(t:OutOfMemoryError){negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
+        finally {negativeDiagnostics?.jobTerminal();reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete();reusedPayload?.delete();cacheTicket?.close();pngCacheStream?.close()}}
     }
+    /** Cache IO/identity/optional ABI failures cannot turn a valid cold export into a failure. */
+    private suspend fun <T> optionalCache(work:suspend ()->T?):T? = try {work()}catch(c:CancellationException){throw c}catch(_:Exception){null}catch(_:LinkageError){null}catch(_:OutOfMemoryError){null}
     private fun saveFinalThumbnail(uri:String,dir:File) {
         val bitmap=android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver,android.net.Uri.parse(uri))) {decoder,info,_->
             val scale=minOf(1.0,240.0/maxOf(info.size.width,info.size.height))
@@ -313,8 +424,9 @@ class ExportQueue internal constructor(private val context:Context,private val p
         try {FileOutputStream(File(dir,"final-preview.jpg")).use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,88,it));it.fd.sync()}}finally{bitmap.recycle()}
     }
     private fun cleanup(id:String):Boolean {
+        if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)
         val dir=store.directory(id)
-        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg")}
+        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !NegativePreviewStore.retain(dir,it)}
             ?.map{if(it.isDirectory)it.deleteRecursively()else it.delete()}?.all{it} ?: false
     }
     class IntakeLease internal constructor(val generation:Long,private val release:()->Unit):java.io.Closeable {

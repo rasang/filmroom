@@ -13,7 +13,7 @@ class ExportWorkAdmissionsTest {
         val admission=ExportWorkAdmission();val limiter=NativeWorkLimiter()
         val entered=CompletableDeferred<Unit>();val release=CompletableDeferred<Unit>()
         val first=launch { admission.run { limiter.run(128*mib,::ample){entered.complete(Unit);release.await()} } }
-        entered.await();assertEquals(1,limiter.activeCount())
+        entered.await();assertTrue(admission.active.value);assertEquals(1,limiter.activeCount())
         val secondRequested=CompletableDeferred<Unit>();val secondEntered=AtomicBoolean(false)
         val second=launch(start=CoroutineStart.UNDISPATCHED){secondRequested.complete(Unit);admission.run {limiter.run(128*mib,::ample){secondEntered.set(true)}}}
         secondRequested.await();assertFalse(secondEntered.get());assertEquals(1,limiter.activeCount())
@@ -22,15 +22,15 @@ class ExportWorkAdmissionsTest {
         withTimeout(2000){previewEntered.await()};assertEquals(2,limiter.activeCount())
         second.cancelAndJoin();assertFalse(secondEntered.get());assertEquals(2,limiter.activeCount())
         previewRelease.complete(Unit);preview.join();release.complete(Unit);first.join()
-        assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
+        assertFalse(admission.active.value);assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
         assertEquals(7,admission.run {limiter.run(128*mib,::ample){7}})
     }
     @Test fun ownerExceptionAndCancellationReleaseBothAdmissions()=runBlocking {
         val admission=ExportWorkAdmission();val limiter=NativeWorkLimiter()
         try {admission.run {limiter.run(128*mib,::ample){throw IllegalStateException("test")}};fail()}catch(_:IllegalStateException){}
-        assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
+        assertFalse(admission.active.value);assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
         val entered=CompletableDeferred<Unit>();val owner=launch {admission.run {limiter.run(128*mib,::ample){entered.complete(Unit);awaitCancellation()}}}
-        entered.await();owner.cancelAndJoin();assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
+        entered.await();owner.cancelAndJoin();assertFalse(admission.active.value);assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
         assertEquals(9,admission.run {limiter.run(128*mib,::ample){9}})
     }
 }

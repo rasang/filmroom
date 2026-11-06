@@ -32,10 +32,10 @@ class HeicRepositoryHostTest {
     private fun fixture(name:String="corners-sdr8.heic")=listOf(File("src/androidTest/assets/heic/$name"),File("app/src/androidTest/assets/heic/$name")).first{it.isFile}.readBytes()
     private class Backend:HeicBackend {
         var calls=0;var closed=false;var fail=false
-        var seenFile:File?=null;var seenBytes:ByteArray?=null
+        var seenFile:File?=null;var seenBytes:ByteArray?=null;var seenInfo:HeicContainer.Info?=null
         override fun supported()=true
         override fun decode(file:File,info:HeicContainer.Info,job:CoroutineContext):HeicPixels {
-            calls++;seenFile=file;seenBytes=file.readBytes()
+            calls++;seenFile=file;seenBytes=file.readBytes();seenInfo=info
             return object:HeicPixels{
                 override val width=info.displayWidth;override val height=info.displayHeight
                 override fun readRow(y:Int,argb:IntArray){if(fail)throw IOException("injected failure");for(x in argb.indices)argb[x]=0xff000000.toInt() or ((x*2) shl 16) or (y*3)}
@@ -182,6 +182,48 @@ class HeicRepositoryHostTest {
         try {repo.import(uri);fail("Injected pixel failure")}catch(_:PhotoException){}
         assertEquals(1,backend.calls);assertTrue(backend.closed);assertFalse(checkNotNull(backend.seenFile).exists())
         assertTrue(File(app.cacheDir,"photo-sources").listFiles()!!.none{it.name.startsWith("heic-primary-")})
+    }
+
+    /** Production import lifecycle with explicitly substituted pixels, not an Android HEVC test. */
+    @Test fun appleGainmapImportPassesRotatedAuxFreeViewAndRestoresRetainedSpool()=runBlocking {
+        val bytes=HeicPrimaryInputTest().appleSample(grid=true,method=1)
+        val backend=Backend();val(repo,uri)=setup(backend,bytes);val photo=repo.import(uri,48)
+        try {
+            assertEquals("image/heif",photo.source.mimeType)
+            assertEquals(64,photo.source.originalWidth);assertEquals(192,photo.source.originalHeight)
+            assertEquals(16,photo.preview.width);assertEquals(48,photo.preview.height)
+            assertArrayEquals("Retain the original gainmap-bearing file",bytes,photo.source.localFile.readBytes())
+            val info=checkNotNull(backend.seenInfo)
+            assertEquals(90,info.rotationDegreesClockwise)
+            assertEquals(192,info.encodedWidth);assertEquals(64,info.encodedHeight)
+            val view=checkNotNull(backend.seenFile);assertNotEquals(photo.source.localFile,view)
+            assertTrue(view.name.startsWith("heic-primary-"));assertFalse("Temporary view must be closed after decode",view.exists())
+            val viewText=checkNotNull(backend.seenBytes).toString(Charsets.ISO_8859_1)
+            assertFalse(viewText.contains("auxC"));assertFalse(viewText.contains("auxl"))
+            assertFalse(viewText.contains("hdrgainmap"));assertTrue(viewText.contains("irot"))
+            val spool=checkNotNull(photo.source.linearFile)
+            assertEquals(64L*192*12,spool.length());val originalSpool=spool.readBytes()
+            val restored=repo.reopen(photo.source.cacheKey,previewMaxEdge=48,rawCacheKey=photo.source.rawCacheKey)
+            try {
+                assertEquals("Restore must not decode an original or view again",1,backend.calls)
+                assertTrue(photo.preview.sameAs(restored.preview))
+                assertArrayEquals(originalSpool,checkNotNull(restored.source.linearFile).readBytes())
+                assertEquals(photo.source.developmentWarning,restored.source.developmentWarning)
+            }finally{restored.preview.recycle()}
+            assertArrayEquals(bytes,photo.source.localFile.readBytes())
+            assertTrue(photo.source.localFile.parentFile!!.listFiles()!!.none{it.name.startsWith("heic-primary-")})
+            assertTrue(backend.closed)
+        }finally{photo.preview.recycle();repo.discard(photo.source)}
+    }
+    @Test fun failedAppleGainmapSubstituteDecodeRemovesViewOriginalAndPartialSpool()=runBlocking {
+        val dir=File(app.cacheDir,"photo-sources");val before=dir.listFiles().orEmpty().map{it.name}.toSet()
+        val backend=Backend().apply{fail=true}
+        val(repo,uri)=setup(backend,HeicPrimaryInputTest().appleSample())
+        try{repo.import(uri);fail("Injected substitute pixel failure")}catch(_:PhotoException){}
+        assertEquals(1,backend.calls);assertTrue(backend.closed)
+        assertFalse(checkNotNull(backend.seenFile).exists())
+        assertFalse(checkNotNull(backend.seenBytes).toString(Charsets.ISO_8859_1).contains("auxl"))
+        assertEquals("No copied original, temporary view or partial spool leaks",before,dir.listFiles().orEmpty().map{it.name}.toSet())
     }
 
 }

@@ -167,7 +167,7 @@ internal object HeicPrimaryInput {
                         val at = if (method == 1) sum(idat?.body ?: invalid(), relative) else relative
                         val boundary = if (method == 1) idat!! else mdats.singleOrNull { at >= it.body && at < it.end } ?: invalid()
                         if (at < boundary.body || at > boundary.end || size > boundary.end - at) invalid()
-                        totalBytes = sum(totalBytes, size); if (totalBytes > PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+                        totalBytes = sum(totalBytes, size); if (totalBytes > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
                         extents.add(Extent(at, size))
                     }
                 }
@@ -180,7 +180,8 @@ internal object HeicPrimaryInput {
 
         fun plan(original: File): Prepared {
             val directory = original.parentFile ?: original.absoluteFile.parentFile ?: invalid()
-            if (length !in 1..PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+            if (length <= 0) invalid()
+            if (length > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
             val top = boxes(0, length)
             if (top.any { it.type in setOf("moov", "moof") }) unsupported()
             val ftyp = one(top, "ftyp"); input.seek(ftyp.body)
@@ -203,12 +204,39 @@ internal object HeicPrimaryInput {
             val refBoxes = parts.filter { it.type == "iref" }; if (refBoxes.size > 1) invalid()
             val refs = refs(refBoxes.singleOrNull())
             if (refs.any { it.from !in items || it.to.any { to -> to !in items } }) invalid()
-            // Explicit tmap relationship: primary is the base input, not the gain map or HDR output.
+            val iprp = one(parts, "iprp"); val iparts = boxes(iprp.body, iprp.end)
+            val ipco = one(iparts, "ipco"); val props = boxes(ipco.body, ipco.end)
+            if (props.size > HeicContainer.MAX_PROPERTIES) limit()
+            val associations = links(one(iparts, "ipma"), props.size)
+            if (associations.keys.any { it !in items }) invalid()
             val toneMaps = items.values.filter { it.type == "tmap" }
-            if (toneMaps.size != 1) unsupported()
-            val tmapRefs = refs.filter { it.from == toneMaps.single().id && it.type == "dimg" }
-            val inputs = tmapRefs.singleOrNull()?.to ?: unsupported()
-            if (inputs.size != 2 || inputs[0] != primary || inputs[1] == primary || items[inputs[1]]?.type !in setOf("hvc1", "grid")) unsupported()
+            // A separate, narrowly declared legacy gain map is not an alpha/depth channel.
+            // Its presence never proves SDR: the selected image still passes the shared
+            // strict color/depth/geometry reader below, before any platform decode.
+            val legacyGainmap = if (toneMaps.isEmpty()) {
+                if (items.values.any { it.type !in setOf("hvc1", "grid", "Exif", "mime") }) unsupported()
+                val aux = refs.filter { it.type == "auxl" }.singleOrNull() ?: unsupported()
+                if (aux.to != listOf(primary) || aux.from == primary) unsupported()
+                val gain = items.getValue(aux.from)
+                if (gain.type != "hvc1" || !gain.hidden) unsupported()
+                val gainProps = associations[gain.id].orEmpty().map { props[it.property - 1] }
+                val declaration = gainProps.filter { it.type == "auxC" }.singleOrNull() ?: unsupported()
+                if (header(declaration) != (0 to 0)) unsupported()
+                val expected = "urn:com:apple:photo:2020:aux:hdrgainmap\u0000".toByteArray(Charsets.US_ASCII)
+                if (declaration.end - input.filePointer != expected.size.toLong()) unsupported()
+                val actual = ByteArray(expected.size); input.readFully(actual)
+                if (!actual.contentEquals(expected)) unsupported()
+                if (refs.any { it.from == gain.id && it != aux }) unsupported()
+                aux
+            } else null
+            val gainmapId = if (legacyGainmap != null) legacyGainmap.from else {
+                // Standard tmap: primary is explicitly the first (base) input.
+                if (toneMaps.size != 1) unsupported()
+                val tmapRefs = refs.filter { it.from == toneMaps.single().id && it.type == "dimg" }
+                val inputs = tmapRefs.singleOrNull()?.to ?: unsupported()
+                if (inputs.size != 2 || inputs[0] != primary || inputs[1] == primary || items[inputs[1]]?.type !in setOf("hvc1", "grid")) unsupported()
+                inputs[1]
+            }
             val primaryRefs = refs.filter { it.from == primary && it.type == "dimg" }
             val tiles = if (base.type == "grid") primaryRefs.singleOrNull()?.to ?: invalid() else {
                 if (primaryRefs.isNotEmpty()) unsupported(); emptyList()
@@ -216,18 +244,15 @@ internal object HeicPrimaryInput {
             if (base.type == "grid" && (tiles.isEmpty() || tiles.distinct().size != tiles.size)) invalid()
             if (tiles.any { it == primary || items[it]?.type != "hvc1" }) unsupported()
             val selected = (listOf(primary) + tiles).toSet()
-            if (inputs[1] in selected) unsupported()
+            if (gainmapId in selected) unsupported()
             // Do not discard alpha, mirroring, dependency, or an unknown essential reference.
             for (ref in refs) if (ref.from in selected) {
                 if (ref.type == "dimg") { if (ref.from != primary || base.type != "grid") unsupported() }
                 else if (ref.type !in setOf("cdsc", "thmb")) unsupported()
             }
-            if (refs.any { it.type !in setOf("dimg", "cdsc", "thmb") && it.to.any { to -> to in selected } }) unsupported()
-            val iprp = one(parts, "iprp"); val iparts = boxes(iprp.body, iprp.end)
-            val ipco = one(iparts, "ipco"); val props = boxes(ipco.body, ipco.end)
-            if (props.size > HeicContainer.MAX_PROPERTIES) limit()
-            val associations = links(one(iparts, "ipma"), props.size)
-            if (associations.keys.any { it !in items }) invalid()
+            if (refs.any { it != legacyGainmap && it.type !in setOf("dimg", "cdsc", "thmb") && it.to.any { to -> to in selected } }) unsupported()
+            // The legacy branch has no derived HDR graph to justify incoming dimg edges.
+            if (legacyGainmap != null && refs.any { it.type == "dimg" && it.from !in selected && it.to.any { to -> to in selected } }) unsupported()
             val indices = selected.flatMap { associations[it].orEmpty().map(Link::property) }.distinct().sorted()
             val remap = indices.withIndex().associate { it.value to it.index + 1 }
             val selectedProps = indices.map { props[it - 1] }
@@ -262,7 +287,7 @@ internal object HeicPrimaryInput {
             val firstMeta = outputMeta(0); val payloadStart = outputFtyp.size.toLong() + firstMeta.size + 8
             val outMeta = outputMeta(payloadStart); check(firstMeta.size == outMeta.size)
             val payloadSize = sizes.values.sum(); val outputSize = payloadStart + payloadSize
-            if (outputSize > PhotoLimits.MAX_COMPRESSED_BYTES) limit()
+            if (outputSize > PhotoLimits.MAX_COMPRESSED_BYTES) HeicContainer.sizeLimit(dev.filmroom.R.string.text_2673ef9ba447)
             // Validate the selected graph/profile in memory. Restoring a retained linear spool
             // must not write a new encoded file or require free disk space.
             val skeleton = outputFtyp + outMeta + box("mdat", byteArrayOf())
@@ -307,7 +332,7 @@ internal object HeicPrimaryInput {
                 val property = links[id].orEmpty().map { props[it.property - 1] }.filter { it.type == "ispe" }.singleOrNull() ?: invalid()
                 if (header(property) != (0 to 0)) unsupported()
                 val w = u32(property.end); val h = u32(property.end); end(property.end)
-                if (w > Int.MAX_VALUE || h > Int.MAX_VALUE || !PhotoLimits.validSource(w.toInt(), h.toInt())) limit()
+                HeicContainer.validateSourceSize(w, h)
                 return w to h
             }
             if (shape(primary) != (width to height)) invalid()

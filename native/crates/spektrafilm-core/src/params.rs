@@ -76,6 +76,10 @@ pub struct CameraParams {
     pub exposure_compensation_ev: f32,
     #[serde(default = "default_true")]
     pub auto_exposure: bool,
+    /// Validated full-photo preview AE. None preserves original/export measurement.
+    /// Separate from user compensation because print calibration depends on that value.
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    pub preview_metered_ev: Option<f32>,
     #[serde(default = "default_center_weighted")]
     pub auto_exposure_method: String,
     #[serde(default)]
@@ -96,6 +100,7 @@ impl Default for CameraParams {
             pixel_size_um_override: None,
             exposure_compensation_ev: 0.0,
             auto_exposure: true,
+            preview_metered_ev: None,
             auto_exposure_method: "center_weighted".into(),
             lens_blur_um: 0.0,
             film_format_mm: 35.0,

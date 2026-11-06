@@ -45,6 +45,12 @@ pub struct Identity {
     profiles: String,
 }
 impl Identity {
+    /// Reuse the CURRENT export's freshly verified content/data hashes, never
+    /// historical path/mtime stamps. Only dependency configuration is replaced.
+    pub(crate) fn with_configuration(&self, configuration:String)->io::Result<Self> {
+        if configuration.len()>64*1024 {return Err(invalid());}
+        let mut identity=self.clone();identity.configuration=configuration;Ok(identity)
+    }
     pub fn new(
         data: &Path,
         input: &Path,
@@ -356,14 +362,14 @@ pub fn hash_file(path: &Path, c: &mut impl FnMut() -> bool) -> io::Result<String
 }
 // SHA-256 (FIPS 180-4), incremental and bounded. Used for corruption/configuration
 // integrity, not authenticity: app-private files remain the trust boundary.
-struct Sha256 {
+pub(crate) struct Sha256 {
     state: [u32; 8],
     block: [u8; 64],
     used: usize,
     len: u64,
 }
 impl Sha256 {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             state: [
                 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
@@ -374,7 +380,7 @@ impl Sha256 {
             len: 0,
         }
     }
-    fn update(&mut self, mut bytes: &[u8]) {
+    pub(crate) fn update(&mut self, mut bytes: &[u8]) {
         self.len += bytes.len() as u64;
         while !bytes.is_empty() {
             let n = (64 - self.used).min(bytes.len());
@@ -439,7 +445,7 @@ impl Sha256 {
             *s = s.wrapping_add(v);
         }
     }
-    fn finish(mut self) -> String {
+    pub(crate) fn finish(mut self) -> String {
         let bits = self.len * 8;
         self.update(&[0x80]);
         while self.used != 56 {

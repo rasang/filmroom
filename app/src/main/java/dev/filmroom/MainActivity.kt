@@ -115,6 +115,7 @@ class MainActivity:ComponentActivity() {
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         compositionReturnTool=savedInstanceState?.getString("compositionReturnTool");compositionReturnGroup=savedInstanceState?.getString("compositionReturnGroup")
         group=savedInstanceState?.getString("group") ?: "film";selected=savedInstanceState?.getString("selected") ?: "brightness"
+        pendingImprintDraft=savedInstanceState?.getBundle("imprintDraft");pendingImprintSource=savedInstanceState?.getString("imprintSource")
         restoredViewer=savedInstanceState?.getFloatArray("viewerNormalized");restoredZoom=savedInstanceState?.getFloatArray("zoom");restoredSource=savedInstanceState?.getString("zoomSource")
         lastToastAttempt=savedInstanceState?.getLong("lastToastAttempt") ?: 0
         lastToastMessage=savedInstanceState?.getString("lastToastMessage");lastEngineNotice=savedInstanceState?.getString("lastEngineNotice")
@@ -150,11 +151,11 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true)}
-    override fun onResume(){super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
-    override fun onPause(){if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
-    override fun onDestroy(){exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
+    override fun onPause(){model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
+    override fun onDestroy(){imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
         recoveryDialog?.dismiss();recoveryDialog=null
@@ -166,6 +167,7 @@ class MainActivity:ComponentActivity() {
         super.onStop()
     }
     override fun onSaveInstanceState(outState:Bundle){
+        imprintDialog?.takeIf{it.isShowing}?.let{outState.putBundle("imprintDraft",dev.filmroom.imprint.ImprintDialog.capture(it));outState.putString("imprintSource",imprintDialogSource)}
         exportBackgroundGuidance.save(outState)
         languageDialog?.takeIf{it.isShowing}?.let { outState.putInt("languageDraft",it.listView.checkedItemPosition) }
         photo.finishCompositionGesture();outState.putFloatArray("viewerNormalized",photo.viewerState())
@@ -284,7 +286,7 @@ class MainActivity:ComponentActivity() {
         root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
         val imageColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         body.addView(imageColumn,if(body.orientation==LinearLayout.HORIZONTAL)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,0,1f))
-        val frame=FrameLayout(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
+        val frame=dev.filmroom.ui.PhotoPreviewFrame(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
         photo=PhotoView(this);model.detailInvalidator=invalidateDetail;if(model.localDetailEnabled)photo.configureDetail(model.detailProviderFactory());frame.addView(photo,FrameLayout.LayoutParams(-1,-1))
         welcome=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12),dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12))}
         welcome.addView(ImageView(this).apply{setImageResource(R.drawable.welcome_cplift)},LinearLayout.LayoutParams(dp(if(wideLayout)40 else 76),dp(if(wideLayout)40 else 76)))
@@ -325,6 +327,7 @@ class MainActivity:ComponentActivity() {
         }.apply{tag="composition";contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08)}
         infoButton=iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c3154414c11),R.drawable.ic_info){photoInfo()}
         frame.addView(infoButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.START).apply{leftMargin=dp(12);bottomMargin=dp(8)})
+        frame.avoidControls(photo,infoButton,compare)
         val toolColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(surface);setPadding(dp(12),dp(8),dp(12),dp(8))}
         body.addView(toolColumn,if(wideLayout)LinearLayout.LayoutParams(dp((resources.configuration.screenWidthDp*0.45f).roundToInt().coerceAtLeast(240)),-1)else LinearLayout.LayoutParams(-1,-2))
         // The current tool is measured at its natural height: never a vertically scrolling slot.
@@ -345,7 +348,7 @@ class MainActivity:ComponentActivity() {
         if(!::detailLoading.isInitialized)return
         val state=model.state.value
         val key=state.photo?.cacheKey?.takeIf{it==shownSource}
-        val scienceReady=state.renderedParameters?.copy(filmBorder=state.parameters.filmBorder,negativeWhiteHoles=state.parameters.negativeWhiteHoles,composition=state.parameters.composition,crop=state.parameters.crop,mediumFormat=state.parameters.mediumFormat,mediumPortrait=state.parameters.mediumPortrait)==state.parameters
+        val scienceReady=state.renderedParameters?.copy(imprint=state.parameters.imprint,filmBorder=state.parameters.filmBorder,negativeWhiteHoles=state.parameters.negativeWhiteHoles,composition=state.parameters.composition,crop=state.parameters.crop,mediumFormat=state.parameters.mediumFormat,mediumPortrait=state.parameters.mediumPortrait)==state.parameters
         val presentationChanged=state.renderedParameters?.let{it.filmBorder!=state.parameters.filmBorder || it.negativeWhiteHoles!=state.parameters.negativeWhiteHoles || it.composition!=state.parameters.composition || it.crop!=state.parameters.crop || it.mediumFormat!=state.parameters.mediumFormat || it.mediumPortrait!=state.parameters.mediumPortrait}==true
         val compositionOnly=state.compositionSource!=null && scienceReady && (state.compositionEditing || presentationChanged)
         val eligible=model.localDetailEnabled && state.startupReady && state.busy==null && !state.exporting && ((!state.updating && !state.previewRefining) || compositionOnly) && !state.compare && state.rendered!=null && scienceReady
@@ -358,16 +361,24 @@ class MainActivity:ComponentActivity() {
         if(s.exporting)window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val hasPhoto=s.photo!=null
         val sourceChanged=hasPhoto && shownSource!=s.photo?.cacheKey
+        if(sourceChanged && shownSource!=null){imprintDialog?.dismiss();imprintDialog=null}
         shownSource=s.photo?.cacheKey
         welcomeScroll.visibility=if(hasPhoto)View.GONE else View.VISIBLE
-        badge.visibility=if(hasPhoto)View.VISIBLE else View.GONE
+        // Normal film preview is intentionally unobstructed. Keep only the original/compare hint.
+        val showSourceBadge=hasPhoto && (s.compare || s.rendered==null)
+        badge.visibility=if(showSourceBadge)View.VISIBLE else View.GONE
+        badge.importantForAccessibility=if(showSourceBadge)View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_NO
         val shown=if(s.compare)s.original else s.rendered ?: s.original
         if(lastBitmap!==shown){
+            photo.onNextPreviewDraw=null
+            if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let { diagnostic ->
+                photo.onNextPreviewDraw={drawn->if(drawn===shown)diagnostic.timing?.nextDraw(diagnostic)}
+            }
             photo.bitmap=shown;lastBitmap=shown
             if(!s.compare && shown!=null && shown===s.rendered)s.renderedDiagnosticContext?.let(model::previewBound)
         }
         if(!model.localDetailEnabled)photo.disableDetail()
-        val scienceReady=s.renderedParameters?.copy(filmBorder=s.parameters.filmBorder,negativeWhiteHoles=s.parameters.negativeWhiteHoles,composition=s.parameters.composition,crop=s.parameters.crop,mediumFormat=s.parameters.mediumFormat,mediumPortrait=s.parameters.mediumPortrait)==s.parameters
+        val scienceReady=s.renderedParameters?.copy(imprint=s.parameters.imprint,filmBorder=s.parameters.filmBorder,negativeWhiteHoles=s.parameters.negativeWhiteHoles,composition=s.parameters.composition,crop=s.parameters.crop,mediumFormat=s.parameters.mediumFormat,mediumPortrait=s.parameters.mediumPortrait)==s.parameters
         val presentationChanged=s.renderedParameters?.let{it.filmBorder!=s.parameters.filmBorder || it.negativeWhiteHoles!=s.parameters.negativeWhiteHoles || it.composition!=s.parameters.composition || it.crop!=s.parameters.crop || it.mediumFormat!=s.parameters.mediumFormat || it.mediumPortrait!=s.parameters.mediumPortrait}==true
         val compositionOnly=s.compositionSource!=null && scienceReady && (s.compositionEditing || presentationChanged)
         // Never enter a new presentation kind through the previous bitmap's gesture adapter.
@@ -379,8 +390,14 @@ class MainActivity:ComponentActivity() {
             s.compositionEditing && presentationReady && !s.compare,interactiveBorder=s.interactiveBorder){transform,commit->model.composition(transform,commit)}
         else photo.bindCrop(if(s.compare)null else s.cropPresentation,s.compositionSource,s.parameters.crop,
             s.compositionEditing && presentationReady && !s.compare){transform,commit->model.composition(transform,commit)}
+        pendingImprintDraft?.takeIf{s.editable}?.let{draft->
+            pendingImprintDraft=null
+            if(pendingImprintSource==s.photo?.cacheKey)showImprintDialog(draft)
+            pendingImprintSource=null
+        }
+        bindImprintPreview(s)
         updateDetailStatus(photo.detailStatus)
-        badge.text=when{ s.compare->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1b0acbdaf172);s.rendered!=null->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6d05fcab868f, s.rendered.width, s.rendered.height);else->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c37117eec876) }
+        badge.text=if(s.compare)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1b0acbdaf172)else if(showSourceBadge)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c37117eec876)else ""
         enabled(resetPresetButton,s.editable && !s.compositionEditing)
         enabled(importButton,s.startupReady&&s.busy==null);enabled(exportButton,s.canExport);enabled(undo,s.editable&&s.canUndo);enabled(redo,s.editable&&s.canRedo);enabled(compare,s.rendered!=null&&s.busy==null)
         if(boundCompare!=s.compare){
@@ -406,7 +423,7 @@ class MainActivity:ComponentActivity() {
         // Tool values depend on scientific parameters and border ON/OFF, not the crop or edit mode.
         // Keep existing listeners/views during a gesture; every mutation reads current parameters.
         val toolValues=builtParameters?.let{it.copy(composition=s.parameters.composition,crop=it.crop.copy(transform=s.parameters.crop.transform))}
-        if(!dragging && (toolValues!=s.parameters || builtCompositionEditing!=s.compositionEditing ||
+        if(!dragging && (sourceChanged || toolValues!=s.parameters || builtCompositionEditing!=s.compositionEditing ||
             (s.compositionEditing && builtCompositionAspect!=s.parameters.composition.targetAspect) || tools.tag!=s.editable)){buildTools()}
     }
     private fun showStatus(s:EditorUiState){
@@ -429,7 +446,7 @@ class MainActivity:ComponentActivity() {
     private fun updateExportProgress(s:EditorUiState){
         if(!s.exporting){dismissExportProgress();return}
         if(exportProgressDialog==null){
-            val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(16));background=shape(surface)}
+            val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(16));setBackgroundResource(R.drawable.filmroom_dialog_background)}
             val animation=ProcessingAnimationView(this)
             content.addView(animation,LinearLayout.LayoutParams(-1,dp(148)))
             val progress=text("",18f).apply{gravity=Gravity.CENTER;minLines=2;accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE;setPadding(0,dp(8),0,dp(16))}
@@ -956,7 +973,6 @@ class MainActivity:ComponentActivity() {
             target.addView(carousel,LinearLayout.LayoutParams(-1,-2))
             val infoRow=row()
             val infoScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;tag="border-options-scroll";addView(infoRow)}
-            infoRow.addView(button(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_61ea0b0d9ed0),R.drawable.ic_info){filmInfo()}.apply{background=shape(Color.TRANSPARENT);maxLines=1;setHorizontallyScrolling(false)},LinearLayout.LayoutParams(-2,-2))
             if(dev.filmroom.border.BorderCatalog.PROTOTYPE_ENABLED){
                 infoRow.addView(Switch(this).apply{
                     text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_74b054e27203);contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_369143830b0b);tag="film-border-switch";maxLines=1;setHorizontallyScrolling(false);minHeight=dp(48);isChecked=p.filmBorder
@@ -979,7 +995,44 @@ class MainActivity:ComponentActivity() {
                     }
                 },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             }
+            // Keep imprint settings next to the film-edge controls in every editor layout.
+            infoRow.addView(button(dev.filmroom.imprint.ImprintText.SETTINGS.text(this),R.drawable.ic_time_date_settings){showImprintDialog()}.apply{
+                tag="imprint-settings-button";background=shape(Color.TRANSPARENT)
+                maxLines=1;setHorizontallyScrolling(false);minimumHeight=dp(48)
+                enabled(this,s.editable)
+            },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             target.addView(infoScroll,LinearLayout.LayoutParams(-1,-2))
+    }
+    private val imprintPreviewSession=dev.filmroom.imprint.ImprintPreviewSession()
+    private var imprintDraftPreview:dev.filmroom.imprint.ImprintSettings?=null
+    private fun bindImprintPreview(s:EditorUiState){
+        val draft=imprintDraftPreview?.takeIf{imprintDialogSource==s.photo?.cacheKey && !s.compare}
+        val border=s.presentation
+        val crop=s.cropPresentation
+        val plan=if(draft!=null && s.photo!=null && (border!=null || crop!=null)) {
+            dev.filmroom.imprint.ImprintPlan.create(draft,s.photo.photoMetadata,
+                border?.outputWidth ?: crop!!.outputWidth,border?.outputHeight ?: crop!!.outputHeight,border)
+        }else if(s.compare)null else s.imprintPlan
+        photo.bindImprint(plan,draftPreview=draft!=null)
+    }
+    private var imprintDialog:AlertDialog?=null
+    private var imprintDialogSource:String?=null
+    private var pendingImprintDraft:Bundle?=null
+    private var pendingImprintSource:String?=null
+    private fun showImprintDialog(draft:Bundle?=null){
+        if(imprintDialog?.isShowing==true)return
+        val current=model.state.value;val source=current.photo ?: return
+        if(!current.editable)return
+        finishCompositionForParameterEdit()
+        imprintDialogSource=source.cacheKey
+        val publishPreview=imprintPreviewSession.begin {settings->
+            imprintDraftPreview=if(model.state.value.photo===source)settings else null
+            bindImprintPreview(model.state.value)
+        }
+        imprintDialog=dev.filmroom.imprint.ImprintDialog.show(this,current.parameters,source.photoMetadata,draft,onPreview=publishPreview){settings->
+            val latest=model.state.value
+            if(latest.editable && latest.photo===source)model.parameters(latest.parameters.copy(imprint=settings))
+        }
     }
     private fun formatted(control:Control,value:Float):String=when(control.id){
         "brightness","filmExposure"->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ffd510bae3ad,value)

@@ -27,6 +27,15 @@ data class PhotoHeader(
 /** No filenames, extension/MIME guesses, EXIF values or arbitrary text enter the result. */
 object PhotoHeaders {
     const val MAX_PREFIX_BYTES = 64 * 1024
+    /** Container hints only. Native validates the complete structure and actual RAW encoding. */
+    fun isOlympusRaw(prefix: ByteArray, count: Int = prefix.size): Boolean {
+        val n = count.coerceIn(0, prefix.size)
+        return ascii(prefix, 0, "IIRO", n) || ascii(prefix, 0, "IIRS", n) || ascii(prefix, 0, "MMOR", n)
+    }
+    fun isCanonCr3(prefix: ByteArray, count: Int = prefix.size): Boolean {
+        val n = count.coerceIn(0, prefix.size)
+        return n >= 12 && ascii(prefix, 4, "ftyp", n) && ascii(prefix, 8, "crx ", n)
+    }
     private val pngSignature = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
 
     fun sniff(prefix: ByteArray, count: Int = prefix.size): PhotoHeader {
@@ -72,6 +81,8 @@ object PhotoHeaders {
         if (ascii(prefix, 0, "GIF87a", n) || ascii(prefix, 0, "GIF89a", n))
             return result(PhotoFormat.GIF) // A signature cannot distinguish one frame from many.
         if (n >= 14 && ascii(prefix, 0, "BM", n)) return result(PhotoFormat.BMP)
+        if (isOlympusRaw(prefix, n) || isCanonCr3(prefix, n))
+            return result(PhotoFormat.CAMERA_RAW, identification = Identification.CONTAINER_ONLY)
         if (n >= 4 && ascii(prefix, 0, "II", n) && u8(prefix, 2) == 0x55 && u8(prefix, 3) == 0)
             return result(PhotoFormat.CAMERA_RAW, identification = Identification.CONTAINER_ONLY)
         if (n >= 4 && ((ascii(prefix, 0, "II", n) && u8(prefix, 3) == 0 && u8(prefix, 2) in setOf(42, 43)) ||

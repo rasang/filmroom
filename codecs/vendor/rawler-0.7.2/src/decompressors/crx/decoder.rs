@@ -671,38 +671,9 @@ fn convert_plane_line(codec: &CodecParams, l0: &[i32], l1: &[i32], l2: &[i32], l
   let mut p2 = vec![0; l2.len()];
   let mut p3 = vec![0; l3.len()];
 
-  match codec.enc_type {
-    0 => {
-      let median: i32 = 1 << (codec.median_bits - 1);
-      let max_val: i32 = (1 << codec.median_bits) - 1;
-
-      izip!(l0, l1, l2, l3).enumerate().for_each(|(i, (v0, v1, v2, v3))| {
-        p0[i] = constrain(median + v0, 0, max_val) as u16;
-        p1[i] = constrain(median + v1, 0, max_val) as u16;
-        p2[i] = constrain(median + v2, 0, max_val) as u16;
-        p3[i] = constrain(median + v3, 0, max_val) as u16;
-      });
-    }
-    3 => {
-      let median: i32 = 1 << (codec.median_bits - 1) << 10;
-      let max_val: i32 = (1 << codec.median_bits) - 1;
-
-      izip!(l0, l1, l2, l3).enumerate().for_each(|(i, (v0, v1, v2, v3))| {
-        let mut gr: i32 = median + (v0 << 10) - 168 * v1 - 585 * v3;
-        if gr < 0 {
-          gr = -(((gr.abs() + 512) >> 9) & !1);
-        } else {
-          gr = ((gr.abs() + 512) >> 9) & !1;
-        }
-        p0[i] = constrain((median + (v0 << 10) + 1510 * v3 + 512) >> 10, 0, max_val) as u16;
-        p1[i] = constrain((v2 + gr + 1) >> 1, 0, max_val) as u16;
-        p2[i] = constrain((gr - v2 + 1) >> 1, 0, max_val) as u16;
-        p3[i] = constrain((median + (v0 << 10) + 1927 * v1 + 512) >> 10, 0, max_val) as u16;
-      });
-    }
-    enc_type => {
-      return Err(CrxError::General(format!("Unsupported encoding type {}", enc_type)));
-    }
+  for (i, (&v0, &v1, &v2, &v3)) in izip!(l0, l1, l2, l3).enumerate() {
+    let [a,b,c,d] = super::bounded_math::planes(codec.median_bits as u8, codec.enc_type as u8, [v0,v1,v2,v3]).ok_or_else(|| CrxError::General("Invalid CRX plane conversion".into()))?;
+    p0[i]=a; p1[i]=b; p2[i]=c; p3[i]=d;
   }
 
   Ok((p0, p1, p2, p3))
@@ -754,4 +725,57 @@ fn integrate_cfa(codec: &CodecParams, tiles: &[Tile], cfa_buf: &mut [u16], tile_
     cfa_buf[(row_idx * codec.image_width) + col_idx] = plane_buf[plane_col];
   }
   Ok(())
+}
+
+// Filmroom: sequential wavelet line decode. No full-image plane or CFA allocation.
+impl CodecParams {
+  fn bounded_tiles(&mut self, mdat:&[u8])->Result<Vec<Tile>> {
+    if self.image_width<8 || self.image_height<8 || self.image_width>32768 || self.image_height>32768 || self.image_width.checked_mul(self.image_height).is_none_or(|p|p>52_000_000) || self.image_width%2!=0 || self.image_height%2!=0 || self.tile_width<8 || self.tile_height<8 || self.tile_width>self.image_width || self.tile_height>self.image_height || self.tile_width%2!=0 || self.tile_height%2!=0 || self.tile_cols*self.tile_rows>64 || self.levels>3 || !matches!(self.enc_type,0|3) || !matches!(self.n_bits,12|14|16) || !matches!(self.median_bits,12|14|16) || self.mdat_hdr_size as usize>mdat.len() || self.mdat_hdr_size>256*1024 {
+      return Err(CrxError::Unsupp("Bounded CRX layout".into()));
+    }
+    let mut tiles=parse_header(self.get_header(mdat))?;
+    if tiles.len()!=self.tile_cols*self.tile_rows{return Err(CrxError::General("CRX tile count".into()));}
+    let data=self.get_data(mdat);
+    for (id,tile) in tiles.iter().enumerate(){
+      if tile.id!=id || tile.planes.len()!=4 || tile.data_offset.checked_add(tile.tile_size).is_none_or(|n|n>data.len()) || tile.extra_size()>tile.tile_size{return Err(CrxError::General("CRX tile range".into()));}
+      for (pid,plane) in tile.planes.iter().enumerate(){
+        if plane.id!=pid || plane.subbands.len()!=3*self.levels+1 || plane.data_offset.checked_add(plane.plane_size).is_none_or(|n|n>tile.tile_size-tile.extra_size()){return Err(CrxError::General("CRX plane range".into()));}
+        for (bid,band) in plane.subbands.iter().enumerate(){
+          if band.id!=bid || band.data_size==0 || band.data_offset.checked_add(band.subband_size).is_none_or(|n|n>plane.plane_size) || band.data_size>band.subband_size || band.q_param>255 {return Err(CrxError::General("CRX subband range".into()));}
+        }
+      }
+    }
+    self.process_tiles(&mut tiles);
+    for tile in &tiles{
+      if tile.tile_width%2!=0 || tile.tile_height%2!=0 || tile.plane_width==0 || tile.plane_height==0{return Err(CrxError::General("CRX tile dimensions".into()));}
+      for plane in &tile.planes{for band in &plane.subbands{
+        if band.width==0 || band.height==0 || band.width>tile.plane_width+32 || band.height>tile.plane_height+32 || band.col_start_addon+band.col_end_addon>=band.width || band.row_start_addon+band.row_end_addon>=band.height {return Err(CrxError::General("CRX subband dimensions".into()));}
+      }}
+    }
+    Ok(tiles)
+  }
+  pub(super) fn bounded_validate(mut self,mdat:&[u8])->Result<u64>{self.bounded_tiles(mdat)?;Ok(64*1024*1024)}
+  pub(super) fn decode_segments(mut self,mdat:&[u8],sink:&mut dyn FnMut(usize,usize,&[u16])->crate::Result<()>,cancel:&dyn Fn()->bool)->Result<()>{
+    let mut tiles=self.bounded_tiles(mdat)?;
+    for tile in &mut tiles{
+      if cancel(){return Err(CrxError::General("Decode cancelled".into()));}
+      tile.generate_qstep_table_cancel(&self,self.get_data(mdat),cancel)?;
+      let mut p0=PlaneLineIter::new(self,tile,&tile.planes[0],mdat)?;
+      let mut p1=PlaneLineIter::new(self,tile,&tile.planes[1],mdat)?;
+      let mut p2=PlaneLineIter::new(self,tile,&tile.planes[2],mdat)?;
+      let mut p3=PlaneLineIter::new(self,tile,&tile.planes[3],mdat)?;
+      let x=(tile.id%self.tile_cols)*self.tile_width;
+      let y=(tile.id/self.tile_cols)*self.tile_height;
+      let mut even=vec![0u16;tile.tile_width];let mut odd=vec![0u16;tile.tile_width];
+      for row in 0..tile.plane_height{
+        if cancel(){return Err(CrxError::General("Decode cancelled".into()));}
+        let (c0,c1,c2,c3)=convert_plane_line(&self,p0.decode_plane_line()?,p1.decode_plane_line()?,p2.decode_plane_line()?,p3.decode_plane_line()?)?;
+        for col in 0..tile.plane_width{even[col*2]=c0[col];even[col*2+1]=c1[col];odd[col*2]=c2[col];odd[col*2+1]=c3[col];}
+        sink(x,y+row*2,&even).map_err(|_|CrxError::General("Sensor sink failed".into()))?;
+        sink(x,y+row*2+1,&odd).map_err(|_|CrxError::General("Sensor sink failed".into()))?;
+      }
+      drop(p0);drop(p1);drop(p2);drop(p3);tile.q_step=None;
+    }
+    Ok(())
+  }
 }

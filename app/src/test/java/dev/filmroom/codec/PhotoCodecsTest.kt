@@ -15,6 +15,22 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[35],manifest=Config.NONE)
 class PhotoCodecsTest {
+    @Test fun sizeCodesKeepSafeSpecificMessagesAndImportReason()=runBlocking {
+        val root=kotlin.io.path.createTempDirectory("codec-size-test").toFile()
+        try {
+            for((code,key) in mapOf("PIXEL_LIMIT" to "text_5c55db3ba035","EDGE_LIMIT" to "image_edge_limit_32768")) {
+                val api=Fake("{\"ok\":false,\"error\":{\"code\":\"$code\",\"stage\":\"probe\"}}")
+                try { PhotoCodecs(root,api,memorySnapshot={dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}).probe(File(root,"private"));fail() }
+                catch(e:dev.filmroom.io.PhotoException) {
+                    assertEquals(dev.filmroom.io.PhotoException.Reason.TOO_LARGE,e.reason)
+                    assertEquals(key,e.uiMessage?.key)
+                    assertEquals(code,e.codecCode?.name)
+                    assertFalse(e.message!!.contains("private"))
+                }
+            }
+        } finally {root.deleteRecursively()}
+    }
+
     private class Fake(var errorResponse:String="{\"ok\":false,\"code\":\"UNSUPPORTED_COMPRESSION\"}"):CodecNativeApi {
         override val available=true
         val entered=CountDownLatch(1);val release=CountDownLatch(1)

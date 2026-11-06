@@ -46,7 +46,7 @@ internal object MediumStripProvider {
         checkActive()
         return if(physical.stock==snapshot.stock)physical else Alias(snapshot.stock,physical)
     }
-    private class Alias(override val stock:String,private val physical:MediumStripRaster):BorderRaster by physical {
+    internal class Alias(override val stock:String,internal val physical:MediumStripRaster):BorderRaster by physical {
         override fun validate(snapshot:BorderSnapshot){require(snapshot.stock==stock);physical.validate(snapshot)}
     }
     internal fun decode(definition:MediumStripDefinitions.Definition,open:()->InputStream,checkActive:()->Unit):MediumStripRaster {

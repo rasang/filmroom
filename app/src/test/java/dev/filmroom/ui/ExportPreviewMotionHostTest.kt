@@ -37,6 +37,24 @@ class ExportPreviewMotionHostTest {
         v.show(bitmap(Color.GREEN),"final");assertEquals(3,v.transitionCount)
         v.setBreathing(false);frame(v,1f);assertEquals(Color.BLUE,frame(v,1f).getPixel(100,100));v.release()
     }
+    @Test fun fadesFitInside500MillisecondsAndRespectRecoveredRemainder() {
+        val v=view();v.show(bitmap(Color.WHITE),"contour",true)
+        assertEquals(250L,(field(v,"fade") as ValueAnimator).duration)
+        assertTrue((field(v,"fade") as ValueAnimator).duration<ExportPreviewSequence.MIN_STAGE_MS)
+        frame(v,1f);v.show(bitmap(Color.RED),"negative",maxFadeMs=120L)
+        assertEquals(120L,(field(v,"fade") as ValueAnimator).duration)
+        frame(v,1f);v.show(bitmap(Color.BLUE),"positive",maxFadeMs=0L)
+        assertNull(field(v,"fade"));assertFalse(v.animating)
+        assertEquals(Color.BLUE,frame(v,0f).getPixel(100,100));v.release()
+    }
+    @Test fun backgroundNeverReplaysAnInterruptedFadeAfterTimeHasCounted() {
+        val v=view();v.show(bitmap(Color.WHITE),"contour",true)
+        frame(v,.2f);v.setForeground(false)
+        assertFalse(v.animating);assertNull(field(v,"fade"))
+        v.setForeground(true)
+        assertFalse(v.animating);assertEquals(1,v.transitionCount)
+        assertEquals(Color.WHITE,frame(v,0f).getPixel(100,100));v.release()
+    }
     @Test fun breathingPeakTransitionsWithoutFirstFrameDiscontinuity() {
         val v=view();v.show(bitmap(Color.rgb(50,50,50)),"outline");v.setBreathing(true)
         (field(v,"breathing") as ValueAnimator).setCurrentFraction(1f)

@@ -15,7 +15,7 @@ use spektrafilm_math::spectral::{self, N_WAVELENGTHS, TcLut};
 #[allow(unused_imports)]
 use blas_src as _;
 
-fn dgemm_no_transpose(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k: usize) {
+fn dgemm_no_transpose(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k: usize, checkpoint: &mut dyn FnMut() -> bool) -> Result<(), String> {
     assert_eq!(a.len(), m * k, "dgemm_no_transpose: a.len() != m*k");
     assert_eq!(b.len(), k * n, "dgemm_no_transpose: b.len() != k*n");
     assert_eq!(c.len(), m * n, "dgemm_no_transpose: c.len() != m*n");
@@ -43,6 +43,7 @@ fn dgemm_no_transpose(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k
     #[cfg(not(any()))]
     {
         for row in 0..m {
+            if row % 64 == 0 && !checkpoint() { return Err("Spectral preparation cancelled".into()); }
             for col in 0..n {
                 let mut sum = 0.0f64;
                 for kk in 0..k {
@@ -52,6 +53,7 @@ fn dgemm_no_transpose(a: &[f64], b: &[f64], c: &mut [f64], m: usize, n: usize, k
             }
         }
     }
+    Ok(())
 }
 
 /// Load the spectra LUT from the .npy file.
@@ -151,6 +153,10 @@ impl SpectraLut {
 /// normalized so that the reference illuminant midgray produces balanced
 /// exposure on the green channel (matching Python's `raw / raw_midgray[1]`).
 pub fn compute_tc_lut(spectra_lut: &SpectraLut, sensitivity: &[[f64; 3]]) -> TcLut {
+    compute_tc_lut_controlled(spectra_lut, sensitivity, &mut || true).expect("unconditional spectral preparation")
+}
+
+pub fn compute_tc_lut_controlled(spectra_lut: &SpectraLut, sensitivity: &[[f64; 3]], checkpoint: &mut dyn FnMut() -> bool) -> Result<TcLut, String> {
     let size = spectra_lut.size;
     let n_wl = spectra_lut.n_wavelengths.min(sensitivity.len());
     let channels = 3;
@@ -158,6 +164,7 @@ pub fn compute_tc_lut(spectra_lut: &SpectraLut, sensitivity: &[[f64; 3]]) -> TcL
     let mut data = vec![0.0f64; size * size * channels];
 
     for i in 0..size {
+        if !checkpoint() { return Err("Spectral preparation cancelled".into()); }
         for j in 0..size {
             let spectrum = spectra_lut.spectrum(i, j);
             let mut raw = [0.0f64; 3];
@@ -173,22 +180,28 @@ pub fn compute_tc_lut(spectra_lut: &SpectraLut, sensitivity: &[[f64; 3]]) -> TcL
         }
     }
 
-    TcLut {
+    Ok(TcLut {
         size,
         channels,
         data,
-    }
+    })
 }
 
 /// Build a TC→film-raw LUT from an effective-reflectance surface by relighting
 /// each reflectance with the film/reference illuminant first:
 ///
 /// `raw[i,j,c] = sum_wl reflectance[i,j,wl] * illuminant[wl] * sensitivity[wl,c]`
-pub fn compute_reflectance_tc_lut(
+pub fn compute_reflectance_tc_lut(reflectance_lut: &SpectraLut,
+    sensitivity: &[[f64; 3]],
+    illuminant: &[f64],) -> TcLut {
+    compute_reflectance_tc_lut_controlled(reflectance_lut, sensitivity, illuminant, &mut || true).expect("unconditional spectral preparation")
+}
+
+pub fn compute_reflectance_tc_lut_controlled(
     reflectance_lut: &SpectraLut,
     sensitivity: &[[f64; 3]],
     illuminant: &[f64],
-) -> TcLut {
+    checkpoint: &mut dyn FnMut() -> bool) -> Result<TcLut, String> {
     let size = reflectance_lut.size;
     let n_wl = reflectance_lut
         .n_wavelengths
@@ -198,6 +211,7 @@ pub fn compute_reflectance_tc_lut(
     let mut data = vec![0.0f64; size * size * channels];
 
     for i in 0..size {
+        if !checkpoint() { return Err("Spectral preparation cancelled".into()); }
         for j in 0..size {
             let spectrum = reflectance_lut.spectrum(i, j);
             let mut raw = [0.0f64; 3];
@@ -214,11 +228,11 @@ pub fn compute_reflectance_tc_lut(
         }
     }
 
-    TcLut {
+    Ok(TcLut {
         size,
         channels,
         data,
-    }
+    })
 }
 
 /// Compute the TC LUT with spectral bandpass window (erf4 model).
@@ -231,12 +245,19 @@ pub fn compute_reflectance_tc_lut(
 /// `illuminant`: reference illuminant SPD for normalization (f64 to
 /// match Python parity — f32 illuminants drop ~7 decimal places per
 /// sample, accumulating ~1e-9 error per LUT cell).
-pub fn compute_tc_lut_with_window(
+pub fn compute_tc_lut_with_window(spectra_lut: &SpectraLut,
+    sensitivity: &[[f64; 3]],
+    window_params: &[f64],
+    illuminant: &[f64],) -> TcLut {
+    compute_tc_lut_with_window_controlled(spectra_lut, sensitivity, window_params, illuminant, &mut || true).expect("unconditional spectral preparation")
+}
+
+pub fn compute_tc_lut_with_window_controlled(
     spectra_lut: &SpectraLut,
     sensitivity: &[[f64; 3]],
     window_params: &[f64],
     illuminant: &[f64],
-) -> TcLut {
+    checkpoint: &mut dyn FnMut() -> bool) -> Result<TcLut, String> {
     let n_wl = spectra_lut
         .n_wavelengths
         .min(sensitivity.len())
@@ -297,6 +318,7 @@ pub fn compute_tc_lut_with_window(
     let n_pix = size * size;
     let mut spec_f64 = vec![0.0f64; n_pix * n_wl];
     for i in 0..n_pix {
+        if i % 64 == 0 && !checkpoint() { return Err("Spectral preparation cancelled".into()); }
         let src =
             &spectra_lut.data[i * spectra_lut.n_wavelengths..i * spectra_lut.n_wavelengths + n_wl];
         let dst = &mut spec_f64[i * n_wl..(i + 1) * n_wl];
@@ -312,13 +334,13 @@ pub fn compute_tc_lut_with_window(
         }
     }
     let mut data = vec![0.0f64; n_pix * channels];
-    dgemm_no_transpose(&spec_f64, &sw_flat, &mut data, n_pix, channels, n_wl);
+    dgemm_no_transpose(&spec_f64, &sw_flat, &mut data, n_pix, channels, n_wl, checkpoint)?;
 
-    TcLut {
+    Ok(TcLut {
         size,
         channels,
         data,
-    }
+    })
 }
 
 /// Compute the midgray normalization factor for Hanatos2025.

@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [features]
+# Dedicated logical ownership validation; never enabled by ordinary builds.
+resource-audit = ["wgpu-backend", "spektrafilm-gpu/resource-audit"]
 wgpu-backend = ["spektrafilm-gpu/wgpu-backend"]
 precision-f64 = [
     "spektrafilm-math/precision-f64",

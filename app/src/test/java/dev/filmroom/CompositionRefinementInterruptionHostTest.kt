@@ -44,9 +44,9 @@ class CompositionRefinementInterruptionHostTest {
                 override fun snapshot(stock:String,width:Int,height:Int)=BorderSnapshot.create(stock,raster.version,width,height,.2,.03,4.0)
                 override fun resolve(snapshot:BorderSnapshot)=raster
             }
-            model.parameters(EditorState(brightness=.2f));advanceTimeBy(121);runCurrent()
+            model.parameters(EditorState(brightness=.2f));advanceTimeBy(EditorViewModel.SCIENCE_DEBOUNCE_MS+1);runCurrent()
             assertEquals(listOf(false),calls);assertEquals(96,state.value.compositionSource!!.width)
-            // Cancel the pending 350 ms refinement with a presentation-only update.
+            // Cancel the pending final refinement with a presentation-only update.
             model.parameters(state.value.parameters.copy(filmBorder=true,composition=CompositionTransform(.6,.4,2.0)))
             var done=false
             for(i in 0..500){advanceUntilIdle();runCurrent();if(state.value.compositionSource?.width==192 && state.value.renderedParameters==state.value.parameters && !state.value.previewRefining){done=true;break};Thread.sleep(5)}

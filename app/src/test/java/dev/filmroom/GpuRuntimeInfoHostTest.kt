@@ -63,9 +63,25 @@ class GpuRuntimeInfoHostTest {
         assertNull(result.gpuBatches);assertNull(result.gpuFallbacks);assertNull(result.gpuAdapterModel);assertNull(result.durationMs)
     }
     @Test fun missingTelemetryRemainsUnknownEvenWhenTopLevelBackendClaimsGpu() {
-        val result=GpuRuntimeInfo.fromNativeResult(JSONObject().put("elapsedMs",3).put("backend","vulkan-adreno"))
-        assertEquals(3L,result.durationMs);assertNull(result.gpuActive);assertNull(result.gpuBackend)
-        assertEquals(mapOf("durationMs" to "3"),result.fields())
+        val metrics=dev.filmroom.engine.IdlePrewarmMetrics
+        val attempts=metrics.attempts.get();val skipped=metrics.skipped.get()
+        try {
+            // These process-owned counters are known even when native telemetry is absent.
+            // Neither zero nor nonzero local activity is evidence of GPU work or native reuse.
+            for((localAttempts,localSkipped) in listOf(0L to 0L,4L to 2L)) {
+                metrics.attempts.set(localAttempts);metrics.skipped.set(localSkipped)
+                val result=GpuRuntimeInfo.fromNativeResult(JSONObject().put("elapsedMs",3).put("backend","vulkan-adreno"))
+                assertEquals(3L,result.durationMs);assertNull(result.gpuActive);assertNull(result.gpuBackend)
+                assertNull(result.gpuRequested);assertNull(result.gpuBatches);assertNull(result.gpuFallbacks)
+                assertNull(result.gpuStage);assertNull(result.gpuSelfTest);assertNull(result.gpuNumericGuard)
+                assertNull(result.prewarmNativeAttempts);assertNull(result.prewarmNativeSkipped)
+                assertNull(result.prewarmPublished);assertNull(result.prewarmUsed)
+                assertNull(result.prewarmWasted);assertNull(result.prewarmCancelled)
+                assertEquals(localAttempts,result.prewarmAttempts);assertEquals(localSkipped,result.prewarmSkipped)
+                assertEquals(mapOf("durationMs" to "3","prewarmAttempts" to localAttempts.toString(),
+                    "prewarmSkipped" to localSkipped.toString()),result.fields())
+            }
+        } finally {metrics.attempts.set(attempts);metrics.skipped.set(skipped)}
     }
     @Test fun meteredExposureIsBoundedNumericAndSupportsBothNativeEnvelopes() {
         val preview=GpuRuntimeInfo.fromNativeResult(JSONObject().put("meteredEv",0.22497).put("gpu",gpu()))

@@ -21,6 +21,30 @@ import java.io.File
 @Config(sdk=[29],application=Application::class,qualifiers="w320dp-h640dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ToastShortTextHostTest {
+    @Test fun actualImageLimitsRemainDistinctFromMemoryFormatAndMetadata() {
+        val expected=mapOf(
+            "text_2673ef9ba447" to R.string.toast_file_limit,
+            "text_5c55db3ba035" to R.string.toast_raw_pixel_limit,
+            "text_56e47360aaca" to R.string.toast_raw_pixel_limit,
+            "text_d591741a5a6e" to R.string.toast_raster_pixel_limit,
+            "text_d6bc69a0a6a8" to R.string.toast_export_pixel_limit,
+            "image_edge_limit_30000" to R.string.toast_edge_limit_30000,
+            "image_edge_limit_32768" to R.string.toast_edge_limit_32768,
+            "text_5c2432fd4e78" to R.string.toast_memory,
+            "text_660bbeffe8d6" to R.string.toast_memory,
+            "text_9ff6012fdde9" to R.string.toast_memory,
+            "text_1351a2d16cbe" to R.string.toast_metadata_limit,
+            "text_0105eb1c06a7" to R.string.toast_format,
+            "text_199d9706e7a1" to R.string.toast_read)
+        for((key,res) in expected) assertEquals(key,res,ToastText.resourceForKey(key))
+        for(tag in L10n.supported) {
+            L10n.choose(RuntimeEnvironment.getApplication(),tag)
+            assertTrue(ToastText.forMessage(UiMessage.of(R.string.image_edge_limit_30000)).contains("30000"))
+            assertTrue(ToastText.forMessage(UiMessage.of(R.string.image_edge_limit_32768)).contains("32768"))
+            assertTrue(ToastText.forMessage(UiMessage.of(R.string.text_2673ef9ba447)).contains("512"))
+        }
+    }
+
     @org.junit.After fun restoreChinese(){L10n.choose(RuntimeEnvironment.getApplication(),"zh")}
     @Test fun acceptedCancellationAndUncertainStatesRemainDistinct(){
         for(key in listOf("text_bb8990972dce","text_834295cc897b","text_420e35e0302a"))

@@ -24,6 +24,8 @@ use std::{
 const MIB: u64 = 1024 * 1024;
 const BASE: u64 = 32 * MIB;
 const HALO: usize = 8;
+#[path="dng_geometry_develop.rs"]
+mod geometry;
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -54,7 +56,10 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         .memory_budget_mi_b
         .checked_mul(MIB)
         .ok_or_else(|| err("MEMORY_BUDGET", "admission"))?;
-    if memory > 4096 * MIB || memory < BASE || (d.compression==52546 && memory>crate::jxl::MAX_BUDGET) {
+    if memory > 4096 * MIB
+        || memory < BASE
+        || (d.compression == 52546 && memory > crate::jxl::MAX_BUDGET)
+    {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let base = BASE
@@ -68,12 +73,23 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
     let classic = capacity.min(128);
     // Automatic growth is validated for Bayer DNG. LinearRaw retains its classic
     // default; explicit Large may still request a larger memory-bounded batch.
-    let rows = if d.cpp == 1 { b.raw_batch.dng_rows(classic, capacity) }
-        else { b.raw_batch.camera_rows(classic, capacity, 256) };
+    let rows = if d.cpp == 1 {
+        b.raw_batch.dng_rows(classic, capacity)
+    } else {
+        b.raw_batch.camera_rows(classic, capacity, 256)
+    };
     if rows < 8 {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
-    let disk = d.probe().output_bytes + if d.compression==52546 {crate::jxl::spool_bytes(d)} else {0};
+    let disk = d.probe().output_bytes
+        + if d.warp.is_some() { (d.active.w*d.active.h*12) as u64 } else { 0 }
+        + if d.compression == 52546 {
+            crate::jxl::spool_bytes(d)
+        } else if d.cfa_spool() {
+            (d.width * d.height * 2) as u64
+        } else {
+            0
+        };
     if b.disk_budget_bytes < disk {
         return Err(err("DISK_BUDGET", "admission"));
     }
@@ -134,7 +150,7 @@ fn tile_raw(d: &Development, y: usize, h: usize, data: Vec<f32>) -> RawImage {
     } else {
         CFA::default()
     };
-    cam.color_matrix.insert(Illuminant::D65, d.matrix.clone());
+    if !d.matrix.is_empty() { cam.color_matrix.insert(Illuminant::D65, d.matrix.clone()); }
     let photo = if d.cpp == 1 {
         RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&cam))
     } else {
@@ -159,12 +175,63 @@ pub fn develop_tile(
     h: usize,
     data: Vec<f32>,
 ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
-    develop_dng_tile_cancel(d,&Development::from(d), y, h, data, &AtomicBool::new(false))
+    develop_dng_tile_cancel(
+        d,
+        &Development::from(d),
+        y,
+        h,
+        data,
+        &AtomicBool::new(false),
+    )
 }
-fn develop_dng_tile_cancel(d:&Dng,development:&Development,y:usize,h:usize,data:Vec<f32>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
-    if let Some(profile)=&d.profile { profile.develop(d.active,y,h,data,d.baseline_exposure_ev,cancel) }
-    else { develop_tile_cancel(development,y,h,data,cancel) }
+fn develop_dng_tile_cancel(
+    d: &Dng,
+    development: &Development,
+    y: usize,
+    h: usize,
+    data: Vec<f32>,
+    cancel: &AtomicBool,
+) -> Result<rawler::pixarray::Color2D<f32, 3>> {
+    if d.warp.is_some() { return Err(err("UNSUPPORTED_DNG_OPCODE","develop")); }
+    if d.cfa_color.is_some() {
+        let camera=camera_tile(development,y,h,data)?;
+        return calibrate_camera(d,camera,cancel);
+    }
+    if let Some(profile) = &d.profile {
+        profile.develop(d.active, y, h, data, d.baseline_exposure_ev, cancel)
+    } else {
+        develop_tile_cancel(development, y, h, data, cancel)
+    }
 }
+
+fn camera_tile(d:&Development,y:usize,h:usize,data:Vec<f32>)->Result<rawler::pixarray::Color2D<f32,3>> {
+    let raw=tile_raw(d,y,h,data);
+    let dev=RawDevelop {steps:vec![ProcessingStep::Demosaic]};
+    match dev.develop_intermediate(&raw).map_err(|_|err("DECODE_FAILED","develop"))? {
+        Intermediate::ThreeColor(p)=>pix_finite(p),
+        _=>Err(err("UNSUPPORTED_DNG_VARIANT","develop")),
+    }
+}
+fn calibrate_camera(d:&Dng,mut camera:rawler::pixarray::Color2D<f32,3>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
+    if let Some(color)=&d.cfa_color {
+        let xyz_to_rgb=rawler::imgop::xyz::XYZ_TO_SRGB_D50.map(|r|r.map(|x|x as f64));
+        let transform=crate::dng_color_spec::product(xyz_to_rgb,color.camera_to_pcs);
+        let exposure=d.baseline_exposure_ev.exp2() as f64;
+        for (i,p) in camera.data.iter_mut().enumerate() {
+            if i%1024==0 && cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","develop"));}
+            let input=p.map(|x|x.clamp(0.,1.)as f64);
+            *p=crate::dng_color_spec::apply(transform,input).map(|x|(x*exposure) as f32);
+        }
+        pix_finite(camera)
+    } else {
+        let mut development=Development::from(d);
+        development.cpp=3;development.width=camera.width;development.height=camera.height;
+        development.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
+        development.crop=development.active;development.gain_maps=&[];
+        develop_tile_cancel(&development,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
+    }
+}
+
 pub(crate) fn develop_tile_cancel(
     d: &Development,
     y: usize,
@@ -366,71 +433,123 @@ fn decode_with_reserve(
         .stack_size(1024 * 1024)
         .build()
         .map_err(|_| err("MEMORY_BUDGET", "develop"))?;
-    // JPEG XL output arrives in group order, not necessarily scanline order.
-    // Decode exact samples to anonymous disk, release all decoder allocations,
-    // then use the existing strip-based DNG normalization/development pipeline.
-    let jxl_storage = if d.compression==52546 {Some(crate::jxl::decode_to_spool(&d,&file,output,cancel)?)} else {None};
-    let storage_dng = if let Some(raw)=jxl_storage {
-        file=raw;let mut storage=d.clone();
-        storage.compression=1;storage.endian=crate::tiff::Endian::Le;
-        storage.offsets=vec![0];storage.counts=vec![crate::jxl::spool_bytes(&d) as u32];
-        storage.rows_per_strip=d.height;storage.tile_height=d.height;
+    // JPEG XL output arrives in group order; full-strip CFA JPEG also needs
+    // random access for overlapping demosaic halos. Decode exact samples to
+    // anonymous disk, then use the existing bounded normalization/developer.
+    let sensor_storage = if d.compression == 52546 {
+        Some(crate::jxl::decode_to_spool(&d, &file, output, cancel)?)
+    } else if d.cfa_spool() {
+        Some(crate::dng::cfa_storage::decode_to_spool(
+            &d, &mut file, output, cancel,
+        )?)
+    } else {
+        None
+    };
+    let storage_dng = if let Some(raw) = sensor_storage {
+        file = raw;
+        let mut storage = d.clone();
+        storage.compression = 1;
+        storage.sample_bits = 16;
+        storage.endian = crate::tiff::Endian::Le;
+        storage.offsets = vec![0];
+        storage.counts = vec![(d.width * d.height * d.cpp * 2) as u32];
+        storage.rows_per_strip = d.height;
+        storage.tile_height = d.height;
         Some(storage)
-    } else {None};
-    let storage_reader=storage_dng.as_ref().unwrap_or(&d);
+    } else {
+        None
+    };
+    let storage_reader = storage_dng.as_ref().unwrap_or(&d);
     let development = Development::from(&d);
-    if d.streaming_linear {
+    if d.warp.is_some() {
+        geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel)?;
+    } else if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
-        let mut batch_y=d.active.y;
-        let mut expected_y=0usize;
-        let flush = |batch:&mut Vec<f32>, y:usize| -> Result<()> {
-            let h=batch.len()/(d.active.w*3);
-            let first=y.max(d.crop.y); let last=(y+h).min(d.crop.y+d.crop.h);
-            if first<last {
-                let data=std::mem::take(batch);
-                let pix=pool.install(||develop_dng_tile_cancel(&d,&development,y,h,data,cancel))?;
-                emit(&development,&out,&pix,y,first,last,cancel)?;
-            } else {batch.clear();}
+        let mut batch_y = d.active.y;
+        let mut expected_y = 0usize;
+        let flush = |batch: &mut Vec<f32>, y: usize| -> Result<()> {
+            let h = batch.len() / (d.active.w * 3);
+            let first = y.max(d.crop.y);
+            let last = (y + h).min(d.crop.y + d.crop.h);
+            if first < last {
+                let data = std::mem::take(batch);
+                let pix =
+                    pool.install(|| develop_dng_tile_cancel(&d, &development, y, h, data, cancel))?;
+                emit(&development, &out, &pix, y, first, last, cancel)?;
+            } else {
+                batch.clear();
+            }
             Ok(())
         };
-        for (strip,(&offset,&bytes)) in d.offsets.iter().zip(&d.counts).enumerate() {
-            let start_y=strip*d.rows_per_strip;
-            let h=d.rows_per_strip.min(d.height-start_y);
-            crate::linear_jpeg::rows(&mut file,offset as u64,bytes as u64,d.width,h,d.sample_bits,cancel,|local_y,row|{
-                let y=start_y+local_y;
-                if y!=expected_y || row.len()!=d.width*3 {return Err(err("INVALID_INPUT","decode"));}
-                expected_y+=1;
-                if y>=d.active.y && y<d.active.y+d.active.h {
-                    if batch.is_empty(){batch_y=y;}
-                    for pixel in row[d.active.x*3..(d.active.x+d.active.w)*3].chunks_exact(3) {
-                        for c in 0..3 {
-                            let value=d.linearization.as_ref().map_or(pixel[c],|t|t.apply(pixel[c])) as f32;
-                            batch.push((value-d.black[c]).max(0.)/(d.white[c]-d.black[c]));
+        for (strip, (&offset, &bytes)) in d.offsets.iter().zip(&d.counts).enumerate() {
+            let start_y = strip * d.rows_per_strip;
+            let h = d.rows_per_strip.min(d.height - start_y);
+            crate::linear_jpeg::rows(
+                &mut file,
+                offset as u64,
+                bytes as u64,
+                d.width,
+                h,
+                d.sample_bits,
+                cancel,
+                |local_y, row| {
+                    let y = start_y + local_y;
+                    if y != expected_y || row.len() != d.width * 3 {
+                        return Err(err("INVALID_INPUT", "decode"));
+                    }
+                    expected_y += 1;
+                    if y >= d.active.y && y < d.active.y + d.active.h {
+                        if batch.is_empty() {
+                            batch_y = y;
+                        }
+                        for pixel in
+                            row[d.active.x * 3..(d.active.x + d.active.w) * 3].chunks_exact(3)
+                        {
+                            for c in 0..3 {
+                                let value = d
+                                    .linearization
+                                    .as_ref()
+                                    .map_or(pixel[c], |t| t.apply(pixel[c]))
+                                    as f32;
+                                batch
+                                    .push((value - d.black[c]).max(0.) / (d.white[c] - d.black[c]));
+                            }
+                        }
+                        if batch.len() == d.active.w * admission.strip_rows as usize * 3 {
+                            flush(&mut batch, batch_y)?;
                         }
                     }
-                    if batch.len()==d.active.w*admission.strip_rows as usize*3 {flush(&mut batch,batch_y)?;}
-                }
-                Ok(())
-            })?;
+                    Ok(())
+                },
+            )?;
         }
-        if expected_y!=d.height{return Err(err("INVALID_INPUT","decode"));}
-        if !batch.is_empty(){flush(&mut batch,batch_y)?;}
+        if expected_y != d.height {
+            return Err(err("INVALID_INPUT", "decode"));
+        }
+        if !batch.is_empty() {
+            flush(&mut batch, batch_y)?;
+        }
     } else {
-    let mut first = d.crop.y;
-    while first < d.crop.y + d.crop.h {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(err("CANCELLED", "decode"));
+        let mut first = d.crop.y;
+        while first < d.crop.y + d.crop.h {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(err("CANCELLED", "decode"));
+            }
+            let last = (first + admission.strip_rows as usize).min(d.crop.y + d.crop.h);
+            let tile_y = first.saturating_sub(HALO).max(d.active.y);
+            let tile_end = (last + HALO).min(d.active.y + d.active.h);
+            let data = storage_reader.read_tile_cancellable(
+                &mut file,
+                tile_y,
+                tile_end - tile_y,
+                cancel,
+            )?;
+            let p = pool.install(|| {
+                develop_dng_tile_cancel(&d, &development, tile_y, tile_end - tile_y, data, cancel)
+            })?;
+            emit(&development, &out, &p, tile_y, first, last, cancel)?;
+            first = last;
         }
-        let last = (first + admission.strip_rows as usize).min(d.crop.y + d.crop.h);
-        let tile_y = first.saturating_sub(HALO).max(d.active.y);
-        let tile_end = (last + HALO).min(d.active.y + d.active.h);
-        let data = storage_reader.read_tile_cancellable(&mut file, tile_y, tile_end - tile_y, cancel)?;
-        let p = pool.install(|| {
-            develop_dng_tile_cancel(&d,&development, tile_y, tile_end - tile_y, data, cancel)
-        })?;
-        emit(&development, &out, &p, tile_y, first, last, cancel)?;
-        first = last;
-    }
     }
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "spool"));

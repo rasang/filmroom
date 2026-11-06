@@ -10,6 +10,7 @@ import kotlin.math.*
 
 /** Presentation only. Never participates in the renderer or writes job files. */
 internal class ExportPreviewView(context: Context) : View(context) {
+    companion object { const val FADE_DURATION_MS=250L }
     private var current: Bitmap? = null
     private var previous: Bitmap? = null
     private var blend = 1f
@@ -34,7 +35,12 @@ internal class ExportPreviewView(context: Context) : View(context) {
     }
     fun setForeground(value: Boolean) {
         foreground = value
-        if (!value) { fade?.pause(); breathing?.pause(); emphasis?.pause() }
+        if (!value) {
+            // Hidden time counts toward the phase; never resume an old partial fade
+            // after its presentation deadline has elapsed in the background.
+            fade?.cancel();fade=null;blend=1f;previous=null
+            breathing?.pause();emphasis?.pause();invalidate()
+        }
         else if (ValueAnimator.areAnimatorsEnabled()) {
             fade?.resume(); breathing?.resume(); emphasis?.resume(); updateBreathing()
         } else { finishAnimations() }
@@ -65,7 +71,7 @@ internal class ExportPreviewView(context: Context) : View(context) {
         }
     }
     /** Keep the previous visible pixels until the next bitmap is ready, including interrupted fades. */
-    fun show(bitmap: Bitmap, key: String, blackIntro: Boolean = false) {
+    fun show(bitmap: Bitmap, key: String, blackIntro: Boolean = false, maxFadeMs:Long = FADE_DURATION_MS) {
         if (version == key) return
         val old = if (blend < 1f && width > 0 && height > 0) runCatching {
             val scale = min(1f,480f/max(width,height))
@@ -75,10 +81,11 @@ internal class ExportPreviewView(context: Context) : View(context) {
         }.getOrNull() ?: current else current
         fade?.cancel(); fade = null
         previous = old; current = bitmap; version = key; transitionCount++; intro = blackIntro
-        val animate = foreground && ValueAnimator.areAnimatorsEnabled() && (old != null || blackIntro)
+        val fadeDuration=minOf(FADE_DURATION_MS,maxFadeMs.coerceAtLeast(0L))
+        val animate = foreground && ValueAnimator.areAnimatorsEnabled() && fadeDuration>0L && (old != null || blackIntro)
         blend = if (animate) 0f else 1f
         if (animate) fade = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = if (blackIntro) 1000 else 450
+            duration = fadeDuration
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { blend = it.animatedValue as Float; if (blend == 1f) previous = null; invalidate() }
             start()

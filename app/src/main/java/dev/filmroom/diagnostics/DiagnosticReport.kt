@@ -6,6 +6,7 @@ data class DiagnosticShare(val file: File, val summary: String, val eventCount: 
 
 /** Metadata is numeric/enum-like only, not Build.MODEL/DEVICE/FINGERPRINT strings. */
 internal enum class DiagnosticAbi(val id: String) { ARM64("arm64-v8a"), ARMV7("armeabi-v7a"), X86("x86"), X86_64("x86_64"), UNKNOWN("unknown") }
+internal object DiagnosticEngineVersion { const val BUILD=9; const val INTERFACE=2 }
 internal data class DiagnosticMetadata(
     val appVersionCode: Long = 0, val androidApi: Int = 0, val abi: DiagnosticAbi = DiagnosticAbi.UNKNOWN,
     val processorCount: Int = 0, val heapMaxBytes: Long = 0, val memoryClassMb: Int = 0,
@@ -14,7 +15,7 @@ internal data class DiagnosticMetadata(
         require(appVersionCode in 0..1_000_000_000 && androidApi in 0..1000 && processorCount in 0..1024)
         require(heapMaxBytes in 0..(1L shl 40) && memoryClassMb in 0..1_000_000)
     }
-    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb)
+    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb, DiagnosticEngineVersion.BUILD, DiagnosticEngineVersion.INTERFACE)
 }
 
 internal object ChineseDiagnostics {
@@ -38,6 +39,7 @@ internal object ChineseDiagnostics {
             .append(java.time.Instant.ofEpochMilli(snapshot.effectiveWallTimes.max())).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0e898ec43b0b))
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_fa1c6dd0bfc3)).append(snapshot.expiredDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6e94c47fde22)).append(snapshot.capacityDiscarded)
             .append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4af5bd6fb80e)).append(snapshot.malformedDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e9d6840052fc)).append(snapshot.futureDiscarded).append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1701c7739625))
+        append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.diagnostics_read_rejections_detail, snapshot.startupReadRejected, snapshot.rotationReadRejected))
         // Historical recovery markers remain in the event list, but are not
         // relabelled as the current run's latest failure in the short summary.
         val failure = snapshot.events.lastOrNull { it.stage != Stage.PREVIOUS_UNFINISHED && (it.error != null || it.outcome == Outcome.FAILED) }
@@ -52,7 +54,7 @@ internal object ChineseDiagnostics {
     fun json(snapshot: DiagnosticSnapshot, metadata: DiagnosticMetadata): String = buildString {
         // All strings originate in fixed enums/allowlists. No general-purpose raw JSON pass-through.
         append("{\"schemaVersion\":1,\"appVersionCode\":").append(metadata.appVersionCode)
-        append(",\"engineBuildRevision\":4,\"engineInterfaceVersion\":1,\"androidApi\":").append(metadata.androidApi)
+        append(",\"engineBuildRevision\":").append(DiagnosticEngineVersion.BUILD).append(",\"engineInterfaceVersion\":").append(DiagnosticEngineVersion.INTERFACE).append(",\"androidApi\":").append(metadata.androidApi)
         append(",\"abi\":").append(jsonString(metadata.abi.id)).append(",\"processorCount\":").append(metadata.processorCount)
         append(",\"heapMaxBytes\":").append(metadata.heapMaxBytes).append(",\"memoryClassMb\":").append(metadata.memoryClassMb)
         append(",\"minutes\":").append(snapshot.minutes).append(",\"snapshotUtcMs\":").append(snapshot.snapshotWallMs)
@@ -61,6 +63,15 @@ internal object ChineseDiagnostics {
         append(",\"expiredDiscardedThisRun\":").append(snapshot.expiredDiscarded)
         append(",\"capacityDiscardedThisRun\":").append(snapshot.capacityDiscarded)
         append(",\"malformedDiscardedThisRun\":").append(snapshot.malformedDiscarded)
+        // These are rejected line observations, not a count of unique current-run events lost.
+        append(",\"startupReadRejectedThisRun\":").append(snapshot.startupReadRejected)
+        append(",\"rotationReadRejectedThisRun\":").append(snapshot.rotationReadRejected)
+        append(",\"readRejectionsThisRun\":{")
+        snapshot.readRejections.entries.forEachIndexed { index, (reason, count) ->
+            if (index > 0) append(',')
+            append(jsonString(reason.name)).append(':').append(count)
+        }
+        append('}')
         append(",\"futureDiscardedThisRun\":").append(snapshot.futureDiscarded).append(",\"events\":[")
         snapshot.events.forEachIndexed { index, event ->
             if (index > 0) append(',')

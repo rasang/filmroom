@@ -60,6 +60,23 @@ class PhotoInputAdaptersTest {
         assertFalse(header(73,73,42,0).isPanasonicRw2)
         assertFalse(header(255,216,255).isPanasonicRw2)
     }
+    @Test fun additionalRawRoutingUsesContentAndCannotTakeRasterFallback(){
+        for(bytes in listOf(byteArrayOf(73,73,82,79),byteArrayOf(73,73,82,83),byteArrayOf(77,77,79,82))) {
+            val h=PhotoInputHeader(bytes,bytes.size)
+            assertTrue(h.isOlympusRaw);assertFalse(h.isClassicTiff)
+            assertFalse(h.isCanonCr3);assertNull(h.rasterMime)
+            assertEquals(PhotoFormat.CAMERA_RAW,h.identified.format)
+        }
+        val cr3=byteArrayOf(0,0,0,20)+"ftypcrx ".toByteArray(Charsets.US_ASCII)+byteArrayOf(0,0,0,0)+"heic".toByteArray(Charsets.US_ASCII)
+        val h=PhotoInputHeader(cr3,cr3.size)
+        assertTrue(h.isCanonCr3);assertFalse(h.isClassicTiff)
+        assertEquals(PhotoFormat.CAMERA_RAW,h.identified.format)
+        assertNull(h.rasterMime)
+        assertFalse(PhotoInputHeader(cr3,11).isCanonCr3)
+        assertFalse(header(73,73,82).isOlympusRaw)
+        assertFalse(header(73,73,79,82).isOlympusRaw)
+        cr3[8]='h'.code.toByte();assertFalse(PhotoInputHeader(cr3,cr3.size).isCanonCr3)
+    }
     @Test fun probeRejectsInvalidCountsBeforeIndexing(){
         for(count in listOf(-1,5)) {
             try { PhotoInputHeader(byteArrayOf(73,73,42,0),count);fail("Invalid prefix count") }

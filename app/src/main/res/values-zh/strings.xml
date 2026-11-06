@@ -253,7 +253,7 @@
     <string name="text_646130986822" formatted="false">色域压缩</string>
     <string name="text_192216b8cb6d" formatted="false">将超出 sRGB 色域的颜色压缩到可显示范围；宽色域导出会自动关闭。</string>
     <string name="text_6f16843acab7" formatted="false">GPU加速</string>
-    <string name="text_8d80b85bbd7f" formatted="false">自动尝试 Adreno 部分密度阶段加速，其余阶段仍在 CPU。不可用时回退 CPU，不保证更快。</string>
+    <string name="text_8d80b85bbd7f" formatted="false">实验性 GPU 常驻或分带计算，部分效果采用近似算法，可能与 CPU 出图不同。预算不足或设备不支持时回退 CPU；不保证更快。</string>
     <string name="text_683099bf5b6c" formatted="false">胶片默认</string>
     <string name="text_789f61dbfcc7" formatted="false">红色</string>
     <string name="text_d5234258fd84" formatted="false">琥珀色</string>
@@ -390,8 +390,8 @@
     <string name="text_19b3b0255d08" formatted="false">本机照片读写失败，请检查可用存储空间后重新选择原文件。</string>
     <string name="text_199d9706e7a1" formatted="false">未能读取完整、有效的图像数据，请重新选择原文件；目前不能确认文件是否损坏。</string>
     <string name="text_e92a0c3cbaef" formatted="false">暂不支持此输出色彩空间，未更改颜色标签代替转换。</string>
-    <string name="text_d6bc69a0a6a8" formatted="false">最终导出尺寸超过当前 8400 万像素范围。</string>
-    <string name="text_5c55db3ba035" formatted="false">这张照片超过编解码组件当前 5200 万像素处理范围。</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">图片太大：JPEG/TIFF 导出最多8400万像素，单边最多32768像素。</string>
+    <string name="text_5c55db3ba035" formatted="false">图片太大：RAW 最多5200万像素，单边最多32768像素。</string>
     <string name="text_6bceec6d29d6" formatted="false">本机可用空间不足，处理未完成；原照片未修改。</string>
     <string name="text_d171c3322a9c" formatted="false">当前本机内存预算不足，无法安全处理这张照片。</string>
     <string name="text_56858cdae70f" formatted="false">这张 RAW 的颜色校准数据暂不支持，未使用猜测颜色代替。</string>
@@ -405,7 +405,7 @@
     <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n编码：UTF-8；单个文本文件（非 ZIP）\n\n=== 中文摘要 ===\n</string>
     <string name="text_7af205e83135" formatted="false">\n\n=== 完整脱敏事件明细 ===\n</string>
     <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
-    <string name="text_60ef08049a72" formatted="true">应用：Filmroom；版本代码：%1$s；引擎构建：4；接口：1\nAndroid API：%2$s；ABI：%3$s；处理器数：%4$s；Java 堆上限：%5$s 字节；内存档位：%6$s MB</string>
+    <string name="text_60ef08049a72" formatted="true">应用：Filmroom；版本代码：%1$s；引擎构建：%7$s；接口：%8$s\nAndroid API：%2$s；ABI：%3$s；处理器数：%4$s；Java 堆上限：%5$s 字节；内存档位：%6$s MB</string>
     <string name="text_5c1712cb2d38" formatted="false">本次运行</string>
     <string name="text_b1336f82fea4" formatted="false">恢复编辑</string>
     <string name="text_5a9df9227ec6" formatted="false">预览渲染</string>
@@ -440,7 +440,7 @@
     <string name="text_0e898ec43b0b" formatted="false">；不是连续监测。\n</string>
     <string name="text_fa1c6dd0bfc3" formatted="false">本次运行观测到的丢弃：过期 </string>
     <string name="text_6e94c47fde22" formatted="false">，容量轮替 </string>
-    <string name="text_4af5bd6fb80e" formatted="false">，损坏或未写完 </string>
+    <string name="text_4af5bd6fb80e" formatted="false">，读取时拒绝 </string>
     <string name="text_e9d6840052fc" formatted="false">，未来时间不确定 </string>
     <string name="text_1701c7739625" formatted="false">。跨运行累计未知。\n</string>
     <string name="text_5bf7bab64ce3" formatted="false">最近的失败/中断记录：</string>
@@ -461,7 +461,7 @@
     <string name="text_bf7b123c114d" formatted="false">；事件之间并非连续监测。\n</string>
     <string name="text_ccc4edebf400" formatted="false">本次运行可观测的丢弃计数：过期=</string>
     <string name="text_1a58fbf44b39" formatted="false">，容量轮替=</string>
-    <string name="text_4e203ca8ccb7" formatted="false">，损坏/未写完=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">，读取时拒绝=</string>
     <string name="text_338aa9ce6405" formatted="false">，未来时间无法确认=</string>
     <string name="text_b028650697a5" formatted="false">。跨运行累计不可确定。\n</string>
     <string name="text_bbbde15a1296" formatted="false">仅在本机记录，点击分享后由你选择接收应用；本应用不会上传。\n</string>
@@ -573,12 +573,12 @@
     <string name="text_8d12fc0d4eb2" formatted="false">暂停</string>
     <string name="text_f515de6af876" formatted="false">HEIC 容器数据不完整或不一致。</string>
     <string name="text_0f079bb732f5" formatted="false">此 HEIC 变体暂不支持；当前仅处理已验证的 sRGB / Display P3 SDR 色彩子集及静态 8 位 HEVC 主图；不支持未知 ICC、辅助图、镜像、裁切或 HDR。</string>
-    <string name="text_1351a2d16cbe" formatted="false">HEIC 元数据或尺寸超过安全处理范围。</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEIC 元数据或容器结构超过安全处理限制。</string>
     <string name="text_19e0ce29db17" formatted="false">HEIC ICC 色彩数据不完整或不一致。</string>
     <string name="text_da9f421ae9ad" formatted="false">此 HEIC ICC 色彩配置暂不支持；未将未知或 HDR 色彩标成 sRGB。</string>
     <string name="text_9cd4df0f9933" formatted="false">HEIC ICC 色彩数据超过安全读取范围。</string>
     <string name="text_56e47360aaca" formatted="false">这张 HEIC 超过当前 5200 万编码像素安全范围；没有缩小原图。</string>
-    <string name="text_9ff6012fdde9" formatted="false">这张 HEIC 的原尺寸解码预算超过安全范围；没有缩小原图。</string>
+    <string name="text_9ff6012fdde9" formatted="false">这张 HEIC 的原尺寸解码预计内存超过2 GiB预算上限；没有缩小原图。</string>
     <string name="text_58a07dbdf8d7" formatted="false">本机未正确识别这张 HEIC 的源色彩配置，未猜测颜色或直接改成 sRGB 标签。</string>
     <string name="text_986742c74398" formatted="false">本机未能确认 HEIC 的 8 位 sRGB SDR 底图；未应用 HDR 增益图或自动色调映射。</string>
     <string name="text_8b96428c13f4" formatted="false">本机 HEIC 解码器报告的主图尺寸或方向不一致，未使用缩略图代替原图。</string>
@@ -602,11 +602,11 @@
     <string name="text_9392b8f7c99e" formatted="false">本机空间不足，无法复制这张照片；请释放空间后重新导入。</string>
     <string name="text_2673ef9ba447" formatted="false">照片文件超过 512 MiB，请选择文件体积较小的照片。</string>
     <string name="text_276ad5585012" formatted="false">本机剩余空间不足，导入已停止；请释放空间后重试。原照片未被修改。</string>
-    <string name="text_5c2432fd4e78" formatted="false">这张照片较大，当前无法生成预览。请换一张较小的照片。</string>
+    <string name="text_5c2432fd4e78" formatted="false">当前内存不足，无法生成预览。请稍后重试。</string>
     <string name="text_a064cfbab736" formatted="false">读取权限已失效，请重新选择照片。</string>
     <string name="text_a428b047ad8e" formatted="false">无法读取这张照片：文件可能已损坏、不可用或本机存储不足。</string>
     <string name="text_b769fd8412bb" formatted="false">本机工作照片已不可用，请重新导入。</string>
-    <string name="text_660bbeffe8d6" formatted="false">这张照片无法以当前尺寸处理，请选择较小的导出尺寸。</string>
+    <string name="text_660bbeffe8d6" formatted="false">当前内存不足，无法更新预览。请稍后重试。</string>
     <string name="text_9c508b3acf89" formatted="false">无法重新读取照片，请重新导入。</string>
     <string name="text_d408527bac5d" formatted="false">工作照片记录无效，请重新导入。</string>
     <string name="text_5e9174903275" formatted="false">当前内存不足，无法恢复照片，请稍后重新导入。</string>
@@ -633,7 +633,7 @@
     <string name="text_a1c12237b4d9" formatted="false">导出失败，请检查本机可用空间后重试。原照片未被修改。</string>
     <string name="text_b447e7ccf3ec" formatted="false">导出行归属不匹配</string>
     <string name="text_5dc658ae62f8" formatted="false">无法确认已保存照片的状态，请稍后重试</string>
-    <string name="text_d591741a5a6e" formatted="false">照片尺寸超出安全处理范围，请选择较小的照片。</string>
+    <string name="text_d591741a5a6e" formatted="false">图片太大：JPEG/PNG 最多1.5亿像素，单边最多30000像素。</string>
     <string name="text_3bf690c56856" formatted="false">暂不支持动画照片，请选择静态照片。</string>
     <string name="text_e9d5f1386eb5" formatted="false">PNG 结构不完整，请重新选择照片。</string>
     <string name="text_dac02f5d66dd" formatted="false">暂不支持动画 PNG，请选择静态照片。</string>
@@ -768,4 +768,22 @@
     <string name="bw_print_development">印相显影时间</string>
     <string name="bw_development_help">使用上游实测显影时间族；默认取中间档，非通用化学配方。</string>
     <string name="bw_development_default">上游默认</string>
+    <string name="image_edge_limit_30000">图片单边太长：上限30000像素。</string>
+    <string name="image_edge_limit_32768">图片单边太长：上限32768像素。</string>
+    <string name="toast_edge_limit_30000">边长过大：上限30000像素</string>
+    <string name="toast_edge_limit_32768">边长过大：上限32768像素</string>
+    <string name="toast_export_pixel_limit">图片太大：上限8400万像素</string>
+    <string name="toast_file_limit">文件太大：上限512 MiB</string>
+    <string name="toast_metadata_limit">元数据超出安全限制</string>
+    <string name="toast_raster_pixel_limit">图片太大：上限1.5亿像素</string>
+    <string name="toast_raw_pixel_limit">图片太大：上限5200万像素</string>
+    <string name="gpu_phase_full_chain" formatted="false">GPU 整链计算</string>
+    <string name="gpu_phase_banded_chain" formatted="false">GPU 分带计算</string>
+    <string name="gpu_phase_prepass" formatted="false">GPU 全图预计算</string>
+    <string name="gpu_completion_uncertain" formatted="false">GPU任务未确认结束，为避免内存重叠已暂停处理。请完全关闭并重新打开应用。</string>
+    <string name="diagnostics_read_rejections_detail">读取拒绝次数：启动 %1$d，容量轮替 %2$d；包括版本不兼容、校验失败或未写完，不等于当前运行丢失的事件数。\n</string>
+    <string name="gpu_phase_tiled_chain" formatted="false">GPU 二维分块计算</string>
+    <string name="gpu_progress_processing">GPU 图像处理</string>
+    <string name="gpu_progress_tile">块 %1$d/%2$d</string>
+    <string name="gpu_progress_last_completed">刚完成：%1$s（%2$d ms）</string>
 </resources>

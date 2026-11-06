@@ -109,6 +109,7 @@ pub mod arw;
 mod camera;
 pub mod cr2;
 pub mod cr3;
+pub(crate) mod bounded_bits;
 pub mod crw;
 pub mod dcr;
 pub mod dcs;
@@ -322,7 +323,28 @@ impl RawMetadata {
   }
 }
 
+/// Filmroom bounded sensor decoder contract, never an embedded preview.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoundedBayerPlan {
+  pub format: &'static str,
+  pub variant: &'static str,
+  pub width: usize,
+  pub height: usize,
+  pub bits: usize,
+  pub scratch_bytes: u64,
+  pub active_area_override: Option<[usize;4]>,
+  pub orientation: u8,
+}
+
 pub trait Decoder: Send {
+  /// Validate encoding/layout before metadata-only RawImage creation or pixel allocations.
+  fn bounded_bayer_plan(&self, _file: &RawSource) -> Result<Option<BoundedBayerPlan>> { Ok(None) }
+  /// Segments must cover every sensor row exactly once, in increasing x for each row.
+  /// No full sensor or floating image allocation. Cancellation must be checked per row.
+  fn bounded_bayer_segments(&self, _file: &RawSource, _sink: &mut dyn FnMut(usize, usize, &[u16]) -> Result<()>, _cancel: &dyn Fn() -> bool) -> Result<()> {
+    Err(RawlerError::DecoderFailed("Bounded sensor segments unsupported".into()))
+  }
+
   /// Bounded Canon Bayer decode; caller first validates all entropy/control bytes.
   fn canon_bayer_stream(&self, _file: &RawSource, _storage: &mut dyn cr2::CanonSrawStorage) -> Result<RawImage> {Err("Not a Canon Bayer streaming decoder".into())}
 
@@ -864,6 +886,7 @@ impl RawLoader {
 
   /// Returns a decoder for a given buffer
   pub fn get_decoder<'b>(&'b self, rawfile: &RawSource) -> Result<Box<dyn Decoder + 'b>> {
+    let _olympus_scope = crate::metadata_budget::olympus_scope(rawfile.buf().get(..4).unwrap_or_default(),rawfile.buf().len()as u64);
     let _preview_scope = crate::metadata_budget::panasonic_preview_scope(rawfile.buf().get(..4)==Some(b"II\x55\0"));
     if mrw::is_mrw(rawfile) {
       let dec = Box::new(mrw::MrwDecoder::new(rawfile, self)?);

@@ -7,10 +7,12 @@ import java.io.IOException
 /** Allowlisted UI diagnostics only: never exception messages, paths, source IDs or parameters. */
 enum class DetailPhase { ZoomRequired, WaitingForPreview, Settling, Preparing, Refining, Ready, Comparing, Paused, Fallback }
 enum class DetailFailure {
-    Unsupported, MemoryBudget, MemoryAdmission, MemoryPressure, StorageBudget, AllocationFailed, SourceValidation, SourceRead, EngineUnavailable, DataNotReady, InvalidResult, RenderFailed
+    GpuCompletionUncertain, Unsupported, MemoryBudget, MemoryAdmission, MemoryPressure, StorageBudget, AllocationFailed, SourceValidation, SourceRead, EngineUnavailable, DataNotReady, InvalidResult, RenderFailed
 }
 data class DetailStatus(val phase:DetailPhase,val width:Int=0,val height:Int=0,val readyCells:Int=0,val failure:DetailFailure?=null) {
-    fun label():String=when(phase){
+    fun label():String=if(failure==DetailFailure.GpuCompletionUncertain)
+        dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.gpu_completion_uncertain)
+    else when(phase){
         DetailPhase.ZoomRequired->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b04a7122dd82)
         DetailPhase.WaitingForPreview->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_084663d93fc9)
         DetailPhase.Settling->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_fe1ca7194034)
@@ -37,6 +39,7 @@ data class DetailStatus(val phase:DetailPhase,val width:Int=0,val height:Int=0,v
 }
 internal fun detailFailure(error:Throwable?):DetailFailure=when(error){
     is DetailUnavailable->when(error.code){
+        "GPU_COMPLETION_UNCERTAIN"->DetailFailure.GpuCompletionUncertain
         "UNSUPPORTED"->DetailFailure.Unsupported
         "BUDGET_EXCEEDED","WORKING_MEMORY_BUDGET"->DetailFailure.MemoryBudget
         "STORAGE_BUDGET"->DetailFailure.StorageBudget

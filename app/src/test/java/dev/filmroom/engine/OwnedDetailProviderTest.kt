@@ -1,6 +1,7 @@
 package dev.filmroom.engine
 
 import android.graphics.Bitmap
+import dev.filmroom.diagnostics.*
 import dev.filmroom.io.*
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -25,8 +26,8 @@ class OwnedDetailProviderTest {
         val entered=CountDownLatch(1);val exit=CountDownLatch(1);val destroyed=CountDownLatch(1)
         val cancels=AtomicInteger();val released=AtomicInteger();val begins=AtomicInteger()
         fun ok(op:String)=JSONObject().put("schemaVersion",1).put("operation",op).put("ok",true).put("code","OK").put("outputValid",false)
-        fun identity()=JSONObject().put("sourceRevision",key.source).put("mappingRevision",key.mapping).put("dataRevision",key.data).put("width",key.width).put("height",key.height).put("parameters",key.parameters).put("algorithm","owned-detail-v1-f64-fixed256-gutter1")
-        fun result(op:String)=ok(op).put("identity",identity()).put("quality","ExactSameWorkingGrid").put("backend",JSONObject().put("actualBackend","cpu").put("requestedGpu",true).put("cpuFallback",true))
+        open fun identity()=JSONObject().put("sourceRevision",key.source).put("mappingRevision",key.mapping).put("dataRevision",key.data).put("width",key.width).put("height",key.height).put("parameters",key.parameters).put("algorithm","owned-detail-v1-f64-fixed256-gutter1")
+        open fun result(op:String)=ok(op).put("identity",identity()).put("quality","ExactSameWorkingGrid").put("backend",JSONObject().put("actualBackend","cpu").put("requestedGpu",true).put("cpuFallback",true).put("reason","gpu_not_built").put("acceleratedStage","none").put("gpuBatches",0))
         override fun nativeCapabilities()=ok("capabilities").toString()
         override fun nativePlan(requestJson:String):String=error("unused")
         override fun nativeCreate(canonicalPrivateAppRoot:String)=ok("create").put("sessionId","1").toString()
@@ -114,7 +115,7 @@ class OwnedDetailProviderTest {
             val grid=File(root,"cache/detail-preview/${prepared.relativePath}")
             val floats=ByteBuffer.wrap(grid.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
             assertEquals(-0.5f,floats.float,0f);assertEquals(2f,floats.float,0f)
-            prepared.close();assertFalse(grid.exists());assertTrue(linear.exists())
+            prepared.close();assertTrue(grid.exists());photo.clearLinearPreview();photo.detailGridCache.awaitRetirements();assertFalse(grid.exists());assertTrue(linear.exists())
         }finally{root.deleteRecursively()}
     }
     @Test fun orphanCleanupPreservesLiveUnknownAndSymlinkTargets()=runBlocking {
@@ -123,7 +124,8 @@ class OwnedDetailProviderTest {
             val raw=File(root,"source").apply{writeText("source")};val linear=File(root,"linear")
             val bytes=ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN).putFloat(0f).putFloat(1f).putFloat(2f);linear.writeBytes(bytes.array())
             val factory=DetailSourceFactory(root,memory)
-            val prepared=factory.prepare(PhotoSource(raw,"test","image/heic",1,1,6,linearFile=linear))
+            val photo=PhotoSource(raw,"test","image/heic",1,1,6,linearFile=linear)
+            val prepared=factory.prepare(photo)
             val grid=File(root,"cache/detail-preview/${prepared.relativePath}")
             factory.cleanupOrphans();assertTrue(grid.exists())
             val sources=grid.parentFile!!.parentFile!!
@@ -133,7 +135,7 @@ class OwnedDetailProviderTest {
             File(orphan,".owned-detail-source-v1").writeText("filmroom-detail-v1");File(orphan,".lease").writeText("")
             Files.createSymbolicLink(File(orphan,"escape").toPath(),outside.toPath())
             factory.cleanupOrphans();assertFalse(orphan.exists());assertTrue(keep.exists());assertTrue(unknown.exists());assertTrue(grid.exists())
-            prepared.close()
+            prepared.close();photo.clearLinearPreview();photo.detailGridCache.awaitRetirements()
         }finally{root.deleteRecursively()}
     }
     @Test fun failedOwnershipMarkerCleansDirectoryAndLease()=runBlocking {
@@ -162,9 +164,12 @@ class OwnedDetailProviderTest {
                 throw UnsatisfiedLinkError("deliberately stop after source preparation")
             }}
             val provider=OwnedDetailProvider(alias,api,memory)
-            try{provider.open(PhotoSource(raw,"source","image/heif",1,1,raw.length(),linearFile=linear),dev.filmroom.model.EditorState());fail()}
+            val photo=PhotoSource(raw,"source","image/heif",1,1,raw.length(),linearFile=linear)
+            try{provider.open(photo,dev.filmroom.model.EditorState());fail()}
             catch(e:DetailUnavailable){assertEquals("UNAVAILABLE",e.code)}
             assertTrue("Trusted alias must pass source guard and reach native plan",reachedPlan)
+            assertEquals(1,File(real,"cache/detail-preview/sources").listFiles().orEmpty().size)
+            photo.clearLinearPreview();photo.detailGridCache.awaitRetirements()
             assertTrue(File(real,"cache/detail-preview/sources").listFiles().orEmpty().isEmpty())
             assertTrue(raw.exists());assertTrue(linear.exists())
         }finally{outer.deleteRecursively()}
@@ -176,8 +181,11 @@ class OwnedDetailProviderTest {
             val raw=File(root,"source").apply{writeText("source")};val linear=File(root,"linear").apply{writeBytes(ByteArray(12))}
             val api=object:Fake(key){override fun nativePlan(requestJson:String):String=throw UnsatisfiedLinkError("missing owned ABI")}
             val provider=OwnedDetailProvider(root,api,memory)
-            try{provider.open(PhotoSource(raw,"test","image/heic",1,1,6,linearFile=linear),dev.filmroom.model.EditorState());fail()}
+            val photo=PhotoSource(raw,"test","image/heic",1,1,6,linearFile=linear)
+            try{provider.open(photo,dev.filmroom.model.EditorState());fail()}
             catch(e:DetailUnavailable){assertEquals("UNAVAILABLE",e.code)}
+            assertEquals(1,File(root,"cache/detail-preview/sources").listFiles().orEmpty().size)
+            photo.clearLinearPreview();photo.detailGridCache.awaitRetirements()
             assertTrue(File(root,"cache/detail-preview/sources").listFiles().orEmpty().isEmpty())
             assertTrue(raw.exists());assertTrue(linear.exists())
         }finally{root.deleteRecursively()}
@@ -230,6 +238,157 @@ class OwnedDetailProviderTest {
             };tile.bitmap.recycle()
         }}finally{s.close()}
         withTimeout(2000){while(clean.get()!=2)delay(5)}
+    }
+
+    @Test fun rgba8UsesNegotiatedAbiAndReleasesScratchAfterCopy()=runBlocking {
+        val f=object:Fake(key){
+            override fun nativeTile(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String=error("Legacy conversion should not run")
+            override fun nativeTileRgba8(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String {
+                val x=cellX*256;val y=cellY*256;val w=minOf(256,key.width-x);val h=minOf(256,key.height-y)
+                val sx=maxOf(0,x-1);val sy=maxOf(0,y-1);val sw=minOf(key.width,x+w+1)-sx;val sh=minOf(key.height,y+h+1)-sy
+                repeat(sw*sh){output.put(188.toByte());output.put(64.toByte());output.put(32.toByte());output.put(255.toByte())}
+                fun rect(x:Int,y:Int,w:Int,h:Int)=JSONObject().put("x",x).put("y",y).put("w",w).put("h",h)
+                return result("tile").put("outputValid",true).put("outputFormat","srgb-rgba8").put("bytesWritten",sw*sh*4).put("coreRect",rect(x,y,w,h)).put("sampleRect",rect(sx,sy,sw,sh)).toString()
+            }
+        }
+        val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,rgba8Output=true,outputPool=pool)
+        session.build("{}")
+        try {repeat(20){val tile=session.tile(1,1);assertEquals(DetailRect(255,255,45,5),tile.sample);assertEquals(0L,pool.usage().borrowedBytes);assertEquals(900L,pool.usage().allocatedBytes);tile.bitmap.recycle()}}
+        finally{session.close();session.awaitRetired()}
+        assertEquals(0L,pool.usage().allocatedBytes)
+    }
+    @Test fun cancellationCannotReturnScratchWhileNativeStillBorrowsIt()=runBlocking {
+        val f=Fake(key).apply{block=true};val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,outputPool=pool)
+        session.build("{}")
+        val worker=launch(Dispatchers.Default){session.tile(0,0)}
+        assertTrue(f.entered.await(5,TimeUnit.SECONDS));val bytes=pool.usage().borrowedBytes;assertTrue(bytes>0)
+        worker.cancel();session.close();delay(30)
+        assertEquals(bytes,pool.usage().borrowedBytes);assertEquals(0,pool.usage().idleCount)
+        f.exit.countDown();worker.join();session.awaitRetired()
+        assertEquals(0L,pool.usage().borrowedBytes);assertEquals(0L,pool.usage().allocatedBytes)
+    }
+    @Test fun advertisedRgbaAbiMissingSymbolFailsExplicitlyWithoutLegacyRetry()=runBlocking {
+        val f=object:Fake(key){override fun nativeTileRgba8(sessionId:Long,operationId:Long,cellX:Int,cellY:Int,output:ByteBuffer):String=throw UnsatisfiedLinkError("mismatched RGBA8 library")}
+        val clean=AtomicInteger();val pool=PreviewBufferPool(1024*1024)
+        val session=OwnedDetailSession(f,1,key,true,retained{clean.incrementAndGet()},DetailSource(300,260,"source","mapping","sources/test"){clean.incrementAndGet()},memory,rgba8Output=true,outputPool=pool)
+        session.build("{}")
+        try{session.tile(0,0);fail()}catch(e:DetailUnavailable){assertEquals("UNAVAILABLE",e.code)}
+        assertEquals(1,f.released.get());assertEquals(0L,pool.usage().borrowedBytes)
+        session.close();session.awaitRetired()
+    }
+
+    @Test fun rgba8CapabilityMustExplicitlyMatchSupportedAbi(){
+        assertTrue(DetailNativeContract.rgba8Available(JSONObject().put("outputRgba8",true).put("outputRgba8Abi",1)))
+        for(capabilities in listOf(JSONObject(),JSONObject().put("outputRgba8",true),JSONObject().put("outputRgba8",true).put("outputRgba8Abi",2),JSONObject().put("outputRgba8","true").put("outputRgba8Abi",1),JSONObject().put("outputRgba8",true).put("outputRgba8Abi","1")))assertFalse(DetailNativeContract.rgba8Available(capabilities))
+    }
+
+    @Test fun acceptsActualGpuAndRejectsPostBuildCpuIdentitySwitch()=runBlocking {
+        val f=object:Fake(key) {
+            var cpu=false
+            override fun result(op:String):JSONObject {
+                val response=super.result(op)
+                if(!cpu) {
+                    response.getJSONObject("identity").put("algorithm",DetailBackendContract.GPU_ALGORITHM)
+                    response.put("quality","ApproximateSameWorkingGrid")
+                    response.getJSONObject("backend").put("actualBackend","wgpu").put("cpuFallback",false)
+                        .put("reason","approximate_resident_detail").put("acceleratedStage","full-resident-detail-chain").put("gpuBatches",7)
+                }
+                return response
+            }
+        }
+        val c=AtomicInteger();val s=session(f,c)
+        try {
+            s.build("{}")
+            val tile=s.tile(0,0)
+            assertFalse(tile.cpuFallback);assertEquals("wgpu",tile.actualBackend)
+            assertEquals("ApproximateSameWorkingGrid",tile.quality);assertEquals("approximate_resident_detail",tile.backendReason)
+            tile.bitmap.recycle()
+            f.cpu=true
+            try{s.tile(0,0);fail("CPU pixels cannot enter a published GPU identity")}catch(e:DetailUnavailable){assertEquals("INVALID_RESULT",e.code)}
+        } finally {s.close();s.awaitRetired()}
+        assertEquals(2,c.get())
+    }
+
+    @Test fun providerPassesCpuAdmissionPolicyThroughToNativeBuild()=runBlocking {
+        val root=Files.createTempDirectory("detail-cpu-admission").toFile().canonicalFile
+        try {
+            File(root,"files/engine-data").mkdirs()
+            val original=File(root,"source.raw").apply{writeText("original")}
+            val linear=File(root,"linear.f32le").apply{writeBytes(ByteArray(12))}
+            val policies=mutableListOf<Boolean>();var built:JSONObject?=null
+            val api=object:Fake(key) {
+                override fun nativePlan(requestJson:String):String {
+                    val r=JSONObject(requestJson);val gpu=r.optBoolean("gpuAttempt",true);policies+=gpu
+                    return ok("plan").put("plan",JSONObject().put("maxDimension",1536)
+                        .put("regionOutput",r.optBoolean("regionOutput")).put("gpuAttempt",gpu)
+                        .put("peakReservedBytes",(if(gpu)250L else 100L)*1024*1024).put("diskReservedBytes",1)).toString()
+                }
+                override fun nativeBuild(sessionId:Long,operationId:Long,sourceRelative:String,requestJson:String):String {
+                    built=JSONObject(requestJson)
+                    assertFalse(built!!.getBoolean("gpuAttempt"));assertTrue(built!!.getJSONObject("parameters").getBoolean("useGpu"))
+                    return result("build").toString()
+                }
+                override fun identity():JSONObject {
+                    val r=checkNotNull(built)
+                    return JSONObject().put("sourceRevision",r.getString("sourceRevision")).put("mappingRevision",r.getString("mappingRevision"))
+                        .put("dataRevision",r.getString("dataRevision")).put("width",r.getInt("width")).put("height",r.getInt("height"))
+                        .put("parameters",r.getJSONObject("parameters").toString()).put("algorithm",DetailBackendContract.CPU_ALGORITHM)
+                }
+            }
+            // Shared ledger capacity is 200 MiB. GPU's 250 MiB plan is refused;
+            // CPU's 100 MiB + interop/safety fits and must govern nativeBuild.
+            val memory={NativeMemorySnapshot(464L*1024*1024,0,false)}
+            val provider=OwnedDetailProvider(root,api,memory)
+            val session=provider.open(PhotoSource(original,"source","image/x-adobe-dng",1,1,original.length(),linearFile=linear),
+                dev.filmroom.model.EditorState(useGpu=true,autoExposure=false),preferRegion=true)
+            try {
+                assertEquals(listOf(true,true,false),policies);assertNotNull(built)
+                assertTrue(session.regionOutput);assertTrue(JSONObject(session.key.parameters).getBoolean("useGpu"))
+            } finally {session.close();session.awaitRetired()}
+            assertTrue(original.exists());assertTrue(linear.exists())
+        } finally {root.deleteRecursively()}
+    }
+
+    @Test fun outputDiagnosticsFollowValidatedBackendAndNativeReservationBoundaries()=runBlocking {
+        val f=Fake(key);val c=AtomicInteger();val s=session(f,c);val records=mutableListOf<DetailTimingSnapshot>()
+        try {
+            s.build("{}")
+            val timing=DetailTiming(DetailAttemptKind.TILE,19,record=records::add)
+            val tile=withContext(timing){s.tile(0,0)}
+            assertSame(timing,tile.diagnosticTiming)
+            tile.diagnosticTiming!!.mark(DetailTimingPoint.ADOPTED);tile.diagnosticTiming!!.drawn()
+            val record=records.single()
+            assertEquals(19L,record.context);assertEquals(DetailActualBackend.CPU,record.backend);assertEquals(true,record.cpuFallback)
+            for(point in listOf(DetailTimingPoint.RESERVATION_REQUESTED,DetailTimingPoint.RESERVATION_ACQUIRED,DetailTimingPoint.JNI_ENTER,DetailTimingPoint.JNI_EXIT,DetailTimingPoint.CONVERSION_START,DetailTimingPoint.CONVERSION_END,DetailTimingPoint.RETURNED,DetailTimingPoint.ADOPTED,DetailTimingPoint.FIRST_DRAW))assertTrue("Missing $point",record.offsets.containsKey(point))
+            assertTrue(record.offsets[DetailTimingPoint.JNI_EXIT]!!>=record.offsets[DetailTimingPoint.JNI_ENTER]!!)
+            tile.bitmap.recycle()
+        }finally{s.close();s.awaitRetired()}
+    }
+    @Test fun invalidNativeIdentityNeverPublishesDiagnosticBackend()=runBlocking {
+        val f=object:Fake(key){var invalid=false;override fun result(op:String)=super.result(op).also{if(invalid)it.getJSONObject("backend").put("actualBackend","secret_path")}}
+        val c=AtomicInteger();val s=session(f,c);val records=mutableListOf<DetailTimingSnapshot>()
+        try {
+            s.build("{}")
+            f.invalid=true;val timing=DetailTiming(DetailAttemptKind.TILE,record=records::add)
+            try{withContext(timing){s.tile(0,0)};fail()}catch(_:DetailUnavailable){}
+            assertEquals(DetailTimingTerminal.FAILED,records.single().terminal);assertNull(records.single().backend)
+            assertEquals(DetailDiagnosticFailure.INVALID_RESULT,records.single().failure);assertFalse(records.single().fields().toString().contains("secret_path"))
+        }finally{s.close();s.awaitRetired()}
+    }
+    @Test fun detailSourceDiagnosticsDistinguishExistingLinearAndDoNotExposeHashes()=runBlocking {
+        val root=Files.createTempDirectory("detail-timing-source").toFile();val records=mutableListOf<DetailTimingSnapshot>()
+        try{
+            val raw=File(root,"private-name.raw").apply{writeText("secret")};val linear=File(root,"private-linear").apply{writeBytes(ByteArray(12))}
+            val timing=DetailTiming(DetailAttemptKind.OPEN,record=records::add)
+            val photo=PhotoSource(raw,"secret-title","image/x-adobe-dng",1,1,raw.length(),linearFile=linear)
+            val prepared=DetailSourceFactory(root,memory).prepare(photo,1536,timing)
+            try{timing.finish(DetailTimingTerminal.OPEN_READY);val record=records.single();assertEquals(DetailSourceRoute.EXISTING_LINEAR,record.sourceRoute)
+                assertTrue(record.offsets.containsKey(DetailTimingPoint.SOURCE_HASH_END));assertTrue(record.offsets.containsKey(DetailTimingPoint.RESIZE_END));assertFalse(record.offsets.containsKey(DetailTimingPoint.DECODE_START))
+                val text=record.fields().toString();assertFalse(text.contains("private"));assertFalse(text.contains("secret"));assertFalse(text.contains(prepared.sourceRevision));assertFalse(text.contains(prepared.mappingRevision))
+            }finally{prepared.close();photo.clearLinearPreview();photo.detailGridCache.awaitRetirements()}
+        }finally{root.deleteRecursively()}
     }
 
 }

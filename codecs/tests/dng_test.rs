@@ -1,3 +1,5 @@
+#[path = "support/gainmap_oracle.rs"]
+mod gainmap_oracle;
 use film_codecs::{
     develop::{Budget, admit, decode, mapped},
     dng::Dng,
@@ -167,7 +169,7 @@ fn independent_linear_sensor_color_values() {
 fn hostile_dimensions_and_compression_rejected() {
     let source = fs::read(fixture("RGGB.dng")).unwrap();
     for (tag, value, code) in [
-        (256u16, 4_000_000_000u32, "PIXEL_LIMIT"),
+        (256u16, 4_000_000_000u32, "EDGE_LIMIT"),
         (259, 8, "UNSUPPORTED_COMPRESSION"),
     ] {
         let mut b = source.clone();
@@ -191,28 +193,84 @@ fn hostile_dimensions_and_compression_rejected() {
 }
 #[test]
 fn aosp_shaped_optional_metadata_and_rejection() {
-    let input = fixture("phone-optional.dng");
-    let d = Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();
-    assert!(d.has_forward_matrix);
-    assert_eq!(
-        d.warnings[0].code,
-        "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED"
-    );
-    let out = temp("phone-optional");
-    decode(&input, &out, &Budget::default(), &AtomicBool::new(false)).unwrap();
-    let reference = temp("plain-reference");
-    decode(
-        &fixture("RGGB.dng"),
-        &reference,
-        &Budget::default(),
-        &AtomicBool::new(false),
-    )
-    .unwrap();
-    assert_eq!(fs::read(&out).unwrap(), fs::read(&reference).unwrap());
-    fs::remove_file(out).unwrap();
-    fs::remove_file(reference).unwrap();
+    // Known optional and required maps execute the same supported operation.
+    for name in ["phone-optional.dng", "phone-mandatory.dng"] {
+        let input = fixture(name);
+        let d = Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();
+        assert!(d.has_forward_matrix);
+        assert!(!d.cfa_gain_maps.is_empty());
+        assert!(
+            !d.warnings
+                .iter()
+                .any(|w| w.code == "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED")
+        );
+        let raw = gainmap_oracle::prepare(&input);
+        assert_gainmap_sensor(&input, &raw);
+        let mut dev = RawDevelop::default();
+        dev.steps
+            .retain(|s| !matches!(s, ProcessingStep::SRgb | ProcessingStep::Rescale));
+        let reference = match dev.develop_intermediate(&raw).unwrap() {
+            Intermediate::ThreeColor(p) => p,
+            _ => panic!(),
+        };
+        let out = temp(name);
+        decode(&input, &out, &Budget::default(), &AtomicBool::new(false)).unwrap();
+        let actual = fs::read(&out).unwrap();
+        let max = actual
+            .chunks_exact(4)
+            .zip(reference.data.iter().flatten())
+            .map(|(a, b)| (f32::from_le_bytes(a.try_into().unwrap()) - b).abs())
+            .fold(0f32, f32::max);
+        assert!(
+            max < 2e-6,
+            "independent supported opcode oracle: {name} {max}"
+        );
+        fs::remove_file(out).unwrap();
+    }
+    // Unknown required operations still reject; unknown optional operations
+    // retain the explicit warning and established uncorrected output policy.
+    for (name, optional) in [("phone-optional.dng", true), ("phone-mandatory.dng", false)] {
+        let mut bytes = fs::read(fixture(name)).unwrap();
+        let n = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
+        let entry = (0..n)
+            .map(|i| 10 + i * 12)
+            .find(|&p| u16::from_le_bytes([bytes[p], bytes[p + 1]]) == 51009)
+            .unwrap();
+        let offset = u32::from_le_bytes(bytes[entry + 8..entry + 12].try_into().unwrap()) as usize;
+        bytes[offset + 4..offset + 8].copy_from_slice(&99u32.to_be_bytes());
+        let path = temp(if optional {
+            "unknown-optional.dng"
+        } else {
+            "unknown-required.dng"
+        });
+        fs::write(&path, bytes).unwrap();
+        let d = Dng::read(&mut fs::File::open(&path).unwrap());
+        if optional {
+            let d = d.unwrap();
+            assert!(
+                d.warnings
+                    .iter()
+                    .any(|w| w.code == "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED")
+            );
+            let out = temp("unknown-optional.f32");
+            let plain = temp("unknown-plain.f32");
+            decode(&path, &out, &Budget::default(), &AtomicBool::new(false)).unwrap();
+            decode(
+                &fixture("RGGB.dng"),
+                &plain,
+                &Budget::default(),
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            assert_eq!(fs::read(&out).unwrap(), fs::read(&plain).unwrap());
+            fs::remove_file(out).unwrap();
+            fs::remove_file(plain).unwrap();
+        } else {
+            assert_eq!(d.unwrap_err().code, "UNSUPPORTED_DNG_OPCODE");
+        }
+        fs::remove_file(path).unwrap();
+    }
     for (name, code) in [
-        ("phone-mandatory.dng", "UNSUPPORTED_DNG_OPCODE"),
         ("phone-malformed.dng", "INVALID_INPUT"),
         ("phone-calibration.dng", "UNSUPPORTED_DNG_CALIBRATION"),
     ] {
@@ -228,7 +286,16 @@ fn aosp_shaped_optional_metadata_and_rejection() {
 #[test]
 fn positive_diagonal_calibration_cancels_under_rawdevelop_row_normalization() {
     let a = fixture("RGGB.dng");
-    let b = fixture("phone-diagonal.dng");
+    let b = temp("diagonal-only.dng");
+    let mut bytes = fs::read(fixture("phone-diagonal.dng")).unwrap();
+    let n = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
+    for i in 0..n {
+        let p = 10 + i * 12;
+        if u16::from_le_bytes([bytes[p], bytes[p + 1]]) == 51009 {
+            bytes[p..p + 2].copy_from_slice(&65000u16.to_le_bytes());
+        }
+    }
+    fs::write(&b, bytes).unwrap();
     let original = Dng::read(&mut fs::File::open(&a).unwrap()).unwrap();
     let calibrated = Dng::read(&mut fs::File::open(&b).unwrap()).unwrap();
     // Prove calibration was actually included, rather than blanket ignored.
@@ -251,6 +318,7 @@ fn positive_diagonal_calibration_cancels_under_rawdevelop_row_normalization() {
     assert!(max < 2e-6, "diagonal equivalence difference {max}");
     fs::remove_file(oa).unwrap();
     fs::remove_file(ob).unwrap();
+    fs::remove_file(b).unwrap();
 }
 
 #[test]
@@ -283,9 +351,11 @@ fn real_cc0_phone_dngs_match_pinned_full_rawdevelop() {
         let input = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/public-fixtures")
             .join(name);
-        let raw = rawler::decode_file(&input).unwrap();
+        let raw = gainmap_oracle::prepare(&input);
+        assert_gainmap_sensor(&input, &raw);
         let mut dev = RawDevelop::default();
-        dev.steps.retain(|s| !matches!(s, ProcessingStep::SRgb));
+        dev.steps
+            .retain(|s| !matches!(s, ProcessingStep::SRgb | ProcessingStep::Rescale));
         let reference = match dev.develop_intermediate(&raw).unwrap() {
             Intermediate::ThreeColor(p) => p,
             _ => panic!(),
@@ -306,6 +376,7 @@ fn real_cc0_phone_dngs_match_pinned_full_rawdevelop() {
                 max = max.max((f32::from_le_bytes(a.try_into().unwrap()) - b).abs());
             }
         }
+        eprintln!("independent gainmap RGB {name}: max={max}");
         assert!(max < 3e-6, "{name} whole-frame difference {max}");
         fs::remove_file(output).unwrap();
     }
@@ -441,4 +512,30 @@ fn hsv_second_table_and_required_descriptors_are_validated_independently() {
         assert_eq!(Dng::read(&mut fs::File::open(&p).unwrap()).is_ok(), valid);
         fs::remove_file(p).unwrap();
     }
+}
+
+fn assert_gainmap_sensor(path: &std::path::Path, raw: &rawler::RawImage) {
+    let mut file = fs::File::open(path).unwrap();
+    let d = Dng::read(&mut file).unwrap();
+    let rawler::RawImageData::Float(pixels) = &raw.data else {
+        panic!()
+    };
+    let mut max = 0f32;
+    let mut changed = 0usize;
+    for y in (0..d.active.h).step_by(64) {
+        let h = 64.min(d.active.h - y);
+        let values = d.read_tile(&mut file, d.active.y + y, h).unwrap();
+        for (r, row) in values.chunks_exact(d.active.w).enumerate() {
+            for (x, a) in row.iter().enumerate() {
+                let b = pixels[(d.active.y + y + r) * raw.width + d.active.x + x];
+                max = max.max((a - b).abs());
+                changed += usize::from(a.to_bits() != b.to_bits());
+            }
+        }
+    }
+    eprintln!("independent gainmap sensor {path:?}: max={max} changed={changed}");
+    assert_eq!(
+        changed, 0,
+        "independent GainMap sensor precision mismatch {path:?}: {max}"
+    );
 }

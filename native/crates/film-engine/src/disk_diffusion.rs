@@ -3,6 +3,7 @@
 //! boundaries. No image resizing, shortened halo, or Gaussian approximation.
 use std::{fs::{self,File,OpenOptions},io::{self,Read,Write,Seek,SeekFrom},path::{Path,PathBuf}};
 use rustfft::{FftPlanner,num_complex::Complex};
+use rayon::prelude::*;
 use spektrafilm_model::diffusion::ExactDiffusionKernel;
 
 const CORE:usize=4096;
@@ -58,6 +59,101 @@ struct OutputGuard{path:PathBuf,keep:bool}impl Drop for OutputGuard{fn drop(&mut
 pub fn apply_plane(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,
     cancelled:impl FnMut()->bool,progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
  apply_plane_with_core(input,output,work_dir,width,height,kernel,channel,CORE,cancelled,progress)
+}
+// Memory FFT is opt-in only through an already reserved export budget. Never
+// infer permission from MemAvailable or raise a low budget to a minimum.
+fn fft_pool()->Option<&'static rayon::ThreadPool> {
+ static POOL:std::sync::OnceLock<Option<rayon::ThreadPool>>=std::sync::OnceLock::new();
+ POOL.get_or_init(||rayon::ThreadPoolBuilder::new().num_threads(2).stack_size(2*1024*1024).thread_name(|n|format!("film-fft-{n}")).start_handler(|_|crate::export_execution::lower_export_thread_priority()).build().ok()).as_ref()
+}
+fn memory_fft_need(side:usize,width:usize,pixels:u64)->Option<u64>{
+ // Two complex planes + retained source + planner/twiddles, at most two
+ // worker scratches, row IO, and 8MiB covering worker stacks/allocation margin.
+ (side as u64).checked_mul(side as u64)?.checked_mul(32)?
+  .checked_add(pixels.checked_mul(8)?)?.checked_add(side as u64*1024)?
+  .checked_add(width as u64*16)?.checked_add(8*1024*1024)
+}
+fn choose_in_memory_core(radius:usize,w:usize,h:usize,cap:u64)->Option<usize>{
+ let n=(w as u64).checked_mul(h as u64)?;let mut core=CORE.min(w.max(h)).max(1);
+ loop{let side=next_fast(radius.checked_mul(2)?.checked_add(core)?);
+  if memory_fft_need(side,w,n)?<=cap{return Some(core);}
+  if core<=256{return None;}core=(core*3/4).max(256);
+ }
+}
+/// Additional memory cap is supplied by the managed export reservation, after
+/// subtracting its pipeline, row, spatial-buffer and stack reserves.
+pub(crate) fn apply_plane_budgeted(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,additional_memory_cap:u64,
+ mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ let(w,h)=(width as usize,height as usize);
+ if w==0||h==0||channel>=3||fs::metadata(input)?.len()!=w as u64*h as u64*8{return Err(io::Error::new(io::ErrorKind::InvalidInput,"Invalid diffusion source"));}
+ check(&mut cancelled)?;
+ if let Some(core)=choose_in_memory_core(kernel.radius,w,h,additional_memory_cap).filter(|_|fft_pool().is_some()){
+  match apply_plane_in_memory(input,output,width,height,kernel,channel,core,&mut cancelled,&mut progress){
+   Ok(metrics)=>return Ok(metrics),
+   Err(e) if e.kind()==io::ErrorKind::OutOfMemory=>{},
+   Err(e)=>return Err(e),
+  }
+ }
+ apply_plane_with_core(input,output,work_dir,width,height,kernel,channel,CORE,cancelled,progress)
+}
+fn alloc_complex(len:usize)->io::Result<Vec<Complex<f64>>>{
+ let mut v=Vec::new();v.try_reserve_exact(len).map_err(|_|io::Error::new(io::ErrorKind::OutOfMemory,"diffusion plane allocation"))?;v.resize(len,Complex::new(0.,0.));Ok(v)
+}
+fn alloc_f64(len:usize)->io::Result<Vec<f64>>{
+ let mut v=Vec::new();v.try_reserve_exact(len).map_err(|_|io::Error::new(io::ErrorKind::OutOfMemory,"diffusion source allocation"))?;v.resize(len,0.);Ok(v)
+}
+/// In-place row FFTs over a contiguous `side*xside` plane, parallel across rows.
+fn transform_rows_mem(a:&mut [Complex<f64>],side:usize,inverse:bool,c:&mut impl FnMut()->bool)->io::Result<()>{
+ let mut planner=FftPlanner::<f64>::new();let fft=if inverse{planner.plan_fft_inverse(side)}else{planner.plan_fft_forward(side)};
+ let scratch=fft.get_inplace_scratch_len();const CHUNK:usize=64;
+ let pool=fft_pool().ok_or_else(||io::Error::new(io::ErrorKind::OutOfMemory,"Bounded FFT pool unavailable"))?;
+ for rows in a.chunks_mut(side*CHUNK){check(c)?;pool.install(||rows.par_chunks_mut(side).try_for_each_init(||alloc_complex(scratch),|s,row|{let s=s.as_mut().map_err(|_|io::Error::new(io::ErrorKind::OutOfMemory,"FFT worker scratch unavailable"))?;fft.process_with_scratch(row,s);Ok::<_,io::Error>(())}))?;}
+ Ok(())
+}
+/// Cache-blocked in-place square transpose (frees the second transient plane).
+fn transpose_in_place(a:&mut [Complex<f64>],side:usize,c:&mut impl FnMut()->bool)->io::Result<()>{
+ const T:usize=32;
+ for bi in (0..side).step_by(T){check(c)?;let imax=(bi+T).min(side);
+  for i in bi..imax{for j in (i+1)..imax{a.swap(i*side+j,j*side+i);}}
+  let mut bj=bi+T;while bj<side{let jmax=(bj+T).min(side);for i in bi..imax{for j in bj..jmax{a.swap(i*side+j,j*side+i);}}bj+=T;}
+ }
+ Ok(())
+}
+fn forward_mem(a:&mut [Complex<f64>],side:usize,c:&mut impl FnMut()->bool)->io::Result<()>{
+ transform_rows_mem(a,side,false,c)?;transpose_in_place(a,side,c)?;transform_rows_mem(a,side,false,c)
+}
+fn inverse_mem(a:&mut [Complex<f64>],side:usize,c:&mut impl FnMut()->bool)->io::Result<()>{
+ transform_rows_mem(a,side,true,c)?;transpose_in_place(a,side,c)?;transform_rows_mem(a,side,true,c)
+}
+/// In-memory original-PSF overlap-save. Numerical agreement is tested, not assumed bit-exact.
+fn apply_plane_in_memory(input:&Path,output:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,core_max:usize,
+    mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
+ let (w,h)=(width as usize,height as usize);let n=(w as u64)*(h as u64);
+ let side=next_fast(2*kernel.radius+core_max.min(w.max(h)).max(1));let core=side-2*kernel.radius;
+ check(&mut cancelled)?;
+ // Source plane read once into RAM (finite-validated), then gathered by reflection.
+ let mut src=alloc_f64(w*h)?;
+ {let mut f=File::open(input)?;let mut bytes=vec![0u8;w*8];for y in 0..h{check(&mut cancelled)?;f.read_exact(&mut bytes)?;for(v,b)in src[y*w..(y+1)*w].iter_mut().zip(bytes.chunks_exact(8)){*v=f64::from_le_bytes(b.try_into().unwrap());if !v.is_finite(){return Err(io::Error::new(io::ErrorKind::InvalidData,"Nonfinite diffusion input"));}}}}
+ let mut data=alloc_complex(side*side)?;let mut kspec=alloc_complex(side*side)?;
+ // Kernel spectrum (transposed orientation, matching the tile forward pass).
+ for y in 0..side{check(&mut cancelled)?;let row=&mut data[y*side..(y+1)*side];row.fill(Complex::new(0.,0.));if y<kernel.side(){for(dst,value)in row.iter_mut().zip(kernel.row(channel,y)){dst.re=value;}}}
+ forward_mem(&mut data,side,&mut cancelled)?;kspec.copy_from_slice(&data);
+ let mut out=fresh(output)?;let mut output_guard=OutputGuard{path:output.to_path_buf(),keep:false};out.set_len(n*8)?;
+ let norm=1./(side as f64*side as f64);let mut completed=0u64;let mut tiles=0u64;
+ for y0 in(0..h).step_by(core){let hh=core.min(h-y0);for x0 in(0..w).step_by(core){let ww=core.min(w-x0);check(&mut cancelled)?;
+  // Entire overlap-save input tile is globally reflected, never tile-reflected.
+  fft_pool().unwrap().install(||data.par_chunks_mut(side).enumerate().for_each(|(y,drow)|{let sy=reflect(y0 as isize+y as isize-kernel.radius as isize,h);let srow=&src[sy*w..sy*w+w];for x in 0..side{drow[x]=Complex::new(srow[reflect(x0 as isize+x as isize-kernel.radius as isize,w)],0.);}}));
+  check(&mut cancelled)?;
+  forward_mem(&mut data,side,&mut cancelled)?;
+  fft_pool().unwrap().install(||data.par_iter_mut().zip(kspec.par_iter()).for_each(|(d,k)|*d*=*k));
+  inverse_mem(&mut data,side,&mut cancelled)?;
+  let mut outbytes=vec![0u8;ww*8];
+  for y in 0..hh{check(&mut cancelled)?;let conv=&data[(y+2*kernel.radius)*side+2*kernel.radius..];for x in 0..ww{let original=src[(y0+y)*w+x0+x];let value=(1.-kernel.scatter)*original+kernel.scatter*conv[x].re*norm;if !value.is_finite(){return Err(io::Error::new(io::ErrorKind::InvalidData,"Nonfinite diffusion result"));}outbytes[x*8..(x+1)*8].copy_from_slice(&value.to_le_bytes());}
+   out.seek(SeekFrom::Start((((y0+y)*w+x0)*8)as u64))?;out.write_all(&outbytes)?;}
+  completed+=(ww*hh)as u64;tiles+=1;progress(completed,n);
+ }}
+ out.flush()?;check(&mut cancelled)?;output_guard.keep=true;
+ Ok(DiffusionMetrics{peak_scratch_bytes:n*8,explicit_buffer_bytes:memory_fft_need(side,w,n).unwrap_or(u64::MAX).max(1024*1024),tiles,fft_side:side})
 }
 fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,height:u32,kernel:&ExactDiffusionKernel,channel:usize,core_max:usize,
     mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<DiffusionMetrics>{
@@ -137,6 +233,25 @@ fn apply_plane_with_core(input:&Path,output:&Path,work_dir:&Path,width:u32,heigh
   let kernel=ExactDiffusionKernel::new(&config("black_pro_mist"),10.,1,7).unwrap();apply_plane(&input,&output,&root.join("work"),1,7,&kernel,0,||false,|_,_|{}).unwrap();
   assert!(fs::read(output).unwrap().chunks_exact(8).all(|v|(f64::from_le_bytes(v.try_into().unwrap())-2.5).abs()<1e-12));
  }
+ #[test] fn in_memory_tiled_matches_whole_frame(){
+  let(w,h)=(47u32,29u32);let root=folder("mem-seam");let _guard=DirGuard(root.clone());let input=root.join("input");let output=root.join("output");
+  let image=ImageBuf::from_data(w,h,(0..w*h*3).map(|i|from_f64(((i*37)%251)as f64/13.)).collect());let df=config("black_pro_mist");
+  let kernel=ExactDiffusionKernel::new(&df,10.,w as usize,h as usize).unwrap();let expected=apply_diffusion_filter_um(&image,&df,10.);
+  let mut f=File::create(&input).unwrap();for px in image.data.chunks_exact(3){f.write_all(&(px[2]as f64).to_le_bytes()).unwrap();}drop(f);
+  let metrics=apply_plane_in_memory(&input,&output,w,h,&kernel,2,16,||false,|_,_|{}).unwrap();assert!(metrics.tiles>=4);
+  let bytes=fs::read(output).unwrap();let max=bytes.chunks_exact(8).zip(expected.data.chunks_exact(3)).map(|(v,p)|(f64::from_le_bytes(v.try_into().unwrap())-p[2]as f64).abs()).fold(0.,f64::max);assert!(max<1e-10,"in-memory seam {max:e}");
+ }
+ #[test] fn in_memory_matches_disk_path(){
+  let(w,h)=(38u32,26u32);let root=folder("mem-vs-disk");let _guard=DirGuard(root.clone());
+  let image=ImageBuf::from_data(w,h,(0..w*h*3).map(|i|from_f64(((i*23)%197)as f64/11.)).collect());let df=config("pro_mist");
+  let kernel=ExactDiffusionKernel::new(&df,10.,w as usize,h as usize).unwrap();
+  let input=root.join("input");let mut f=File::create(&input).unwrap();for px in image.data.chunks_exact(3){f.write_all(&(px[0]as f64).to_le_bytes()).unwrap();}drop(f);
+  let mem_out=root.join("mem");apply_plane_in_memory(&input,&mem_out,w,h,&kernel,0,16,||false,|_,_|{}).unwrap();
+  let disk_out=root.join("disk");apply_plane_with_core(&input,&disk_out,&root.join("work"),w,h,&kernel,0,16,||false,|_,_|{}).unwrap();
+  let a=fs::read(mem_out).unwrap();let b=fs::read(disk_out).unwrap();
+  let max=a.chunks_exact(8).zip(b.chunks_exact(8)).map(|(x,y)|(f64::from_le_bytes(x.try_into().unwrap())-f64::from_le_bytes(y.try_into().unwrap())).abs()).fold(0.,f64::max);assert!(max<1e-12,"mem vs disk {max:e}");
+ }
+ #[test] fn memory_fft_budget_is_never_raised(){assert!(choose_in_memory_core(64,2048,1024,0).is_none());let low=choose_in_memory_core(64,2048,1024,64*1024*1024).unwrap();let high=choose_in_memory_core(64,2048,1024,256*1024*1024).unwrap();assert!(low<high);assert!(memory_fft_need(next_fast(128+low),2048,2048*1024).unwrap()<=64*1024*1024);}
  #[test] fn kernel_normalization_cancels(){let mut calls=0;let result=ExactDiffusionKernel::new_cancellable(&config("black_pro_mist"),5.,8192,6144,||{calls+=1;calls>2});assert!(matches!(result,Err("CANCELLED")));}
 
 }

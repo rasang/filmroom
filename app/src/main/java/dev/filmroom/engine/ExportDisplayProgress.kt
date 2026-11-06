@@ -1,14 +1,14 @@
 package dev.filmroom.engine
 
 /** Seven public steps; raw stages 7/8 remain distinct for durable old queues and diagnostics. */
-data class ExportDisplayProgress(val stage:Int, val done:Long=0, val total:Long=0) {
+data class ExportDisplayProgress(val stage:Int, val done:Long=0, val total:Long=0, val gpu:GpuWorkProgress?=null, val visual:ExportVisualProgress?=null) {
     init { require(stage in 1..8 && done>=0 && total>=done && total<=MAX_WORK) }
-    val displayStage:Int get()=stage.coerceAtMost(7)
+    val displayStage:Int get()=visual?.stage ?: stage.coerceAtMost(7)
     val label:String get()=LABELS[displayStage-1]
     val percent:Int? get()=if(total>0)(done*100/total).toInt() else null
     // Encoding and cleanup have no common measured denominator. Do not reset or invent
     // a percentage when moving between them; only completed cleanup certifies 100%.
-    val displayPercent:Int? get()=if(stage<7)percent else if(stage==8 && total>0 && done==total)100 else null
+    val displayPercent:Int? get()=if(visual!=null)visual.percent else if(stage<7)percent else if(stage==8 && total>0 && done==total)100 else null
     // Two reserved lines keep updates from changing the compact dialog's height.
     val compactText:String get()=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c6bddcd61e6b, label, displayStage)+(displayPercent?.let{" · $it%"} ?: "")
     companion object {

@@ -292,6 +292,12 @@ pub fn encode(
     if p.quality.is_some_and(|q| q == 0 || q > 100) {
         return Err(err("INVALID_INPUT", "admission"));
     }
+    if p.width == 0 || p.height == 0 {
+        return Err(err("INVALID_INPUT", "admission"));
+    }
+    if p.width > crate::export_limits::MAX_EXPORT_EDGE || p.height > crate::export_limits::MAX_EXPORT_EDGE {
+        return Err(err("EDGE_LIMIT", "admission"));
+    }
     let admission = crate::export_limits::plan(p.width, p.height, format == "JPEG")
         .ok_or_else(|| err("PIXEL_LIMIT", "admission"))?;
     let peak = admission.estimated_peak_bytes;

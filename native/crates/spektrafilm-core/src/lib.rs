@@ -7,6 +7,7 @@ pub mod mallett;
 pub mod neutral_filters;
 pub mod params;
 pub mod pipeline;
+pub mod prepared_spectral;
 pub mod print_morph;
 pub mod profile;
 pub mod spectral_service;

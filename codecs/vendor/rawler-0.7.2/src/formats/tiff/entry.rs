@@ -90,6 +90,15 @@ impl Entry {
       return Ok(Entry {tag,value:Value::Undefined(Vec::new()),embedded:None});
     }
 
+    if let Some(length)=crate::metadata_budget::olympus_makernote_extent(tag,typ){
+      let offset=apply_corr(reader.read_u32()?,corr);
+      let begin=(base as u64).checked_add(offset as u64).ok_or_else(||TiffError::General("ORF MakerNote offset".into()))?;
+      if count<16 || begin.checked_add(count as u64).is_none_or(|end|end>length){return Err(TiffError::General("ORF MakerNote extent".into()));}
+      if !crate::metadata_budget::charge(32,false){return Err(TiffError::General("ORF metadata budget".into()));}
+      reader.goto(base.checked_add(offset).ok_or_else(||TiffError::General("ORF MakerNote offset".into()))?)?;
+      let mut signature=vec![0;16];reader.read_u8_into(&mut signature)?;reader.goto(pos+12)?;
+      return Ok(Entry{tag,value:Value::Undefined(signature),embedded:Some(offset)});
+    }
     // If we don't know the type assume byte data (undefined)
     let compat_typ = if typ == 0 || typ > 12 { 7 } else { typ };
 

@@ -24,7 +24,10 @@ impl Huff{
 /// Calls sink only for complete rows. Failure invalidates ALL previously emitted
 /// rows; the caller must retain its output guard until EOI and exact extent pass.
 pub fn rows(file:&mut File,offset:u64,bytes:u64,width:usize,height:usize,precision:u8,cancel:&AtomicBool,mut sink:impl FnMut(usize,&[u16])->Result<()>)->Result<()>{
- if width==0||height==0||width>32768||height>32768||width.checked_mul(height).is_none_or(|n|n>crate::MAX_PIXELS as usize)||!matches!(precision,12|14|16){return Err(unsupported())}
+ if width==0||height==0{return Err(invalid())}
+ if width>32768||height>32768{return Err(err("EDGE_LIMIT","decode"))}
+ crate::validate_dimensions(width as u32,height as u32)?;
+ if !matches!(precision,12|14|16){return Err(unsupported())}
  if offset.checked_add(bytes).is_none_or(|e|file.metadata().map(|m|e>m.len()).unwrap_or(true)){return Err(invalid())}
  file.seek(SeekFrom::Start(offset)).map_err(|e|io_error(e,"decode"))?;
  let mut input=Input{r:BufReader::with_capacity(65536,file.take(bytes)),byte:0,left:0};

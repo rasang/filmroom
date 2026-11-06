@@ -6,6 +6,8 @@ license.workspace = true
 
 [features]
 default = ["wgpu-backend"]
+# Validation-only, explicitly enabled. No Android/JNI entry is added.
+resource-audit = ["wgpu-backend"]
 wgpu-backend = ["dep:wgpu"]
 cuda-backend = ["dep:cudarc"]
 precision-f64 = ["spektrafilm-math/precision-f64"]

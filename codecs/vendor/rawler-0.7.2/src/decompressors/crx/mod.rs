@@ -36,6 +36,7 @@ use std::io::Cursor;
 use thiserror::Error;
 
 mod decoder;
+mod bounded_math;
 mod idwt;
 mod iquant;
 mod mdat;
@@ -419,4 +420,14 @@ pub fn decompress_crx_image(buf: &[u8], cmp1: &Cmp1Box) -> Result<Vec<u16>> {
   let image = CodecParams::new(cmp1)?;
   debug!("CRX codec parameter: {:?}", image);
   image.decode(buf)
+}
+
+/// Filmroom: validate the codec shape before using allocation-driving fields.
+pub fn bounded_crx_plan(buf:&[u8],cmp1:&Cmp1Box)->Result<u64>{
+  if cmp1.tile_width==0 || cmp1.tile_height==0 || cmp1.enc_type>3 || cmp1.cfa_layout!=0 || !matches!(cmp1.version,0x100|0x200) || cmp1.image_levels>3 || !matches!(cmp1.n_bits,12|14|16) || !matches!(cmp1.median_bits,12|14|16){return Err(CrxError::Unsupp("Bounded CRX parameters".into()));}
+  CodecParams::new(cmp1)?.bounded_validate(buf)
+}
+/// Write actual sensor samples in exact row segments, never a preview.
+pub fn decompress_crx_segments(buf:&[u8],cmp1:&Cmp1Box,sink:&mut dyn FnMut(usize,usize,&[u16])->crate::Result<()>,cancel:&dyn Fn()->bool)->Result<()>{
+  bounded_crx_plan(buf,cmp1)?;CodecParams::new(cmp1)?.decode_segments(buf,sink,cancel)
 }

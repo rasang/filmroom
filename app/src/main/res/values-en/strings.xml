@@ -253,7 +253,7 @@
     <string name="text_646130986822" formatted="false">Gamut compression</string>
     <string name="text_192216b8cb6d" formatted="false">Compresses colors outside the sRGB gamut into the displayable range. Automatically disabled for wide-gamut export.</string>
     <string name="text_6f16843acab7" formatted="false">GPU acceleration</string>
-    <string name="text_8d80b85bbd7f" formatted="false">Automatically attempts Adreno acceleration for some density stages; other stages remain on the CPU. Falls back to the CPU when unavailable. Faster processing is not guaranteed.</string>
+    <string name="text_8d80b85bbd7f" formatted="false">Experimental resident or banded GPU rendering. Some effects use approximations and may differ from CPU output. Falls back to CPU when budgets or device support are insufficient. Speed gains are not guaranteed.</string>
     <string name="text_683099bf5b6c" formatted="false">Film default</string>
     <string name="text_789f61dbfcc7" formatted="false">Red</string>
     <string name="text_d5234258fd84" formatted="false">Amber</string>
@@ -390,8 +390,8 @@
     <string name="text_19b3b0255d08" formatted="false">On-device photo read/write failed. Check available storage and select the original file again.</string>
     <string name="text_199d9706e7a1" formatted="false">Could not read complete, valid image data. Select the original file again. It is not yet possible to confirm whether the file is damaged.</string>
     <string name="text_e92a0c3cbaef" formatted="false">This output color space is not supported yet. Color tags were not changed in place of conversion.</string>
-    <string name="text_d6bc69a0a6a8" formatted="false">The final export exceeds the current limit of 84 million pixels.</string>
-    <string name="text_5c55db3ba035" formatted="false">This photo exceeds the codec component\'s current limit of 52 million pixels.</string>
+    <string name="text_d6bc69a0a6a8" formatted="false">Image too large: JPEG/TIFF export supports at most 84 million pixels and 32768 pixels per edge.</string>
+    <string name="text_5c55db3ba035" formatted="false">Image too large: RAW supports at most 52 million pixels and 32768 pixels per edge.</string>
     <string name="text_6bceec6d29d6" formatted="false">Not enough device storage. Processing did not finish. Your original photo is unchanged.</string>
     <string name="text_d171c3322a9c" formatted="false">The current device memory budget is too low to process this photo safely.</string>
     <string name="text_56858cdae70f" formatted="false">This RAW file\'s color calibration data is not supported yet. No guessed colors were substituted.</string>
@@ -405,7 +405,7 @@
     <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\nEncoding: UTF-8; single text file (not ZIP)\n\n=== Summary ===\n</string>
     <string name="text_7af205e83135" formatted="false">\n\n=== Full sanitized event details ===\n</string>
     <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
-    <string name="text_60ef08049a72" formatted="true">App: Filmroom; version code: %1$s; engine build: 4; interface: 1\nAndroid API: %2$s; ABI: %3$s; processors: %4$s; Java heap limit: %5$s bytes; memory class: %6$s MB</string>
+    <string name="text_60ef08049a72" formatted="true">App: Filmroom; version code: %1$s; engine build: %7$s; interface: %8$s\nAndroid API: %2$s; ABI: %3$s; processors: %4$s; Java heap limit: %5$s bytes; memory class: %6$s MB</string>
     <string name="text_5c1712cb2d38" formatted="false">Current run</string>
     <string name="text_b1336f82fea4" formatted="false">Restore editing</string>
     <string name="text_5a9df9227ec6" formatted="false">Preview rendering</string>
@@ -440,7 +440,7 @@
     <string name="text_0e898ec43b0b" formatted="false">; not continuous monitoring.\n</string>
     <string name="text_fa1c6dd0bfc3" formatted="false">Discards observed in this run: expired </string>
     <string name="text_6e94c47fde22" formatted="false">, capacity rotation </string>
-    <string name="text_4af5bd6fb80e" formatted="false">, damaged or incomplete </string>
+    <string name="text_4af5bd6fb80e" formatted="false">, rejected on read </string>
     <string name="text_e9d6840052fc" formatted="false">, uncertain future timestamp </string>
     <string name="text_1701c7739625" formatted="false">. Totals across runs are unknown.\n</string>
     <string name="text_5bf7bab64ce3" formatted="false">Most recent failure/interruption record: </string>
@@ -461,7 +461,7 @@
     <string name="text_bf7b123c114d" formatted="false">; no continuous monitoring between events.\n</string>
     <string name="text_ccc4edebf400" formatted="false">Discard counts observable in this run: expired=</string>
     <string name="text_1a58fbf44b39" formatted="false">, capacity rotation=</string>
-    <string name="text_4e203ca8ccb7" formatted="false">, damaged/incomplete=</string>
+    <string name="text_4e203ca8ccb7" formatted="false">, rejected on read=</string>
     <string name="text_338aa9ce6405" formatted="false">, unconfirmed future timestamp=</string>
     <string name="text_b028650697a5" formatted="false">. Totals across runs cannot be determined.\n</string>
     <string name="text_bbbde15a1296" formatted="false">Recorded only on your device. After tapping Share, you choose the receiving app. This app does not upload logs.\n</string>
@@ -573,12 +573,12 @@
     <string name="text_8d12fc0d4eb2" formatted="false">Pause</string>
     <string name="text_f515de6af876" formatted="false">HEIC container data is incomplete or inconsistent.</string>
     <string name="text_0f079bb732f5" formatted="false">This HEIC variant is not supported yet. Currently supports only verified sRGB / Display P3 SDR color subsets and static 8-bit HEVC primary images. Unknown ICC profiles, auxiliary images, mirroring, cropping and HDR are not supported.</string>
-    <string name="text_1351a2d16cbe" formatted="false">HEIC metadata or dimensions exceed safe processing limits.</string>
+    <string name="text_1351a2d16cbe" formatted="false">HEIC metadata or container structure exceeds safe processing limits.</string>
     <string name="text_19e0ce29db17" formatted="false">HEIC ICC color data is incomplete or inconsistent.</string>
     <string name="text_da9f421ae9ad" formatted="false">This HEIC ICC color profile is not supported yet. Unknown or HDR colors were not labeled as sRGB.</string>
     <string name="text_9cd4df0f9933" formatted="false">HEIC ICC color data exceeds safe reading limits.</string>
     <string name="text_56e47360aaca" formatted="false">This HEIC exceeds the current safety limit of 52 million encoded pixels. The original image was not reduced.</string>
-    <string name="text_9ff6012fdde9" formatted="false">This HEIC\'s original-size decoding budget exceeds safe limits. The original image was not reduced.</string>
+    <string name="text_9ff6012fdde9" formatted="false">Estimated memory for full-resolution HEIC decoding exceeds the 2 GiB budget. The original image was not resized.</string>
     <string name="text_58a07dbdf8d7" formatted="false">Your device did not correctly identify this HEIC\'s source color profile. Colors were not guessed or simply relabeled as sRGB.</string>
     <string name="text_986742c74398" formatted="false">Your device could not confirm an 8-bit sRGB SDR base image in this HEIC. No HDR gain map or automatic tone mapping was applied.</string>
     <string name="text_8b96428c13f4" formatted="false">The device\'s HEIC decoder reported inconsistent primary image dimensions or orientation. A thumbnail was not substituted for the original.</string>
@@ -602,11 +602,11 @@
     <string name="text_9392b8f7c99e" formatted="false">Not enough device storage to copy this photo. Free up storage and import it again.</string>
     <string name="text_2673ef9ba447" formatted="false">Photo file exceeds 512 MiB. Choose a photo with a smaller file size.</string>
     <string name="text_276ad5585012" formatted="false">Not enough remaining device storage. Import stopped. Free up storage and retry. Your original photo is unchanged.</string>
-    <string name="text_5c2432fd4e78" formatted="false">This photo is too large to generate a preview right now. Please choose a smaller photo.</string>
+    <string name="text_5c2432fd4e78" formatted="false">Not enough memory to create a preview. Please try again later.</string>
     <string name="text_a064cfbab736" formatted="false">Read permission has expired. Select the photo again.</string>
     <string name="text_a428b047ad8e" formatted="false">Unable to read this photo. The file may be damaged or unavailable, or device storage may be insufficient.</string>
     <string name="text_b769fd8412bb" formatted="false">The on-device working photo is no longer available. Please import it again.</string>
-    <string name="text_660bbeffe8d6" formatted="false">This photo cannot be processed at the current size. Choose a smaller export size.</string>
+    <string name="text_660bbeffe8d6" formatted="false">Not enough memory to update the preview. Please try again later.</string>
     <string name="text_9c508b3acf89" formatted="false">Unable to read the photo again. Please import it again.</string>
     <string name="text_d408527bac5d" formatted="false">Invalid working photo record. Please import it again.</string>
     <string name="text_5e9174903275" formatted="false">Not enough memory to restore the photo right now. Import it again later.</string>
@@ -633,7 +633,7 @@
     <string name="text_a1c12237b4d9" formatted="false">Export failed. Check available device storage and retry. Your original photo is unchanged.</string>
     <string name="text_b447e7ccf3ec" formatted="false">Export row ownership mismatch</string>
     <string name="text_5dc658ae62f8" formatted="false">Unable to confirm the saved photo\'s status. Try again later</string>
-    <string name="text_d591741a5a6e" formatted="false">Photo dimensions exceed safe processing limits. Choose a smaller photo.</string>
+    <string name="text_d591741a5a6e" formatted="false">Image too large: JPEG/PNG supports at most 150 million pixels and 30000 pixels per edge.</string>
     <string name="text_3bf690c56856" formatted="false">Animated photos are not supported yet. Choose a still photo.</string>
     <string name="text_e9d5f1386eb5" formatted="false">PNG structure is incomplete. Select the photo again.</string>
     <string name="text_dac02f5d66dd" formatted="false">Animated PNG is not supported yet. Choose a still photo.</string>
@@ -768,4 +768,22 @@
     <string name="bw_print_development">Print development time</string>
     <string name="bw_development_help">Uses the upstream measured development-time family; default selects its middle entry, not a universal chemistry recipe.</string>
     <string name="bw_development_default">Upstream default</string>
+    <string name="toast_file_limit">File too large: max 512 MiB</string>
+    <string name="toast_raw_pixel_limit">Image too large: max 52 MP</string>
+    <string name="toast_raster_pixel_limit">Image too large: max 150 MP</string>
+    <string name="toast_export_pixel_limit">Image too large: max 84 MP</string>
+    <string name="image_edge_limit_30000">Image edge too long: maximum 30000 pixels.</string>
+    <string name="image_edge_limit_32768">Image edge too long: maximum 32768 pixels.</string>
+    <string name="toast_edge_limit_30000">Edge too long: max 30000 px</string>
+    <string name="toast_edge_limit_32768">Edge too long: max 32768 px</string>
+    <string name="toast_metadata_limit">Metadata exceeds safe limits</string>
+    <string name="gpu_phase_full_chain" formatted="false">GPU image pipeline</string>
+    <string name="gpu_phase_banded_chain" formatted="false">GPU banded rendering</string>
+    <string name="gpu_phase_prepass" formatted="false">GPU global prepass</string>
+    <string name="gpu_completion_uncertain" formatted="false">GPU completion could not be confirmed. Processing is paused to prevent overlapping memory use. Fully close and reopen the app.</string>
+    <string name="diagnostics_read_rejections_detail">Read rejections: startup %1$d, rotation %2$d. Includes incompatible versions, failed validation or incomplete writes; not a count of current-run events lost.\n</string>
+    <string name="gpu_phase_tiled_chain" formatted="false">GPU tiled rendering</string>
+    <string name="gpu_progress_processing">GPU image processing</string>
+    <string name="gpu_progress_tile">Tile %1$d/%2$d</string>
+    <string name="gpu_progress_last_completed">Last completed: %1$s (%2$d ms)</string>
 </resources>

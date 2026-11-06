@@ -1,0 +1,15 @@
+<resources>
+    <!-- Only compact imprint pickers use this overlay; the application theme is unchanged. -->
+    <style name="ImprintCompactPickerTheme" parent="FilmroomDialogTheme">
+        <item name="android:datePickerStyle">@style/ImprintCompactDatePicker</item>
+        <item name="android:timePickerStyle">@style/ImprintCompactTimePicker</item>
+    </style>
+    <style name="ImprintCompactDatePicker" parent="android:style/Widget.Material.DatePicker">
+        <item name="android:datePickerMode">spinner</item>
+        <item name="android:calendarViewShown">false</item>
+        <item name="android:spinnersShown">true</item>
+    </style>
+    <style name="ImprintCompactTimePicker" parent="android:style/Widget.Material.TimePicker">
+        <item name="android:timePickerMode">spinner</item>
+    </style>
+</resources>

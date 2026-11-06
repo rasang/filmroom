@@ -23,6 +23,8 @@ pub enum BridgeError {
     InvalidScope,
     Busy,
     Cancelled,
+    GpuCompletionUncertain,
+    GpuExecutionFailed,
     Unsupported,
     Budget,
     StorageBudget,
@@ -38,6 +40,8 @@ impl BridgeError {
             Self::InvalidScope => "INVALID_SCOPE",
             Self::Busy => "BUSY",
             Self::Cancelled => "CANCELLED",
+            Self::GpuCompletionUncertain => "GPU_COMPLETION_UNCERTAIN",
+            Self::GpuExecutionFailed => "GPU_EXECUTION_FAILED",
             Self::Unsupported => "UNSUPPORTED",
             Self::Budget => "BUDGET_EXCEEDED",
             Self::StorageBudget => "STORAGE_BUDGET",
@@ -53,6 +57,8 @@ impl BridgeError {
             Self::InvalidScope => "Detail paths must remain in the private preview scope",
             Self::Busy => "A detail operation is already running",
             Self::Cancelled => "Detail operation was cancelled",
+            Self::GpuCompletionUncertain => "GPU completion is uncertain; restart before rendering",
+            Self::GpuExecutionFailed => "GPU detail failed; context cannot publish CPU replacement pixels",
             Self::Unsupported => "Requested detail mode requires an unsupported global stage",
             Self::Budget => "Detail resource budget is insufficient",
             Self::StorageBudget => "Detail temporary storage budget is insufficient",
@@ -72,6 +78,8 @@ impl From<DetailError> for BridgeError {
     fn from(e: DetailError) -> Self {
         match e {
             DetailError::Cancelled => Self::Cancelled,
+            DetailError::GpuCompletionUncertain => Self::GpuCompletionUncertain,
+            DetailError::GpuExecutionFailed => Self::GpuExecutionFailed,
             DetailError::InvalidGeometry(_) => Self::InvalidRequest,
             DetailError::BudgetExceeded { .. } => Self::Budget,
             DetailError::StorageBudgetExceeded { .. } => Self::StorageBudget,
@@ -562,6 +570,7 @@ pub fn tile(session: u64, operation: u64, x: usize, y: usize) -> Result<TileResu
     Ok(TileResult { tile, lease })
 }
 pub struct RegionResult {
+    pub performance:Option<super::DetailPerformance>,
     pub identity:DetailIdentity,
     pub backend:super::DetailBackendInfo,
     pub core_rect:super::Rect,
@@ -572,10 +581,10 @@ impl RegionResult {pub fn check_publish(&self)->Result<()> {self.lease.check_pub
 pub fn region_into(session:u64,operation:u64,core:super::Rect,output:&mut[f32])->Result<RegionResult> {
     let lease=acquire(session,operation)?;
     let context=lease.session.context.lock().map_err(|_|BridgeError::Processing)?.clone().ok_or(BridgeError::InvalidRequest)?;
-    context.render_region_into(core,output,&lease.operation.token).map_err(BridgeError::from)?;
+    let performance=context.render_region_into_measured(core,output,&lease.operation.token).map_err(BridgeError::from)?;
     lease.check_publish()?;
     let sample=core.expand(1,context.identity().width as usize,context.identity().height as usize);
-    Ok(RegionResult{identity:context.identity().clone(),backend:context.backend_info(),core_rect:core,sample_rect:sample,lease})
+    Ok(RegionResult{performance,identity:context.identity().clone(),backend:context.backend_info(),core_rect:core,sample_rect:sample,lease})
 }
 pub fn region_layout(session:u64, core:super::Rect) -> Result<(super::Rect,super::Rect)> {
     let s=get(session)?;
@@ -625,7 +634,9 @@ mod tests {
         let mut p = crate::mobile::MobileParams::default();
         p.use_gpu = false;
         DetailConfig {
+            gpu_attempt: true,
             region_output: true,
+            initial_region: None,
             width: 16,
             height: 12,
             params: p,

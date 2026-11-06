@@ -1,6 +1,8 @@
 package dev.filmroom.roi
 
 import dev.filmroom.engine.*
+import dev.filmroom.diagnostics.*
+import kotlin.coroutines.EmptyCoroutineContext
 import dev.filmroom.io.PhotoSource
 import dev.filmroom.model.EditorState
 import kotlinx.coroutines.*
@@ -9,6 +11,7 @@ import kotlinx.coroutines.*
 interface EditorDetailSession : AutoCloseable {
     val key: RenderKey
     val regionOutput:Boolean get()=false
+    val diagnosticContext:Long? get()=null
     fun onRetired(listener: () -> Unit) {}
     suspend fun awaitRetired() {}
     suspend fun tile(x: Int, y: Int): TileResult
@@ -17,6 +20,8 @@ interface EditorDetailSession : AutoCloseable {
 fun interface EditorDetailProvider {
     suspend fun open(source: PhotoSource, parameters: EditorState): EditorDetailSession
     suspend fun openLegacy(source:PhotoSource,parameters:EditorState):EditorDetailSession = open(source,parameters)
+    /** Geometry-only warmup hint; never part of the immutable science key. */
+    suspend fun openWithInitialRegion(source:PhotoSource,parameters:EditorState,initialRegion:PixelRect?):EditorDetailSession = open(source,parameters)
 }
 class RealEditorDetailProvider(private val provider: OwnedDetailProvider) : EditorDetailProvider {
     override suspend fun open(source: PhotoSource, parameters: EditorState): EditorDetailSession {
@@ -24,19 +29,24 @@ class RealEditorDetailProvider(private val provider: OwnedDetailProvider) : Edit
         return openWithPolicy(source,parameters,preferRegion)
     }
     override suspend fun openLegacy(source:PhotoSource,parameters:EditorState):EditorDetailSession = openWithPolicy(source,parameters,false)
-    private suspend fun openWithPolicy(source:PhotoSource,parameters:EditorState,preferRegion:Boolean):EditorDetailSession {
-        val session = provider.open(source, parameters, 1536,preferRegion=preferRegion)
+    override suspend fun openWithInitialRegion(source:PhotoSource,parameters:EditorState,initialRegion:PixelRect?):EditorDetailSession {
+        val preferRegion=withContext(Dispatchers.IO){provider.supportsRegions()}
+        return openWithPolicy(source,parameters,preferRegion,initialRegion)
+    }
+    private suspend fun openWithPolicy(source:PhotoSource,parameters:EditorState,preferRegion:Boolean,initialRegion:PixelRect?=null):EditorDetailSession {
+        val session = provider.open(source, parameters, 1536,preferRegion=preferRegion,initialRegion=initialRegion?.let{DetailRect(it.left,it.top,it.width,it.height)})
         try { return object : EditorDetailSession {
             override val regionOutput=session.regionOutput
+            override val diagnosticContext=session.diagnosticContext
             override val key = session.key.toRenderKey(regionOutput)
             override suspend fun tile(x: Int, y: Int): TileResult {
                 val tile = session.tile(x,y)
-                try { return TileResult(tile.key.toRenderKey(regionOutput), tile.core.toPixels(), tile.sample.toPixels(), tile.bitmap, TileQuality.Exact) }
+                try { return TileResult(tile.key.toRenderKey(regionOutput), tile.core.toPixels(), tile.sample.toPixels(), tile.bitmap, TileQuality.Exact,tile.diagnosticTiming) }
                 catch(t:Throwable) { if(!tile.bitmap.isRecycled)tile.bitmap.recycle();throw t }
             }
             override suspend fun region(rect:PixelRect,cancelled:()->Boolean):TileResult {
                 val tile=session.region(DetailRect(rect.left,rect.top,rect.width,rect.height),cancelled)
-                try{return TileResult(tile.key.toRenderKey(regionOutput),tile.core.toPixels(),tile.sample.toPixels(),tile.bitmap,TileQuality.Exact)}
+                try{return TileResult(tile.key.toRenderKey(regionOutput),tile.core.toPixels(),tile.sample.toPixels(),tile.bitmap,TileQuality.Exact,tile.diagnosticTiming)}
                 catch(t:Throwable){if(!tile.bitmap.isRecycled)tile.bitmap.recycle();throw t}
             }
             override fun onRetired(listener: () -> Unit) = session.setRetirementListener(listener)
@@ -69,15 +79,19 @@ class EditorDetailController(
     private val retirement = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var source: PhotoSource? = null
     private var parameters: EditorState? = null
+    private var science: String? = null
     private var allowed = false
     private var comparing = false
     private var foreground = true
     private var disposed = false
     private var generation = 0L
     private var opening: Job? = null
+    private var openingTiming: DetailTiming? = null
+    private var settlingRegion: PixelRect? = null
     private var openingStarted = false
     private var latestMoving = false
     private var session: EditorDetailSession? = null
+    private var firstPresentation:DetailTiming?=null
     private var scheduler: DetailOutputScheduler? = null
     private var failedGeneration = -1L
     private var fallbackReason:DetailFailure?=null
@@ -104,10 +118,15 @@ class EditorDetailController(
     val viewportRevision get() = scheduler?.viewportRevision ?: 0L
     fun bind(photo: PhotoSource?, params: EditorState, eligible: Boolean, compareOriginal:Boolean=false) {
         if (disposed) return
-        if (source !== photo || parameters != params || allowed != eligible) {
-            if(source !== photo || parameters != params){retryAttempts=0;forceLegacy=false}
-            retire(); source=photo; parameters=params; allowed=eligible
+        // Compare exactly the parameter representation sent to native. Imprint,
+        // framing, crop and output preferences do not invalidate scientific work.
+        val nextScience=if(parameters==params)science ?: params.json("preview",includePresentation=false) else params.json("preview",includePresentation=false)
+        val scienceChanged=source !== photo || science != nextScience
+        if (scienceChanged || allowed != eligible) {
+            if(scienceChanged){retryAttempts=0;forceLegacy=false}
+            retire(reason=when {source !== photo->DetailRetirementReason.SOURCE_CHANGED;scienceChanged->DetailRetirementReason.SCIENCE_CHANGED;else->DetailRetirementReason.ELIGIBILITY_CHANGED})
         }
+        source=photo;parameters=params;science=nextScience;allowed=eligible
         comparing=compareOriginal
         demand(latestMoving);changed()
     }
@@ -115,13 +134,13 @@ class EditorDetailController(
         if (foreground == value || disposed) return
         foreground=value
         if(!value)latestMoving=false
-        if (!value) retire() else demand(false)
+        if (!value) retire(reason=DetailRetirementReason.BACKGROUND) else demand(false)
     }
     fun demand(moving: Boolean) {
         latestMoving=moving
         if (disposed) return
         if (!allowed || !foreground || source == null) {
-            if (session != null || opening != null) retire()
+            if (session != null || opening != null) retire(reason=DetailRetirementReason.ELIGIBILITY_CHANGED)
             return
         }
         if(effectiveZoom() < 1.15) {
@@ -129,14 +148,14 @@ class EditorDetailController(
                 // The full-source crop editor temporarily zooms out. Keep same-science ownership,
                 // but admit no new tiles/context builds while that editor does not need detail.
                 scheduler?.setPaused(true)
-                if(!openingStarted){opening?.cancel();opening=null}
-            } else if(session!=null || opening!=null)retire()
+                if(!openingStarted){openingTiming?.retiring(DetailRetirementReason.ZOOM_OUT);opening?.cancel();opening=null;openingTiming=null}
+            } else if(session!=null || opening!=null)retire(reason=DetailRetirementReason.ZOOM_OUT)
             return
         }
         if(comparing) {
             scheduler?.setPaused(true)
             // Keep an already-running same-key context build/result, but do not start work.
-            if(!openingStarted){opening?.cancel();opening=null}
+            if(!openingStarted){openingTiming?.retiring(DetailRetirementReason.COMPARING);opening?.cancel();opening=null;openingTiming=null}
             changed();return
         }
         scheduler?.let { active ->
@@ -148,32 +167,49 @@ class EditorDetailController(
         // Once native context construction starts, same-key pans only update demand.
         // Cancel/restart the settle timer, never a valid in-progress build for viewport motion.
         if(opening != null && openingStarted) return
-        opening?.cancel(); opening=null
+        // Repeated UI binds with the same science and visible demand do not
+        // restart the existing settle timer. Motion or a changed rect still does.
+        val requestedRegion=source?.let(::initialRegion)
+        if(opening!=null && !moving && settlingRegion==requestedRegion)return
+        openingTiming?.retiring(DetailRetirementReason.MOTION);opening?.cancel(); opening=null;openingTiming=null
         if (moving || failedGeneration == generation) return
         val photo=source ?: return; val params=parameters ?: return; val request=generation
-        opening=scope.launch {
+        val timing=DetailTiming(DetailAttemptKind.OPEN)
+        openingTiming=timing;settlingRegion=requestedRegion
+        opening=scope.launch(timing) {
             var opened: EditorDetailSession? = null
             try {
                 delay(settleMillis)
+                timing.mark(DetailTimingPoint.SETTLE_END)
                 if(forceLegacy)while(!retirementReady()){retirementJobs.toList().forEach{it.join()}}
                 ensureActive()
                 openingStarted=true;changed()
-                opened=if(forceLegacy)provider.openLegacy(photo,params) else provider.open(photo,params)
+                // Resolve the current viewport after settling, on Main. This key
+                // carries geometry only and is never published or used in a cache.
+                val firstRegion=initialRegion(photo)
+                opened=if(forceLegacy)provider.openLegacy(photo,params) else provider.openWithInitialRegion(photo,params,firstRegion)
                 ensureActive()
                 if (disposed || request != generation || !foreground || !allowed) return@launch
                 val adopted=opened
                 require(maxOf(adopted.key.virtualFullWidth,adopted.key.virtualFullHeight)<=1536)
                 session=adopted; opened=null
-                val created=DetailOutputScheduler(TileProvider { k, rect, cancelled ->
-                    if (cancelled()) throw CancellationException("Retired detail")
-                    check(k == adopted.key)
-                    runBlocking { if(adopted.regionOutput)adopted.region(rect,cancelled) else adopted.tile(rect.left/256,rect.top/256) }
+                timing.finish(DetailTimingTerminal.OPEN_READY)
+                firstPresentation=timing.presentation()
+                val created=DetailOutputScheduler(object:TileProvider {
+                    override fun startTiming()=adopted.diagnosticContext?.let{DetailTiming(if(adopted.regionOutput)DetailAttemptKind.REGION else DetailAttemptKind.TILE,it)}
+                    override fun render(k:RenderKey,rect:PixelRect,cancelled:()->Boolean)=renderTimed(k,rect,cancelled,null)
+                    override fun renderTimed(k:RenderKey,rect:PixelRect,cancelled:()->Boolean,timing:DetailTiming?):TileResult {
+                        timing?.mark(DetailTimingPoint.WORKER_STARTED)
+                        if (cancelled()) throw CancellationException("Retired detail")
+                        check(k == adopted.key)
+                        return runBlocking(timing ?: EmptyCoroutineContext) { if(adopted.regionOutput)adopted.region(rect,cancelled) else adopted.tile(rect.left/256,rect.top/256) }
+                    }
                 },regionOutput=adopted.regionOutput,onChanged={
                     // A provider failure (including native pressure retirement) releases idle ownership.
                     if (scheduler?.lastError != null) {
                         val failure=scheduler?.lastFailure
                         if(session?.regionOutput==true && failure is NativeWorkUnavailable)forceLegacy=true
-                        fallbackReason=detailFailure(failure);failedGeneration=generation;retire(resetFailure=false)
+                        fallbackReason=detailFailure(failure);failedGeneration=generation;retire(resetFailure=false,reason=DetailRetirementReason.PROVIDER_ERROR)
                     }
                     changed()
                 })
@@ -182,25 +218,34 @@ class EditorDetailController(
                 created.update(adopted.key,visibleRegion(adopted.key))
                 adopted.onRetired {
                     scope.launch {
-                        if(session === adopted) { fallbackReason=DetailFailure.MemoryPressure;retire(resetFailure=false) }
+                        if(session === adopted) { fallbackReason=DetailFailure.MemoryPressure;retire(resetFailure=false,reason=DetailRetirementReason.RESOURCE_PRESSURE) }
                     }
                 }
                 changed()
-            } catch(c: CancellationException) { throw c }
-            catch(e: Exception) { if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false)} }
-            catch(e: LinkageError) { if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false)} }
-            catch(e: OutOfMemoryError) { if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false)} }
-            finally { opened?.let(::closeOffMain); if(opening === currentCoroutineContext()[Job]) {opening=null;openingStarted=false} }
-        }
+            } catch(c: CancellationException) { timing.failed(c);throw c }
+            catch(e: Exception) { timing.failed(e);if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false,reason=DetailRetirementReason.PROVIDER_ERROR)} }
+            catch(e: LinkageError) { timing.failed(e);if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false,reason=DetailRetirementReason.PROVIDER_ERROR)} }
+            catch(e: OutOfMemoryError) { timing.failed(e);if(request==generation) {fallbackReason=detailFailure(e);retire(resetFailure=false,reason=DetailRetirementReason.PROVIDER_ERROR)} }
+            finally { opened?.let(::closeOffMain); if(opening === currentCoroutineContext()[Job]) {opening=null;openingStarted=false;openingTiming=null} }
+        }.also(timing::monitor)
     }
+    private fun initialRegion(photo:PhotoSource):PixelRect? {
+        val size=photo.outputSize(1536)
+        val geometry=RenderKey("open-hint","open-hint","open-hint","open-hint","open-hint",size.width,size.height)
+        return visibleRegion(geometry)?.takeIf{it.left>=0 && it.top>=0 && it.right<=size.width && it.bottom<=size.height && it.width>0 && it.height>0}
+    }
+    fun onTileDrawn(output:DetailTiming?=null){firstPresentation?.let{it.drawnOutput(output);it.drawn()};firstPresentation=null}
     fun forEachDrawable(draw: (TileResult)->Unit) { if(!comparing)scheduler?.forEachDrawable(draw) }
-    fun releaseForPressure() { fallbackReason=DetailFailure.MemoryPressure;retire(resetFailure=false) }
+    fun releaseForPressure() { fallbackReason=DetailFailure.MemoryPressure;retire(resetFailure=false,reason=DetailRetirementReason.EXTERNAL_INVALIDATION) }
     private fun closeOffMain(value: EditorDetailSession) {
         retirementJobs.removeAll{it.isCompleted}
         retirementJobs+=retirement.launch { runCatching { try{value.close()}finally{value.awaitRetired()} } }
     }
     private fun retirementReady():Boolean {retirementJobs.removeAll{it.isCompleted};return retirementJobs.isEmpty()}
-    private fun retire(resetFailure: Boolean = true) {
+    private fun retire(resetFailure: Boolean = true,reason:DetailRetirementReason=DetailRetirementReason.PROVIDER_ERROR) {
+        openingTiming?.retiring(reason);openingTiming=null;settlingRegion=null
+        firstPresentation?.retiring(reason)
+        firstPresentation?.finish(DetailTimingTerminal.RETIRED);firstPresentation=null
         retryJob?.cancel();retryJob=null
         generation++
         val retiringOpen=opening
@@ -231,5 +276,5 @@ class EditorDetailController(
             retryJob=null
         }
     }
-    override fun close() { if(disposed)return; disposed=true; retire(); scope.cancel() }
+    override fun close() { if(disposed)return; disposed=true; retire(reason=DetailRetirementReason.CLOSED); scope.cancel() }
 }

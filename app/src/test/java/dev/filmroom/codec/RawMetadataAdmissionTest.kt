@@ -54,6 +54,20 @@ class RawMetadataAdmissionTest {
             assertEquals(0L,RawMetadataAdmission.estimatedBytes(input))
         }finally{root.deleteRecursively()}
     }
+    @Test fun cr3OrfAndOriContentKeepTheCameraMetadataLease() {
+        val root=kotlin.io.path.createTempDirectory("additional-raw-hint").toFile()
+        try {
+            val input=File(root,"renamed.jpeg")
+            for(magic in listOf("IIRO","IIRS","MMOR")) {
+                input.writeBytes(magic.toByteArray(Charsets.US_ASCII)+ByteArray(12))
+                assertEquals(32*mib,RawMetadataAdmission.estimatedBytes(input))
+            }
+            input.writeBytes(byteArrayOf(0,0,0,32)+"ftypcrx ".toByteArray(Charsets.US_ASCII)+ByteArray(4))
+            assertEquals(32*mib,RawMetadataAdmission.estimatedBytes(input))
+            input.writeBytes(byteArrayOf(0,0,0,32)+"ftypheic".toByteArray(Charsets.US_ASCII)+ByteArray(4))
+            assertEquals(0L,RawMetadataAdmission.estimatedBytes(input))
+        }finally{root.deleteRecursively()}
+    }
     @Test fun malformedRootCannotSelectUnchargedCameraProfilePath() {
         val root=kotlin.io.path.createTempDirectory("raw-probe-malformed").toFile()
         try {

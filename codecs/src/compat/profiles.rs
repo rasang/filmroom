@@ -96,3 +96,54 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
         Ok(())
 }
 
+
+
+/// Admit a no-op DNG look table only after validating its complete payload.
+/// This does not implement arbitrary look transforms or relax the TIFF reader's
+/// 64 KiB per-tag / 512 KiB aggregate metadata limits.
+pub(super) fn identity_look_table(root: &Ifd, raw: &Ifd) -> Result<()> {
+    const TAGS: [u16; 3] = [50981, 50982, 51108];
+    if !std::ptr::eq(root, raw) && TAGS.iter().any(|tag| raw.contains_key(tag)) {
+        return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
+    }
+    if !TAGS.iter().any(|tag| root.contains_key(tag)) {
+        return Ok(());
+    }
+    let dims = root.get(&50981).ok_or_else(color_err)?;
+    let data = root.get(&50982).ok_or_else(color_err)?;
+    if dims.typ != 4 || dims.count != 3 || dims.bytes.len() != 12 {
+        return Err(color_err());
+    }
+    let dims = dims.uints()?;
+    if dims[0] == 0 || dims[1] < 2 || dims[2] == 0 {
+        return Err(color_err());
+    }
+    let count = dims.iter().try_fold(3u64, |n, &v| n.checked_mul(v as u64))
+        .ok_or_else(color_err)?;
+    if count > 65536 / 4 || data.typ != 11 || data.count as u64 != count
+        || data.bytes.len() as u64 != count * 4 {
+        return Err(color_err());
+    }
+    if let Some(encoding) = root.get(&51108) {
+        if encoding.typ != 4 || encoding.count != 1 || encoding.bytes.len() != 4 {
+            return Err(color_err());
+        }
+        // Encoding 0 is linear and is also the DNG default. Keep other
+        // encodings closed until separately verified, even for a no-op table.
+        if encoding.uints()? != [0] {
+            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
+        }
+    }
+    for triple in data.bytes.chunks_exact(12) {
+        let hue = f32::from_bits(data.endian.u32(&triple[0..4]));
+        let saturation = f32::from_bits(data.endian.u32(&triple[4..8]));
+        let value = f32::from_bits(data.endian.u32(&triple[8..12]));
+        if !hue.is_finite() || !saturation.is_finite() || !value.is_finite() {
+            return Err(color_err());
+        }
+        if hue != 0.0 || saturation != 1.0 || value != 1.0 {
+            return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
+        }
+    }
+    Ok(())
+}

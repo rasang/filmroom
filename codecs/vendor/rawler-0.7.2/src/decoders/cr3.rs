@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1
 // Copyright 2021 Daniel Vogelbacher <daniel@chaospixel.com>
 
+mod bounded;
+
 use image::DynamicImage;
 use log::{debug, warn};
 use std::convert::{TryFrom, TryInto};
@@ -182,6 +184,9 @@ pub struct Cr3Format {
 }
 
 impl<'a> Decoder for Cr3Decoder<'a> {
+  fn bounded_bayer_plan(&self,file:&RawSource)->Result<Option<super::BoundedBayerPlan>>{bounded::plan(self,file)}
+  fn bounded_bayer_segments(&self,file:&RawSource,sink:&mut dyn FnMut(usize,usize,&[u16])->Result<()>,cancel:&dyn Fn()->bool)->Result<()>{bounded::segments(self,file,sink,cancel)}
+
   fn format_dump(&self) -> FormatDump {
     FormatDump::Cr3(Cr3Format {
       filebox: self.bmff.filebox.clone(),

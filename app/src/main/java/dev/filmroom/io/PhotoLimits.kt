@@ -25,6 +25,14 @@ object PhotoLimits {
         return null
     }
 
+    enum class SourceFailure { INVALID, EDGE, PIXELS }
+    fun sourceFailure(width: Long, height: Long): SourceFailure? = when {
+        width <= 0 || height <= 0 -> SourceFailure.INVALID
+        width > MAX_SOURCE_EDGE || height > MAX_SOURCE_EDGE -> SourceFailure.EDGE
+        width * height > MAX_SOURCE_PIXELS -> SourceFailure.PIXELS
+        else -> null
+    }
+
     fun validSource(width: Int, height: Int): Boolean =
         width in 1..MAX_SOURCE_EDGE && height in 1..MAX_SOURCE_EDGE &&
             width.toLong() * height <= MAX_SOURCE_PIXELS

@@ -1911,9 +1911,29 @@ impl CudaBackend {
         &self,
         p: &FilmChainParams<'_>,
     ) -> Result<Option<ImageBuf>, Box<dyn std::error::Error + Send + Sync>> {
-        let image = p.image;
+        // Chain input: dims plus the f32 upload pixels (same ChainImage
+        // handling as the wgpu backend; the export fast path supplies f32
+        // data directly).
+        struct ChainDims {
+            width: u32,
+            height: u32,
+        }
+        impl ChainDims {
+            fn pixel_count(&self) -> usize {
+                self.width as usize * self.height as usize
+            }
+        }
+        let (image, input_f32) = match p.image {
+            crate::ChainImage::F64(img) => (
+                ChainDims { width: img.width, height: img.height },
+                scalars_to_f32(&img.data),
+            ),
+            crate::ChainImage::F32(data, w, h) => (
+                ChainDims { width: w, height: h },
+                std::borrow::Cow::Borrowed(data),
+            ),
+        };
         let n_pixels = image.pixel_count() as u32;
-        let input_f32 = scalars_to_f32(&image.data);
         let mut buf_a = self.stream.clone_htod(input_f32.as_ref())?;
         let mut buf_b = self.alloc_f32(n_pixels as usize * 3)?;
 
@@ -2281,6 +2301,20 @@ impl ComputeBackend for CudaBackend {
     }
 
     fn try_run_film_chain(&self, params: &FilmChainParams<'_>) -> Option<ImageBuf> {
+        // The banded diffusion pre-pass taps (ChainStop) and precomputed
+        // scattered-field mixes are implemented by the wgpu backend only;
+        // decline so the caller falls back instead of silently running the
+        // wrong chain.
+        if params.start_at != crate::ChainStart::Rgb || params.stop_after != crate::ChainStop::Full
+            || params.diffusion_scattered.is_some()
+            || params.enlarger_scattered.is_some()
+            || params.glare.as_ref().is_some_and(|g| g.pixel_offset != 0 || g.full_width != params.image.width())
+            || params.defer_gamut_to_cpu
+            || params.highlight_boost.as_ref().is_some_and(|h| h.max_raw_override.is_some())
+            || params.grain.as_ref().is_some_and(|g| g.sublayers.is_some() || g.microstructure.is_some() || g.pixel_offset != 0 || g.full_width != params.image.width())
+        {
+            return None;
+        }
         match self.run_film_chain_resident(params) {
             Ok(out) => out,
             Err(e) => {

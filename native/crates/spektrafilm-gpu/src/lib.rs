@@ -1,10 +1,48 @@
+/// Explicit algorithm identity for diagnostics/checkpoints; not CPU-bit-exact.
+pub const RESIDENT_APPROXIMATION_VERSION: &str = "resident-f32-psf6-cap64-fir256-grain-rms-v1";
+
 pub mod cpu_backend;
+#[cfg(feature = "resource-audit")]
+pub mod resource_audit;
 #[cfg(feature = "cuda-backend")]
 pub mod cuda_backend;
 #[cfg(feature = "wgpu-backend")]
 pub mod wgpu_backend;
 
 use spektrafilm_math::image::ImageBuf;
+
+/// Maximum four stratified samples for a 256 x 256 negative thumbnail.
+pub const MAX_FILM_DENSITY_SAMPLES: usize = 256 * 256 * 4;
+
+/// A caller-owned thumbnail sample ID and coordinates local to the input tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FilmDensitySample { pub index: u32, pub x: u32, pub y: u32 }
+
+/// Optional, best-effort DIR-corrected normalized density BEFORE grain.
+/// Each call clears `result`. None means unsupported, invalid, canceled, or
+/// rejected by device limits. Valid captures share the required output map;
+/// there is no separate callback, wait, or map-lag failure.
+#[derive(Default, Debug)]
+pub struct FilmDensityCapture {
+    pub samples: Vec<FilmDensitySample>,
+    pub result: Option<Vec<(u32, [f32; 3])>>,
+}
+
+/// Additional explicit GPU buffers; caller must reserve this within its
+/// existing tile budget without changing tile geometry. Does not include
+/// driver allocations, pipeline objects, or CPU sample/result vectors.
+pub fn film_density_capture_gpu_bytes(count: usize) -> Option<u64> {
+    if count == 0 || count > MAX_FILM_DENSITY_SAMPLES { return None; }
+    (count as u64).checked_mul(28)?.checked_add(16)
+}
+
+impl FilmDensityCapture {
+    pub fn valid_for(&self, width: u32, height: u32) -> bool {
+        film_density_capture_gpu_bytes(self.samples.len()).is_some()
+            && width.checked_mul(height).and_then(|n| n.checked_mul(3)).is_some()
+            && self.samples.iter().all(|s| s.x < width && s.y < height)
+    }
+}
 
 /// Compute backend abstraction. Each method corresponds to a GPU-friendly
 /// operation in the film simulation pipeline.
@@ -134,6 +172,27 @@ pub trait ComputeBackend: Send + Sync {
         None
     }
 
+    /// Start a new controlled chain before any caller checkpoint observes progress.
+    fn reset_thread_resident_progress(&self) {}
+
+    /// Cooperative resident entry. A backend may checkpoint between proven
+    /// completed batches, always outside its execution mutex.
+    fn try_run_film_chain_controlled(&self, params: &FilmChainParams<'_>,
+        checkpoint: &mut dyn FnMut() -> bool) -> Option<ImageBuf> {
+        if !checkpoint() { return None; }
+        let result = self.try_run_film_chain(params);
+        if !checkpoint() { return None; }
+        result
+    }
+
+    /// Optional side-channel; default backends leave capture unavailable.
+    /// Preview failure does not change the required rendering result.
+    fn try_run_film_chain_capture_controlled(&self, params: &FilmChainParams<'_>,
+        capture: &mut FilmDensityCapture, checkpoint: &mut dyn FnMut() -> bool) -> Option<ImageBuf> {
+        capture.result = None;
+        self.try_run_film_chain_controlled(params, checkpoint)
+    }
+
     /// True when `try_run_film_chain` returns the same post-scan output that
     /// `Pipeline::apply_post_scan` would produce (final clamp and optional
     /// sRGB encoding). Backends default to returning linear RGB and letting
@@ -152,11 +211,59 @@ pub trait ComputeBackend: Send + Sync {
     fn name(&self) -> &str;
 }
 
+/// Chain input pixels: either the usual f64 working image or, on the export
+/// fast path, the f32 upload data read straight from the spool. The f32 form
+/// skips materializing an n*24-byte f64 copy for large exports, which roughly
+/// halves the CPU-side peak of the GPU full-chain attempt.
+#[derive(Clone, Copy)]
+pub enum ChainImage<'a> {
+    F64(&'a ImageBuf),
+    /// Interleaved RGB f32, row-major, width*height*3 elements.
+    F32(&'a [f32], u32, u32),
+}
+
+impl<'a> ChainImage<'a> {
+    pub fn width(&self) -> u32 {
+        match self {
+            Self::F64(i) => i.width,
+            Self::F32(_, w, _) => *w,
+        }
+    }
+    pub fn height(&self) -> u32 {
+        match self {
+            Self::F64(i) => i.height,
+            Self::F32(_, _, h) => *h,
+        }
+    }
+    pub fn pixel_count(&self) -> usize {
+        self.width() as usize * self.height() as usize
+    }
+    /// f32 pixels ready for GPU upload, when the input is already in that
+    /// layout (export fast path).
+    pub fn f32_data(&self) -> Option<&'a [f32]> {
+        match self {
+            Self::F32(d, _, _) => Some(d),
+            _ => None,
+        }
+    }
+    /// The f64 working image, when the input is in that form.
+    pub fn f64_image(&self) -> Option<&'a ImageBuf> {
+        match self {
+            Self::F64(i) => Some(i),
+            _ => None,
+        }
+    }
+}
+
 /// All inputs to the GPU-resident film chain. Bundled into a struct so the
 /// trait method stays object-safe and adding more optional stages (halation,
 /// DIR couplers, …) doesn't churn every callsite.
+#[derive(Clone)]
 pub struct FilmChainParams<'a> {
-    pub image: &'a ImageBuf,
+    pub start_at: ChainStart,
+    /// Large export and bounded preview tiles: fence spatial batches, preserving GPU intermediates.
+    pub stage_batched: bool,
+    pub image: ChainImage<'a>,
     /// RGB → film-raw front pass (the configured upsampler).
     pub front: FrontPass<'a>,
     pub film_log_exposure: &'a [f64],
@@ -227,11 +334,25 @@ pub struct FilmChainParams<'a> {
     /// Optional camera lens diffusion filter — applied on the raw film
     /// exposure buffer right after hanatos2025, before halation (matching
     /// the CPU filming order). A downsampled sum-of-Gaussians; see
-    /// `DiffusionGpuPlan`.
+    /// `DiffusionGpuPlan`. Used by the whole-frame resident chain; the
+    /// banded chain sets `diffusion_scattered` instead.
     pub diffusion: Option<DiffusionGpuPlan>,
     /// Optional enlarger diffusion filter. Applied in the print stage on
     /// linear print raw between print_spectral and print density curves.
+    /// Used by the whole-frame resident chain; the banded chain sets
+    /// `enlarger_scattered` instead.
     pub enlarger_diffusion: Option<DiffusionGpuPlan>,
+    /// Banded-chain camera diffusion: precomputed whole-frame scattered
+    /// field, mixed in at the same point as `diffusion`. Mutually exclusive
+    /// with `diffusion` (the scattered form takes precedence when both are
+    /// set, and the full plan is ignored).
+    pub diffusion_scattered: Option<DiffusionScatteredGpu<'a>>,
+    /// Banded-chain enlarger diffusion: precomputed whole-frame scattered
+    /// field, mixed in at the same point as `enlarger_diffusion`.
+    pub enlarger_scattered: Option<DiffusionScatteredGpu<'a>>,
+    /// Where the chain stops. Everything except `Full` exists for the banded
+    /// diffusion pre-pass; the normal render paths always pass `Full`.
+    pub stop_after: ChainStop,
     /// The print_exposure × B&W printing correction scalar. Used by CUDA
     /// when `enlarger_diffusion` is active so it can preserve the CPU
     /// print-stage ordering around preflash.
@@ -239,12 +360,19 @@ pub struct FilmChainParams<'a> {
     /// Whether the final output should be sRGB-encoded after clamping. Mirrors
     /// `RuntimeParams::io.output_cctf_encoding`.
     pub output_cctf_encoding: bool,
+    /// Export-only: skip the GPU gamut-compression pass AND the final
+    /// clamp+sRGB encode, returning unclamped linear RGB so the caller can run
+    /// the exact f64 CPU gamut compressor + post-scan. The scan-spectral pass
+    /// still skips its [0,1] clamp so out-of-gamut values survive to the CPU.
+    /// Preview paths leave this `false` (gamut runs on the GPU in f32).
+    pub defer_gamut_to_cpu: bool,
 }
 
 /// RGB → film-raw front pass of the GPU-resident chain. Both variants are
 /// homogeneous in the input RGB, so the caller folds the exposure scale
 /// (auto-exposure × EV compensation × B&W filming correction) into the
 /// matrix — no separate scale pass.
+#[derive(Clone)]
 pub enum FrontPass<'a> {
     /// Hanatos2025 spectral upsampling: per-pixel chromaticity LUT lookup.
     Hanatos2025 {
@@ -258,7 +386,7 @@ pub enum FrontPass<'a> {
 }
 
 /// Pre-computed plan for the GPU-resident diffusion filter. The per-channel
-/// PSF is decomposed into Gaussian components (3 per PSF sub-component) and
+/// PSF is decomposed into Gaussian components (6 per PSF sub-component) and
 /// the whole scattered field is computed on an image downsampled by `d` so
 /// the blur σ stay small. `sigmas`/`coeffs` are parallel: component `i`
 /// blurs the downsampled image at `sigmas[i]` (working-resolution px) and
@@ -273,8 +401,97 @@ pub struct DiffusionGpuPlan {
     pub coeffs: Vec<[f32; 3]>,
 }
 
+/// Input color domain of the resident chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainStart { Rgb, FilmLog, CorrectedDensity }
+
+/// Where the resident film chain should stop, and what it returns. The
+/// default is [`ChainStop::Full`]; the other variants exist for the banded
+/// diffusion pre-pass, which taps the chain state at a diffusion filter's
+/// input point so the (global) scattered field can be computed once for the
+/// whole frame instead of per band.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainStop {
+    /// Exact f32 density after DIR, before grain.
+    CorrectedDensity,
+    /// Camera optics completed; returns unclamped f32 film log exposure.
+    FilmLog,
+    /// Run the whole chain; the readback holds the final RGB.
+    Full,
+    /// Stop right after the front pass + highlight boost; the readback holds
+    /// the raw film exposure — the camera-diffusion input. Later stages
+    /// (diffusion, lens blur, halation, …) are neither built nor encoded.
+    Front,
+    /// Stop after print spectral + log-to-linear; the readback holds the
+    /// linear print light — the enlarger-diffusion input. Print density
+    /// curves, scan spectral and everything downstream are skipped. Only
+    /// meaningful when `scan_film` is false.
+    PrintLinear,
+}
+
+/// Precomputed whole-frame diffusion scattered field (already downsampled +
+/// blurred at 1/d resolution), consumed by the *banded* resident chain: the
+/// global part of the diffusion filter is done, so each band only needs the
+/// local part — bilinear-upsample its row window from the small field and
+/// mix `(1-p_s)·img + p_s·scattered` at the diffusion point. Produced by
+/// `Pipeline::diffusion_scattered_fields_gpu`.
+#[derive(Debug, Clone, Copy)]
+pub struct DiffusionScatteredGpu<'a> {
+    pub band_x0: u32,
+    /// [x,y,width,height] in global small-pixel coordinates.
+    pub crop: [u32; 4],
+    /// `small_w*small_h*3` interleaved f32, row-major — the blurred scattered
+    /// field of the WHOLE frame at 1/d resolution.
+    pub field: &'a [f32],
+    pub small_w: u32,
+    pub small_h: u32,
+    /// The downsample factor the field was computed at.
+    pub d: u32,
+    /// Scatter mix strength.
+    pub p_s: f32,
+    /// Global row index of this band's row 0 (halo rows included), so the
+    /// upsample window lines up with the whole-frame field.
+    pub band_y0: u32,
+}
+
+impl DiffusionScatteredGpu<'_> {
+    /// Exact conservative bilinear footprint in global small-pixel coordinates.
+    /// Uses the same f32 arithmetic as WGSL (including large-coordinate rounding).
+    pub fn required_crop(small_w: u32, small_h: u32, d: u32,
+        x: u32, y: u32, width: u32, height: u32) -> Option<[u32; 4]> {
+        if small_w == 0 || small_h == 0 || d == 0 || width == 0 || height == 0 { return None; }
+        let end_x = x.checked_add(width - 1)?;
+        let end_y = y.checked_add(height - 1)?;
+        let bounds = |start: u32, end: u32, size: u32| {
+            let sample = |v: u32| (((v as f32 + 0.5) * (1.0 / d as f32) - 0.5)
+                .clamp(0.0, (size - 1) as f32).floor() as u32).min(size - 1);
+            let lo = sample(start);
+            let hi = sample(end).saturating_add(1).min(size - 1);
+            (lo, hi - lo + 1)
+        };
+        let (cx, cw) = bounds(x, end_x, small_w);
+        let (cy, ch) = bounds(y, end_y, small_h);
+        Some([cx, cy, cw, ch])
+    }
+
+    pub fn valid_for(&self, width: u32, height: u32) -> bool {
+        let Some([x, y, w, h]) = Self::required_crop(self.small_w, self.small_h, self.d,
+            self.band_x0, self.band_y0, width, height) else { return false; };
+        let [cx, cy, cw, ch] = self.crop;
+        let Some(ex) = cx.checked_add(cw) else { return false; };
+        let Some(ey) = cy.checked_add(ch) else { return false; };
+        let Some(len) = (cw as usize).checked_mul(ch as usize).and_then(|n| n.checked_mul(3)) else { return false; };
+        cw > 0 && ch > 0 && ex <= self.small_w && ey <= self.small_h
+            && cx <= x && cy <= y && ex >= x + w && ey >= y + h
+            && self.field.len() == len && self.p_s.is_finite()
+            && self.field.iter().all(|v| v.is_finite())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct HighlightBoostGpuParams {
+    /// Whole-image front-pass maximum for banded exports, never a band maximum.
+    pub max_raw_override: Option<f32>,
     pub boost_ev: f32,
     pub boost_range: f32,
     pub protect_ev: f32,
@@ -301,11 +518,39 @@ pub struct DirCouplersGpuParams<'a> {
     pub gamma_factor: f64,
 }
 
+/// Exact CPU sublayer grain model data (`apply_grain_layers`). When attached
+/// to [`GrainGpuParams::sublayers`], the GPU runs the per-sublayer particle
+/// model (curve-interpolated sublayer densities + per-sublayer particle
+/// sizes) instead of the simple per-channel model. This is what the CPU
+/// export/preview uses by default (`grain.sublayers_active == true`).
+///
+/// f32 particle sampling is statistically modeled, not NumPy-bit-identical.
+/// Dye-cloud spread is approximated by a combined post-blur and active
+/// microstructure is retained as a separately blurred multiplicative field.
+#[derive(Debug, Clone)]
+pub struct GrainSublayersGpu {
+    /// `+1.0` for negative film, `-1.0` for positive (reversal) film.
+    pub sign: f32,
+    /// Number of curve points (`axis.len()/4`, `layers.len()/12`).
+    pub n_points: u32,
+    /// Per curve point, per channel: `sign * normalized_density_curve[ch]`.
+    /// Laid out as `n_points` consecutive `[f32; 4]` (xyz = channel, w = pad).
+    pub axis: Vec<f32>,
+    /// Per curve point, per sublayer, per channel:
+    /// `density_curves_layers[point][sl][ch]`. Laid out as `n_points * 3`
+    /// consecutive `[f32; 4]` (`point*3 + sl`, xyz = channel, w = pad).
+    pub layers: Vec<f32>,
+    /// Per `(channel*3 + sublayer)`: `(dmax, od_particle, particles, dmin)`.
+    pub sl_params: [[f32; 4]; 9],
+}
+
 /// Grain parameters for the GPU-resident Poisson-binomial particle model.
 /// Mirrors `apply_grain_to_density`: per-channel n_particles_per_pixel
 /// already divided by `n_sub_layers`, density_max already includes
-/// `density_min`, etc.
-#[derive(Debug, Clone, Copy)]
+/// `density_min`, etc. When `sublayers` is `Some`, the exact CPU
+/// `apply_grain_layers` sublayer model is used instead and the simple
+/// `density_max`/`n_particles_per_pixel`/`n_sub_layers` fields are ignored.
+#[derive(Debug, Clone)]
 pub struct GrainGpuParams {
     pub density_min: [f32; 3],
     pub density_max: [f32; 3],
@@ -314,9 +559,19 @@ pub struct GrainGpuParams {
     pub n_sub_layers: u32,
     pub base_seed: u32,
     pub grain_blur: f32,
+    /// Active lognormal microstructure: (standard deviation, blur spread px).
+    pub microstructure: Option<[f32; 2]>,
     /// One shared noise field across all channels (B&W single emulsion)
     /// instead of independent per-channel RNG streams.
     pub monochrome: bool,
+    /// Global pixel index of the first pixel of the chain input. Banded
+    /// export sets this to the band's global start so the per-pixel RNG
+    /// seeds match the whole-frame run; 0 for whole-frame dispatches.
+    pub pixel_offset: u32,
+    /// Whole-frame row stride for coordinate-stable rectangular tiles.
+    pub full_width: u32,
+    /// Exact CPU sublayer model data; `None` selects the simple model.
+    pub sublayers: Option<GrainSublayersGpu>,
 }
 
 /// Output gamut compression parameters for the GPU-resident per-pixel pass.
@@ -364,6 +619,12 @@ pub struct GlareGpuParams {
     /// `(XYZ→RGB) * illuminant_xyz`, pre-divided by 100. The shader
     /// just multiplies the lognormal scalar by this per-channel offset.
     pub rgb_offset: [f32; 3],
+    /// Global pixel index of the first pixel of the chain input. Banded
+    /// export sets this to the band's global start so the per-pixel RNG
+    /// seeds match the whole-frame run; 0 for whole-frame dispatches.
+    pub pixel_offset: u32,
+    /// Whole-frame row stride for coordinate-stable rectangular tiles.
+    pub full_width: u32,
 }
 
 /// Halation parameters for the GPU-resident scatter + multi-bounce pass.
@@ -441,4 +702,46 @@ pub fn select_backend() -> Box<dyn ComputeBackend> {
     }
     tracing::info!("using CPU backend");
     Box::new(cpu_backend::CpuBackend)
+}
+
+#[cfg(test)]
+mod rectangular_field_tests {
+    use super::*;
+    #[test]
+    fn cropped_field_requires_both_global_bilinear_taps() {
+        let crop = DiffusionScatteredGpu::required_crop(8, 9, 4, 9, 13, 7, 5).unwrap();
+        assert_eq!(crop, [1, 2, 4, 3]);
+        let values = vec![0.25; (crop[2] * crop[3] * 3) as usize];
+        let mut view = DiffusionScatteredGpu { field: &values, small_w: 8, small_h: 9,
+            d: 4, p_s: 0.5, band_x0: 9, band_y0: 13, crop };
+        assert!(view.valid_for(7, 5));
+        view.crop[0] += 1;
+        assert!(!view.valid_for(7, 5));
+        view.crop = crop;
+        view.d = 0;
+        assert!(!view.valid_for(7, 5));
+    }
+    #[test]
+    fn edge_crop_clamps_at_global_image_not_tile_boundary() {
+        assert_eq!(DiffusionScatteredGpu::required_crop(8, 9, 4, 0, 0, 1, 1), Some([0, 0, 2, 2]));
+        assert_eq!(DiffusionScatteredGpu::required_crop(8, 9, 4, 31, 35, 1, 1), Some([7, 8, 1, 1]));
+        assert!(DiffusionScatteredGpu::required_crop(8, 9, 0, 0, 0, 1, 1).is_none());
+        assert!(DiffusionScatteredGpu::required_crop(8, 9, 4, u32::MAX, 0, 2, 1).is_none());
+    }
+}
+
+#[cfg(test)]
+mod density_capture_tests {
+    use super::*;
+    #[test] fn bounded_capture_contract() {
+        assert_eq!(film_density_capture_gpu_bytes(0), None);
+        assert_eq!(film_density_capture_gpu_bytes(1), Some(44));
+        assert_eq!(film_density_capture_gpu_bytes(MAX_FILM_DENSITY_SAMPLES), Some(7_340_048));
+        assert_eq!(film_density_capture_gpu_bytes(usize::MAX), None);
+        let mut c = FilmDensityCapture { samples: vec![FilmDensitySample { index: 99, x: 2, y: 3 }], result: None };
+        assert!(c.valid_for(3, 4));
+        assert!(!c.valid_for(2, 4));
+        assert!(!c.valid_for(u32::MAX, 2));
+        c.samples.clear(); assert!(!c.valid_for(3, 4));
+    }
 }

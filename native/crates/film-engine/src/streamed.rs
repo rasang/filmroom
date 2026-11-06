@@ -16,7 +16,10 @@ const BLOCK_PIXELS:usize=32768;
 pub struct StageMetrics {pub stage:&'static str,pub elapsed_ms:f64}
 #[derive(Debug,Serialize)]
 #[serde(rename_all="camelCase")]
-pub struct StreamedMetrics {pub export_execution:Option<crate::export_execution::ExportExecutionMetrics>,pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub width:u32,pub height:u32,pub pixel_count:u64,pub memory_budget_mi_b:u32,pub elapsed_ms:f64,pub setup_ms:f64,pub estimated_scratch_bytes:u64,pub peak_logical_scratch_bytes:u64,pub spatial_peak_explicit_buffer_bytes:u64,pub spatial_bytes_read:u64,pub spatial_bytes_written:u64,pub spatial_pass_count:u64,pub pointwise_chunk_rows:u32,pub lut_storage_bytes:usize,pub stages:Vec<StageMetrics>,pub algorithm:&'static str,pub grain_mode:&'static str,pub memory_policy:&'static str}
+pub struct GpuTileMetrics {pub core_width:u32,pub core_height:u32,pub expanded_width:u32,pub expanded_height:u32}
+#[derive(Debug,Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct StreamedMetrics {pub export_execution:Option<crate::export_execution::ExportExecutionMetrics>,pub metered_ev:Option<f32>,pub gpu:crate::adreno::GpuDiagnostics,pub width:u32,pub height:u32,pub pixel_count:u64,pub memory_budget_mi_b:u32,pub elapsed_ms:f64,pub setup_ms:f64,pub estimated_scratch_bytes:u64,pub peak_logical_scratch_bytes:u64,pub spatial_peak_explicit_buffer_bytes:u64,pub spatial_bytes_read:u64,pub spatial_bytes_written:u64,pub spatial_pass_count:u64,pub pointwise_chunk_rows:u32,pub gpu_tiles:Option<GpuTileMetrics>,pub lut_storage_bytes:usize,pub stages:Vec<StageMetrics>,pub algorithm:&'static str,pub grain_mode:&'static str,pub memory_policy:&'static str}
 
 fn error(code:&'static str,message:impl Into<String>)->EngineError {EngineError::new(code,message)}
 fn checkpoint_error(e:std::io::Error)->EngineError {if e.kind()==std::io::ErrorKind::InvalidData{error("CHECKPOINT_INVALID","Saved export checkpoint is corrupt or does not match this job")}else{io(e)}}
@@ -204,6 +207,7 @@ pub(crate) fn export_file_checkpointed_managed(execution:&crate::export_executio
 }
 
 fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::ExportPermit>,data_dir:&Path,film_stock:&str,paper_stock:&str,mut params:RuntimeParams,input_path:&Path,output_path:&Path,scratch_dir:&Path,checkpoint_dir:Option<&Path>,width:u32,height:u32,memory_budget_mib:u32,brightness_ev:f64,use_gpu:bool,mut cancelled:impl FnMut()->bool,progress:impl FnMut(ExportProgress))->Result<StreamedMetrics> {
+ crate::mobile::gpu_completion_guard()?;
  let mut progress=Reporter::new(progress);
  let start=Instant::now();if !cfg!(feature="precision-f64"){return Err(error("UNSUPPORTED_PRECISION","Streamed physical export requires f64 internal precision"));}
  if width==0||height==0||width>40000||height>40000{return Err(error("INVALID_DIMENSIONS","Dimensions must be1..40000"));}
@@ -222,15 +226,47 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  params.camera.pixel_size_um_override=Some(pitch);params.film_render.grain.coordinate_origin=Some([0,0]);params.settings.use_enlarger_lut=true;params.settings.use_scanner_lut=true;params.settings.lut_resolution=33;
  cancel(&mut cancelled)?;progress.pass("setup",0,1);let film=load_profile_by_name(data_dir,film_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;let paper=load_profile_by_name(data_dir,paper_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;
  if (!film.is_negative()&&!film.is_positive())||film.is_positive()&&!params.io.scan_film{return Err(error("UNSUPPORTED_PROFILE","Unsupported film or reversal print route"));}
+ // An existing exact CPU checkpoint wins over a new approximate attempt.
+ #[allow(unused_mut)] let mut resident_fallback:Option<&'static str>=None;
+ #[cfg(feature="adreno-gpu")]
+ let mut early_preview:Option<crate::early_negative_preview::PreviewHandle>=None;
+ #[cfg(feature="adreno-gpu")]
+ if use_gpu {
+   if checkpoint_dir.is_some_and(|root|root.join("manifest.json").exists()) {resident_fallback=Some("cpu_checkpoint_resume");}
+   else {
+     let gpu_submits_before=crate::mobile::full_chain_gpu().map_or(0,|g|g.thread_submits());
+     let attempt=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||crate::gpu_export::export(&params,film_stock,paper_stock,&film,&paper,data_dir,input_path,output_path,checkpoint_dir,width,height,memory_budget_mib,brightness_ev,&mut cancelled,&mut progress,&mut early_preview)));
+     if !matches!(&attempt,Ok(Ok(_))) {if let Some(ref preview)=early_preview {preview.cancel.store(true,std::sync::atomic::Ordering::Release);}}
+     if let Some(failure)=crate::mobile::full_chain_gpu().filter(|g|g.thread_submits()>gpu_submits_before).and_then(|g|g.thread_resident_failure()) {progress.gpu_failure(failure.stage.as_str(),failure.elapsed_ms);}
+     crate::mobile::gpu_completion_guard()?;
+     match attempt {
+       Ok(Ok(metrics))=>return Ok(metrics),
+       Ok(Err(e)) if matches!(e.code,"CANCELLED"|"INVALID_PIXELS"|"NONFINITE_OUTPUT"|"INVALID_OUTPUT_SHAPE"|"CHECKPOINT_INVALID"|"IO_ERROR")=>return Err(e),
+       Ok(Err(e))=>resident_fallback=Some(match e.code {"GPU_MEMORY_BUDGET"=>"gpu_memory_budget_fallback","GPU_BINDING_LIMIT"=>"gpu_binding_limit_fallback","GPU_UNAVAILABLE"=>"gpu_unavailable_fallback",_=>"gpu_execution_fallback"}),
+       Err(_)=>resident_fallback=Some("gpu_execution_fallback"),
+     }
+   }
+ }
+ // Cancel is cooperative inside the optional CPU preview. If it is still
+ // releasing its resources, keep its reservation while the real CPU fallback
+ // runs rather than waiting for it or exceeding the requested budget.
+ #[cfg(feature="adreno-gpu")]
+ let memory_budget_mib=if let Some(p)=early_preview.as_ref().filter(|p|p.running.load(std::sync::atomic::Ordering::Acquire)) {
+     let reserved=p.reserved_bytes.saturating_add(1024*1024-1)/(1024*1024);
+     memory_budget_mib.saturating_sub(reserved.min(u64::from(u32::MAX)) as u32)
+ }else{memory_budget_mib};
+ if let Some(reason)=resident_fallback {progress.diagnostic(reason);}
+ cancel(&mut cancelled)?;
  let mut checkpoints=if let Some(root)=checkpoint_dir {
    let config=serde_json::to_string(&(film_stock,paper_stock,&params,brightness_ev,use_gpu)).map_err(|_|error("INVALID_PARAMETERS","Checkpoint configuration serialization failed"))?;
    let identity=crate::checkpoint::Identity::new(data_dir,input_path,width,height,config,&mut cancelled).map_err(checkpoint_error)?;
    Some(crate::checkpoint::Checkpoints::open(root,identity,&mut cancelled).map_err(checkpoint_error)?)
  }else{None};
  let resume_stage=checkpoints.as_ref().map_or(0,|c|c.stage());
- let pipe=Pipeline::new_with_spectral(film,paper,params,data_dir).map_err(|e|error("PIPELINE_ERROR",e))?;let prepared=pipe.prepare_streamed_finish_spatial(&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?;let setup_ms=start.elapsed().as_secs_f64()*1000.;let backend=crate::adreno::AdrenoDensityBackend::with_enabled(use_gpu);cancel(&mut cancelled)?;let mut scratch=Scratch::new(scratch_dir)?;let mut stages=Vec::new();
+ let pipe=Pipeline::new_with_spectral(film,paper,params,data_dir).map_err(|e|error("PIPELINE_ERROR",e))?;let prepared=pipe.prepare_streamed_finish_spatial(&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?;let setup_ms=start.elapsed().as_secs_f64()*1000.;let backend=crate::adreno::AdrenoDensityBackend::with_enabled(use_gpu&&resident_fallback.is_none());cancel(&mut cancelled)?;let mut scratch=Scratch::new(scratch_dir)?;let mut stages=Vec::new();
  let mut output_guard=OutputGuard{path:output_path.to_path_buf(),keep:false};
  let rows=rows_per_chunk(width);
+ let fft_memory_cap=(memory_budget_mib as u64*1024*1024).saturating_sub(115*1024*1024+256*(width as u64).max(32768)+crate::export_execution::EXPORT_STACK_RESERVE_BYTES+SPATIAL_MEMORY as u64);
  let print_diffusion= !pipe.params.io.scan_film && pipe.params.enlarger.diffusion_filter.active;
  let mut metered_ev=checkpoints.as_ref().and_then(|c|c.metered_ev());
  if resume_stage<6 {
@@ -254,7 +290,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
    if let Some(kernel)=spektrafilm_model::diffusion::ExactDiffusionKernel::new_cancellable(&d.to_model(),pitch as f64,width as usize,height as usize,&mut cancelled).map_err(|_|error("CANCELLED","Diffusion kernel cancelled"))? {
      for ch in 0..3 {
        cancel(&mut cancelled)?;let transformed=scratch.path("camera-diffusion");let work=scratch.path("diffusion-work");let before=scratch.live()?;
-       let m=crate::disk_diffusion::apply_plane(&logs[ch],&transformed,&work,width,height,&kernel,ch,&mut cancelled,|done,total|progress.pass("camera_diffusion",ch as u64*n+done,total*3)).map_err(io)?;
+       let m=crate::disk_diffusion::apply_plane_budgeted(&logs[ch],&transformed,&work,width,height,&kernel,ch,fft_memory_cap,&mut cancelled,|done,total|progress.pass("camera_diffusion",ch as u64*n+done,total*3)).map_err(io)?;
        scratch.peak=scratch.peak.max(before+m.peak_scratch_bytes);scratch.spatial_buffer=scratch.spatial_buffer.max(m.explicit_buffer_bytes);scratch.passes+=m.tiles;scratch.remove(&logs[ch])?;logs[ch]=transformed;
      }
    }
@@ -303,7 +339,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
    let mut raw=raw;let d=&pipe.params.enlarger.diffusion_filter;let print_pitch=pipe.params.camera.film_format_mm*1000./width.max(height)as f32;
    progress.begin_work("print_diffusion");if let Some(kernel)=spektrafilm_model::diffusion::ExactDiffusionKernel::new_cancellable(&d.to_model(),print_pitch as f64,width as usize,height as usize,&mut cancelled).map_err(|_|error("CANCELLED","Print diffusion cancelled"))? {
      for ch in 0..3 {cancel(&mut cancelled)?;let transformed=scratch.path("print-diffusion");let work=scratch.path("print-diffusion-work");let before=scratch.live()?;
-       let m=crate::disk_diffusion::apply_plane(&raw[ch],&transformed,&work,width,height,&kernel,ch,&mut cancelled,|done,total|progress.pass("print_diffusion",ch as u64*n+done,total*3)).map_err(io)?;
+       let m=crate::disk_diffusion::apply_plane_budgeted(&raw[ch],&transformed,&work,width,height,&kernel,ch,fft_memory_cap,&mut cancelled,|done,total|progress.pass("print_diffusion",ch as u64*n+done,total*3)).map_err(io)?;
        scratch.peak=scratch.peak.max(before+m.peak_scratch_bytes);scratch.spatial_buffer=scratch.spatial_buffer.max(m.explicit_buffer_bytes);scratch.passes+=m.tiles;scratch.remove(&raw[ch])?;raw[ch]=transformed;
      }
    }
@@ -357,6 +393,6 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
    checkpoints.as_ref().unwrap().restore(&[output_path.to_path_buf()],&mut cancelled).map_err(checkpoint_error)?;progress.end_work();
    if let Err(e)=crate::scan_preview::publish_restored(output_path,width,height,&pipe.params.io.output_color_space,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}
  }
- scratch.observe()?;let metrics=StreamedMetrics{export_execution:None,metered_ev,gpu:backend.diagnostics(),width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
+ scratch.observe()?;let mut gpu=backend.diagnostics();if let Some(reason)=resident_fallback {gpu.requested=use_gpu;gpu.reason=reason.into();gpu.cpu_fallbacks+=1;}let metrics=StreamedMetrics{export_execution:None,metered_ev,gpu,width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,gpu_tiles:None,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
  fs::remove_dir_all(&scratch.dir).map_err(io)?;drop(scratch);output_guard.keep=true;progress.pass("complete",n,n);progress.finish_stage();Ok(metrics)
 }

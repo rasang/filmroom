@@ -28,6 +28,7 @@ pub struct GpuDiagnostics {
     pub cpu_fallbacks: u64,
     pub reason: String,
     pub startup_self_test_passed: bool,
+    pub numeric_guard_passed: bool,
 }
 pub struct AdrenoDensityBackend {
     #[cfg(feature = "adreno-gpu")]
@@ -62,6 +63,7 @@ impl AdrenoDensityBackend {
             }
             .into(),
             startup_self_test_passed: false,
+            numeric_guard_passed: false,
         };
         #[allow(unused_mut)]
         let mut backend = Self {

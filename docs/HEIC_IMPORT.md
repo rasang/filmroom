@@ -110,3 +110,17 @@ ImageDecoder 的 ImageInfo.colorSpace 是默认输出空间，官方明确不保
 验证分层：两张原始标准tmap样本在正式源码上均稳定于全局NCLX检查失败。候选每张保留49个item（grid+48 tiles），各item payload与关联属性逐字节一致，dimg顺序一致，原文件hash不变。主机libheif对原始primary与视图完整解码，共25,116,672像素，两对RGB hash与实际ICC→sRGB LittleCMS转换后hash均完全一致。抽样独立矩阵/TRC数学与LittleCMS差异最多1个8-bit码值。
 
 这些证据证明容器选择和主机像素保真，不证明目标Android系统HEVC实现已成功。Robolectric native ColorSpace、输入生命周期、失败清理和恢复测试与真实HEVC probe分别记录；当前host实际ImageDecoder仍在nCreate报unimplemented。没有把替身像素或支持查询true当作真机成功。设备端仍需完整解码、原尺寸/颜色核验，发布前不得略过该边界。
+
+## Apple auxl HDR gainmap：隔离严格 SDR primary
+
+新增一个独立于标准 `tmap` 的受限容器分支。只接受无 `tmap`、唯一 `auxl` 从隐藏 `hvc1` 辅图指向 primary，且辅图具有唯一、版本/flags 均为零的 `auxC`，内容精确为零终止 `urn:com:apple:photo:2020:aux:hdrgainmap`。这是辅助图格式标识，不是设备或文件名白名单。该标识不能单独证明底图为 SDR：所选主图与 tiles 仍经过同一个严格 Reader 的 ICC/TRC、8-bit、4:2:0、几何和资源检查。
+
+只对已核验的这条 gainmap 引用允许隔离；alpha、depth、未知辅助类型、多个/反向/多目标引用、gainmap 作为 tile、其他不明依赖、混合 tmap/auxl 继续拒绝。主图本身的 PQ/HLG、10-bit、未知 ICC、mirror/crop 与未知 essential 属性规则不变。当前不支持可见辅图、grid gainmap 或 auxC subtype 扩展。
+
+复用现有延迟 materialization、流式复制和清理流程。primary + 有序 tiles 的编码 payload、ICC、hvcC、ispe、pixi、irot 和 essential 位保持逐字节相同；只重写容器索引，不转 JPEG、不选缩略图、不重编码。方向仍由 ImageDecoder 应用一次，EXIF 来自原件且不再次旋转。输出仍为原尺寸 SDR → sRGB 工作流，不保留 HDR gainmap 或完整 Display P3 色域。
+
+2026-11-05 主机验证：公开 PhotoPrism `iphone_15_pro.heic` 原件 SHA256 `c68e438f92341da271a731a059113db9395366f4c2f78ead5ded64deba7de463`，主图 4032×3024、irot=3，显示尺寸 3024×4032。隔离 49 items（grid + 48 tiles），所有编码 payload、关联属性列表和 dimg 顺序相同，原件不变。libheif 完整解码的 12,192,768 像素 RGB hash 在原件与 view 间一致；实际 ICC 经 LittleCMS 转换 sRGB 后的全像素 hash 也一致。独立矩阵/TRC 抽样 6,080 像素，差异最多 1 个 8-bit 码值。现有两张标准 tmap 样本仍准入。
+
+聚焦验证：纯 JVM 容器/ICC/主图/恢复测试 77 项通过；Android host 聚焦回归 128 项通过，0 失败、0 跳过（含 Apple 导入、保留原件、spool 恢复及失败清理；host backend 替身像素不作为设备 HEVC 解码证据）。
+
+主机证据不是 Android/OEM 端到端成功证明。目标设备仍须完成原尺寸解码、方向与颜色核验；不宣称所有 Android 设备兼容或完整 HDR 保留。

@@ -12,6 +12,9 @@ fn is_dng(input: &Path) -> Result<bool> {
     let mut f = File::open(input).map_err(|e| io_error(e, "probe"))?;
     let mut h = [0; 8];
     f.read_exact(&mut h).map_err(|e| io_error(e, "probe"))?;
+    if crate::camera_raw::additional::orf_magic(&h){return Ok(false);}
+    // CR3 has a BMFF container; full box/track validation follows before decoding.
+    if &h[4..8]==b"ftyp" { return Ok(false); }
     let e = match &h[..2] {
         b"II" => crate::tiff::Endian::Le,
         b"MM" => crate::tiff::Endian::Be,
@@ -48,6 +51,9 @@ pub fn probe(input: &Path, b: &Budget, metadata_only: bool) -> Result<(Probe, Op
             Some(crate::develop::admit(&d, b)?)
         };
         Ok((d.probe(), admission))
+    } else if let Some(d)=crate::camera_raw::additional::AdditionalRaw::read(input)? {
+        let admission=if metadata_only {None}else{Some(d.admit(b)?)};
+        Ok((d.probe(),admission))
     } else if let Some(d) = crate::nikon_snef::Snef::read(input)? {
         let admission=if metadata_only {None}else{Some(d.admit(b)?)};
         Ok((d.probe(),admission))
@@ -72,6 +78,8 @@ pub fn decode(
     }
     if is_dng(input)? {
         crate::develop::decode(input, output, b, cancel)
+    } else if let Some(d)=crate::camera_raw::additional::AdditionalRaw::read(input)? {
+        d.decode(output,b,cancel)
     } else if let Some(d) = crate::nikon_snef::Snef::read(input)? {
         d.decode(output,b,cancel)
     } else {
