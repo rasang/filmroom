@@ -1,0 +1,96 @@
+name: LivePhoto SDK test build
+on:
+  push:
+    branches: [livephoto-sdk]
+    paths:
+      - 'livephoto-sdk/**'
+      - '.github/workflows/livephoto-sdk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: livephoto-sdk-test-build
+  cancel-in-progress: true
+jobs:
+  build:
+    if: github.ref == 'refs/heads/livephoto-sdk'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install SDK and synthetic-media test tools
+        run: |
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install Pillow
+      - name: Generate synthetic fixtures
+        working-directory: livephoto-sdk
+        run: python tools/generate_fixtures.py
+      - name: Compile SDK, run JVM tests, and assemble demo APK
+        working-directory: livephoto-sdk
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace :livephoto-core:check :livephoto-android:assembleRelease :demo:assembleDebug :livephoto-android:assembleDebugAndroidTest 2>&1 | tee build.log
+      - name: Independently check generated media
+        working-directory: livephoto-sdk
+        run: |
+          set -o pipefail
+          python tools/verify_outputs.py core/build/selftest core/src/test/resources/fixtures 2>&1 | tee media-checks.log
+      - name: Android lint
+        working-directory: livephoto-sdk
+        run: |
+          set -o pipefail
+          gradle --no-daemon :livephoto-android:lintRelease :demo:lintDebug 2>&1 | tee lint.log
+      - name: Verify APK signature and package downloadable files
+        working-directory: livephoto-sdk
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs demo/build/outputs/apk/debug/demo-debug.apk > apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging demo/build/outputs/apk/debug/demo-debug.apk > apk-badging.txt
+          python tools/bundle_outputs.py
+      - name: Upload build outputs and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: livephoto-sdk-${{ github.run_number }}
+          if-no-files-found: warn
+          path: |
+            downloads/livephoto-sdk/
+            livephoto-sdk/build.log
+            livephoto-sdk/media-checks.log
+            livephoto-sdk/lint.log
+            livephoto-sdk/apk-signature.txt
+            livephoto-sdk/apk-badging.txt
+            livephoto-sdk/core/build/selftest/*.json
+            livephoto-sdk/core/build/selftest/junit.xml
+            livephoto-sdk/android/build/reports/lint-results-*.html
+            livephoto-sdk/demo/build/reports/lint-results-*.html
+            livephoto-sdk/demo/build/outputs/apk/debug/*.apk
+      - name: Publish download files on the SDK branch only
+        if: success() && github.ref == 'refs/heads/livephoto-sdk'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/livephoto-sdk'
+          git fetch origin livephoto-sdk
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA" || { echo 'Branch changed; refusing to publish stale outputs'; exit 1; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f -- downloads/livephoto-sdk
+          git diff --cached --quiet && exit 0
+          git commit -m 'Build LivePhoto SDK test downloads [skip ci]'
+          git push origin HEAD:refs/heads/livephoto-sdk
