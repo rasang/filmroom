@@ -1,0 +1,118 @@
+[
+  {
+    "name": "GOOGLE: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "GOOGLE: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "GOOGLE: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "XIAOMI_COMPAT: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "XIAOMI_COMPAT: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "XIAOMI_COMPAT: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "OPLUS: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "OPLUS: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "OPLUS: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "VIVO_SINGLE: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "VIVO_SINGLE: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "VIVO_SINGLE: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_2104: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_2104: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_2104: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_2104: full MP4 with appended UUID decodes",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_LEGACY: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_LEGACY: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_LEGACY: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "VIVO_PAIR_LEGACY: full MP4 with appended UUID decodes",
+    "passed": true
+  },
+  {
+    "name": "HONOR_LEGACY: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "HONOR_LEGACY: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "HONOR_LEGACY: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_107: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_107: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_107: strict H264/AAC decode, 30 frames",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_106: independent container/identity",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_106: Pillow full pixels and upright EXIF",
+    "passed": true
+  },
+  {
+    "name": "SAMSUNG_SEF_106: strict H264/AAC decode, 30 frames",
+    "passed": true
+  }
+]
