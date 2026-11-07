@@ -25,8 +25,8 @@ class PreviewDiagnosticContext(val sourceToken:Long,val generation:Long,val scie
     }
     fun enrich(info:SafeInfo)=info.copy(previewSourceToken=sourceToken,previewGeneration=generation,previewOriginGeneration=originGeneration,previewOriginKind=originKind,previewScienceFingerprint=scienceFingerprint,previewKind=kind)
 }
-data class PreviewAdoptionRecord(val context:PreviewDiagnosticContext,val disposition:PreviewDisposition,val nativeCompleted:Boolean,val observedElapsedMs:Long=android.os.SystemClock.elapsedRealtime(),val timing:PreviewTimingSnapshot?=null) {
-    fun safeInfo()=context.enrich(SafeInfo(previewTiming=timing,previewDisposition=disposition,previewObservedElapsedMs=observedElapsedMs,previewNativeCompleted=if(disposition==PreviewDisposition.BOUND)null else nativeCompleted))
+data class PreviewAdoptionRecord(val context:PreviewDiagnosticContext,val disposition:PreviewDisposition,val nativeCompleted:Boolean,val observedElapsedMs:Long=android.os.SystemClock.elapsedRealtime(),val timing:PreviewTimingSnapshot?=null,val failureInfo:SafeInfo?=null) {
+    fun safeInfo()=context.enrich((failureInfo ?: SafeInfo()).copy(previewTiming=timing,previewDisposition=disposition,previewObservedElapsedMs=observedElapsedMs,previewNativeCompleted=if(disposition==PreviewDisposition.BOUND)null else nativeCompleted))
 }
 /** At most eight terminal presentation records/second; store has its existing hard capacity.
  * Native render traces still retain correlation fields when a presentation record is rate limited. */

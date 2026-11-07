@@ -1,0 +1,5 @@
+# Exact Python package versions in the recorded authoring environment.
+# Native FreeType/libwebp versions are separately pinned in environment-lock.json.
+Pillow==13.0.0
+numpy==2.3.5
+fonttools==4.61.1

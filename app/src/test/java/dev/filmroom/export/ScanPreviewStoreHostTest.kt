@@ -49,6 +49,27 @@ class ScanPreviewStoreHostTest {
    val next=ScanPreviewStore.begin(d);assertNotEquals(id,next);assertNull(ScanPreviewStore.select(d));assertFalse(image.exists())
   }finally{d.deleteRecursively()}
  }
+ @Test fun fullResolutionScanKeepsNewPixelsAndRejectsOversizeInput(){
+  val d=dir();try{
+   val id=ScanPreviewStore.begin(d)
+   fun write(width:Int,height:Int):File {
+    val b=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
+    Canvas(b).apply{drawColor(Color.BLUE);drawRect(0f,0f,width/2f,height.toFloat(),Paint().apply{color=Color.RED})}
+    return File(d,"scan-source-${UUID.randomUUID()}.png").also{it.outputStream().use{o->b.compress(Bitmap.CompressFormat.PNG,100,o)};b.recycle()}
+   }
+   val source=write(768,512);val bytes=source.readBytes()
+   ScanPreviewStore.publish(d,id,source,job(),provider){}
+   assertArrayEquals(bytes,source.readBytes())
+   val preview=checkNotNull(ScanPreviewStore.select(d));val published=preview.readBytes()
+   val bitmap=BitmapFactory.decodeFile(preview.path)
+   try {assertEquals(768,bitmap.width);assertEquals(512,bitmap.height)
+    assertTrue(Color.red(bitmap.getPixel(96,256))>240);assertTrue(Color.blue(bitmap.getPixel(672,256))>240)
+   }finally{bitmap.recycle()}
+   try{ScanPreviewStore.publish(d,id,write(769,512),job(),provider){};fail("Oversized source must be rejected")}
+   catch(_:IllegalArgumentException){}
+   assertArrayEquals("Rejected source cannot replace good preview",published,preview.readBytes())
+  }finally{d.deleteRecursively()}
+ }
  @Test fun cancellationMalformedSourceAndOldTokenCannotPublish(){
   val d=dir();try{
    val old=ScanPreviewStore.begin(d);val input=source(d);val j=job()

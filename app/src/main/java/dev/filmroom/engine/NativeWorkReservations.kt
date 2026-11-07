@@ -18,9 +18,11 @@ interface RetainedNativeWork:AutoCloseable {
 
 /** Shared by engine and codec callers. Only heavyweight JNI work holds a lease; planning never does. */
 object NativeWorkReservations {
-    private val limiter=NativeWorkLimiter()
+    private val limiter=NativeWorkLimiter { !ExportWorkAdmissions.prewarmBlocked }
     /** Read-only retry gate; does not raise capacity or alter reservation accounting. */
     fun detailRetryIdle():Boolean=limiter.activeCount()==0
+    fun preemptIdle()=limiter.preemptIdle()
+    suspend fun <T:Any> tryRunIdle(estimatedBytes:Long,memory:()->NativeMemorySnapshot,onPreempt:()->Unit,work:suspend ()->T):T? = limiter.tryRunIdle(estimatedBytes,memory(),onPreempt,work)
     val unavailableMemory=NativeMemorySnapshot(0,0,true)
     fun snapshot(context:Context):NativeMemorySnapshot {
         val manager=context.applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -41,8 +43,10 @@ object NativeWorkReservations {
 }
 
 /** Tiny process-local ledger. A fresh OS snapshot is checked on every cancellable retry. */
-internal class NativeWorkLimiter {
+internal class NativeWorkLimiter(private val idleAllowed:()->Boolean = {true}) {
     private val lock=Any()
+    private var foregroundWaiters=0
+    private var idlePreempt:(()->Unit)?=null
     private var count=0
     private var reserved=0L
     private val passive=mutableMapOf<Long,()->Unit>()
@@ -60,6 +64,27 @@ internal class NativeWorkLimiter {
         private var closed=false
         override fun close() {synchronized(this){if(!closed){closed=true;release()}}}
     }
+    /** Never queues, evicts a passive cache, or borrows capacity from another
+     * owner. A real admission first invalidates this work outside the ledger lock.
+     * Bytes and slot remain charged until the synchronous native call returns. */
+    fun preemptIdle(){val callback=synchronized(lock){idlePreempt};runCatching{callback?.invoke()}}
+    suspend fun <T:Any> tryRunIdle(estimate:Long,memory:NativeMemorySnapshot,onPreempt:()->Unit,work:suspend ()->T):T? {
+        val lease=synchronized(lock) {
+            require(estimate in 1..(2L*1024*NativeMemoryPolicy.MIB))
+            // Read only atomics/StateFlow here. Queue activity is published before
+            // preemptIdle takes this same lock, closing check/register races.
+            if(!idleAllowed())return null
+            val charge=Math.addExact(estimate,16L*NativeMemoryPolicy.MIB)
+            val headroom=if(memory.thresholdBytes>=0 && memory.availableBytes>memory.thresholdBytes)memory.availableBytes-memory.thresholdBytes else 0L
+            val capacity=(headroom-64L*NativeMemoryPolicy.MIB).coerceAtLeast(0)/2
+            if(memory.lowMemory || count!=0 || foregroundWaiters!=0 || idlePreempt!=null || evicting.isNotEmpty() || charge>capacity || reserved>capacity-charge)return null
+            count++;reserved+=charge;idlePreempt=onPreempt
+            Lease {synchronized(lock){idlePreempt=null;count--;reserved-=charge;check(count>=0&&reserved>=0)}}
+        }
+        try {currentCoroutineContext().ensureActive();return work()} finally {lease.close()}
+    }
+    private fun foregroundWaiting(){synchronized(lock){foregroundWaiters++};preemptIdle()}
+    private fun foregroundReady(){synchronized(lock){foregroundWaiters--;check(foregroundWaiters>=0)}}
     fun retain(estimate:Long,memory:NativeMemorySnapshot,onPressure:(()->Unit)?=null):AutoCloseable=synchronized(lock) {
         require(estimate in 1..(2L*1024*NativeMemoryPolicy.MIB))
         val headroom=if(memory.thresholdBytes>=0 && memory.availableBytes>memory.thresholdBytes)
@@ -79,7 +104,8 @@ internal class NativeWorkLimiter {
             override fun close(){synchronized(lock){if(!closed){closed=true;if(workers==0)reservation.close()}}}
             override suspend fun <T> run(memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
                 var acquired=false
-                while(!acquired){
+                foregroundWaiting()
+                try { while(!acquired){
                     currentCoroutineContext().ensureActive()
                     val snapshot=memory()
                     acquired=synchronized(lock){
@@ -93,6 +119,7 @@ internal class NativeWorkLimiter {
                     }
                     if(!acquired)delay(100)
                 }
+                } finally {foregroundReady()}
                 try {currentCoroutineContext().ensureActive();work()}
                 finally {synchronized(lock){count--;workers--;check(count>=0 && workers==0);if(closed)reservation.close()}}
             }
@@ -110,14 +137,17 @@ internal class NativeWorkLimiter {
         if(memory.lowMemory || count>=2 || charge>capacity || reserved>capacity-charge) {
             val callbacks=passive.filterKeys { it !in evicting }
             if(callbacks.isNotEmpty()){evicting.addAll(callbacks.keys);return@synchronized Attempt.Evict(callbacks.values.toList())}
+            if(count==0 && evicting.isEmpty())dev.filmroom.diagnostics.ImportObservation.current()?.admission(estimate,memory,capacity,reserved,count,true)
             return@synchronized if(count>0 || evicting.isNotEmpty())Attempt.Wait else Attempt.Reject
         }
+        dev.filmroom.diagnostics.ImportObservation.current()?.admission(estimate,memory,capacity,reserved,count,false)
         count++;reserved+=charge
         Attempt.Ready(Lease {synchronized(lock){count--;reserved-=charge;check(count>=0&&reserved>=0)}})
     }
     suspend fun <T> run(estimate:Long,memory:()->NativeMemorySnapshot,work:suspend ()->T):T=withContext(Dispatchers.IO) {
         var lease:Lease?=null
-        while(lease==null) {
+        foregroundWaiting()
+        try { while(lease==null) {
             currentCoroutineContext().ensureActive()
             when(val result=acquire(estimate,memory())) {
                 is Attempt.Ready->lease=result.lease
@@ -126,6 +156,7 @@ internal class NativeWorkLimiter {
                 is Attempt.Evict->{result.callbacks.forEach{it()};delay(25)}
             }
         }
-        try {currentCoroutineContext().ensureActive();work()} finally {lease.close()}
+        } finally {foregroundReady()}
+        try {currentCoroutineContext().ensureActive();work()} finally {lease!!.close()}
     }
 }

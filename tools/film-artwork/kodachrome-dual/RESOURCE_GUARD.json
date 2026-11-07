@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "seconds": 33.56,
+  "peak_tree_rss_bytes": 295190528,
+  "minimum_mem_available_bytes": 2938961920,
+  "minimum_overlay_free_bytes": 2509606912,
+  "terminated_reason": null
+}

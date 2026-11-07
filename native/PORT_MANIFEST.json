@@ -17,7 +17,7 @@
     },
     {
       "path": "DATA_MANIFEST.json",
-      "sourceSha256": "5e8b924aa7a682a808ca10e7e07ee909c089724486ccd599ef9f8e6f6659c1f2",
+      "sourceSha256": "df8e075fbcd5f241f808f53ab0f3aea868495480046757a086163a7e9d098473",
       "upstreamSha256": null,
       "type": "added"
     },
@@ -101,7 +101,7 @@
     },
     {
       "path": "crates/film-engine/src/mobile.rs",
-      "sourceSha256": "7e5396e7f5dbb5f2237e6ef759ea0a0258f162bc5d06c7f7dc1231e326cd8388",
+      "sourceSha256": "6560f49d42e28f4a3cdc37b46c001c242b606f59480498dc71c2b471d6e7d904",
       "upstreamSha256": null,
       "type": "added"
     },
@@ -203,7 +203,7 @@
     },
     {
       "path": "crates/spektrafilm-core/src/profile.rs",
-      "sourceSha256": "3b2e421b21cd85b2f35b957337f010665e30b37c8eee6f7def8a26d15e3fa3d2",
+      "sourceSha256": "3283f8c3fde3ce100e7014b8f467bf4ba7b4b904db737ea85a78671fbc4a572b",
       "upstreamSha256": "3b2e421b21cd85b2f35b957337f010665e30b37c8eee6f7def8a26d15e3fa3d2",
       "type": "unchanged"
     },
@@ -512,10 +512,65 @@
       "sourceSha256": "ed9c0daa07e5fbfe4b600c0f157e31fbff8a34ad73d8c4b98b20b6554c12eaea",
       "upstreamSha256": null,
       "type": "added"
+    },
+    {
+      "path": "crates/film-engine/src/profile_catalog.rs",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "e58073f07dbc78c1b10c4ddf1c22416700a3db2e1182496c0b09269260c9dc60"
+    },
+    {
+      "path": "crates/film-engine/tests/profile_routes.rs",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "6365600a2fd3570d985cf427302975ee72768ebaaee4990c99b5f00396b3f233"
+    },
+    {
+      "path": "SPEKTRALAB_PROFILE_SUPPORT.md",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "6394b215d4f58a75c5e3c3e88dad3d6bebf6387ba0d77a6d4eaa2fb8d899a129"
+    },
+    {
+      "path": "crates/film-engine/tests/spektralab_profiles.rs",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "d5ad68d9cd0d3016a81d5e503c2c087555d3043d902f4d8d157ecaf828bfc866"
+    },
+    {
+      "path": "notices/spektralab/ATTRIBUTION.txt",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "9df2a287708e9bb9d85b4be28e7551c18dd17e6ae5103648ef77f514510de305"
+    },
+    {
+      "path": "notices/spektralab/GPL-3.0.txt",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "notices/spektralab/NOTICE.md",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "44425f1dbf29983482087f2b439730db389866bbf19cf90159cf915b2956b96c"
+    },
+    {
+      "path": "notices/spektralab/paper_grades.json",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "a6a2f689c73b104880d965519586db7c0976027aad05b6103872537f81b76ce9"
+    },
+    {
+      "path": "tests/jni/dev/filmroom/engine/SpektraLabProbe.java",
+      "upstreamSha256": null,
+      "type": "added",
+      "sourceSha256": "e6b2c22121fc23810693a4ffea0e61e2e05ed2e8e52fb13adb2fa9990f9dcb96"
     }
   ],
   "sourceFileCount": 85,
   "modifiedOrAddedCount": 49,
   "dataManifestSha256": "5e8b924aa7a682a808ca10e7e07ee909c089724486ccd599ef9f8e6f6659c1f2",
-  "note": "V5 production source freeze: complete-image stage-separated local disk FIR/IIR; no finite halo, server, effect disable or silent resize. Keeps 128N+64MiB scratch reserve. All-source hash inventory includes unchanged files; baseline V4 source/data/artifacts preserved separately. Final native manifest records test and ABI scope."
+  "note": "V5 production source freeze: complete-image stage-separated local disk FIR/IIR; no finite halo, server, effect disable or silent resize. Keeps 128N+64MiB scratch reserve. All-source hash inventory includes unchanged files; baseline V4 source/data/artifacts preserved separately. Final native manifest records test and ABI scope.",
+  "spektralabRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af"
 }

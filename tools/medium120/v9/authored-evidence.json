@@ -1,0 +1,258 @@
+{
+  "generator": "tools/medium120/v9/generate.py",
+  "font_sha256": {
+    "DejaVuSansCondensed.ttf": "6de96c09bf752e3774583eea6bc3fb0b60f1733c595f22a926c89219ba8ade43"
+  },
+  "asset": {
+    "stock": "fujifilm_neopan_acros_100_ii",
+    "monochrome": true,
+    "perforated": false,
+    "defaultCenterMm": 410.0,
+    "coverageStartMm": 320.0,
+    "coverageEndMm": 500.0,
+    "sourceCenterMm": 30.0,
+    "primaryObservedStartMm": 380.0,
+    "primaryObservedEndMm": 439.81151832460733,
+    "physical_calibration": false,
+    "continuous_source": false,
+    "periodic_extension": true,
+    "indexPitchMm": 41.53577661431064,
+    "inferredBrandPeriodMm": 83.07155322862128,
+    "source_coordinates_sha256": "dce04211979acdedd26444d680ed9b83388e927f629b20032e94a2f86383d671",
+    "source_hashes_sha256": "0b43c1b68adec38ea70941e44addbe790d2f7dc2ac467211b100e641358c6bbb",
+    "base": [
+      8,
+      8,
+      8,
+      255
+    ],
+    "ink": [
+      185,
+      185,
+      185,
+      255
+    ],
+    "marks": [
+      {
+        "kind": "text",
+        "label": "3",
+        "rail": 0,
+        "x_mm": 343.64397905759165,
+        "width_mm": 1.2705061082024431,
+        "rail_y_mm": 0.6841186736474695,
+        "height_mm": 1.2705061082024431,
+        "source_bbox_px": [
+          53,
+          7,
+          66,
+          20
+        ],
+        "phase_px": -425,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "kind": "narrow_left_wedge",
+        "label": "wedge3",
+        "rail": 0,
+        "x_mm": 346.869109947644,
+        "width_mm": 3.3228621291448515,
+        "rail_y_mm": 0.5863874345549738,
+        "height_mm": 1.1727748691099475,
+        "source_bbox_px": [
+          86,
+          6,
+          120,
+          18
+        ],
+        "phase_px": -425,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "kind": "text",
+        "label": "4",
+        "rail": 0,
+        "x_mm": 385.1797556719023,
+        "width_mm": 1.2705061082024431,
+        "rail_y_mm": 0.6841186736474695,
+        "height_mm": 1.2705061082024431,
+        "source_bbox_px": [
+          53,
+          7,
+          66,
+          20
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "narrow_left_wedge",
+        "label": "wedge4",
+        "rail": 0,
+        "x_mm": 388.40488656195464,
+        "width_mm": 3.3228621291448515,
+        "rail_y_mm": 0.5863874345549738,
+        "height_mm": 1.1727748691099475,
+        "source_bbox_px": [
+          86,
+          6,
+          120,
+          18
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "text",
+        "label": "5",
+        "rail": 0,
+        "x_mm": 426.7155322862129,
+        "width_mm": 1.2705061082024431,
+        "rail_y_mm": 0.4886561954624782,
+        "height_mm": 1.4659685863874345,
+        "source_bbox_px": [
+          478,
+          5,
+          491,
+          20
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "narrow_left_wedge",
+        "label": "wedge5",
+        "rail": 0,
+        "x_mm": 429.84293193717275,
+        "width_mm": 3.420593368237347,
+        "rail_y_mm": 0.39092495636998253,
+        "height_mm": 1.368237347294939,
+        "source_bbox_px": [
+          510,
+          4,
+          545,
+          18
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "text",
+        "label": "6",
+        "rail": 0,
+        "x_mm": 468.25130890052355,
+        "width_mm": 1.2705061082024431,
+        "rail_y_mm": 0.6841186736474695,
+        "height_mm": 1.2705061082024431,
+        "source_bbox_px": [
+          53,
+          7,
+          66,
+          20
+        ],
+        "phase_px": 850,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "kind": "narrow_left_wedge",
+        "label": "wedge6",
+        "rail": 0,
+        "x_mm": 471.4764397905759,
+        "width_mm": 3.3228621291448515,
+        "rail_y_mm": 0.5863874345549738,
+        "height_mm": 1.1727748691099475,
+        "source_bbox_px": [
+          86,
+          6,
+          120,
+          18
+        ],
+        "phase_px": 850,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "kind": "text",
+        "label": "4586",
+        "rail": 1,
+        "x_mm": 339.05061082024434,
+        "width_mm": 3.81151832460733,
+        "rail_y_mm": 0.7408376963350787,
+        "height_mm": 1.2705061082024431,
+        "source_bbox_px": [
+          431,
+          620,
+          470,
+          633
+        ],
+        "phase_px": -850,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "kind": "text",
+        "label": "FUJI 100 ACROS II",
+        "rail": 1,
+        "x_mm": 381.56369982547994,
+        "width_mm": 14.464223385689353,
+        "rail_y_mm": 0.7408376963350787,
+        "height_mm": 1.1727748691099475,
+        "source_bbox_px": [
+          16,
+          620,
+          164,
+          632
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "text",
+        "label": "4586",
+        "rail": 1,
+        "x_mm": 422.1221640488656,
+        "width_mm": 3.81151832460733,
+        "rail_y_mm": 0.7408376963350787,
+        "height_mm": 1.2705061082024431,
+        "source_bbox_px": [
+          431,
+          620,
+          470,
+          633
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "kind": "text",
+        "label": "FUJI 100 ACROS II",
+        "rail": 1,
+        "x_mm": 464.6352530541012,
+        "width_mm": 14.464223385689353,
+        "rail_y_mm": 0.7408376963350787,
+        "height_mm": 1.1727748691099475,
+        "source_bbox_px": [
+          16,
+          620,
+          164,
+          632
+        ],
+        "phase_px": 850,
+        "evidence": "periodic_approximation"
+      }
+    ],
+    "limitations": [
+      "Primary source is the LEFT AcrosII panel. The RIGHT originalAcros panel is excluded, including its170,12,100ACROS and dot-matrix marks.",
+      "4,5,narrow left wedges,FUJI100ACROSII and4586 are visible.4586 is an observed code, not an asserted universal batch or emulsion identifier.",
+      "Secondary source separately shows13 andA. It is not spliced into a same-roll panorama; A is not repeated because its cadence is unverified.",
+      "Only about59.8mm is directly observed in the primary. The180mm authored model uses explicitly inferred sequential indices and a twice-index brand/code period for all five formats.",
+      "Cap height,typeface,gray value,rail width,phase,56mm aperture and3mm end allowance are approximations, not factory metrology.",
+      "No photograph pixels, first-generationAcros markings, perforations, orange mask or scientific response data are included or changed.",
+      "Optional centered imprint layouts separately reposition copied lower-rail marks outward; the immutable source asset does not change. Empty authored space outside primary evidence is not evidence of physically blank film."
+    ],
+    "path": "medium120/v9/acrosii-rails.png",
+    "version": "mf120-v9-acrosii-5d8eb4aa9d8f",
+    "sha256": "5d8eb4aa9d8fd621fd8de674c9003202c43b324eb7fcc50f076f358c493013e6",
+    "bytes": 18696,
+    "width": 8200,
+    "height": 50,
+    "ppm": 10
+  }
+}

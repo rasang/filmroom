@@ -1,0 +1,23 @@
+<resources>
+    <string name="preset_qr_title">Recipe QR code</string>
+    <string name="preset_qr_import">Import QR</string>
+    <string name="preset_qr_share">Share QR</string>
+    <string name="preset_qr_scan">Scan QR code</string>
+    <string name="preset_qr_album">Choose QR image</string>
+    <string name="preset_qr_scan_prompt">Place the whole Filmroom recipe QR code in the viewfinder</string>
+    <string name="preset_qr_camera_denied">Camera unavailable or permission denied. You can still choose a QR image.</string>
+    <string name="preset_qr_save_new">Save as new recipe</string>
+    <string name="preset_qr_share_image">Share QR image</string>
+    <string name="preset_qr_image_description">Filmroom recipe QR code</string>
+    <string name="preset_qr_home">Scan or choose a Filmroom recipe QR image. Everything is decoded offline. Review it before saving; your photo will not change.</string>
+    <string name="preset_qr_import_scope">Save a new recipe without overwriting existing recipes or changing your photo. Includes film, all editing settings, borders, composition, imprints, and custom dates. New settings missing from older codes use defaults. Apply it later from the recipe list.</string>
+    <string name="preset_qr_share_scope">This QR contains every setting, composition, and custom date in this recipe, but no photo or source metadata. Anyone who receives it can read and import it. Share the original image without compression or cropping the white margin.</string>
+    <string name="preset_qr_saved">Saved as a new recipe. Your photo is unchanged. Return to the recipe list to apply it.</string>
+    <string name="preset_qr_done">Done</string>
+    <string name="preset_qr_working">Processing on this device…</string>
+    <string name="preset_qr_details">Name: %1$s\nFilm: %2$s\nPaper: %3$s</string>
+    <string name="preset_qr_invalid">No valid Filmroom recipe QR was found. Existing data is unchanged. Try a clear image showing the complete code.</string>
+    <string name="preset_qr_incompatible">This code contains a format, setting, or film this version does not support. Update Filmroom and retry. Nothing was imported or changed.</string>
+    <string name="preset_qr_too_large">This recipe exceeds the supported single-QR capacity. No settings have been removed. Keep the original recipe; this version cannot share or import it as one code.</string>
+    <string name="preset_qr_share_failed">Could not share the QR image. Check available storage and try again.</string>
+</resources>

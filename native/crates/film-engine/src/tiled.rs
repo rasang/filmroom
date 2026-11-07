@@ -59,6 +59,11 @@ pub fn export_file(data_dir:&Path, film_stock:&str,paper_stock:&str,mut params:R
     if width==0||height==0||width>40000||height>40000 {return Err(EngineError::new("INVALID_DIMENSIONS","Export dimensions must be 1..40000"));}
     if !(64..=1024).contains(&requested_tile) || max_tile_pixels<65536 || max_tile_pixels>4_194_304 {return Err(EngineError::new("INVALID_BUDGET","Invalid tile or memory budget"));}
     if input_path==output_path {return Err(EngineError::new("INVALID_PATH","Input and output must differ"));}
+    // This legacy diagnostic exporter has no full-frame headroom reduction.
+    // The app uses streamed::export_file (including its bounded GPU tiles).
+    if params.film_render.halation.active && params.film_render.halation.back_reflection && params.film_render.halation.halation_amount>0. {
+        return Err(EngineError::new("UNSUPPORTED_EXPORT_OPTIONS","CineStill back-reflection requires the streamed exporter with full-frame headroom"));
+    }
     if params.camera.auto_exposure || params.camera.diffusion_filter.active || params.enlarger.diffusion_filter.active || params.camera.lens_blur_um!=0. || params.scanner.lens_blur!=0. || params.scanner.unsharp_mask!=[0.,0.] || params.print_render.glare.active || params.io.crop || params.io.upscale_factor!=1. {
         return Err(EngineError::new("UNSUPPORTED_EXPORT_OPTIONS","Tiled export requires AE/crop/resize/lens filters/scan glare/sharpening off; it retains film halation, DIR and density grain"));
     }

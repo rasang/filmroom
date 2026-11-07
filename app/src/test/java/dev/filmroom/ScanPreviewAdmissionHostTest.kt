@@ -4,8 +4,10 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 class ScanPreviewAdmissionHostTest {
- @Test fun threeAdditionalNativeMiBAreChargedAtAdmissionBoundary()=runBlocking {
-  val mib=1024L*1024;val oldEstimate=112*mib+256*32768L+8*mib;val estimate=oldEstimate+3*mib
+ @Test fun sharperScanRetainsTheExistingExportAdmissionBoundary()=runBlocking {
+  val mib=1024L*1024
+  for (scientificBudget in listOf(128*mib,384*mib)) {
+  val estimate=maxOf(115*mib+256*32768L+8*mib,scientificBudget)
   val limiter=NativeWorkLimiter();var called=false
   // run adds the existing16MiB per-operation safety allowance; capacity is half remaining headroom.
   val tooSmall=NativeMemorySnapshot(64*mib+2*(estimate+16*mib)-1,0,false)
@@ -13,6 +15,7 @@ class ScanPreviewAdmissionHostTest {
   assertFalse(called);assertEquals(0,limiter.activeCount());assertEquals(0L,limiter.reservedBytes())
   val exact=tooSmall.copy(availableBytes=tooSmall.availableBytes+1)
   limiter.run(estimate,{exact}){called=true};assertTrue(called);assertEquals(0L,limiter.reservedBytes())
+  }
  }
  @Test fun onlyCurrentOwnedOutputUuidCanChooseSourcePath(){
   val dir=java.io.File("/tmp/scan-owned")

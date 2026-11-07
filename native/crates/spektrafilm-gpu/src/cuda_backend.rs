@@ -2305,12 +2305,13 @@ impl ComputeBackend for CudaBackend {
         // scattered-field mixes are implemented by the wgpu backend only;
         // decline so the caller falls back instead of silently running the
         // wrong chain.
-        if params.stop_after != crate::ChainStop::Full
+        if params.start_at != crate::ChainStart::Rgb || params.stop_after != crate::ChainStop::Full
             || params.diffusion_scattered.is_some()
             || params.enlarger_scattered.is_some()
             || params.glare.as_ref().is_some_and(|g| g.pixel_offset != 0 || g.full_width != params.image.width())
             || params.defer_gamut_to_cpu
-            || params.highlight_boost.as_ref().is_some_and(|h| h.max_raw_override.is_some())
+            || params.highlight_boost.as_ref().is_some_and(|h| h.max_raw_override.is_some() || h.headroom_ev != 0.0)
+            || params.halation.as_ref().is_some_and(|h| h.back_reflection.is_some())
             || params.grain.as_ref().is_some_and(|g| g.sublayers.is_some() || g.microstructure.is_some() || g.pixel_offset != 0 || g.full_width != params.image.width())
         {
             return None;

@@ -89,6 +89,24 @@ class LinearPreviewTest {
             }
         }finally{root.deleteRecursively()}
     }
+    @Test fun separateRefinementReads1536LinearSourceWithoutChangingOrdinaryBound()=runBlocking {
+        val root=kotlin.io.path.createTempDirectory("refined-linear-").toFile()
+        try {
+            val raw=File(root,"source.rgb")
+            val row=ByteBuffer.allocate(1600*12).order(ByteOrder.LITTLE_ENDIAN)
+            repeat(1600){row.putFloat(5.734f).putFloat(-0.02f).putFloat(0.1234567f)}
+            raw.writeBytes(row.array())
+            val refined=LinearSpool.refinedPreview(raw,1600,1,coroutineContext)
+            assertEquals(1536,refined.width);assertEquals(1,refined.height)
+            assertEquals(1536*12,refined.buffer().capacity());assertTrue(refined.buffer().isReadOnly)
+            val values=refined.buffer()
+            while(values.hasRemaining()) {assertEquals(5.734f,values.float,0.00001f);assertEquals(-0.02f,values.float,0.00001f);assertEquals(0.1234567f,values.float,0.00001f)}
+            assertThrows(IllegalArgumentException::class.java){LinearSpool.linearPreview(raw,1600,1,1536,coroutineContext)}
+            val tiny=LinearSpool.refinedPreview(input(root),4,4,coroutineContext)
+            assertEquals(4,tiny.width);assertEquals(4,tiny.height)
+        }finally{root.deleteRecursively()}
+    }
+
     @Test fun cancellationInsideRowsCannotReturnPartialPreview()=runBlocking {
         val root=kotlin.io.path.createTempDirectory("preview-mid-cancel-").toFile()
         try {

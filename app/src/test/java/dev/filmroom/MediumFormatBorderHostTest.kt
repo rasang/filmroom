@@ -76,8 +76,8 @@ class MediumFormatBorderHostTest {
         rejected{a.copy(mediumPortrait=true)}
     }
 
-    @Test fun ninePhysicalStocksAndPushAliasesOnly(){
-        assertEquals(9,MediumFormatStocks.profiles.values.toSet().size);assertEquals(11,MediumFormatStocks.profiles.size)
+    @Test fun reviewedPhysicalStocksAndPushAliasesOnly(){
+        assertEquals(15,MediumFormatStocks.profiles.values.toSet().size);assertEquals(17,MediumFormatStocks.profiles.size)
         val base=snapshot(MediumFormat.MF67)
         for(alias in listOf("kodak_portra_800_push1","kodak_portra_800_push2")){
             val s=snapshot(MediumFormat.MF67,stock=alias)
@@ -85,7 +85,7 @@ class MediumFormatBorderHostTest {
         }
         assertFalse(BorderCatalog.available("kodak_vision3_500t",MediumFormat.MF67))
         rejected{snapshot(MediumFormat.MF67,stock="kodak_vision3_500t")}
-        for(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100")){
+        for(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100","kodak_kodachrome_64")){
             val s=snapshot(MediumFormat.MF67,stock=stock,route="direct")
             assertEquals(FrameAppearanceContext.Material.POSITIVE_DISPLAY,s.appearance!!.material)
         }
@@ -115,7 +115,7 @@ class MediumFormatBorderHostTest {
     @Test fun allBundledRailsAreOpaquePinnedAndHolePreferenceHasNoEffect(){
         initialize()
         for(stock in MediumFormatStocks.profiles.values.toSet()){
-            val route=if(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100"))"direct" else "print"
+            val route=if(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100","kodak_kodachrome_64"))"direct" else "print"
             val s=snapshot(MediumFormat.MF617,stock=stock,route=route)
             val raster=resolve(s);raster.validate(s) // Loader checks hash, exact dimensions and every alpha=255.
             val dark=s.copy(appearance=s.appearance!!.copy(negativeWhiteHoles=false))

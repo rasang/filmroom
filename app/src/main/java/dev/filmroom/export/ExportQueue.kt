@@ -26,22 +26,40 @@ class ExportIntakeGeneration(val generation:Long):kotlin.coroutines.AbstractCoro
 internal interface ExportProcessing {
     suspend fun plan(width:Int,height:Int,parameters:EditorState):NativeExportPlan
     suspend fun render(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,onProgress:(EngineProgress)->Unit):File
+    /** Scope is this render only; old adapters remain uncached. */
+    suspend fun renderReserved(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,onProgress:(EngineProgress)->Unit):File = render(input,width,height,parameters,workspace,onProgress)
+    /** Older adapters must explicitly implement this new input contract. Never silently render with polluted AE. */
+    suspend fun planPreImaging(width:Int,height:Int,parameters:EditorState,preImaging:org.json.JSONObject):NativeExportPlan =
+        throw EngineException(EngineFailure.UNAVAILABLE)
+    suspend fun renderPreImaging(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,preImaging:org.json.JSONObject,onProgress:(EngineProgress)->Unit):File =
+        throw EngineException(EngineFailure.UNAVAILABLE)
+    fun trimCacheForReserve(bytes:Long) {}
+    /** Optional feature: older/fake processors never acquire a cache identity implicitly. */
+    suspend fun encodedReuseIdentity(width:Int,height:Int,parameters:EditorState):String?=null
+    fun completedEncodedReuseIdentity():EncodedReuseIdentity?=null
     fun cancel()
 }
 private class NativeExportProcessing(context:Context):ExportProcessing {
     private val engine=FilmEngine(context)
     override suspend fun plan(width:Int,height:Int,parameters:EditorState)=engine.planExport(width,height,parameters)
     override suspend fun render(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,onProgress:(EngineProgress)->Unit)=engine.exportSpool(input,width,height,parameters,workspace=workspace,progressOnMain=false,onProgress=onProgress)
+    override suspend fun renderReserved(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,onProgress:(EngineProgress)->Unit)=engine.exportSpool(input,width,height,parameters,workspace=workspace,progressOnMain=false,cacheDiskReserveBytes=diskReserveBytes,onProgress=onProgress)
+    override suspend fun planPreImaging(width:Int,height:Int,parameters:EditorState,preImaging:org.json.JSONObject)=engine.planExport(width,height,parameters,preImaging)
+    override suspend fun renderPreImaging(input:File,width:Int,height:Int,parameters:EditorState,workspace:File,diskReserveBytes:Long,preImaging:org.json.JSONObject,onProgress:(EngineProgress)->Unit)=
+        engine.exportSpool(input,width,height,parameters,workspace=workspace,progressOnMain=false,cacheDiskReserveBytes=diskReserveBytes,preImaging=preImaging,onProgress=onProgress)
+    override fun trimCacheForReserve(bytes:Long)=engine.trimExportReuse(bytes)
+    override suspend fun encodedReuseIdentity(width:Int,height:Int,parameters:EditorState)=engine.encodedReuseIdentity(width,height,parameters)
+    override fun completedEncodedReuseIdentity()=engine.completedEncodedReuseIdentity()
     override fun cancel()=engine.cancel()
 }
 enum class ExportRunOutcome { DRAINED, BLOCKED_STARTUP_RECOVERY }
-class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog) {
+class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog,private val repository:PhotoRepository=PhotoRepository(context),private val sourceHashNanoTime:()->Long=System::nanoTime) {
     val store=ExportJobStore(File(context.filesDir,"export-jobs"))
     val jobs=store.jobs
     val startupRecoveryReady get()=startupGate==null || startupGate.state.value is StartupRecoveryGate.State.Ready
     val hasPendingWorkOrIntakes get()=intakes.get()>0 || jobs.value.any{it.state in setOf(ExportJobState.PENDING,ExportJobState.RETRY)}
     init {val app=context.applicationContext;BorderCatalog.initialize(app.assets){NativeWorkReservations.snapshot(app)};jobs.value.filter{it.terminal}.forEach{cleanup(it.id)}}
-    private val repository=PhotoRepository(context)
+    private val encodedCache=EncodedPayloadCache.get(context.cacheDir)
     private val activeLock=Any()
     @Volatile private var activeId:String?=null
     @Volatile private var activeTask:Job?=null
@@ -77,7 +95,10 @@ class ExportQueue internal constructor(private val context:Context,private val p
             try {
                 store.update(draft);accepted=true;runCatching{onAccepted(draft)};beforeCapture(draft)
                 val bytes=opened.channel.size()
-                if(android.os.StatFs(dir.path).availableBytes<bytes+64L*1024*1024+reservedBytes.get())throw EngineException(EngineFailure.STORAGE)
+                val captureReserve=bytes+64L*1024*1024+reservedBytes.get()
+                encodedCache.trimForReserve(captureReserve){android.os.StatFs(dir.path).availableBytes}
+                processing.trimCacheForReserve(captureReserve)
+                if(android.os.StatFs(dir.path).availableBytes<captureReserve)throw EngineException(EngineFailure.STORAGE)
                 val linked=runCatching{Files.createLink(snapshot.toPath(),sourceFile.toPath());true}.getOrDefault(false)
                 if(!linked)FileOutputStream(snapshot).use{out->val buffer=ByteArray(256*1024);while(true){currentCoroutineContext().ensureActive();val n=opened.read(buffer);if(n<0)break;out.write(buffer,0,n)};out.fd.sync()}
                 currentCoroutineContext().ensureActive();check(snapshot.length()==bytes);if(kind!="ENCODED")check(bytes==source.originalWidth.toLong()*source.originalHeight*12)
@@ -188,11 +209,19 @@ class ExportQueue internal constructor(private val context:Context,private val p
             return ExportRunOutcome.DRAINED
         } finally {runLock.unlock()}
     }
-    private suspend fun runOne(initial:ExportJob,onChanged:(ExportJob)->Unit) {
+    private suspend fun runOne(initial:ExportJob,onChanged:(ExportJob)->Unit):Unit =
+        ExportWorkAdmissions.withQueueActivity { runOneActive(initial,onChanged) }
+    private suspend fun runOneActive(initial:ExportJob,onChanged:(ExportJob)->Unit) {
         val id=initial.id;val dir=store.directory(id)
         fun update(transform:(ExportJob)->ExportJob){store.change(id,transform)?.let{changed->runCatching{onChanged(changed)}}}
         var output:File?=null
         var framedOutput:File?=null
+        var preImagingInput:File?=null
+        var reusedPayload:File?=null
+        var reusedBackend:dev.filmroom.diagnostics.GpuBackend?=null
+        var cacheTicket:EncodedPayloadCache.Ticket?=null
+        var pngCacheStream:EncodedPayloadCache.StreamCandidate?=null
+        var pngCompletion:EncodedReuseIdentity?=null
         val previewContext=currentCoroutineContext()
         var negativeDiagnostics:NegativePreviewDiagnostics?=null
         var previewAttempt:String?=null
@@ -214,9 +243,43 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 }
                 initial.border?.let{BorderExportPolicy.validate(it,initial.format);borderProvider.verifySnapshot(it)}
                 dir.listFiles()?.filter{it.isFile && it.name.matches(Regex("film-result-[0-9a-f-]{36}\\.rgb(\\.part)?"))}?.forEach{check(it.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_29367795aabb) }}
+                val captureMetadata=initial.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
+                val sourceSnapshot=File(dir,when(initial.inputKind){"LINEAR"->"input.rgb";"RAW","LINEAR_SOURCE"->"source.rgb";else->"source.image"})
+                val cacheJob=currentCoroutineContext()
+                val sourceHasher=EncodedSourceHash(initial.inputKind,
+                    if(initial.inputKind=="LINEAR")initial.width else initial.sourceWidth,
+                    if(initial.inputKind=="LINEAR")initial.height else initial.sourceHeight,sourceHashNanoTime)
+                val sourceDigest=optionalCache { if(EncodedExportIdentity.supported(initial))sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()} else null }
+                val lookupIdentity=if(sourceDigest!=null && !initial.parameters.preImagingBorder)optionalCache {processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)}else null
+                if(lookupIdentity!=null)optionalCache {
+                    val key=EncodedExportIdentity.key(initial,checkNotNull(sourceDigest),lookupIdentity,captureMetadata)
+                    storageLock.withLock {
+                        encodedCache.acquire(key)?.use { lease ->
+                            // Destination, transactional metadata replacement, and MediaStore copy.
+                            val required=64L*1024*1024+3*lease.bytes+2*PhotoMetadata.BUDGET
+                            processing.trimCacheForReserve(required)
+                            if(android.os.StatFs(dir.path).availableBytes>=required) {
+                                val target=File(dir,"codec-reused-${java.util.UUID.randomUUID()}.${initial.format.extension}")
+                                lease.copyTo(target){cacheJob.ensureActive()}
+                                reusedPayload=target;reservedBytes.set(required)
+                                val backend=org.json.JSONObject(lease.receipt).optJSONObject("probe")?.optString("backend")
+                                reusedBackend=dev.filmroom.diagnostics.GpuBackend.entries.firstOrNull{it.id==backend}
+                            }
+                        }
+                    }
+                }
+                var freshlyPreparedInput=false
+                if(reusedPayload==null) {
                 storageLock.withLock {
-                    val plan=processing.plan(initial.width,initial.height,initial.parameters)
-                    val required=(if(input.length()==initial.width.toLong()*initial.height*12)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan))+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it,initial.parameters.imprint.enabled)} ?: 0L)
+                    val pre=initial.border?.takeIf{initial.parameters.preImagingBorder}
+                    val plan=if(pre==null)processing.plan(initial.width,initial.height,initial.parameters)
+                        else processing.planPreImaging(pre.outputWidth,pre.outputHeight,initial.parameters,PreImagingInput.nativeJson(pre,input))
+                    val sourceReady=input.length()==initial.width.toLong()*initial.height*12
+                    val inputAndNative=if(pre!=null)PreImagingInput.nativeAndPendingSourceDiskBytes(plan,pre,sourceReady)
+                        else if(sourceReady)ExportStoragePolicy.afterInput(plan)else ExportStoragePolicy.beforeInput(plan)
+                    val required=inputAndNative+plan.checkpointReserveBytes+(initial.border?.let{BorderExportPolicy.additionalDiskBytes(it)+(if(initial.parameters.preImagingBorder)PreImagingInput.additionalDiskBytes(it) else 0L)} ?: initial.crop?.let{CropCompositor.additionalDiskBytes(it,initial.parameters.imprint.enabled)} ?: 0L)
+                    encodedCache.trimForReserve(required){android.os.StatFs(dir.path).availableBytes}
+                    processing.trimCacheForReserve(required)
                     if(!ExportStoragePolicy.hasSpace(android.os.StatFs(dir.path).availableBytes,required))throw EngineException(EngineFailure.STORAGE)
                     reservedBytes.set(required)
                 }
@@ -233,27 +296,50 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         check(prepared.length()==initial.width.toLong()*initial.height*12)
                         FileOutputStream(prepared,true).use{it.fd.sync()}
                         Files.move(prepared.toPath(),input.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+                        freshlyPreparedInput=true
                     }finally{prepared.delete()}
                 }
                 if(input.length()!=initial.width.toLong()*initial.height*12)throw EngineException(EngineFailure.INCOMPLETE)
-                output=processing.render(input,initial.width,initial.height,initial.parameters,dir){p->
+                val pre=initial.border?.takeIf{initial.parameters.preImagingBorder}
+                val nativeInput=if(pre!=null){
+                    val coroutine=currentCoroutineContext()
+                    val asset=borderProvider.resolve(pre){coroutine.ensureActive()}
+                    val bytes=BorderCompositor.workingBytes(pre,asset)+(if(initial.parameters.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L)
+                    File(dir,"pre-imaging-input.rgb").also{target->
+                        preImagingInput=target
+                        BorderMemoryAdmission.withBudget(bytes,{NativeWorkReservations.snapshot(context)}){
+                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,pre.outputWidth,pre.outputHeight,pre)
+                            PreImagingInput.file(input,target,pre,asset,imprint){coroutine.ensureActive()}
+                        }
+                    }
+                }else input
+                val onNativeProgress:(EngineProgress)->Unit={p->
                     if(!previewAttempted && p.display.stage==6 && p.scanPreview!=null && previewAttempt!=null){
                         previewAttempted=true
-                        try {BorderMemoryAdmission.withBudget(4L*1024*1024,{NativeWorkReservations.snapshot(context)}){
+                        try {BorderMemoryAdmission.withBudget(ScanPreviewStore.WORKING_BYTES,{NativeWorkReservations.snapshot(context)}){
                             ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
                         }}catch(c:CancellationException){throw c}catch(_:Exception){}catch(_:OutOfMemoryError){}
                     }
                     update{it.copy(progress=p.display)}
                 }
+                output=if(pre==null)processing.renderReserved(nativeInput,initial.width,initial.height,initial.parameters,dir,reservedBytes.get(),onNativeProgress)
+                    else processing.renderPreImaging(nativeInput,pre.outputWidth,pre.outputHeight,initial.parameters,dir,reservedBytes.get(),PreImagingInput.nativeJson(pre,input),onNativeProgress)
+                }
                 update{it.copy(progress=ExportDisplayProgress(7))}
                 // One persisted instant per encode attempt. A committed row is reused above;
                 // an uncommitted retry gets its actual new export time, not the failed attempt time.
-                val captureMetadata=store.get(id)?.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
                 update{it.copy(exportMillis=System.currentTimeMillis(),metadataWarning=captureMetadata.warning)}
                 val exportRecord=checkNotNull(store.get(id))
+                val prepared:(ExportResult)->Unit={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}}
+                val committed:(ExportResult)->Unit={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}}
+                if(reusedPayload!=null) {
+                    repository.exportEncodedPayload(checkNotNull(reusedPayload),initial.outputWidth,initial.outputHeight,initial.format,
+                        initial.parameters.outputColorSpace,captureMetadata,checkNotNull(exportRecord.exportMillis),prepared,committed,cacheSourceBackend=reusedBackend,
+                        onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}})
+                } else {
                 val imprintBudget=if(initial.parameters.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L
                 val encodingInput=initial.border?.let{border->
-                    // Decode only after scientific rendering, never pin an atlas through the film pipeline.
+                    // Resolve only for final legacy composition or the new clear-hole mask; no second image/border pass.
                     val borderContext=currentCoroutineContext()
                     val asset=withContext(Dispatchers.IO){borderProvider.resolve(border){borderContext.ensureActive()}}
                     val memory=android.app.ActivityManager.MemoryInfo().also{(context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(it)}
@@ -263,8 +349,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
                         BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset)+imprintBudget,{NativeWorkReservations.snapshot(context)}) {
-                            val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,border.outputWidth,border.outputHeight,border)
-                            BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint){coroutine.ensureActive()}
+                            if(initial.parameters.preImagingBorder)PreImagingInput.restoreHoles(checkNotNull(output),target,border,asset){coroutine.ensureActive()}
+                            else {
+                                val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,border.outputWidth,border.outputHeight,border)
+                                BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint){coroutine.ensureActive()}
+                            }
                         }
                     }
                 } ?: initial.crop?.takeUnless{it.isIdentity && !initial.parameters.imprint.enabled}?.let{crop->
@@ -278,13 +367,58 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         }
                     }
                 } ?: checkNotNull(output)
+                if(!initial.parameters.preImagingBorder && initial.format==ExportFormat.PNG && sourceDigest!=null && (initial.inputKind=="LINEAR" || freshlyPreparedInput))optionalCache {
+                    val completion=processing.completedEncodedReuseIdentity() ?: return@optionalCache null
+                    if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)!=completion.identity)return@optionalCache null
+                    if(sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}!=sourceDigest)return@optionalCache null
+                    val key=EncodedExportIdentity.key(initial,sourceDigest,completion.identity,captureMetadata)
+                    storageLock.withLock {
+                        pngCacheStream=encodedCache.beginStream(key,completion.receipt){bytes,write->
+                            // Never wait while holding the cache monitor: intake takes these locks
+                            // in the opposite order. A busy intake merely drops this optional tee.
+                            if(!storageLock.tryLock())false else try {
+                                if(android.os.StatFs(dir.path).availableBytes<Math.addExact(reservedBytes.get(),bytes.toLong()))false
+                                else {cacheJob.ensureActive();write();true}
+                            }finally{storageLock.unlock()}
+                        }
+                        pngCompletion=completion
+                    }
+                }
                 repository.exportLinear(encodingInput,initial.outputWidth,initial.outputHeight,initial.format,initial.quality,
                     onPrepared={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}},
                     onCommitted={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}},
                     outputColorSpace=initial.parameters.outputColorSpace,
                     photoMetadata=captureMetadata,
                     exportMillis=checkNotNull(exportRecord.exportMillis),
-                    onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}})
+                    onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}},
+                    pngPixelPayload=pngCacheStream,
+                    onEncodedPayload={encoded->
+                        // Old prepared spools/checkpoint resumes are not certified as a new
+                        // decoding of source.image. Direct LINEAR is itself content-hashed.
+                        if(sourceDigest!=null && (initial.inputKind=="LINEAR" || freshlyPreparedInput))optionalCache {
+                            val completion=processing.completedEncodedReuseIdentity() ?: return@optionalCache null
+                            // Never publish a token for a different memory-budget request or a device
+                            // which became quarantined during presentation/encoding.
+                            if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)!=completion.identity)return@optionalCache null
+                            if(sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}!=sourceDigest)return@optionalCache null
+                            val key=EncodedExportIdentity.key(initial,sourceDigest,completion.identity,captureMetadata)
+                            storageLock.withLock {
+                                cacheTicket=encodedCache.stage(key,encoded,completion.receipt,reservedBytes.get(),{android.os.StatFs(dir.path).availableBytes}){cacheJob.ensureActive()}
+                            }
+                        }
+                    })
+                currentCoroutineContext().ensureActive()
+                optionalCache {
+                    if(pngCacheStream!=null && pngCompletion!=null && sourceDigest!=null) {
+                        // A complete Kotlin PNG encode proves exact RGB length and finite pixels.
+                        // Revalidate source + runtime after encoding before installing the tee.
+                        if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)==pngCompletion!!.identity &&
+                            sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()}==sourceDigest)
+                            cacheTicket=pngCacheStream?.finish{cacheJob.ensureActive()}
+                    }
+                    cacheTicket?.commit{cacheJob.ensureActive()}
+                }
+                }
             }
             store.get(id)?.mediaUri?.let { uri->runCatching{saveFinalThumbnail(uri,dir)} }
             update{it.copy(progress=ExportDisplayProgress(8))}
@@ -308,16 +442,24 @@ class ExportQueue internal constructor(private val context:Context,private val p
             else->(t as? EngineException)?.uiMessage ?: (t as? PhotoException)?.uiMessage ?: UiMessage.of(R.string.text_c42a34760d85)
         })}}
         catch(t:OutOfMemoryError){negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
-        finally {negativeDiagnostics?.jobTerminal();reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete()}}
+        finally {negativeDiagnostics?.jobTerminal();reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete();preImagingInput?.delete();reusedPayload?.delete();cacheTicket?.close();pngCacheStream?.close()}}
     }
+    /** Cache IO/identity/optional ABI failures cannot turn a valid cold export into a failure. */
+    private suspend fun <T> optionalCache(work:suspend ()->T?):T? = try {work()}catch(c:CancellationException){throw c}catch(_:Exception){null}catch(_:LinkageError){null}catch(_:OutOfMemoryError){null}
     private fun saveFinalThumbnail(uri:String,dir:File) {
-        val bitmap=android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(context.contentResolver,android.net.Uri.parse(uri))) {decoder,info,_->
-            val scale=minOf(1.0,240.0/maxOf(info.size.width,info.size.height))
-            decoder.setTargetSize((info.size.width*scale).toInt().coerceAtLeast(1),(info.size.height*scale).toInt().coerceAtLeast(1))
-            decoder.allocator=android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
-            decoder.setTargetColorSpace(android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB))
+        fun save(edge:Int,budget:Long) {
+            BorderMemoryAdmission.withBudget(budget,{NativeWorkReservations.snapshot(context)}) {
+                val bitmap=ExportFinalPreview.decode(context,uri,edge)
+                try {ExportFinalPreview.write(bitmap,dir)}finally{bitmap.recycle()}
+            }
         }
-        try {FileOutputStream(File(dir,"final-preview.jpg")).use{check(bitmap.compress(Bitmap.CompressFormat.JPEG,88,it));it.fd.sync()}}finally{bitmap.recycle()}
+        // This optional derivative cannot turn a committed photo into a failure.
+        // If the larger display bitmap is not admitted, retain the old small-photo
+        // fallback; opening that record later can refine it from the saved media.
+        try {save(ExportFinalPreview.MAX_EDGE,ExportFinalPreview.WORKING_BYTES)}
+        catch(c:CancellationException){throw c}
+        catch(_:Exception){save(240,4L*1024*1024)}
+        catch(_:OutOfMemoryError){save(240,4L*1024*1024)}
     }
     private fun cleanup(id:String):Boolean {
         if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)

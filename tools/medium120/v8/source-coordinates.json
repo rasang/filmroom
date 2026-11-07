@@ -1,0 +1,517 @@
+{
+  "status": "User-approved authored visual reconstruction, not authenticated same-roll calibration",
+  "coordinates": "Original 1320x1758 JPEG pixel coordinates; bbox [x0,y0,x1,y1), approximate visible amber including glow",
+  "pixel_bbox_uncertainty": "Typically +/- 2-4 px; dim wedge tips up to +/- 6 px. Bottom 4819 on 6446 is clipped.",
+  "nominal_aperture_width_px": 1166,
+  "nominal_aperture_width_mm": 56,
+  "px_per_mm": 20.821428571428573,
+  "assumed_wedge_pitch_px": 850,
+  "assumed_wedge_pitch_mm": 40.82332761578044,
+  "pitch_basis": "Visible wedge-tip spacing 9->10 approximately847px and12->13 approximately852px. 850px is a registration assumption. Partial7 does not expose its wedge; number6->7 start spacing873px warns of a few-percent frame-to-frame mismatch.",
+  "global_origin": "Left edge of6443 reference; increasing x follows number sequence6..13",
+  "frames": [
+    {
+      "file": "1000036443.jpg",
+      "anchor_number": 6,
+      "anchor_tip": 434,
+      "bounds": [
+        26,
+        215,
+        1294,
+        1480
+      ],
+      "marks": [
+        {
+          "rail": "top",
+          "text": "6.",
+          "bbox_px": [
+            405,
+            217,
+            433,
+            243
+          ],
+          "global_x_interval_mm": [
+            18.202,
+            19.547
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge6",
+          "bbox_px": [
+            433,
+            216,
+            506,
+            245
+          ],
+          "global_x_interval_mm": [
+            19.547,
+            23.053
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "7_partial",
+          "bbox_px": [
+            1278,
+            219,
+            1294,
+            245
+          ],
+          "global_x_interval_mm": [
+            60.13,
+            60.899
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "CINESTILL 800T",
+          "bbox_px": [
+            65,
+            1446,
+            316,
+            1475
+          ],
+          "global_x_interval_mm": [
+            1.873,
+            13.928
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "A",
+          "bbox_px": [
+            584,
+            1437,
+            609,
+            1465
+          ],
+          "global_x_interval_mm": [
+            26.799,
+            28.0
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "4819",
+          "bbox_px": [
+            875,
+            1440,
+            962,
+            1474
+          ],
+          "global_x_interval_mm": [
+            40.775,
+            44.954
+          ]
+        }
+      ],
+      "global_covered_interval_mm": [
+        0.0,
+        60.899
+      ]
+    },
+    {
+      "file": "1000036442.jpg",
+      "anchor_number": 8,
+      "anchor_tip": 836,
+      "bounds": [
+        26,
+        215,
+        1294,
+        1480
+      ],
+      "marks": [
+        {
+          "rail": "top",
+          "text": "partial_wedge_unlabeled",
+          "bbox_px": [
+            26,
+            220,
+            60,
+            247
+          ],
+          "global_x_interval_mm": [
+            62.34,
+            63.973
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "8",
+          "bbox_px": [
+            811,
+            222,
+            835,
+            248
+          ],
+          "global_x_interval_mm": [
+            100.041,
+            101.194
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge8",
+          "bbox_px": [
+            835,
+            220,
+            910,
+            248
+          ],
+          "global_x_interval_mm": [
+            101.194,
+            104.796
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "CINESTILL 800T",
+          "bbox_px": [
+            170,
+            1444,
+            416,
+            1473
+          ],
+          "global_x_interval_mm": [
+            69.256,
+            81.07
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "4819",
+          "bbox_px": [
+            965,
+            1434,
+            1051,
+            1467
+          ],
+          "global_x_interval_mm": [
+            107.437,
+            111.568
+          ]
+        }
+      ],
+      "global_covered_interval_mm": [
+        62.34,
+        123.238
+      ]
+    },
+    {
+      "file": "1000036446.jpg",
+      "anchor_number": 9,
+      "anchor_tip": 380,
+      "bounds": [
+        26,
+        218,
+        1294,
+        1477
+      ],
+      "marks": [
+        {
+          "rail": "top",
+          "text": "9.",
+          "bbox_px": [
+            353,
+            222,
+            381,
+            248
+          ],
+          "global_x_interval_mm": [
+            140.768,
+            142.113
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge9",
+          "bbox_px": [
+            379,
+            221,
+            452,
+            248
+          ],
+          "global_x_interval_mm": [
+            142.017,
+            145.523
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "10",
+          "bbox_px": [
+            1185,
+            223,
+            1226,
+            249
+          ],
+          "global_x_interval_mm": [
+            180.727,
+            182.696
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge10_partial",
+          "bbox_px": [
+            1226,
+            221,
+            1294,
+            249
+          ],
+          "global_x_interval_mm": [
+            182.696,
+            185.962
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "CINESTILL 800T",
+          "bbox_px": [
+            281,
+            1448,
+            526,
+            1477
+          ],
+          "global_x_interval_mm": [
+            137.31,
+            149.077
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "4819_bottom_clipped",
+          "bbox_px": [
+            1086,
+            1449,
+            1169,
+            1477
+          ],
+          "global_x_interval_mm": [
+            175.973,
+            179.959
+          ]
+        }
+      ],
+      "global_covered_interval_mm": [
+        125.063,
+        185.962
+      ]
+    },
+    {
+      "file": "1000036445.jpg",
+      "anchor_number": 11,
+      "anchor_tip": 762,
+      "bounds": [
+        26,
+        215,
+        1293,
+        1480
+      ],
+      "marks": [
+        {
+          "rail": "top",
+          "text": "11",
+          "bbox_px": [
+            723,
+            218,
+            764,
+            243
+          ],
+          "global_x_interval_mm": [
+            221.839,
+            223.808
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge11",
+          "bbox_px": [
+            762,
+            216,
+            837,
+            244
+          ],
+          "global_x_interval_mm": [
+            223.712,
+            227.314
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "CINESTILL 800T",
+          "bbox_px": [
+            371,
+            1445,
+            621,
+            1473
+          ],
+          "global_x_interval_mm": [
+            204.933,
+            216.94
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "4819",
+          "bbox_px": [
+            1203,
+            1435,
+            1288,
+            1468
+          ],
+          "global_x_interval_mm": [
+            244.892,
+            248.974
+          ]
+        }
+      ],
+      "global_covered_interval_mm": [
+        188.364,
+        249.214
+      ]
+    },
+    {
+      "file": "1000036444.jpg",
+      "anchor_number": 12,
+      "anchor_tip": 343,
+      "bounds": [
+        26,
+        215,
+        1294,
+        1480
+      ],
+      "marks": [
+        {
+          "rail": "top",
+          "text": "12",
+          "bbox_px": [
+            303,
+            216,
+            340,
+            241
+          ],
+          "global_x_interval_mm": [
+            262.614,
+            264.391
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge12",
+          "bbox_px": [
+            342,
+            214,
+            414,
+            241
+          ],
+          "global_x_interval_mm": [
+            264.487,
+            267.945
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "13",
+          "bbox_px": [
+            1155,
+            218,
+            1193,
+            241
+          ],
+          "global_x_interval_mm": [
+            303.533,
+            305.358
+          ]
+        },
+        {
+          "rail": "top",
+          "text": "wedge13",
+          "bbox_px": [
+            1194,
+            214,
+            1265,
+            243
+          ],
+          "global_x_interval_mm": [
+            305.407,
+            308.816
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "CINESTILL 800T",
+          "bbox_px": [
+            541,
+            1444,
+            787,
+            1473
+          ],
+          "global_x_interval_mm": [
+            274.045,
+            285.859
+          ]
+        },
+        {
+          "rail": "bottom",
+          "text": "A",
+          "bbox_px": [
+            1062,
+            1435,
+            1085,
+            1462
+          ],
+          "global_x_interval_mm": [
+            299.067,
+            300.172
+          ]
+        }
+      ],
+      "global_covered_interval_mm": [
+        249.31,
+        310.209
+      ]
+    }
+  ],
+  "gaps": [
+    {
+      "after": "1000036443.jpg",
+      "before": "1000036442.jpg",
+      "interval_mm": [
+        60.899,
+        62.34
+      ],
+      "gap_mm": 1.441
+    },
+    {
+      "after": "1000036442.jpg",
+      "before": "1000036446.jpg",
+      "interval_mm": [
+        123.238,
+        125.063
+      ],
+      "gap_mm": 1.825
+    },
+    {
+      "after": "1000036446.jpg",
+      "before": "1000036445.jpg",
+      "interval_mm": [
+        185.962,
+        188.364
+      ],
+      "gap_mm": 2.402
+    },
+    {
+      "after": "1000036445.jpg",
+      "before": "1000036444.jpg",
+      "interval_mm": [
+        249.214,
+        249.31
+      ],
+      "gap_mm": 0.096
+    }
+  ],
+  "handling": "Keep observed marks only; compose observed intervals in order6443,6442,6446,6445,6444. Fill listed tiny seam intervals with explicitly reconstructed unmarked rail. Do not stretch/duplicate text to fill gaps. Keep partial boundary glyphs clipped and do not complete them. NoA outside6443 and6444. Never describe gaps as observed blank film. Nominal physical scale and phase are approximate; equal pitch is not proven. A174mm window [0,174] has two reconstructed seams, not fully observed coverage.",
+  "seam_warning": "First gap sits between the clipped7 numeral in6443 and the unlabeled partial wedge at6442 left, plausibly the same7 wedge but not verified. Thus the unseen interval may contain part of a mark; blank fill is an acknowledged visual approximation, not a claim the original gap was blank. Third gap follows clipped wedge10, and may omit its tail. Do not silently join these as complete observed glyphs."
+}

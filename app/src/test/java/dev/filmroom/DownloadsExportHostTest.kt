@@ -47,7 +47,8 @@ class DownloadsExportHostTest {
   override fun openFile(uri:Uri,mode:String):ParcelFileDescriptor {
    openFailure?.let{throw it}
    require(rows.containsKey(uri))
-   return ParcelFileDescriptor.open(File(context!!.cacheDir,"provider-${uri.lastPathSegment}.bin"),ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE or ParcelFileDescriptor.MODE_READ_WRITE)
+   // Queue thumbnail reads must not truncate an already published export.
+   return ParcelFileDescriptor.open(File(context!!.cacheDir,"provider-${uri.lastPathSegment}.bin"),ParcelFileDescriptor.parseMode(mode))
   }
  }
  private class Api(private val failure:String?=null):CodecNativeApi {

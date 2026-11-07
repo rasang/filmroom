@@ -42,7 +42,7 @@ class MediumFormatScanPreviewHostTest {
                     ScanPreviewStore.publish(dir,token,input,job,BorderCatalog){}
                     assertArrayEquals(sourceBytes,input.readBytes())
                     val preview=BitmapFactory.decodeFile(checkNotNull(ScanPreviewStore.select(dir)).path)
-                    assertTrue(maxOf(preview.width,preview.height)<=256)
+                    assertTrue(maxOf(preview.width,preview.height)<=ScanPreviewStore.MAX_EDGE)
                     assertEquals(frozen.outputWidth.toDouble()/frozen.outputHeight,preview.width.toDouble()/preview.height,.035)
                     assertEquals(frozen,job.border)
                     preview.recycle()

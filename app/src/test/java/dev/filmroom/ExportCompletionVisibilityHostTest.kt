@@ -18,7 +18,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[29],application=Application::class,qualifiers="w360dp-h640dp-mdpi")
 class ExportCompletionVisibilityHostTest {
-    private fun render(a:ExportQueueActivity,jobs:List<ExportJob>){ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,jobs)}
+    private fun render(a:ExportQueueActivity,jobs:List<ExportJob>){
+        // Isolate visible-frame acknowledgement. Genuine image dwell is covered by LoadingHostTest.
+        a.previewSequenceEnabled=false
+        ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,jobs)}
     private fun job(state:ExportJobState)=ExportJob(ExportJobStore.newId(),System.nanoTime(),EditorState(),2,2,ExportFormat.PNG,95,state)
     private fun layout(a:ExportQueueActivity){val root=a.findViewById<ViewGroup>(android.R.id.content);root.measure(View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(640,View.MeasureSpec.EXACTLY));root.layout(0,0,360,640)}
     private fun queue(a:ExportQueueActivity):ExportQueue {

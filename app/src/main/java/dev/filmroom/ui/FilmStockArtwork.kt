@@ -7,7 +7,8 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import dev.filmroom.R
 
-/** Original model renders, keyed by immutable engine profile IDs, never display order/name. */
+/** Original packaging renders keyed by immutable engine profile IDs, never display order/name.
+ * Depicted physical 135/120 products do not grant the app any frame-strip capability. */
 object FilmStockArtwork {
     val physicalStockByProfile: Map<String, String> = mapOf(
         "kodak_doublex" to "kodak_doublex",
@@ -32,6 +33,11 @@ object FilmStockArtwork {
         "kodak_vision3_250d" to "kodak_vision3_250d",
         "kodak_vision3_500t" to "kodak_vision3_500t",
         "kodak_verita_200d" to "kodak_verita_200d",
+        "kodak_tri_x_400" to "kodak_tri_x_400",
+        "kodak_tmax_100" to "kodak_tmax_100",
+        "fujifilm_neopan_acros_100_ii" to "fujifilm_neopan_acros_100_ii",
+        "ilford_hp5_plus_400" to "ilford_hp5_plus_400",
+        "cinestill_800t" to "cinestill_800t",
     )
     private val bitmaps = mutableMapOf<String, Bitmap>()
     fun assetPath(profileId: String): String? = physicalStockByProfile[profileId]?.let { "film-rolls/$it.webp" }
@@ -53,6 +59,7 @@ object FilmStockArtwork {
     fun cardLabel(profileId: String, displayName: String): String = when (profileId) {
         "kodak_portra_800_push1" -> "Kodak\nPortra 800 · +1 PUSH"
         "kodak_portra_800_push2" -> "Kodak\nPortra 800 · +2 PUSH"
+        "fujifilm_neopan_acros_100_ii" -> "Fujifilm Neopan\n100 Acros II"
         else -> displayName.replaceFirst(" ", "\n")
     }
 }

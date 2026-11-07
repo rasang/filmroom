@@ -1,0 +1,7 @@
+{
+  "note": "Three non-semantic whitespace warnings are deliberately preserved so the licensed upstream text and the byte-verified generator source retain their recorded hashes.",
+  "warnings": [
+    "fonts/DejaVu-LICENSE.txt lines8 and54: upstream trailing spaces, license copied verbatim",
+    "stage_geometry.py line55: retained final blank line, generator source hash unchanged"
+  ]
+}

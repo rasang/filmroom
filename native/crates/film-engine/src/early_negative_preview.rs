@@ -6,13 +6,17 @@ use spektrafilm_math::{image::ImageBuf, precision::from_f64};
 use std::{fs::File, io::{self, Read, Seek, SeekFrom}, path::Path,
     sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}}};
 
-pub(crate) const MAX_EDGE: u32 = 128;
-/// Conservative admission estimate for 128-edge images, capped diffusion FFT,
+pub(crate) const MAX_EDGE: u32 = 256;
+const EXPENSIVE_EFFECT_EDGE: u32 = 128;
+/// Conservative admission estimate for 256-edge images without diffusion FFT,
+/// or 128-edge images with the unchanged capped diffusion FFT,
 /// one Rayon worker (2 MiB stack), launcher stack and source row. Not measured
 /// RSS or an allocator-enforced ceiling. Shared Pipeline storage is excluded;
 /// callers that deep-clone it must separately charge the profiles and TC LUT.
 pub(crate) const PREVIEW_WORKSPACE_BYTES: u64 = 32 * 1024 * 1024;
-const READ_BUDGET_BYTES: u64 = 24 * 1024 * 1024;
+// At most two rows per output row. 48 MiB admits the full 256-edge preview
+// for sources through 8192 pixels wide, without unbounded whole-image I/O.
+const READ_BUDGET_BYTES: u64 = 48 * 1024 * 1024;
 /// A process-wide passive lease, not a second export worker slot.
 static ACTIVE_BYTES: AtomicU64 = AtomicU64::new(0);
 pub(crate) fn active_reservation_bytes() -> u64 { ACTIVE_BYTES.load(Ordering::Acquire) }
@@ -130,11 +134,27 @@ fn bounded_settings(pipe: &Pipeline, width: u32, height: u32, w: u32, h: u32) ->
     let sigma_ok = |um: f64| um.is_finite() && um >= 0. && um / pitch <= 32.;
     if !sigma_ok(f64::from(p.camera.lens_blur_um)) { return false; }
     let hal = &p.film_render.halation;
-    if hal.active && (hal.halation_n_bounces > 16
-        || !hal.scatter_core_um.iter().chain(hal.scatter_tail_um.iter()).all(|v| sigma_ok(*v * hal.scatter_spatial_scale))
-        || !hal.halation_first_sigma_um.iter().all(|v| sigma_ok(*v * hal.halation_spatial_scale * f64::from(hal.halation_n_bounces.max(1)).sqrt()))) { return false; }
+    if hal.active {
+        if !hal.scatter_core_um.iter().chain(hal.scatter_tail_um.iter()).all(|v| sigma_ok(*v * hal.scatter_spatial_scale)) { return false; }
+        if hal.back_reflection && hal.halation_amount > 0. && hal.base_thickness_um > 0. {
+            let components=spektrafilm_math::halation::back_reflection_components(
+                hal.base_thickness_um,hal.halation_spatial_scale,hal.halation_amount,pitch);
+            if components.iter().flat_map(|c|c.sigma_px).any(|s|!s.is_finite() || s>32.) { return false; }
+        } else if hal.halation_n_bounces > 16
+            || !hal.halation_first_sigma_um.iter().all(|v| sigma_ok(*v * hal.halation_spatial_scale * f64::from(hal.halation_n_bounces.max(1)).sqrt())) { return false; }
+    }
     let dir = &p.film_render.dir_couplers;
     !dir.active || (sigma_ok(dir.diffusion_size_um) && sigma_ok(dir.diffusion_tail_um * 2.7684))
+}
+/// Prefer more source detail without enlarging the existing FFT/kernel budget.
+/// A lower resolution preserves selected physical effects and pixel pitch;
+/// it does not disable effects or change the full-resolution export pipeline.
+fn admitted_shape(pipe: &Pipeline, width: u32, height: u32) -> io::Result<Option<(u32, u32, u32)>> {
+    for cap in [MAX_EDGE, EXPENSIVE_EFFECT_EDGE] {
+        let (w, h) = shape(width, height, cap)?;
+        if bounded_settings(pipe, width, height, w, h) { return Ok(Some((cap, w, h))); }
+    }
+    Ok(None)
 }
 fn lower_priority() {
     #[cfg(target_os = "android")]
@@ -145,7 +165,7 @@ fn lower_priority() {
 }
 /// Starts at most one worker process-wide. `None` means unsupported, busy, or
 /// no budget; caller may use its authoritative density-tap fallback. Requires
-/// actual export AE already folded into pipe.params (auto_exposure=false).
+/// actual export AE resolved in pipe.params, separate from manual exposure.
 /// Share the existing Pipeline via Arc to avoid a duplicate TC LUT/profile.
 /// Input FD is opened before spawn so ordinary export cleanup cannot unlink
 /// the source out from under us. Attempt token is the sole publication owner.
@@ -167,18 +187,18 @@ fn spawn_for_attempt(input: &Path, dir: &Path, pipe: Arc<Pipeline>, width: u32, 
     available_preview_bytes: u64, attempt: &str) -> io::Result<Option<PreviewHandle>> {
     let attempt = attempt.to_owned();
     if !crate::negative_preview::valid_attempt(&attempt) { return Err(invalid("Invalid preview attempt")); }
-    let cap = MAX_EDGE;
-    let (w, h) = shape(width, height, cap)?;
+    let candidate = admitted_shape(&pipe, width, height)?;
     let required_bytes = required_workspace_bytes(&pipe).unwrap_or(u64::MAX);
     if available_preview_bytes < required_bytes {
         crate::negative_preview::write_early_attempt_status(dir, &attempt, "skipped_budget")?;
         return Ok(None);
     }
-    if pipe.film.info.film_type != "negative" || pipe.params.camera.auto_exposure || pipe.params.film_render.halation.boost_ev != 0.
-        || !bounded_settings(&pipe, width, height, w, h) {
+    if pipe.film.info.film_type != "negative" || (pipe.params.camera.auto_exposure && !pipe.params.camera.preview_metered_ev.is_some_and(|ev|ev.is_finite() && 2.0f32.powf(ev).is_finite())) || (pipe.params.film_render.halation.boost_ev != 0. || pipe.params.film_render.halation.headroom_active())
+        || candidate.is_none() {
         crate::negative_preview::write_early_attempt_status(dir, &attempt, "failed")?;
         return Ok(None);
     }
+    let (cap, _, _) = candidate.unwrap();
     let mut file = File::open(input)?;
     if file.metadata()?.len() != u64::from(width) * u64::from(height) * 12 { return Err(invalid("Invalid linear RGB spool size")); }
     if !acquire_reservation(required_bytes) {
@@ -276,8 +296,8 @@ mod tests {
     }
     /// Run each edge in a FRESH process so VmHWM is not inherited from another
     /// variant. Fixture JSON: input, data_dir, width, height, film, paper, params.
-    /// params must contain the actual export AE already folded in. Harness
-    /// explicitly lifts source-read cap; production admission stays unchanged.
+    /// params must contain resolved export AE. Each edge runs in a fresh process;
+    /// fixture rendering is not evidence of mobile-device RSS or export latency.
     #[test]
     #[ignore = "Manual genuine-fixture visual/timing/memory review; requires resource clearance"]
     fn review_early_negative_fixture() {
@@ -313,21 +333,41 @@ mod tests {
             "read_cap_bytes":read_cap,"actual_row_read_bytes":u64::from(width)*24*u64::from(image.height),
             "sample_ms":sample_ms,"density_ms":density_ms,"total_ms":total_ms,
             "fft_three_arrays_upper_bytes":3u64*(u64::from(edge)*3).pow(2)*16,
-            "recommended_worker_workspace_bytes":if edge==256 {64*1024*1024} else {32*1024*1024},
+            "production_admitted_shape":admitted_shape(&pipe,width,height).unwrap(),
+            "production_settings_admitted_at_review_shape":bounded_settings(&pipe,width,height,density.width,density.height),
+            "production_read_budget_bytes":READ_BUDGET_BYTES,
+            "production_worker_workspace_bytes":PREVIEW_WORKSPACE_BYTES,
             "production_retained_pipeline_plus_workspace_bytes":required_workspace_bytes(&pipe),
             "rss_before":memory_lines(&rss_before),"rss_after":memory_lines(&rss_after),
-            "note":"Separate low-resolution physical simulation. VmHWM includes process/pipeline; use fresh process per edge. Production limits unchanged."});
+            "note":"Separate low-resolution physical simulation. VmHWM includes process/pipeline; use fresh process per edge. A 256-edge diffusion review can exceed production admission and is not enabled by this harness."});
         std::fs::write(output.with_extension("metrics.json"),serde_json::to_vec_pretty(&metrics).unwrap()).unwrap();
         eprintln!("EARLY_NEGATIVE_REVIEW {metrics}");
     }
     #[test] fn shape_and_io_are_bounded() {
-        assert_eq!(shape(6144,8192,MAX_EDGE).unwrap(),(96,128));
+        assert_eq!(shape(6144,8192,MAX_EDGE).unwrap(),(192,256));
         for (w,h) in [(1,1),(40_000,40_000),(40_000,1),(1,40_000),(8192,6144)] {
             let (sw,sh) = shape(w,h,MAX_EDGE).unwrap();
             assert!(sw > 0 && sh > 0 && sw <= MAX_EDGE && sh <= MAX_EDGE);
             assert!(u64::from(w)*12*u64::from(sh)*2 <= READ_BUDGET_BYTES);
         }
         assert!(shape(0,1,MAX_EDGE).is_err()); assert!(shape(40_001,1,MAX_EDGE).is_err());
+    }
+    #[test] fn higher_detail_does_not_increase_expensive_effect_limits() {
+        let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let film=spektrafilm_core::profile::load_profile_by_name(&data,"kodak_portra_400").unwrap();
+        let paper=spektrafilm_core::profile::load_profile_by_name(&data,"kodak_portra_endura").unwrap();
+        let mut params=spektrafilm_core::params::RuntimeParams::default();
+        params.camera.auto_exposure=false;params.film_render.halation.boost_ev=0.;
+        let mut pipe=Pipeline::new_with_spectral(film,paper,params,&data).unwrap();
+        assert_eq!(admitted_shape(&pipe,6144,8192).unwrap(),Some((256,192,256)));
+        pipe.params.camera.diffusion_filter.active=true;
+        assert_eq!(admitted_shape(&pipe,6144,8192).unwrap(),Some((128,96,128)));
+        pipe.params.camera.diffusion_filter.active=false;
+        pipe.params.camera.lens_blur_um=6000.;
+        assert_eq!(admitted_shape(&pipe,6144,8192).unwrap(),Some((128,96,128)));
+        pipe.params.camera.lens_blur_um=12_000.;
+        assert!(admitted_shape(&pipe,6144,8192).unwrap().is_none());
+        assert_eq!(PREVIEW_WORKSPACE_BYTES,32*1024*1024);
     }
     #[test] fn source_samples_preserve_linear_values_and_cancel() {
         let path = std::env::temp_dir().join(format!("early-negative-{}-{}.rgb", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));

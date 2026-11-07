@@ -52,6 +52,20 @@ class PreviewRefinementHostTest {
             assertEquals(listOf(false,true,false),calls);vm.cancel()
         }finally{Dispatchers.resetMain()}
     }
+    @Test fun wholeRefinementCanPublish1536WhileImportAndQuickStayBounded()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val(vm,s)=setup();runCurrent();seed(s);vm.detailPreviewEdge={768}
+            vm.renderPreview={_,_,_,detail->Bitmap.createBitmap(if(detail)1536 else 512,if(detail)1024 else 341,Bitmap.Config.ARGB_8888)}
+            vm.parameters(EditorState());advanceTimeBy(EditorViewModel.SCIENCE_DEBOUNCE_MS+1);runCurrent()
+            assertEquals(512,s.value.rendered!!.width);assertEquals(768,s.value.original!!.width)
+            advanceUntilIdle()
+            assertEquals(1536,s.value.rendered!!.width);assertEquals(1024,s.value.rendered!!.height)
+            assertEquals(768,s.value.original!!.width);assertFalse(s.value.previewRefining);assertTrue(s.value.canExport)
+            vm.cancel()
+        }finally{Dispatchers.resetMain()}
+    }
+
     @Test fun explicitDisabledPathAlsoKeepsOrdinary768Refinement()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
@@ -86,6 +100,28 @@ class PreviewRefinementHostTest {
             assertEquals(512,s.value.rendered!!.width);assertTrue(s.value.canExport);assertNull(s.value.message);vm.cancel()
         }finally{Dispatchers.resetMain()}
     }
+    @Test fun insufficientMemoryFor512KeepsPreviousFrameAndShowsBudgetFailure()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val(vm,s)=setup();runCurrent();seed(s);vm.detailPreviewEdge={512}
+            var deny=false
+            val accepted=EditorState(brightness=0.1f)
+            vm.renderPreview={_,_,_,_->
+                if(deny)throw dev.filmroom.engine.EngineException(dev.filmroom.engine.EngineFailure.BUDGET)
+                Bitmap.createBitmap(512,384,Bitmap.Config.ARGB_8888)
+            }
+            vm.parameters(accepted);advanceUntilIdle()
+            val previous=checkNotNull(s.value.rendered)
+            deny=true
+            vm.parameters(accepted.copy(brightness=0.2f));advanceUntilIdle()
+            assertSame(previous,s.value.rendered);assertFalse(previous.isRecycled)
+            assertEquals(accepted,s.value.renderedParameters)
+            assertFalse(s.value.updating);assertFalse(s.value.previewRefining)
+            assertEquals(dev.filmroom.engine.EngineException(dev.filmroom.engine.EngineFailure.BUDGET).message,s.value.message)
+            vm.cancel()
+        }finally{Dispatchers.resetMain()}
+    }
+
     @Test fun borderExpansionDoesNotSuppressPhotoDetailRefinement()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

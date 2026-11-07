@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composition_straighten_value">수평 %1$s</string>
+    <string name="composition_straighten_reset">초기화</string>
+</resources>

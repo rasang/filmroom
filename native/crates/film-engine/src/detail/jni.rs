@@ -16,8 +16,12 @@ use std::{
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Request {
+    #[serde(default = "allow_gpu_attempt")]
+    gpu_attempt: bool,
     #[serde(default)]
     region_output: bool,
+    #[serde(default)]
+    initial_region: Option<InitialRegion>,
     schema_version: u32,
     width: u32,
     height: u32,
@@ -30,6 +34,10 @@ struct Request {
     stage_cache_bytes: u64,
     spectrum_cache_bytes: u64,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InitialRegion { x: u32, y: u32, w: u32, h: u32 }
+fn allow_gpu_attempt() -> bool {true}
 fn parse(s: &str) -> Result<DetailConfig, &'static str> {
     if s.len() > 32768 {
         return Err("INVALID_REQUEST");
@@ -42,6 +50,12 @@ fn parse(s: &str) -> Result<DetailConfig, &'static str> {
     {
         return Err("INVALID_REQUEST");
     }
+    let initial_region=r.initial_region.map(|v| super::Rect {
+        x:v.x as usize,y:v.y as usize,w:v.w as usize,h:v.h as usize,
+    });
+    if initial_region.is_some_and(|v| !v.valid(r.width as usize,r.height as usize)) {
+        return Err("INVALID_REQUEST");
+    }
     let params = MobileParams::parse(&r.parameters.to_string()).map_err(|e| {
         if e.code == "UNSUPPORTED_PROFILE" {
             "UNSUPPORTED"
@@ -50,7 +64,9 @@ fn parse(s: &str) -> Result<DetailConfig, &'static str> {
         }
     })?;
     Ok(DetailConfig {
+        gpu_attempt: r.gpu_attempt,
         region_output: r.region_output,
+        initial_region,
         width: r.width,
         height: r.height,
         params,
@@ -182,7 +198,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeCapabil
     reply(env, "capabilities", |_| {
         let profiles:Vec<Value>=crate::profile_catalog::FILMS.iter().map(|film|json!({"filmStock":film,"printSupported":!crate::profile_catalog::is_reversal(film),"directSupported":crate::profile_catalog::is_reversal(film),"reason":"SUPPORTED_ROUTE_FINITE_GRAIN_ONLY"})).collect();
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"cpu","gpuRequestPolicy":"explicitCpuFallback","precision":"f64-internal-f32-io","quality":"ExactSameWorkingGrid","coreEdge":256,"visibleRegion":true,"outputRgba8":true,"outputRgba8Abi":1,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare","nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
+            json!({"ok":true,"code":"OK","outputValid":false,"actualBackend":"unresolved","gpuRequestPolicy":"residentDetailOrExplicitCpuFallback","precision":"backend-specific","quality":"backend-specific","gpuAlgorithm":"owned-detail-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1","cpuAlgorithm":"owned-detail-v1-f64-fixed256-gutter1","coreEdge":256,"visibleRegion":true,"outputRgba8":true,"outputRgba8Abi":1,"gutter":1,"maxDimension":1536,"profiles":profiles,"unsupported":["negativeDirectRoute","scannerBlur","scannerSharpen","scannerGlare"],"cpuOnlyUnsupported":["nonlocalGrain","sequentialGrainRng"],"sourceScope":"cache/detail-preview/sources","dataScope":"files/engine-data","requiresSharedReservation":true}),
         )
     })
 }
@@ -196,7 +212,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativePlan(
         let c = parse(&text(env, &request)?)?;
         let plan = DetailContext::preflight(&c).map_err(|e| bridge::BridgeError::from(e).code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"plan":plan,"actualBackend":"cpu","requestedGpu":c.params.use_gpu,"cpuFallback":c.params.use_gpu}),
+            json!({"ok":true,"code":"OK","outputValid":false,"plan":plan,"actualBackend":"unresolved","requestedGpu":c.params.use_gpu}),
         )
     })
 }
@@ -275,7 +291,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeBuild(
             bridge::build(session, operation, config, Path::new(&source)).map_err(|e| e.code())?;
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":false,"identity":result.context().identity(),"backend":result.context().backend_info(),"plan":result.context().resource_plan(),"meteredEv":result.context().metered_ev(),"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":false,"identity":result.context().identity(),"backend":result.context().backend_info(),"plan":result.context().resource_plan(),"meteredEv":result.context().metered_ev(),"quality":result.context().backend_info().quality(),"detailPerformance":result.context().build_performance()}),
         )
     })
 }
@@ -326,7 +342,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeTile(
         // generation guards remain necessary even after this final operation check.
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":result.tile.backend.quality()}),
         )
     })
 }
@@ -373,7 +389,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegion(
             .map_err(|e|e.code())?;
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":result.backend.quality(),"detailPerformance":result.performance}),
         )
     })
 }
@@ -434,7 +450,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeTileRgb
         // generation guards remain necessary even after this final operation check.
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.tile.core_rect,"sampleRect":result.tile.sample_rect,"identity":result.tile.identity,"backend":result.tile.backend,"quality":result.tile.backend.quality()}),
         )
     })
 }
@@ -500,7 +516,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRegionR
         unsafe { std::ptr::copy_nonoverlapping(rgba8.as_ptr(), ptr, bytes) };
         result.check_publish().map_err(|e| e.code())?;
         Ok(
-            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":"ExactSameWorkingGrid"}),
+            json!({"ok":true,"code":"OK","outputValid":true,"outputFormat":"srgb-rgba8","bytesWritten":bytes,"coreRect":result.core_rect,"sampleRect":result.sample_rect,"identity":result.identity,"backend":result.backend,"quality":result.backend.quality(),"detailPerformance":result.performance}),
         )
     })
 }
@@ -517,4 +533,38 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeDetailBridge_nativeRelease
         bridge::release_operation(id(session)?, id(operation)?).map_err(|e| e.code())?;
         Ok(ok())
     })
+}
+
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    fn request()->Value {json!({"schemaVersion":1,"width":16,"height":12,
+        "parameters":{"useGpu":true},"sourceRevision":"s","mappingRevision":"m","dataRevision":"d",
+        "memoryBudgetBytes":536870912u64,"diskBudgetBytes":1073741824u64,
+        "stageCacheBytes":2097152u64,"spectrumCacheBytes":67108864u64})}
+    #[test]
+    fn initial_region_request_is_optional_strict_and_not_scientific() {
+        let mut r=request();let baseline=parse(&r.to_string()).unwrap();assert!(baseline.initial_region.is_none());
+        r["initialRegion"]=json!({"x":4,"y":3,"w":12,"h":9});
+        let hinted=parse(&r.to_string()).unwrap();
+        assert_eq!(hinted.initial_region,Some(super::super::Rect{x:4,y:3,w:12,h:9}));
+        assert_eq!(serde_json::to_string(&hinted.params).unwrap(),serde_json::to_string(&baseline.params).unwrap());
+        for bad in [json!({"x":0,"y":0,"w":0,"h":1}),json!({"x":16,"y":0,"w":1,"h":1}),
+            json!({"x":0,"y":11,"w":1,"h":2}),json!({"x":-1,"y":0,"w":1,"h":1}),
+            json!({"x":0.5,"y":0,"w":1,"h":1}),json!({"x":0,"y":0,"w":1}),
+            json!({"x":0,"y":0,"w":1,"h":1,"extra":0}),
+            json!({"x":u64::MAX,"y":0,"w":1,"h":1}),json!([])] {
+            r["initialRegion"]=bad;assert_eq!(parse(&r.to_string()).unwrap_err(),"INVALID_REQUEST");
+        }
+        r["initialRegion"]=Value::Null;assert!(parse(&r.to_string()).unwrap().initial_region.is_none());
+    }
+    #[test]
+    fn operational_gpu_attempt_defaults_true_but_never_rewrites_use_gpu() {
+        let mut r=request();let original=parse(&r.to_string()).unwrap();assert!(original.gpu_attempt);
+        r["gpuAttempt"]=json!(false);let cpu=parse(&r.to_string()).unwrap();
+        assert!(!cpu.gpu_attempt);assert!(cpu.params.use_gpu);
+        assert_eq!(serde_json::to_string(&original.params).unwrap(),serde_json::to_string(&cpu.params).unwrap());
+        r["gpuAttempt"]=json!("false");assert!(parse(&r.to_string()).is_err());
+    }
 }

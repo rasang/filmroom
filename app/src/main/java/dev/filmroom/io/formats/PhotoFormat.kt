@@ -36,6 +36,8 @@ object PhotoHeaders {
         val n = count.coerceIn(0, prefix.size)
         return n >= 12 && ascii(prefix, 4, "ftyp", n) && ascii(prefix, 8, "crx ", n)
     }
+    fun isFujifilmRaf(prefix: ByteArray, count: Int = prefix.size): Boolean =
+        ascii(prefix, 0, "FUJIFILMCCD-RAW ", count.coerceIn(0, prefix.size))
     private val pngSignature = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
 
     fun sniff(prefix: ByteArray, count: Int = prefix.size): PhotoHeader {
@@ -81,7 +83,7 @@ object PhotoHeaders {
         if (ascii(prefix, 0, "GIF87a", n) || ascii(prefix, 0, "GIF89a", n))
             return result(PhotoFormat.GIF) // A signature cannot distinguish one frame from many.
         if (n >= 14 && ascii(prefix, 0, "BM", n)) return result(PhotoFormat.BMP)
-        if (isOlympusRaw(prefix, n) || isCanonCr3(prefix, n))
+        if (isOlympusRaw(prefix, n) || isCanonCr3(prefix, n) || isFujifilmRaf(prefix, n))
             return result(PhotoFormat.CAMERA_RAW, identification = Identification.CONTAINER_ONLY)
         if (n >= 4 && ascii(prefix, 0, "II", n) && u8(prefix, 2) == 0x55 && u8(prefix, 3) == 0)
             return result(PhotoFormat.CAMERA_RAW, identification = Identification.CONTAINER_ONLY)

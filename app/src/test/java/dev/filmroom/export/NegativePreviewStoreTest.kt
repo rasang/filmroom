@@ -21,7 +21,7 @@ class NegativePreviewStoreTest {
         image.writeText("late old attempt");status.writeText("ready")
         assertNull(NegativePreviewStore.select(dir))
     }
-    @Test fun earlyAndExactAreIndependentAndAcceptedChoiceCanStayFrozen()=temp {dir->
+    @Test fun earlyPromotesToExactAndAcceptedExactNeverDowngrades()=temp {dir->
         val id=ScanPreviewStore.begin(dir)
         val early=File(dir,"negative-preview-early-$id.png");val exact=File(dir,"negative-preview-$id.png")
         File(dir,"negative-preview-early-$id.status").writeText("pending")
@@ -30,11 +30,25 @@ class NegativePreviewStoreTest {
         early.writeText("physical low resolution");File(dir,"negative-preview-early-$id.status").writeText("ready")
         assertEquals(early,NegativePreviewStore.select(dir))
         exact.writeText("full image density samples");File(dir,"negative-preview-$id.status").writeText("ready")
-        assertEquals(early,NegativePreviewStore.select(dir,early.name))
+        assertEquals(exact,NegativePreviewStore.select(dir,early.name))
         assertEquals(exact,NegativePreviewStore.select(dir,exact.name))
         assertTrue(NegativePreviewStore.current(dir,early));assertTrue(NegativePreviewStore.current(dir,exact))
         assertTrue(NegativePreviewStore.retain(dir,early));assertTrue(NegativePreviewStore.retain(dir,exact))
+        exact.delete()
+        assertNull(NegativePreviewStore.select(dir,exact.name))
+        assertEquals(early,NegativePreviewStore.select(dir,early.name))
         ScanPreviewStore.clear(dir);assertFalse(early.exists());assertFalse(exact.exists())
+    }
+    @Test fun laterQualityUpgradeKeepsEarliestAvailabilityAndCorruptCandidateCanFallBackBeforeAcceptance()=temp {dir->
+        val id=ScanPreviewStore.begin(dir)
+        val early=File(dir,"negative-preview-early-$id.png").apply{writeText("early");setLastModified(1000)}
+        File(dir,"negative-preview-early-$id.status").apply{writeText("ready");setLastModified(1000)}
+        assertEquals(1000L,NegativePreviewStore.readyAtMillis(dir))
+        val exact=File(dir,"negative-preview-$id.png").apply{writeText("bad PNG handled by decoder");setLastModified(2000)}
+        File(dir,"negative-preview-$id.status").apply{writeText("ready");setLastModified(2000)}
+        assertEquals(listOf(exact,early),NegativePreviewStore.alternatives(dir,early.name))
+        assertEquals(1000L,NegativePreviewStore.readyAtMillis(dir))
+        assertEquals(listOf(exact),NegativePreviewStore.alternatives(dir,exact.name))
     }
     @Test fun gpuToCpuFallbackSelectsFreshFixedNegativeDespiteGpuStatuses()=temp {dir->
         val id=ScanPreviewStore.begin(dir)

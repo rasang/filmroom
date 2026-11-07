@@ -41,6 +41,7 @@ mod sony_tiles;
 mod canon_stream;
 mod panasonic;
 pub(crate) mod additional;
+pub(crate) mod fuji;
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_CAMERA_RAW_VARIANT", "probe")
 }
@@ -184,6 +185,9 @@ fn contains(outer: Rect, inner: Rect) -> bool {
             .is_some_and(|(a, b)| a <= b)
 }
 fn descriptor(raw: &RawImage, orientation: u8) -> Result<Development<'static>> {
+    descriptor_cfa(raw, orientation, false)
+}
+fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Development<'static>> {
     crate::validate_dimensions(
         raw.width.try_into().map_err(|_| unsupported())?,
         raw.height.try_into().map_err(|_| unsupported())?,
@@ -198,6 +202,10 @@ fn descriptor(raw: &RawImage, orientation: u8) -> Result<Development<'static>> {
         {
             Some(config)
         }
+        (RawPhotometricInterpretation::Cfa(config), 1)
+            if xtrans && config.cfa.width == 6 && config.cfa.height == 6
+                && config.cfa.name.len() == 36
+                && config.cfa.name.bytes().all(|c| matches!(c, b'R'|b'G'|b'B')) => Some(config),
         (RawPhotometricInterpretation::LinearRaw, 3) => None,
         _ => return Err(unsupported()),
     };

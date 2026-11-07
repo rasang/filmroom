@@ -8,6 +8,7 @@ import java.util.LinkedHashMap
  * The two producers never overwrite one another. No previous attempt may supply new pixels.
  */
 internal object NegativePreviewStore {
+    const val MAX_EDGE=384
     // Explicit graceful-failure ceiling for a known in-process worker, not a render deadline.
     // Beyond this limit the optional negative may be skipped; real completion never waits.
     internal const val PENDING_GRACE_MS=5*60*1000L
@@ -34,26 +35,33 @@ internal object NegativePreviewStore {
             status(dir,base)=="pending" && (now-File(dir,"$base.status").lastModified()).coerceAtLeast(0) <= PENDING_GRACE_MS
         } && ScanPreviewStore.token(dir)==id
     }
-    fun select(dir:File,preferredName:String?=null):File? {
+    private fun quality(name:String)=when {name=="negative-preview.png"->2;name.startsWith("negative-preview-early-")->0;else->1}
+    /** The accepted image sets a quality floor, not a permanent preference for a draft. */
+    fun select(dir:File,preferredName:String?=null):File?=alternatives(dir,preferredName).firstOrNull()
+    fun alternatives(dir:File,preferredName:String?=null):List<File> {
         val id=ScanPreviewStore.token(dir)
         val legacy=File(dir,"negative-preview.png").takeIf{it.isFile && it.length() in 1L..524288L}
-        if(preferredName=="negative-preview.png" && legacy!=null)return legacy.takeIf{ScanPreviewStore.token(dir)==id}
-        if(id!=null) {
-            val candidates=bases(id).sortedBy{if("$it.png"==preferredName)0 else 1}
-            for(base in candidates) {
+        // A fresh CPU fallback is authoritative over optional work from the abandoned GPU route.
+        val candidates=listOfNotNull(legacy)+(if(id!=null) {
+            bases(id).asReversed().mapNotNull { base ->
                 val image=File(dir,"$base.png")
-                if(status(dir,base)=="ready" && image.isFile && image.length() in 1L..524288L && ScanPreviewStore.token(dir)==id)return image
+                image.takeIf{status(dir,base)=="ready" && it.isFile && it.length() in 1L..524288L}
             }
-        }
-        // CPU compatibility: begin() deletes the old fixed-name image before each attempt.
-        return legacy?.takeIf{ScanPreviewStore.token(dir)==id}
+        }else emptyList())
+        if(ScanPreviewStore.token(dir)!=id)return emptyList()
+        return candidates.filter{preferredName==null || quality(it.name)>=quality(preferredName)}
     }
-    fun alternatives(dir:File):List<File> {
-        val id=ScanPreviewStore.token(dir)?:return listOfNotNull(select(dir))
-        return (bases(id).mapNotNull{select(dir,"$it.png")}+listOfNotNull(select(dir,"negative-preview.png"))).distinctBy{it.name}
+    /** A quality upgrade must not restart the negative phase while the card is in the background. */
+    fun readyAtMillis(dir:File):Long? {
+        val id=ScanPreviewStore.token(dir)
+        val ready=alternatives(dir).map { file ->
+            val status=File(dir,file.name.removeSuffix(".png")+".status")
+            maxOf(file.lastModified(),if(status.isFile)status.lastModified()else 0L)
+        }.filter{it>0}.minOrNull()
+        return ready.takeIf{ScanPreviewStore.token(dir)==id}
     }
     fun isNegative(file:File?)=file?.let{it.name=="negative-preview.png" || artifact.matches(it.name)&&it.extension=="png"}==true
-    fun current(dir:File,file:File)=select(dir,file.name)?.name==file.name
+    fun current(dir:File,file:File)=alternatives(dir).any{it.name==file.name}
     fun retain(dir:File,file:File):Boolean {
         val id=ScanPreviewStore.token(dir)?:return false
         return file.name=="scan-preview-attempt" || bases(id).any { base ->

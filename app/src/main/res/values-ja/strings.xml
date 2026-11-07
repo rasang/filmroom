@@ -78,7 +78,7 @@
     <string name="text_76420433f22d" formatted="false">書き出し</string>
     <string name="text_926a50b98ece" formatted="false">取り消す</string>
     <string name="text_03717b6f1070" formatted="false">やり直す</string>
-    <string name="text_ae384296a4ac" formatted="false">プリセットに戻す</string>
+    <string name="text_ae384296a4ac" formatted="false">初期設定に戻す</string>
     <string name="text_df3d58c7d84b" formatted="false">設定</string>
     <string name="text_1f14f4b50d0b" formatted="false">写真をFilmroomへ</string>
     <string name="text_95c277eafaea" formatted="false">リアルなフィルムと印画紙の処理\nすべての計算を端末内で実行</string>
@@ -274,7 +274,7 @@
     <string name="text_c2a291b64f6b" formatted="false">スキャン</string>
     <string name="text_ec00bc673f05" formatted="false">印画紙を選択</string>
     <string name="text_3691a3aa4ece" formatted="false">印画紙／プリントスタイル</string>
-    <string name="text_b9afff7ca1b0" formatted="false"> · 映画用プリントフィルム</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · カラー映画用プリントフィルム</string>
     <string name="text_3b789c2037e2" formatted="false"> · カラー印画紙</string>
     <string name="text_7b528c395978" formatted="false">135判の構図</string>
     <string name="text_e76a25844aa5" formatted="false">構図を変更</string>
@@ -299,7 +299,7 @@
     <string name="text_4e3db4596715" formatted="true">%1$sの説明</string>
     <string name="text_de32e20193ad" formatted="false">OK</string>
     <string name="text_f94fbbaa8f93" formatted="true">%1$sをリセット</string>
-    <string name="text_f2961369ae98" formatted="false">現在のフィルムのプリセット設定に戻しますか？</string>
+    <string name="text_f2961369ae98" formatted="false">現在のフィルムの初期設定設定に戻しますか？</string>
     <string name="text_c265e02073e5" formatted="false">露光、光学効果、粒子、印画紙などの色調設定を元に戻します。構図と透かしの設定は保持します。</string>
     <string name="text_e0534b8a4e46" formatted="false">元に戻す</string>
     <string name="text_d1c4835b23ed" formatted="false">\n透明部分は白で合成されます</string>
@@ -347,7 +347,7 @@
     <string name="text_d14f6e1f0a6f" formatted="false">新しい写真を保存</string>
     <string name="text_e8e6e48f180e" formatted="false">編集設定</string>
     <string name="text_2413c386102e" formatted="false">新しい写真の読み込み時に設定をリセット</string>
-    <string name="text_712623100497" formatted="false">オンにすると現在のフィルムのプリセットに戻します。オフでは色調整設定を引き継ぎます。新しい写真の構図は常にリセットされます。</string>
+    <string name="text_712623100497" formatted="false">オンにすると現在のフィルムの初期設定に戻します。オフでは色調整設定を引き継ぎます。新しい写真の構図は常にリセットされます。</string>
     <string name="text_7daa923cc7e5" formatted="false">起動時に前回の写真を復元</string>
     <string name="text_5f08fa1da11e" formatted="false">次回の起動にのみ適用されます。現在の編集やバックグラウンドの書き出しは消去されません。</string>
     <string name="text_84a61a56ecc6" formatted="false">ログの対象期間を選択</string>
@@ -405,7 +405,7 @@
     <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n文字コード：UTF-8；単一のテキストファイル（ZIPではありません）\n\n=== 概要 ===\n</string>
     <string name="text_7af205e83135" formatted="false">\n\n=== 匿名化したイベントの全詳細 ===\n</string>
     <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
-    <string name="text_60ef08049a72" formatted="true">アプリ：Filmroom；バージョンコード：%1$s；エンジンビルド：4；インターフェース：1\nAndroid API：%2$s；ABI：%3$s；プロセッサー数：%4$s；Javaヒープ上限：%5$sバイト；メモリクラス：%6$s MB</string>
+    <string name="text_60ef08049a72" formatted="true">アプリ：Filmroom；バージョンコード：%1$s；エンジンビルド：%7$s；インターフェース：%8$s\nAndroid API：%2$s；ABI：%3$s；プロセッサー数：%4$s；Javaヒープ上限：%5$sバイト；メモリクラス：%6$s MB</string>
     <string name="text_5c1712cb2d38" formatted="false">今回の起動</string>
     <string name="text_b1336f82fea4" formatted="false">編集の復元</string>
     <string name="text_5a9df9227ec6" formatted="false">プレビューのレンダリング</string>
@@ -786,4 +786,8 @@
     <string name="gpu_progress_processing">GPU画像処理</string>
     <string name="gpu_progress_tile">タイル %1$d/%2$d</string>
     <string name="gpu_progress_last_completed">完了した処理：%1$s（%2$d ms）</string>
+    <string name="print_medium_bw_paper" formatted="false"> · モノクロ印画紙</string>
+    <string name="print_medium_bw_film" formatted="false"> · モノクロ映画用プリントフィルム</string>
+    <string name="print_medium_bw_help" formatted="false">選択した印画紙・プリントフィルムはモノクロ用です。カラーネガからもモノクロのプリントになります。</string>
+    <string name="preview_histogram_description">現在の写真プレビューの輝度ヒストグラム</string>
 </resources>

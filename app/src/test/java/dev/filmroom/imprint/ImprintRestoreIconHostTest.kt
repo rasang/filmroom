@@ -33,7 +33,7 @@ class ImprintRestoreIconHostTest {
         val host = Robolectric.buildActivity(Activity::class.java).setup()
         try {
             val metadata = PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2026:11:05 12:34:56"))
-            val dialog = ImprintDialog.show(host.get(), EditorState(), metadata) {}
+            val dialog = ImprintDialog.show(host.get(), EditorState(imprint=ImprintSettings(dateEnabled=true)), metadata) {}
             shadowOf(Looper.getMainLooper()).idle()
             val root = dialog.window!!.decorView
             assertNull(root.findViewWithTag<View>("imprint-source"))

@@ -10,7 +10,15 @@ internal open class FinalImageSampling(
     private val apertureLeft:Double,private val apertureTop:Double,
     private val apertureWidth:Int,private val apertureHeight:Int,private val featherRadius:Double=0.0,
     private val repeatX:Double=0.0,private val repeatY:Double=0.0,private val allRows:Boolean=false,
+    transform:CompositionTransform?=null,canonicalWidth:Int=sourceWidth,canonicalHeight:Int=sourceHeight,
 ) {
+    val inputHeight get()=sourceHeight
+    val inputWidth get()=sourceWidth
+    val rotated=transform?.straightenDegrees?.let{it!=0.0} ?: false
+    private val origin=transform?.sourcePoint(0.0,0.0,canonicalWidth,canonicalHeight) ?: (crop.left to crop.top)
+    private val u=transform?.sourcePoint(1.0,0.0,canonicalWidth,canonicalHeight)?.let{it.first-origin.first to it.second-origin.second} ?: (crop.width to 0.0)
+    private val v=transform?.sourcePoint(0.0,1.0,canonicalWidth,canonicalHeight)?.let{it.first-origin.first to it.second-origin.second} ?: (0.0 to crop.height)
+    private val rotatedRow=if(rotated)FloatArray(outputWidth*3)else null
     val x0=IntArray(outputWidth)
     val fraction=DoubleArray(outputWidth)
     private fun snap(v:Double):Double {val n=kotlin.math.round(v);return if(kotlin.math.abs(v-n)<1e-9)n else v}
@@ -28,7 +36,18 @@ internal open class FinalImageSampling(
         return Row(first,minOf(first+1,sourceHeight-1),value-first)
     }
     fun rowHasPhoto(y:Int):Boolean=allRows || minOf(y+.5-apertureTop,apertureTop+apertureHeight-y-.5)>=-featherRadius
+    fun prepareRotatedRow(y:Int,source:FinalImageTileCache) {
+        val row=rotatedRow ?: return
+        val fy=repeat(y+.5-apertureTop,repeatY,apertureHeight)/apertureHeight
+        for(x in x0.indices){
+            val fx=repeat(x+.5-apertureLeft,repeatX,apertureWidth)/apertureWidth
+            val sx=((origin.first+fx*u.first+fy*v.first)*sourceWidth-.5).coerceIn(0.0,sourceWidth-1.0)
+            val sy=((origin.second+fx*u.second+fy*v.second)*sourceHeight-.5).coerceIn(0.0,sourceHeight-1.0)
+            source.sample(sx,sy,row,x*3)
+        }
+    }
     fun sample(first:FloatArray,second:FloatArray,fy:Double,x:Int,channel:Int):Double {
+        rotatedRow?.let{return it[x*3+channel].toDouble()}
         val sx=x0[x];val next=minOf(sx+1,sourceWidth-1);val fx=fraction[x]
         val upper=if(fx==0.0)first[sx*3+channel].toDouble()else first[sx*3+channel]*(1-fx)+first[next*3+channel]*fx
         if(fy==0.0)return upper
@@ -39,4 +58,5 @@ internal open class FinalImageSampling(
 internal class BorderSampling(val s:BorderSnapshot):FinalImageSampling(s.sourceWidth,s.sourceHeight,s.outputWidth,s.sourceRect,
     s.apertureLeft,s.apertureTop,s.photoWidth,s.photoHeight,s.featherRadius,
     if(s.portrait)(s.layout?.pitch ?: 0.0)*s.pixelsPerMm else 0.0,
-    if(!s.portrait)(s.layout?.pitch ?: 0.0)*s.pixelsPerMm else 0.0,s.geometryVersion==4)
+    if(!s.portrait)(s.layout?.pitch ?: 0.0)*s.pixelsPerMm else 0.0,s.geometryVersion==4,
+    s.composition.takeIf{s.geometryVersion>=2},s.canonicalWidth,s.canonicalHeight)

@@ -59,6 +59,42 @@ class CameraLayoutRenderHostTest {
             original=bitmap,rendered=bitmap,parameters=parameters,renderedParameters=parameters,engineUnavailable=null)
         shadowOf(android.os.Looper.getMainLooper()).idle()
     }
+    @Test fun normalPreviewHasNoBadgeButCompareHintAndPhotoRemainAcrossLayouts() {
+        try {
+            for((w,h) in listOf(360 to 780,740 to 360)) for(scale in listOf(1f,2f)) {
+                RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-mdpi");RuntimeEnvironment.setFontScale(scale)
+                Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+                    val activity=controller.get();val bitmap=fixture();installFixture(activity,bitmap)
+                    val root=activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+                    layout(root,w,h)
+                    val photo=all(root).filterIsInstance<PhotoView>().single()
+                    val badge=MainActivity::class.java.getDeclaredField("badge").apply{isAccessible=true}.get(activity) as TextView
+                    val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(activity) as EditorViewModel
+                    @Suppress("UNCHECKED_CAST")
+                    val state=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(vm) as MutableStateFlow<EditorUiState>
+                    fun checkPreview() {
+                        assertEquals(View.GONE,badge.visibility);assertEquals("",badge.text.toString())
+                        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO,badge.importantForAccessibility)
+                        assertSame(bitmap,photo.bitmap);assertTrue(photo.width>0 && photo.height>0)
+                        assertTrue(photo.contentDescription.isNotBlank())
+                    }
+                    checkPreview()
+                    val controls=all(root).filterIsInstance<Button>().map{it.contentDescription?.toString()}
+                    repeat(2) {
+                        state.value=state.value.copy(compare=true);shadowOf(android.os.Looper.getMainLooper()).idle();layout(root,w,h)
+                        assertEquals(View.VISIBLE,badge.visibility)
+                        assertEquals(dev.filmroom.i18n.L10n.text(R.string.text_1b0acbdaf172),badge.text.toString())
+                        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO,badge.importantForAccessibility)
+                        assertSame(bitmap,photo.bitmap)
+                        state.value=state.value.copy(compare=false);shadowOf(android.os.Looper.getMainLooper()).idle();layout(root,w,h)
+                        checkPreview()
+                        assertEquals(controls,all(root).filterIsInstance<Button>().map{it.contentDescription?.toString()})
+                    }
+                }
+            }
+        } finally { RuntimeEnvironment.setFontScale(1f) }
+    }
+
     @Test fun portraitAndLandscapeKeepPhotoAndOneSelectedControlVisible(){
         val target=File("build/ui-host-renders").apply{mkdirs()}
         for((w,h) in listOf(320 to 640,360 to 780,740 to 320))for(scale in listOf(1f,2f)){

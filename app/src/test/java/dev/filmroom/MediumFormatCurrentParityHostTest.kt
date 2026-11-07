@@ -13,7 +13,7 @@ import org.robolectric.annotation.GraphicsMode
 import java.util.concurrent.Executors
 
 /** Current reviewed revisions, unchanged stocks and push aliases.
- * 190 supported combinations; exhaustive preview-vs-float-export pixels.
+ * 300 supported combinations; exhaustive preview-vs-float-export pixels.
  * No external master fixture, JNI codec, image files, or absolute paths required.
  * This is rendering parity, not real-film authenticity or final JPEG/TIFF validation.
  */
@@ -39,13 +39,19 @@ class MediumFormatCurrentParityHostTest {
         "fujifilm_velvia_100" to "mf120-v2-velvia100-9836225fb731",
         "fujifilm_pro_400h" to "mf120-v2-pro400h-2d036c5cba8c",
         "kodak_portra_160" to "mf120-v5-portra160-a970a81fe0dc",
-        "kodak_portra_800" to "mf120-v5-portra800-64b689c66093"
+        "kodak_portra_800" to "mf120-v5-portra800-64b689c66093",
+        "ilford_hp5_plus_400" to "mf120-v11-hp5plus-imprint-cb94b4135551",
+        "kodak_tmax_100" to "mf120-v11-tmax100-imprint-15d981f5a232",
+        "kodak_tri_x_400" to "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+        "cinestill_800t" to "mf120-v8-cinestill800t-a041a70e696f",
+        "fujifilm_neopan_acros_100_ii" to "mf120-v9-acrosii-5d8eb4aa9d8f",
+        "kodak_kodachrome_64" to "mf120-v10-kodachrome64-42ed192f4558"
     )
     @Test fun allCurrentProfilesAndSupportedRoutesMatchFloatExport(){
         initialize()
         var completedCases=0
         var comparedPixels=0L
-        assertEquals(11,MediumFormatStocks.profiles.size)
+        assertEquals(17,MediumFormatStocks.profiles.size)
         assertEquals(5,MediumFormat.values().size)
         val width=181;val height=137
         val photo=android.graphics.Bitmap.createBitmap(width,height,android.graphics.Bitmap.Config.ARGB_8888)
@@ -62,7 +68,7 @@ class MediumFormatCurrentParityHostTest {
                 linear[i*3+c]=value;bytes.putFloat(value)
             }
             val input=java.io.File(dir,"input.rgb");input.writeBytes(bytes.array())
-            for(stock in MediumFormatStocks.profiles.keys)for(route in if(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100"))listOf("direct") else listOf("print","direct"))for(f in MediumFormat.values())for(p in listOf(false,true)){
+            for(stock in MediumFormatStocks.profiles.keys)for(route in if(stock in listOf("kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100","kodak_kodachrome_64"))listOf("direct") else listOf("print","direct"))for(f in MediumFormat.values())for(p in listOf(false,true)){
                 val composition=CompositionTransform(centerX=.63,centerY=.38,zoom=1.7)
                 val s=BorderCatalog.snapshot(stock,width,height,width,height,composition,true,route,f,p)
                 assertEquals("Current accepted asset for $stock",acceptedVersions[MediumFormatStocks.physicalStock(stock)],s.assetVersion)
@@ -99,8 +105,8 @@ class MediumFormatCurrentParityHostTest {
                 println("CURRENT120 PARITY PASS stock=$stock route=$route format=$f portrait=$p pixels=${s.outputWidth*s.outputHeight}")
                 }finally{preview.recycle()}
             }
-            assertEquals("All supported combinations exercised",190,completedCases)
-            assertEquals("Every output pixel compared",3791469L,comparedPixels)
+            assertEquals("All supported combinations exercised",300,completedCases)
+            assertEquals("Every output pixel compared",5986530L,comparedPixels)
         }finally{photo.recycle();dir.deleteRecursively()}
     }
 

@@ -1,0 +1,83 @@
+{
+  "pipeline": [
+    "authored v2 clean geometry",
+    "approved positive A material",
+    "D65 direct endpoint model with clean geometry coverage"
+  ],
+  "original_text_inputs": [
+    {
+      "origin_artifact": "filmroom-five-135-review-v2",
+      "path": "source/generate.py",
+      "sha256": "d3084077368d40cd2ed6d0f808397718884e57ff037b0cd11de6eb38c5f6eccd",
+      "bytes": 15332
+    },
+    {
+      "origin_artifact": "filmroom-five-135-review-v2",
+      "path": "source/specs.json",
+      "sha256": "d0600131d682a746f6dafe0833ebb02398aca5776da042c7f670eebd4adb5699",
+      "bytes": 3385
+    },
+    {
+      "origin_artifact": "filmroom-five-135-review-v2",
+      "path": "source/hp5-observed-bar-trace.json",
+      "sha256": "5b44b76f772e133d74d3eb4f53ac23b85e493736bff135a4fc566ab610252f11",
+      "bytes": 3315
+    },
+    {
+      "origin_artifact": "filmroom-five-135-review-v2",
+      "path": "source/sources.json",
+      "sha256": "eeecd0256e1df7b82de017aefee3af83a385203cfc19b06eb0230ad1a6ebc5ed",
+      "bytes": 4901
+    },
+    {
+      "origin_artifact": "filmroom-five-135-material-study",
+      "path": "source/generate_study.py",
+      "sha256": "23776853795279ca594e0878887a067beffd53b8f736be9080ad96e197e206c3",
+      "bytes": 6642
+    },
+    {
+      "origin_artifact": "filmroom-five-135-material-study",
+      "path": "source/material-parameters.json",
+      "sha256": "13567c473ba2236cf7591847df289db6493347828bf9ded25b72c8700f629fa9",
+      "bytes": 477
+    },
+    {
+      "origin_artifact": "filmroom-five-135-material-study",
+      "path": "source/qa-results.json",
+      "sha256": "3447778a574ee3f1bc59859fbc96fa555a984910276e23785571eb9b743f5c31",
+      "bytes": 2943
+    },
+    {
+      "origin_artifact": "filmroom-five-135-direct-review",
+      "path": "source/generate.py",
+      "sha256": "bf1b9cfd557fe5c4840af768e8c8a02f40d850d3f941118de9b0bb067efac78c",
+      "bytes": 5911
+    },
+    {
+      "origin_artifact": "filmroom-five-135-direct-review",
+      "path": "source/REVIEW_MANIFEST.json",
+      "sha256": "08920c4402a824b7cf83d4ae551bccf4b69fa4caa09bbfe009a55bd3f6013753",
+      "bytes": 13310
+    }
+  ],
+  "included_reference_pixels": false,
+  "external_photographs": "Not included and not read by this build. sources.json records factual visual provenance only; it is not a grant to redistribute reference imagery.",
+  "historical_scripts": "Not shipped as runnable alternatives: B and the old schematic negative palette are intentionally absent. Required numerical operations were extracted into the three stages.",
+  "adaptations": [
+    "Specs and trace become editable input JSON, not generator outputs.",
+    "Fonts are bundled and referenced relative to this directory.",
+    "Native scientific tables and inherited profiles resolve relative to explicit repository root and require fixed SHA-256.",
+    "Only A and direct-model are rendered; review boards and external photographs are never opened.",
+    "Entrypoint requires a new output directory outside the repository and never installs assets."
+  ],
+  "invariants": [
+    "38x35 mm atlas at 40 px/mm (1520x1400)",
+    "36x24 mm nominal still aperture at (1,5.5) mm",
+    "1.981x2.794 mm nominal perforation, 4.75 mm pitch, 0.30 mm rounding",
+    "Fixed displayed 25/25A, original specimen numbers separately documented",
+    "HP5 visible two-row bar trace, not decoded or claimed machine-readable",
+    "CineStill typography uses renamed DejaVu derivative with only zero dot removed",
+    "CineStill direct science inherits released kodak_vision3_500t",
+    "Direct RGB ignores A microtexture and projects clean v2 coverage between D65 endpoints"
+  ]
+}

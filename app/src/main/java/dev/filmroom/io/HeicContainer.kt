@@ -55,6 +55,16 @@ internal object HeicContainer {
     fun inspect(file: File, checkCancelled: () -> Unit = {}): Info =
         RandomAccessFile(file, "r").use { Reader(FileInput(it), checkCancelled).inspect() }
 
+    /** Reuse the ordinary validator to classify the selected primary before any smaller
+     * memory route is considered. Existing Info/inspect callers retain their ABI. */
+    internal data class GridCandidate(val info: Info, val primaryIsGrid: Boolean)
+    internal fun inspectGridCandidate(file: File, check: () -> Unit): GridCandidate =
+        RandomAccessFile(file, "r").use { input ->
+            val reader = Reader(FileInput(input), check)
+            val info = reader.inspect()
+            GridCandidate(info, reader.primaryIsGrid)
+        }
+
     /** In-memory admission of a remux plan; the plan separately bounds every source extent. */
     internal fun inspectSelectedMetadata(bytes: ByteArray, checkCancelled: () -> Unit): Info {
         if (bytes.size.toLong() > MAX_METADATA_BYTES + 4096) limit()
@@ -100,6 +110,8 @@ internal object HeicContainer {
     private data class Item(val type: String, val hidden: Boolean)
 
     private class Reader(val input: Input, val check: () -> Unit) {
+        var primaryIsGrid: Boolean = false
+            private set
         var boxes = 0
         val length = input.length()
         private fun need(end: Long, bytes: Int) {
@@ -167,6 +179,7 @@ internal object HeicContainer {
             val items = items(single(parts, "iinf"))
             val item = items[primary] ?: invalid()
             if (item.type !in setOf("hvc1", "grid") || item.hidden) unsupported()
+            primaryIsGrid = item.type == "grid"
             val iprp = single(parts, "iprp")
             val propertyParts = children(iprp.body, iprp.end)
             val ipco = single(propertyParts, "ipco")

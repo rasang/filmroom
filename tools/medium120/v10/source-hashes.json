@@ -1,0 +1,23 @@
+[
+  {
+    "file": "kodak-pkr-ad.pdf",
+    "url": "https://www.pacificrimcamera.com/rl/03708/03708.pdf",
+    "sha256": "9e1d5b4ef475e11f90d536f936582bc135d9186a655636d71a33d9a95ad1e0bd",
+    "bytes": 17173940,
+    "role": "Historical Kodak1987 brochure; product identity only; pages8,14,16."
+  },
+  {
+    "file": "shirley-pinterest.jpg",
+    "url": "https://i.pinimg.com/originals/72/f0/97/72f0973059c836b350adf677215b37ff.jpg",
+    "sha256": "5915823d3a2b28afd896a9ab927e115778d408ebfff5c161809f2ff3767a8926",
+    "bytes": 304930,
+    "role": "Inspected Musicians reproduction with both rails. Derivative copy; not a calibrated raw scan."
+  },
+  {
+    "file": "Dylan-Mulvin-Proxies-The-Cultural-Work-of-Standing-In.pdf",
+    "url": "https://dylanmulvin.com/wp-content/uploads/2021/08/Dylan-Mulvin-Proxies-The-Cultural-Work-of-Standing-In.pdf",
+    "sha256": "5b6bf36a80936fd25574512c2a23efb02339cffd10c1295e46195ae8ab391dca",
+    "bytes": 17269131,
+    "role": "Inspected PDF page108/printed95 figure3.6. Confirms Musicians photograph and1993 caption, but crops out film edges; not independent rail metrology."
+  }
+]

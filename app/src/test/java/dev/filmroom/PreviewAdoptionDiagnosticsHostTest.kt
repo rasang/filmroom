@@ -73,7 +73,7 @@ class PreviewAdoptionDiagnosticsHostTest {
             assertNotEquals(refined.generation,cached.generation)
         }finally{f?.close();Dispatchers.resetMain()}
     }
-    @Test fun completedCancelledOldGammaIsNotReportedAsAdoptedAfterReset()=runTest {
+    @Test fun completedObsoleteOldGammaIsNotReportedAsAdoptedAfterReset()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler));var f:Fixture?=null
         val gate=CompletableDeferred<Unit>()
         try {
@@ -83,13 +83,15 @@ class PreviewAdoptionDiagnosticsHostTest {
                 else h.bitmap()
             }
             h.vm.parameters(EditorState(filmGamma=1.46f),commit=false);advanceTimeBy(121);runCurrent();assertTrue(entered)
-            h.vm.reset();waitFor{h.state.value.renderedParameters?.filmGamma==1f && h.seen.any{it.record.disposition==PreviewDisposition.ADOPTED}}
+            h.vm.reset();runCurrent()
+            // The latest reset waits for the single in-flight native call to release ownership.
+            assertTrue(h.seen.none{it.record.disposition==PreviewDisposition.ADOPTED})
+            gate.complete(Unit)
+            waitFor{h.state.value.renderedParameters?.filmGamma==1f && h.seen.size==2}
             assertEquals(1f,h.state.value.renderedParameters!!.filmGamma)
-            val current=h.state.value.rendered
-            gate.complete(Unit);waitFor{h.seen.size==2}
-            assertSame(current,h.state.value.rendered);assertTrue(obsolete!!.isRecycled)
+            assertNotSame(obsolete,h.state.value.rendered);assertTrue(obsolete!!.isRecycled)
             val old=h.seen.single{it.record.context.scienceFingerprint==PreviewDiagnosticContext.fingerprint(EditorState(filmGamma=1.46f))}
-            assertEquals(PreviewDisposition.CANCELLED,old.record.disposition)
+            assertEquals(PreviewDisposition.STALE_GENERATION,old.record.disposition)
             assertTrue("Fake native completed, but its UI adoption did not",old.record.nativeCompleted)
             assertEquals(1,h.seen.count{it.record.disposition==PreviewDisposition.ADOPTED})
         }finally{gate.complete(Unit);f?.close();Dispatchers.resetMain()}
@@ -251,6 +253,26 @@ class PreviewAdoptionDiagnosticsHostTest {
             waitFor{h.state.value.rendered!=null && !h.state.value.previewRefining}
             assertTrue(h.state.value.canExport);assertNull(h.state.value.message)
             assertFalse(h.state.value.rendered!!.isRecycled)
+        }finally{f?.close();Dispatchers.resetMain()}
+    }
+    @Test fun renderCallbackFailureKeepsSafeStageAndReasonWithoutInventedDuration()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));var f:Fixture?=null
+        try {
+            f=fixture();val h=f
+            val secret="content://private/source.jpg GPS=22.3 token"
+            h.vm.renderPreview={_,_,_,_->throw java.io.IOException(secret)}
+            h.vm.retry()
+            waitFor{h.seen.size==1 && !h.state.value.updating}
+            val record=h.seen.single().record
+            assertEquals(PreviewDisposition.FAILED,record.disposition)
+            assertFalse(record.nativeCompleted)
+            val info=record.safeInfo()
+            assertEquals(PreviewFailureStage.RENDER_REQUEST,info.previewFailureStage)
+            assertEquals(PreviewExceptionType.IO_EXCEPTION,info.previewExceptionType)
+            assertEquals(PreviewFailureReason.IO_FAILED,info.previewFailureReason)
+            assertNull(info.durationMs)
+            assertFalse(info.fields().toString().contains(secret))
+            assertEquals(info,SafeInfo.parse(info.fields()))
         }finally{f?.close();Dispatchers.resetMain()}
     }
     @Test fun diagnosticsContainOnlyTypedCorrelationNotSourceOrPixelIdentity(){

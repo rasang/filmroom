@@ -34,6 +34,6 @@ class MediumFormatArtworkHostTest {
             val bitmap=checkNotNull(BitmapFactory.decodeByteArray(bytes,0,bytes.size))
             assertEquals(240,bitmap.width);assertEquals(240,bitmap.height);assertTrue(bitmap.hasAlpha());bitmap.recycle()
         }
-        assertEquals(11,pairs);assertEquals(4,singles)
+        assertEquals(12,pairs);assertEquals(3,singles)
     }
 }

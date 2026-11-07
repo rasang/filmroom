@@ -354,6 +354,13 @@ pub trait Decoder: Send {
   }
 
   fn raw_image(&self, file: &RawSource, params: &RawDecodeParams, dummy: bool) -> Result<RawImage>;
+  /// Filmroom opt-in cancellation. RAF checks between six-row entropy groups.
+  fn raw_image_with_cancel(&self, file: &RawSource, params: &RawDecodeParams, dummy: bool,
+    cancelled: &(dyn Fn() -> bool + Sync)) -> Result<RawImage> {
+    if cancelled() { return Err("Decode cancelled".into()); }
+    self.raw_image(file, params, dummy)
+  }
+
   /// Cooperative decode; implementations without row hooks preserve their existing path.
   fn raw_image_cancel(&self,file:&RawSource,params:&RawDecodeParams,cancel:&dyn Fn()->bool)->Result<RawImage>{
     if cancel(){return Err("Decode cancelled".into());} self.raw_image(file,params,false)

@@ -1,0 +1,21 @@
+{
+  "A": {
+    "bw_body": 8,
+    "bw_ink": 125,
+    "cine_body": [
+      8,
+      7,
+      10
+    ],
+    "cine_ink": [
+      175,
+      155,
+      106
+    ],
+    "smooth_amplitude": 1.0,
+    "fine_sigma": 0.55,
+    "ink_sigma": 1.1
+  },
+  "approval_scope": "Positive A only, exact shipped asset hashes in Reviewed135Definitions.kt",
+  "alpha": "Byte-identical to reviewed v2; fixed 25/25A"
+}

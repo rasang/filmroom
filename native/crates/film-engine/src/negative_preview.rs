@@ -11,7 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const MAX_EDGE: u32 = 256;
+pub const MAX_EDGE: u32 = 384;
+const GPU_BASE_EDGE: u32 = 256;
 const MAX_SOURCE_EDGE: u32 = 131_072; // At most three 1 MiB source row buffers.
 fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
@@ -210,15 +211,42 @@ impl GpuDensityAssembly {
         lo
     }
     pub(crate) fn new(width: u32, height: u32) -> Option<Self> {
+        Self::with_edge(width, height, GPU_BASE_EDGE)
+    }
+    fn empty(width: u32, height: u32, cap: u32) -> Option<Self> {
         if width == 0 || height == 0 || width > MAX_SOURCE_EDGE || height > MAX_SOURCE_EDGE { return None; }
         let edge = width.max(height);
-        let thumb_w = ((width as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
-        let thumb_h = ((height as u64 * MAX_EDGE.min(edge) as u64) / edge as u64).max(1) as u32;
-        let count = (thumb_w as usize).checked_mul(thumb_h as usize)?.checked_mul(4)?;
-        let mut values = Vec::new();
-        values.try_reserve_exact(count).ok()?;
-        values.resize(count, [f32::NAN; 3]);
-        Some(Self { width, height, thumb_w, thumb_h, values, received: 0 })
+        if cap == 0 || cap > MAX_EDGE { return None; }
+        let thumb_w = ((width as u64 * cap.min(edge) as u64) / edge as u64).max(1) as u32;
+        let thumb_h = ((height as u64 * cap.min(edge) as u64) / edge as u64).max(1) as u32;
+        Some(Self { width, height, thumb_w, thumb_h, values: Vec::new(), received: 0 })
+    }
+    fn allocate(mut self) -> Option<Self> {
+        let count = (self.thumb_w as usize).checked_mul(self.thumb_h as usize)?.checked_mul(4)?;
+        self.values.try_reserve_exact(count).ok()?;
+        self.values.resize(count, [f32::NAN; 3]);
+        Some(self)
+    }
+    pub(crate) fn with_edge(width: u32, height: u32, cap: u32) -> Option<Self> {
+        Self::empty(width, height, cap)?.allocate()
+    }
+    pub(crate) fn edge(&self) -> u32 { self.thumb_w.max(self.thumb_h) }
+    /// Use only memory left over by the original 256-edge capture plan. Never
+    /// shrink tiles, alter full-resolution reduction order, or add export work
+    /// to make room for a sharper display-only image. Plans include baseline
+    /// capture reservation; each is (core width, core height, planned bytes).
+    pub(crate) fn upgrade_for_plans(self, plans: &[(u32, u32, u64)], budget: u64) -> Option<Self> {
+        let candidate = Self::empty(self.width, self.height, MAX_EDGE)?;
+        if self.received != 0 || candidate.edge() == self.edge() || plans.is_empty() { return Some(self); }
+        let fits = plans.iter().all(|&(w, h, bytes)| {
+            self.peak_reservation(w, h).and_then(|old| bytes.checked_sub(old))
+                .and_then(|base| candidate.peak_reservation(w, h).and_then(|extra| base.checked_add(extra)))
+                .is_some_and(|total| total <= budget)
+        });
+        if !fits { return Some(self); }
+        // Release the old sample array before allocating its replacement.
+        drop(self);
+        candidate.allocate()
     }
     /// Conservative extra live bytes: full density samples; per-tile request,
     /// result, GPU index/gather/readback; and space for optional image encoding.
@@ -238,7 +266,7 @@ impl GpuDensityAssembly {
             }
             y=bottom;
         }
-        let sample_bytes=(self.values.len() as u64).checked_mul(12)?;
+        let sample_bytes=u64::from(self.thumb_w).checked_mul(u64::from(self.thumb_h))?.checked_mul(48)?;
         let tile_bytes=(maximum as u64).checked_mul(56)?.checked_add(16)?;
         sample_bytes.checked_add(tile_bytes)?.checked_add(2*1024*1024)
     }
@@ -271,8 +299,8 @@ impl GpuDensityAssembly {
         }
         true
     }
-    pub(crate) fn complete(self) -> Option<Vec<[f32;3]>> {
-        (self.received == self.values.len()).then_some(self.values)
+    pub(crate) fn complete(self) -> Option<(u32, u32, Vec<[f32;3]>)> {
+        (self.received == self.values.len()).then_some((self.thumb_w, self.thumb_h, self.values))
     }
 }
 
@@ -432,15 +460,16 @@ fn encode_srgb(xyz: [f64; 3]) -> io::Result<[u8; 3]> {
     Ok(out)
 }
 // Tiny standards-compliant RGB8 PNG encoder. Stored DEFLATE blocks avoid adding
-// an Android dependency for a <=197 KiB thumbnail. CRC32 and Adler32 cover all data.
+// an Android dependency for a bounded thumbnail. CRC32 and Adler32 cover all data.
 pub(crate) fn png_rgb(w: u32, h: u32, rgb: &[u8]) -> Vec<u8> {
     let mut raw = Vec::with_capacity(rgb.len() + h as usize);
     for row in rgb.chunks_exact(w as usize * 3) {
         raw.push(0);
         raw.extend_from_slice(row);
     }
-    let mut z = vec![0x78, 0x01];
     let count = raw.len().div_ceil(65535);
+    let mut z = Vec::with_capacity(6 + raw.len() + count * 5);
+    z.extend_from_slice(&[0x78, 0x01]);
     for (i, block) in raw.chunks(65535).enumerate() {
         z.push(if i + 1 == count { 1 } else { 0 });
         let len = block.len() as u16;
@@ -454,7 +483,8 @@ pub(crate) fn png_rgb(w: u32, h: u32, rgb: &[u8]) -> Vec<u8> {
         b = (b + a) % 65521;
     }
     z.extend_from_slice(&((b << 16) | a).to_be_bytes());
-    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut png = Vec::with_capacity(z.len() + 70);
+    png.extend_from_slice(b"\x89PNG\r\n\x1a\n");
     let mut header = Vec::new();
     header.extend_from_slice(&w.to_be_bytes());
     header.extend_from_slice(&h.to_be_bytes());
@@ -602,6 +632,39 @@ mod tests {
         assert_eq!(render_sampled_negative(&profile(), 3, 2, &samples, &mut || true).unwrap_err().kind(), io::ErrorKind::Interrupted);
     }
     #[test]
+    fn sharper_capture_uses_only_spare_memory_and_retains_low_budget_fallback() {
+        let old=GpuDensityAssembly::new(1536,1024).unwrap();
+        let old_bytes=old.peak_reservation(512,512).unwrap();
+        let base=100*1024*1024;
+        let tight=old.upgrade_for_plans(&[(512,512,base+old_bytes)],base+old_bytes).unwrap();
+        assert_eq!(tight.edge(),GPU_BASE_EDGE);
+        let upgraded=tight.upgrade_for_plans(&[(512,512,base+old_bytes)],512*1024*1024).unwrap();
+        assert_eq!(upgraded.edge(),MAX_EDGE);
+        assert!(upgraded.peak_reservation(512,512).unwrap()>old_bytes);
+        assert_eq!(upgraded.values.len(),384*256*4);
+        let multi=GpuDensityAssembly::new(1536,1024).unwrap().upgrade_for_plans(&[
+            (512,512,base+old_bytes),(1536,1024,512*1024*1024),
+        ],512*1024*1024).unwrap();
+        assert_eq!(multi.edge(),GPU_BASE_EDGE,"Both split phases must fit unchanged");
+    }
+    #[test]
+    fn larger_thumbnail_png_bound_and_tile_capture_are_complete() {
+        assert_eq!(MAX_EDGE as usize*MAX_EDGE as usize*4,spektrafilm_gpu::MAX_FILM_DENSITY_SAMPLES);
+        let mut assembly=GpuDensityAssembly::with_edge(1024,1024,MAX_EDGE).unwrap();
+        for y in (0..1024).step_by(173) {for x in (0..1024).step_by(197) {
+            let requests=assembly.samples_for_core(x,y,x,y,(x+197).min(1024),(y+173).min(1024));
+            let values:Vec<_>=requests.iter().map(|r|(r.index,[0.2;3])).collect();
+            assert!(assembly.add(&requests,&values));
+        }}
+        let (w,h,samples)=assembly.complete().unwrap();
+        assert_eq!((w,h),(384,384));
+        let png=render_sampled_negative(&profile(),w,h,&samples,&mut||false).unwrap().unwrap();
+        assert_eq!(pixels(&png).0,w);
+        let square=png_rgb(MAX_EDGE,MAX_EDGE,&vec![0;(MAX_EDGE*MAX_EDGE*3) as usize]);
+        assert_eq!(square.len(),442_863);
+        assert_eq!(square.len(),square.capacity(),"Encoder allocations are exact and bounded");
+    }
+    #[test]
     fn sampled_tile_cores_cover_each_point_once_without_halo_duplicates() {
         let mut assembly = GpuDensityAssembly::new(17, 23).unwrap();
         let mut count=0;
@@ -617,11 +680,32 @@ mod tests {
             assert!(assembly.add(&requests,&values));
         }}
         assert_eq!(count,17*23*4);
-        let values=assembly.complete().unwrap();
+        let (_,_,values)=assembly.complete().unwrap();
         for ty in 0..23 { for tx in 0..17 { for sy in 0..2 { for sx in 0..2 {
             let index=((ty*17+tx)*4+sy*2+sx) as usize;
             assert_eq!(values[index], [sample_coordinate(tx,sx,17,17) as f32,sample_coordinate(ty,sy,23,23) as f32,0.25]);
         }}}}
+    }
+    #[test]
+    fn cancelled_high_detail_publication_preserves_ready_image_and_attempt() {
+        let f=Fixture::new(1,1,|_,_|0.);
+        let id="12345678-1234-1234-1234-123456789abc";
+        fs::write(f.dir.join("scan-preview-attempt"),id).unwrap();
+        let target=f.dir.join(format!("negative-preview-{id}.png"));
+        fs::write(&target,b"old-valid-publication").unwrap();
+        write_attempt_status(&f.dir,id,"ready").unwrap();
+        let samples=vec![[0.25;3];MAX_EDGE as usize*MAX_EDGE as usize*4];
+        let mut calls=0;
+        let error=publish_for_attempt(&f.dir,id,&profile(),MAX_EDGE,MAX_EDGE,&samples,false,&mut||{
+            calls+=1;calls>=5
+        }).unwrap_err();
+        assert_eq!(error.kind(),io::ErrorKind::Interrupted);
+        assert_eq!(fs::read(&target).unwrap(),b"old-valid-publication");
+        assert_eq!(fs::read_to_string(f.dir.join(format!("negative-preview-{id}.status"))).unwrap(),"ready");
+        assert!(!f.dir.join(format!("negative-preview-{id}.png.part")).exists());
+        fs::write(f.dir.join("scan-preview-attempt"),"87654321-1234-1234-1234-123456789abc").unwrap();
+        assert!(publish_for_attempt(&f.dir,id,&profile(),MAX_EDGE,MAX_EDGE,&samples,false,&mut||false).is_err());
+        assert_eq!(fs::read(&target).unwrap(),b"old-valid-publication");
     }
     #[test]
     fn async_preview_is_attempt_scoped_and_real_density() {
@@ -643,12 +727,12 @@ mod tests {
     }
     #[test]
     fn bounded_thumbnail_averages_light_not_log_density() {
-        let f = Fixture::new(512, 2, |x, _| if x % 2 == 0 { 0. } else { 2. });
-        let path = write_negative_preview(&f.planes, &profile(), 512, 2, &f.dir, &mut || false)
+        let f = Fixture::new(MAX_EDGE * 2, 2, |x, _| if x % 2 == 0 { 0. } else { 2. });
+        let path = write_negative_preview(&f.planes, &profile(), MAX_EDGE * 2, 2, &f.dir, &mut || false)
             .unwrap()
             .unwrap();
         let (w, h, rgb) = pixels(&fs::read(path).unwrap());
-        assert_eq!((w, h), (256, 1));
+        assert_eq!((w, h), (MAX_EDGE, 1));
         // mean(10^0,10^-2)=0.505; sRGB ~188. mean density=1 would be89.
         assert!(rgb.iter().all(|v| (185..=190).contains(v)));
     }

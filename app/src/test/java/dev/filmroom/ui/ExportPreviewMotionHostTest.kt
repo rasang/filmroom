@@ -18,6 +18,9 @@ import java.io.File
 @Config(sdk=[29],application=Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ExportPreviewMotionHostTest {
+    // Keep screenshot artifacts local to this run; never overwrite historical validation output.
+    private fun evidenceDirectory() = File(System.getenv("FILMROOM_MOTION_EVIDENCE_DIR")
+        ?: File(RuntimeEnvironment.getApplication().cacheDir, "export-preview-motion-evidence").path).apply { mkdirs() }
     private fun view()=ExportPreviewView(RuntimeEnvironment.getApplication()).apply{layout(0,0,320,200);bindJob("a");setForeground(true)}
     private fun bitmap(color:Int)=Bitmap.createBitmap(320,200,Bitmap.Config.ARGB_8888).apply{eraseColor(color)}
     private fun field(v:ExportPreviewView,name:String)=ExportPreviewView::class.java.getDeclaredField(name).apply{isAccessible=true}.get(v)
@@ -36,6 +39,24 @@ class ExportPreviewMotionHostTest {
         assertEquals(before,frame(v,0f).getPixel(100,100))
         v.show(bitmap(Color.GREEN),"final");assertEquals(3,v.transitionCount)
         v.setBreathing(false);frame(v,1f);assertEquals(Color.BLUE,frame(v,1f).getPixel(100,100));v.release()
+    }
+    @Test fun fadesFitInside500MillisecondsAndRespectRecoveredRemainder() {
+        val v=view();v.show(bitmap(Color.WHITE),"contour",true)
+        assertEquals(250L,(field(v,"fade") as ValueAnimator).duration)
+        assertTrue((field(v,"fade") as ValueAnimator).duration<ExportPreviewSequence.MIN_STAGE_MS)
+        frame(v,1f);v.show(bitmap(Color.RED),"negative",maxFadeMs=120L)
+        assertEquals(120L,(field(v,"fade") as ValueAnimator).duration)
+        frame(v,1f);v.show(bitmap(Color.BLUE),"positive",maxFadeMs=0L)
+        assertNull(field(v,"fade"));assertFalse(v.animating)
+        assertEquals(Color.BLUE,frame(v,0f).getPixel(100,100));v.release()
+    }
+    @Test fun backgroundNeverReplaysAnInterruptedFadeAfterTimeHasCounted() {
+        val v=view();v.show(bitmap(Color.WHITE),"contour",true)
+        frame(v,.2f);v.setForeground(false)
+        assertFalse(v.animating);assertNull(field(v,"fade"))
+        v.setForeground(true)
+        assertFalse(v.animating);assertEquals(1,v.transitionCount)
+        assertEquals(Color.WHITE,frame(v,0f).getPixel(100,100));v.release()
     }
     @Test fun breathingPeakTransitionsWithoutFirstFrameDiscontinuity() {
         val v=view();v.show(bitmap(Color.rgb(50,50,50)),"outline");v.setBreathing(true)
@@ -110,9 +131,10 @@ class ExportPreviewMotionHostTest {
         v.show(bitmap(Color.WHITE),"ready");assertTrue(v.animating);v.release();assertFalse(v.animating)
     }
     @Test fun writeExistingNativeSyntheticFixtureFramesWithoutRerendering() {
-        val dir=File("/workspace/shared/filmroom-export-integration/validation/interactive-final/files/export-jobs/00000000-0000-0000-0000-000000000001")
+        val dir=File(System.getenv("FILMROOM_NATIVE_MOTION_FIXTURE")
+            ?: "/workspace/shared/filmroom-export-integration/validation/interactive-final/files/export-jobs/00000000-0000-0000-0000-000000000001")
         org.junit.Assume.assumeTrue(File(dir,"negative-preview.png").isFile)
-        val output=File("/workspace/shared/export-preview-motion-evidence").apply{mkdirs()}
+        val output=evidenceDirectory()
         fun raw(name:String,linear:Boolean):Bitmap {
             val bytes=java.nio.ByteBuffer.wrap(File(dir,name).readBytes()).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
             fun channel(v:Float):Int {val x=v.coerceIn(0f,1f);return ((if(linear){if(x<=.0031308f)12.92f*x else 1.055f*Math.pow(x.toDouble(),1.0/2.4).toFloat()-.055f}else x)*255).toInt().coerceIn(0,255)}
@@ -141,7 +163,7 @@ class ExportPreviewMotionHostTest {
         motion.show(result,"final");repeat(9){movie(it/8f)};motion.release()
     }
     @Test fun writeControlledCanvasFrames() {
-        val dir=File("/workspace/shared/export-preview-motion-evidence").apply{mkdirs()}
+        val dir=evidenceDirectory()
         val v=view();val original=javaClass.getResourceAsStream("/queue/public-source.jpg").use{BitmapFactory.decodeStream(it)}
         val contour=ExportContourCache.get("demo",original)
         fun save(name:String,bitmap:Bitmap){File(dir,"$name.png").outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}}

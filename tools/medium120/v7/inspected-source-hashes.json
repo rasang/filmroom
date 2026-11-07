@@ -1,0 +1,38 @@
+[
+  {
+    "local_research_name": "bw/hp5-photrio-2.jpg",
+    "bytes": 172815,
+    "sha256": "057d5046d5ad2d401ed469365403f2a9a302ddd95712ad115df7953e9bd8c1e9",
+    "purpose": "Inspection only; not packaged in app or repository"
+  },
+  {
+    "local_research_name": "bw/smith.pdf",
+    "bytes": 22606281,
+    "sha256": "df62c39587447d77178aaad384b09b5220b58df663d337ed84bfa4046d86ab47",
+    "purpose": "Inspection only; not packaged in app or repository"
+  },
+  {
+    "local_research_name": "bw/kodak-catalog.pdf",
+    "bytes": 766463,
+    "sha256": "3820cd99f0647f97b10cdc380fc9359228ac78182bc58216a24d333d7c63f384",
+    "purpose": "Inspection only; not packaged in app or repository"
+  },
+  {
+    "local_research_name": "color/kodak-1988-catalog.pdf",
+    "bytes": 17173940,
+    "sha256": "9e1d5b4ef475e11f90d536f936582bc135d9186a655636d71a33d9a95ad1e0bd",
+    "purpose": "Inspection only; not packaged in app or repository"
+  },
+  {
+    "local_research_name": "color/fuji-2002-guide.pdf",
+    "bytes": 2929244,
+    "sha256": "86197ac01be1d42d81712bcf0e295a3af156a304a71c3638ab70671ec051119c",
+    "purpose": "Inspection only; not packaged in app or repository"
+  },
+  {
+    "local_research_name": "bw/trix-expired.jpg",
+    "bytes": 1245421,
+    "sha256": "43cbeccdf5ff4be4a8b7024ba7a96bb20b16a4655283dac38c935b6f8ac2cac1",
+    "purpose": "Inspection only; not packaged in app or repository"
+  }
+]

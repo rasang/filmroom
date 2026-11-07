@@ -1,6 +1,6 @@
 package dev.filmroom.border
 
-/** Reviewed PDF 06 layout, opt-in only. Original assets and legacy queues are never changed.
+/** Reviewed PDF 06 layouts plus explicit centered imprint layouts, opt-in only. Original assets and legacy queues are never changed.
  * Source hashes and exact source-crop extraction are recorded in provenance.json.
  * This is design standardization of synthetic research strips, not authentic film spacing.
  */
@@ -9,9 +9,11 @@ internal object MediumImprintMarks {
     internal data class Layout(
         val assetVersion:String, val widthMm:Double, val cropStartPx:Int,
         val cropWidthPx:Int, val sourcePixelsPerMm:Int,
-        /** Largest central clear interval, with 0.5 mm exclusion from all remaining marks. */
+        /** Reserved clear interval; each reviewed layout specifies its own exclusion from remaining marks. */
         val clearStartMm:Double, val clearEndMm:Double,
         internal val moves:List<Move>,
+        /** Keep the complete photo-date glow mask inside the aperture, including tiny previews. */
+        val protectPhotoDate:Boolean=false,
     ) {
         val clearWidthMm get()=clearEndMm-clearStartMm
         internal val mmPerPixel get()=widthMm/cropWidthPx
@@ -77,6 +79,47 @@ internal object MediumImprintMarks {
         Key("fujifilm_pro_400h", MediumFormat.MF69) to Layout("mf120-v2-pro400h-2d036c5cba8c", 90.0, 3650, 900, 10, 3.0, 87.0, listOf()),
         Key("fujifilm_pro_400h", MediumFormat.MF617) to Layout("mf120-v2-pro400h-2d036c5cba8c", 174.0, 3230, 1740, 10, 3.0, 171.0, listOf()),
 
+        // v11 B&W opt-in centered printing layouts on unchanged v7 pixels. Preserve every existing lower
+        // mark and crop-edge fragment in source order; never complete a glyph.
+        // HP5 needs narrower clear intervals to retain its long lower legends.
+        // Exact pixel bounds/hashes: tools/medium120/v7/imprint-layout-provenance.json.
+        Key("ilford_hp5_plus_400", MediumFormat.MF645) to Layout("mf120-v11-hp5plus-imprint-cb94b4135551", 47.5, 3862, 476, 10, 13.25, 34.25, listOf(Move(73, 124, 7.4), Move(355, 476, 34.95)), true),
+        Key("ilford_hp5_plus_400", MediumFormat.MF66) to Layout("mf120-v11-hp5plus-imprint-cb94b4135551", 62.0, 3790, 620, 10, 20.0, 42.0, listOf(Move(145, 196, 14.2), Move(427, 610, 42.7)), true),
+        Key("ilford_hp5_plus_400", MediumFormat.MF67) to Layout("mf120-v11-hp5plus-imprint-cb94b4135551", 76.0, 3720, 760, 10, 20.0, 56.0, listOf(Move(215, 266, 14.2), Move(497, 680, 56.7)), true),
+        Key("ilford_hp5_plus_400", MediumFormat.MF69) to Layout("mf120-v11-hp5plus-imprint-cb94b4135551", 90.0, 3650, 900, 10, 23.5, 66.5, listOf(Move(0, 67, 1.0), Move(285, 336, 17.7), Move(567, 750, 67.2), Move(845, 859, 87.0)), true),
+        Key("ilford_hp5_plus_400", MediumFormat.MF617) to Layout("mf120-v11-hp5plus-imprint-cb94b4135551", 174.0, 3230, 1740, 10, 60.5, 113.5, listOf(Move(25, 76, 10.0), Move(306, 487, 30.0), Move(705, 756, 54.7), Move(987, 1170, 114.2), Move(1265, 1279, 140.0), Move(1399, 1450, 148.0), Move(1686, 1740, 166.0)), true),
+        Key("kodak_tmax_100", MediumFormat.MF645) to Layout("mf120-v11-tmax100-imprint-15d981f5a232", 47.5, 3862, 476, 10, 10.95, 36.55, listOf(Move(74, 117, 5.95), Move(357, 381, 37.25)), true),
+        Key("kodak_tmax_100", MediumFormat.MF66) to Layout("mf120-v11-tmax100-imprint-15d981f5a232", 62.0, 3790, 620, 10, 15.0, 47.0, listOf(Move(146, 189, 9.9), Move(429, 453, 47.7)), true),
+        Key("kodak_tmax_100", MediumFormat.MF67) to Layout("mf120-v11-tmax100-imprint-15d981f5a232", 76.0, 3720, 760, 10, 18.5, 57.5, listOf(Move(216, 259, 13.4), Move(499, 523, 58.2)), true),
+        Key("kodak_tmax_100", MediumFormat.MF69) to Layout("mf120-v11-tmax100-imprint-15d981f5a232", 90.0, 3650, 900, 10, 22.5, 67.5, listOf(Move(0, 14, 1.0), Move(286, 329, 17.5), Move(569, 593, 68.2), Move(860, 900, 84.0)), true),
+        Key("kodak_tmax_100", MediumFormat.MF617) to Layout("mf120-v11-tmax100-imprint-15d981f5a232", 174.0, 3230, 1740, 10, 60.5, 113.5, listOf(Move(97, 141, 10.0), Move(410, 434, 30.0), Move(706, 749, 55.5), Move(989, 1013, 114.2), Move(1280, 1325, 137.0), Move(1597, 1619, 160.0)), true),
+        Key("kodak_tri_x_400", MediumFormat.MF645) to Layout("mf120-v11-trix400-imprint-4eeb6adc6f6e", 47.5, 3862, 476, 10, 10.95, 36.55, listOf(Move(242, 281, 37.25)), true),
+        Key("kodak_tri_x_400", MediumFormat.MF66) to Layout("mf120-v11-trix400-imprint-4eeb6adc6f6e", 62.0, 3790, 620, 10, 15.0, 47.0, listOf(Move(0, 14, 1.0), Move(314, 353, 47.7)), true),
+        Key("kodak_tri_x_400", MediumFormat.MF67) to Layout("mf120-v11-trix400-imprint-4eeb6adc6f6e", 76.0, 3720, 760, 10, 18.5, 57.5, listOf(Move(60, 84, 14.0), Move(384, 423, 58.2), Move(695, 719, 69.0)), true),
+        Key("kodak_tri_x_400", MediumFormat.MF69) to Layout("mf120-v11-trix400-imprint-4eeb6adc6f6e", 90.0, 3650, 900, 10, 22.5, 67.5, listOf(Move(130, 154, 18.0), Move(454, 493, 68.2), Move(765, 789, 83.0)), true),
+        Key("kodak_tri_x_400", MediumFormat.MF617) to Layout("mf120-v11-trix400-imprint-4eeb6adc6f6e", 174.0, 3230, 1740, 10, 60.5, 113.5, listOf(Move(262, 303, 15.0), Move(550, 574, 57.4), Move(874, 913, 114.2), Move(1185, 1209, 135.0), Move(1480, 1519, 156.0)), true),
+
+        // User-reviewed v8 printing layout. Center the complete date/parameter
+        // group and move existing lower marks toward the sides, as in PDF06.
+        // No source glyphs are completed or new marks created; 645/69 retain
+        // their already cropped code fragments. The original PNG stays intact.
+        Key("cinestill_800t", MediumFormat.MF645) to Layout("mf120-v8-cinestill800t-a041a70e696f",47.5,3862,476,10,13.75,33.75,listOf(Move(66,190,0.7),Move(465,476,34.4)),true),
+        Key("cinestill_800t", MediumFormat.MF66) to Layout("mf120-v8-cinestill800t-a041a70e696f",62.0,3790,620,10,15.0,47.0,listOf(Move(138,262,2.0),Move(537,581,47.6)),true),
+        Key("cinestill_800t", MediumFormat.MF67) to Layout("mf120-v8-cinestill800t-a041a70e696f",76.0,3720,760,10,18.5,57.5,listOf(Move(208,332,5.5),Move(607,651,58.1)),true),
+        Key("cinestill_800t", MediumFormat.MF69) to Layout("mf120-v8-cinestill800t-a041a70e696f",90.0,3650,900,10,22.5,67.5,listOf(Move(0,31,1.0),Move(278,402,9.5),Move(677,721,68.1)),true),
+        Key("cinestill_800t", MediumFormat.MF617) to Layout("mf120-v8-cinestill800t-a041a70e696f",174.0,3230,1740,10,60.5,113.5,listOf(Move(21,143,10.0),Move(408,451,35.0),Move(698,822,47.5),Move(1097,1141,114.1),Move(1389,1511,131.5),Move(1638,1654,156.0)),true),
+        // Acros II v9 follows the existing centered printing design. Only
+        // conflicting lower marks move outward. The upper rail is unchanged.
+        Key("fujifilm_neopan_acros_100_ii", MediumFormat.MF645) to Layout("mf120-v9-acrosii-5d8eb4aa9d8f", 47.5, 3862, 475, 10, 10.95, 36.55, listOf(Move(357, 399, 37.25)), true),
+        Key("fujifilm_neopan_acros_100_ii", MediumFormat.MF66) to Layout("mf120-v9-acrosii-5d8eb4aa9d8f", 62.0, 3790, 620, 10, 15.75, 46.25, listOf(Move(25, 173, 0.25), Move(429, 471, 46.95)), true),
+        Key("fujifilm_neopan_acros_100_ii", MediumFormat.MF67) to Layout("mf120-v9-acrosii-5d8eb4aa9d8f", 76.0, 3720, 760, 10, 19.0, 57.0, listOf(Move(95, 243, 3.5), Move(499, 541, 57.7)), true),
+        Key("fujifilm_neopan_acros_100_ii", MediumFormat.MF69) to Layout("mf120-v9-acrosii-5d8eb4aa9d8f", 90.0, 3650, 900, 10, 24.5, 65.5, listOf(Move(165, 313, 9.0), Move(569, 611, 66.2)), true),
+        Key("fujifilm_neopan_acros_100_ii", MediumFormat.MF617) to Layout("mf120-v9-acrosii-5d8eb4aa9d8f", 174.0, 3230, 1740, 10, 60.5, 113.5, listOf(Move(585, 733, 45.0), Move(989, 1031, 114.2)), true),
+        Key("kodak_kodachrome_64", MediumFormat.MF645) to Layout("mf120-v10-kodachrome64-42ed192f4558", 47.5, 3862, 475, 10, 10.95, 36.55, listOf(Move(219, 310, 37.25)), true),
+        Key("kodak_kodachrome_64", MediumFormat.MF66) to Layout("mf120-v10-kodachrome64-42ed192f4558", 62.0, 3790, 620, 10, 15.0, 47.0, listOf(Move(291, 382, 47.7)), true),
+        Key("kodak_kodachrome_64", MediumFormat.MF67) to Layout("mf120-v10-kodachrome64-42ed192f4558", 76.0, 3720, 760, 10, 18.5, 57.5, listOf(Move(361, 452, 58.2)), true),
+        Key("kodak_kodachrome_64", MediumFormat.MF69) to Layout("mf120-v10-kodachrome64-42ed192f4558", 90.0, 3650, 900, 10, 22.5, 67.5, listOf(Move(431, 522, 68.2)), true),
+        Key("kodak_kodachrome_64", MediumFormat.MF617) to Layout("mf120-v10-kodachrome64-42ed192f4558", 174.0, 3230, 1740, 10, 60.5, 113.5, listOf(Move(851, 942, 114.2)), true),
     )
     fun layout(snapshot:BorderSnapshot):Layout? {
         if(snapshot.geometryVersion!=5 || snapshot.stripCenterMm!=410.0 || snapshot.mediumLayout==null || snapshot.appearance==null)return null
@@ -101,6 +144,8 @@ internal object MediumImprintMarks {
         private val frozen:BorderSnapshot,private val original:BorderRaster,private val layout:Layout,
     ):BorderRaster by original {
         // No copied pixels or photo-sized intermediate. Layout metadata is shared and immutable.
+        private val monochrome=MediumStripDefinitions.registry.exact(
+            MediumFormatStocks.physicalStock(frozen.stock),frozen.assetVersion).monochrome
         override val residentBytes get()=original.residentBytes+256L
         override fun validate(snapshot:BorderSnapshot) {
             require(snapshot==frozen){"120 imprint wrapper belongs to another snapshot"}
@@ -121,7 +166,8 @@ internal object MediumImprintMarks {
             if(source==null) {
                 // Same authored neutral base and existing material presentation as MediumStripRaster.
                 if(snapshot.appearance!!.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION){
-                    rgb[0]=.58f;rgb[1]=.29f;rgb[2]=.12f
+                    if(monochrome){rgb[0]=.70f;rgb[1]=.70f;rgb[2]=.70f}
+                    else{rgb[0]=.58f;rgb[1]=.29f;rgb[2]=.12f}
                 }else{
                     val base=if(original.stock=="kodak_portra_160")9f/255 else 8f/255
                     rgb[0]=base;rgb[1]=base;rgb[2]=base

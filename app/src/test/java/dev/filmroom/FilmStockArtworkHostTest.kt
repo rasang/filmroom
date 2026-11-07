@@ -69,12 +69,12 @@ class FilmStockArtworkHostTest {
             }
         }} finally { RuntimeEnvironment.setQualifiers("w360dp-h780dp-440dpi") }
     }
-    @Test fun allCameraProfilesHaveCorrectTransparentArtworkAndPrintMediaHaveNone() {
+    @Test fun cameraProfilesHaveCorrectArtworkOrNeutralFallbackAndPrintMediaHaveNone() {
         val context=RuntimeEnvironment.getApplication()
         val profiles=JSONObject(context.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         val ids=(0 until profiles.length()).map{profiles.getJSONObject(it)}.filter{it.getString("kind") in listOf("negative","reversal")}.map{it.getString("id")}.toSet()
-        assertEquals(22,ids.size);assertEquals(ids,FilmStockArtwork.physicalStockByProfile.keys)
-        assertEquals(20,FilmStockArtwork.physicalStockByProfile.values.toSet().size)
+        assertEquals(27,ids.size);assertEquals(ids,FilmStockArtwork.physicalStockByProfile.keys)
+        assertEquals(25,FilmStockArtwork.physicalStockByProfile.values.toSet().size)
         for(id in ids){
             val bitmap=context.assets.open(FilmStockArtwork.assetPath(id)!!).use{BitmapFactory.decodeStream(it)}
             assertNotNull(id,bitmap);assertEquals(240,bitmap.width);assertEquals(240,bitmap.height);assertTrue(bitmap.hasAlpha())
@@ -119,7 +119,7 @@ class FilmStockArtworkHostTest {
                 strip().isSmoothScrollingEnabled=false
                 strip().scrollTo(strip().getChildAt(0).width,0)
                 val cards=strip().getChildAt(0) as ViewGroup
-                assertEquals(22,cards.childCount)
+                assertEquals(27,cards.childCount)
                 val last=cards.getChildAt(cards.childCount-1) as Button
                 val x=strip().scrollX;val initialWidth=strip().width;val initialContent=cards.width;assertTrue(x>0);last.performClick();shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400));layout(content,content.width,content.height)
                 // Expanded dialog can relayout its scroll gutters after text reflow. Normal
@@ -130,7 +130,7 @@ class FilmStockArtworkHostTest {
                 val catalogRows=org.json.JSONObject(a.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
                 val expectedLast=(0 until catalogRows.length()).map{catalogRows.getJSONObject(it)}.last{it.getString("kind") in setOf("negative","reversal")}.getString("id")
                 assertEquals(expectedLast,chosen.tag)
-                assertTrue(chosen.compoundDrawables.any{it is BitmapDrawable})
+                assertTrue(chosen.compoundDrawables.any{it != null})
                 assertTrue(chosen.width>=48*density);assertTrue(chosen.height>=48*density)
                 assertEquals("Click does not recenter the film list ${width}x$height font$scale oldViewport=$initialWidth newViewport=${strip().width} oldContent=$initialContent newContent=${strip().getChildAt(0).width}",x,strip().scrollX)
                 assertTrue(chosen.left>=strip().scrollX);assertTrue(chosen.right<=strip().scrollX+strip().width)

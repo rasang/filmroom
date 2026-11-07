@@ -29,9 +29,9 @@ class CandidateBorderCatalogHostTest {
         BorderCatalog.initialize(app.assets){dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
         val profiles=JSONObject(app.assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         val films=(0 until profiles.length()).map{profiles.getJSONObject(it)}.filter{it.getString("kind") in setOf("negative","reversal")}.map{it.getString("id")}.toSet()
-        assertEquals(22,films.size);assertEquals(films,CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix"))
+        assertEquals(27,films.size);assertEquals(films-dev.filmroom.model.FilmProfileCapabilities.withoutFrameArtwork,CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix"))
         assertEquals(18,CandidateBorderDefinitions.definitions.size)
-        for(stock in films){assertTrue(BorderCatalog.available(stock));assertEquals(stock,BorderCatalog.snapshot(stock,96,64).stock)}
+        for(stock in films-dev.filmroom.model.FilmProfileCapabilities.withoutFrameArtwork){assertTrue(BorderCatalog.available(stock));assertEquals(stock,BorderCatalog.snapshot(stock,96,64).stock)}
         assertFalse(BorderCatalog.available("kodak_2383"));assertFalse(BorderCatalog.available("missing"))
         val normal=BorderCatalog.snapshot("kodak_portra_800",96,64)
         for(alias in listOf("kodak_portra_800_push1","kodak_portra_800_push2"))assertEquals(normal.assetVersion,BorderCatalog.snapshot(alias,96,64).assetVersion)

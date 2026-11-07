@@ -1,0 +1,22 @@
+<resources>
+    <string name="saved_preset_import">Recipes</string>
+    <string name="saved_preset_save">Save recipe</string>
+    <string name="saved_preset_name">Recipe name</string>
+    <string name="saved_preset_scope">Save the film and all current editing settings, including borders, composition, imprints and any custom date. Stored on this device only, without the photo.</string>
+    <string name="saved_preset_cancel">Cancel</string>
+    <string name="saved_preset_apply">Apply</string>
+    <string name="saved_preset_delete">Delete</string>
+    <string name="saved_preset_delete_question">Delete “%1$s”? The current photo and settings will stay unchanged.</string>
+    <string name="saved_preset_loading">Loading recipes…</string>
+    <string name="saved_preset_empty">No recipes yet. Adjust a photo, then choose Save current recipe below.</string>
+    <string name="saved_preset_choose">Select a recipe, then Apply. Long-press to share or delete. You can undo an application.</string>
+    <string name="saved_preset_saved">Recipe saved</string>
+    <string name="saved_preset_invalid_name">Enter a name of 1–60 characters, without line breaks or control characters.</string>
+    <string name="saved_preset_duplicate_name">That recipe name already exists. Choose another name.</string>
+    <string name="saved_preset_full">Recipe storage is full. Delete recipes you no longer need.</string>
+    <string name="saved_preset_stale">The photo or settings changed. Close and reopen this dialog.</string>
+    <string name="saved_preset_incompatible">This recipe contains settings or film stocks this version cannot use. Nothing was applied; the saved data is retained.</string>
+    <string name="saved_preset_unreadable">Could not read recipes. Existing data was not changed. Try again or update the app.</string>
+    <string name="saved_preset_write_failed">Could not save changes. Check available storage and try again.</string>
+    <string name="saved_preset_save_current">Save current recipe</string>
+</resources>

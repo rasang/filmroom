@@ -1,5 +1,5 @@
 {
-  "revision": 1,
+  "revision": 2,
   "dimensions": [
     240,
     240
@@ -95,7 +95,14 @@
       "profile_id": "kodak_kodachrome_64",
       "physical_stock_id": "kodak_kodachrome_64",
       "ui_badge": null,
-      "source_url": "https://www.kwconsignment.com/products/vintage-kodak-35mm-film-lot-kodachrome-200-plus-x-pan-rolls-w-box-afc7"
+      "source_url": "https://www.kwconsignment.com/products/vintage-kodak-35mm-film-lot-kodachrome-200-plus-x-pan-rolls-w-box-afc7",
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "source_120_url": "https://www.pacificrimcamera.com/rl/03708/03708.pdf",
+      "source_120_page": 8
     },
     {
       "profile_id": "kodak_vision3_50d",
@@ -126,86 +133,215 @@
       "physical_stock_id": "kodak_verita_200d",
       "ui_badge": null,
       "source_url": "https://www.kodak.com/en/motion/product/camera-films/verita-200d-5206-7206/"
+    },
+    {
+      "profile_id": "kodak_doublex",
+      "physical_stock_id": "kodak_doublex",
+      "ui_badge": null,
+      "provenance_document": "Project docs/BW_FRAME_ASSETS.json"
+    },
+    {
+      "profile_id": "kodak_trix",
+      "physical_stock_id": "kodak_trix",
+      "ui_badge": null,
+      "provenance_document": "Project docs/BW_FRAME_ASSETS.json"
+    },
+    {
+      "profile_id": "kodak_tri_x_400",
+      "physical_stock_id": "kodak_tri_x_400",
+      "ui_badge": null,
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "packaging_source_urls": {
+        "135": "https://filmphotographystore.com/products/35mm-bw-film-kodak-tri-x-400-1-roll",
+        "120": "https://photolaplante.com/en/products/film-kodak-tri-x-400-120"
+      },
+      "source_set": "five-reviewed-rolls-20261106"
+    },
+    {
+      "profile_id": "kodak_tmax_100",
+      "physical_stock_id": "kodak_tmax_100",
+      "ui_badge": null,
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "packaging_source_urls": {
+        "135": "https://www.fotoimpex.com/films/kodak-t-max-100-13536-0325.html",
+        "120": "https://www.bayphotofilm.com/product-page/kodak-t-max-100-120"
+      },
+      "source_set": "five-reviewed-rolls-20261106"
+    },
+    {
+      "profile_id": "fujifilm_neopan_acros_100_ii",
+      "physical_stock_id": "fujifilm_neopan_acros_100_ii",
+      "ui_badge": null,
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "packaging_source_urls": {
+        "135": "https://www.prophot.com/fujifilm-neopan-acros-100-ii-135-36-poses-fuj16648282-148976.html",
+        "120": "https://www.fotoimpex.de/shop/filme/fuji-neopan-acros-ii-neu-100-120.html"
+      },
+      "source_set": "five-reviewed-rolls-20261106"
+    },
+    {
+      "profile_id": "ilford_hp5_plus_400",
+      "physical_stock_id": "ilford_hp5_plus_400",
+      "ui_badge": null,
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "packaging_source_urls": {
+        "135": "https://www.fotoimpex.com/films/ilford-hp5-13536-400-asa.html/",
+        "120": "https://www.rockbrookcamera.com/products/ilford-hp5-120"
+      },
+      "source_set": "five-reviewed-rolls-20261106"
+    },
+    {
+      "profile_id": "cinestill_800t",
+      "physical_stock_id": "cinestill_800t",
+      "ui_badge": null,
+      "illustrated_formats": [
+        "135",
+        "120"
+      ],
+      "grants_frame_support": false,
+      "packaging_source_urls": {
+        "135": "https://cinestillfilm.com/products/800tungsten-c41-36exp-35mm-high-speed-color-negative-135",
+        "120": "https://www.ebay.com.au/itm/193727924712"
+      },
+      "source_set": "five-reviewed-rolls-20261106"
     }
   ],
   "assets": [
     {
+      "physical_stock_id": "cinestill_800t",
+      "path": "cinestill_800t.webp",
+      "sha256": "1c0ae26f4bc61c63daf320fc33e639923966f4e845f53901096d9d8df67de690",
+      "bytes": 20098
+    },
+    {
       "physical_stock_id": "fujifilm_c200",
       "path": "fujifilm_c200.webp",
-      "sha256": "8efc3b361c2fbb53830c19e5c5ae8ea45cbfc3987d116d6e65d829c4bb742bd2",
-      "bytes": 25586
+      "sha256": "6c76a5ddf032293acc940548c43c73a5fb384fccd52712f4ecd1cf99f352c588",
+      "bytes": 11624
+    },
+    {
+      "physical_stock_id": "fujifilm_neopan_acros_100_ii",
+      "path": "fujifilm_neopan_acros_100_ii.webp",
+      "sha256": "bf3f8a2378c9940500b5a1d4bb4ee397e221e9bfe187beb5b5c81e6b84447b79",
+      "bytes": 21746
     },
     {
       "physical_stock_id": "fujifilm_pro_400h",
       "path": "fujifilm_pro_400h.webp",
-      "sha256": "ec3589f2e2bca1188604a1bcc1c8f8d51762410b213f1dc1696d2c288242a537",
-      "bytes": 27622
+      "sha256": "f659e4390e6010ce77f8e31cc74348ceb7dc2b95164ce3af6a14506a4bda9e86",
+      "bytes": 22598
     },
     {
       "physical_stock_id": "fujifilm_provia_100f",
       "path": "fujifilm_provia_100f.webp",
-      "sha256": "9579a9040a46103f6243f7a896d3533525fe6994f3111b37ce5812605e392727",
-      "bytes": 29468
+      "sha256": "e2c4bea75643271227edad55dc07ccce36929828b44b9fadeb50d0f141c5332d",
+      "bytes": 23814
     },
     {
       "physical_stock_id": "fujifilm_velvia_100",
       "path": "fujifilm_velvia_100.webp",
-      "sha256": "531c60e6b07553d25560fc02c5d55b8ad72c4a0a373e4ee35531295266accc73",
-      "bytes": 28694
+      "sha256": "32448eef4526f5f429d4b0e7e167af14c891d3f9a7981f5b1833ce8c5c9c0ce0",
+      "bytes": 23326
     },
     {
       "physical_stock_id": "fujifilm_xtra_400",
       "path": "fujifilm_xtra_400.webp",
-      "sha256": "dbd7eee0efc5c85bac09ff0e1c31bff28c411d43bff2b0b7046d039e5bd9eab2",
-      "bytes": 24388
+      "sha256": "b819b40735898278b02f88c08f0424b00303b52cf74c79c713666982cae9d217",
+      "bytes": 10890
+    },
+    {
+      "physical_stock_id": "ilford_hp5_plus_400",
+      "path": "ilford_hp5_plus_400.webp",
+      "sha256": "2425dc1190deb1b0ce8091d86d5326fff08de93e54465e0878334586a5fd2103",
+      "bytes": 20098
+    },
+    {
+      "physical_stock_id": "kodak_doublex",
+      "path": "kodak_doublex.webp",
+      "sha256": "d83e9bb601900f7a57530303c567952b13c96db9af8179ef3f3265adcf669663",
+      "bytes": 35468
     },
     {
       "physical_stock_id": "kodak_ektachrome_100",
       "path": "kodak_ektachrome_100.webp",
-      "sha256": "7dd6c2f1838071cb25b3c3556dc4680bbf4b48052561e892823c3fb4b58f0a0f",
-      "bytes": 25584
+      "sha256": "b52dec0cdf00a7e61a73bb0e74e4f9e26a1fdc0d590e8f0dc27b6ea85e3b5eae",
+      "bytes": 23228
     },
     {
       "physical_stock_id": "kodak_ektar_100",
       "path": "kodak_ektar_100.webp",
-      "sha256": "2f9fa064190d10a2dcd3249556051ff37dd671fd652fb6ff379e3e9c35859002",
-      "bytes": 24408
+      "sha256": "666d0b3846a36597ecbc68b059964200fd4a012f70ddfc492aecdd1aa07d7657",
+      "bytes": 21488
     },
     {
       "physical_stock_id": "kodak_gold_200",
       "path": "kodak_gold_200.webp",
-      "sha256": "9afbdad3cd766207f49f71daa26fe6d6150019815849b8149a3181b99337c952",
-      "bytes": 27366
+      "sha256": "28f66bf186accf898369e4cad39c705b24163fbc81f8d52d49ea301050836535",
+      "bytes": 23408
     },
     {
       "physical_stock_id": "kodak_kodachrome_64",
       "path": "kodak_kodachrome_64.webp",
-      "sha256": "1ef8b9735596fb6d1088ad44c43649260133de5fce013232babd27047263f13e",
-      "bytes": 27018
+      "sha256": "6b61a8e19db8136be43ebe72df43b066ce19a203bf780d33d8a3b8d54bb27c29",
+      "bytes": 24638
     },
     {
       "physical_stock_id": "kodak_portra_160",
       "path": "kodak_portra_160.webp",
-      "sha256": "d512bccacc6efc7f8429adbc9831c0fcf66bb58bd02c6983d3a7ee5861c8c1fe",
-      "bytes": 24810
+      "sha256": "9224a2d0b380386794397253217e49bef604c78ccfea1f657750920f1604258f",
+      "bytes": 21918
     },
     {
       "physical_stock_id": "kodak_portra_400",
       "path": "kodak_portra_400.webp",
-      "sha256": "71271434b8c8a0d9547e81c0bd077cf3a1f2dcec57d1b045db0d05aa87104bd2",
-      "bytes": 25052
+      "sha256": "5f501669542006e8ed8841fe347d92c5e5c0263b3a37672ce94dabf21483cab0",
+      "bytes": 21742
     },
     {
       "physical_stock_id": "kodak_portra_800",
       "path": "kodak_portra_800.webp",
-      "sha256": "d2d9f95c984dcf2ae195a92943f81154e8cdbf806de4939f3413f81d626e238f",
-      "bytes": 24968
+      "sha256": "731df699b6a8a5e31615d7a4363d79dac768bd6cf933932d9c957e5e7ea0ef76",
+      "bytes": 21814
+    },
+    {
+      "physical_stock_id": "kodak_tmax_100",
+      "path": "kodak_tmax_100.webp",
+      "sha256": "f88d04f961b119f7514bbcff8e2c10dce4006e1b1ebd0bf56f15a1303ddab1de",
+      "bytes": 21860
+    },
+    {
+      "physical_stock_id": "kodak_tri_x_400",
+      "path": "kodak_tri_x_400.webp",
+      "sha256": "40c888bcad47459a8d1f7158fd3924fb84c69b25f7070f12e00c11bce7ed7914",
+      "bytes": 22094
+    },
+    {
+      "physical_stock_id": "kodak_trix",
+      "path": "kodak_trix.webp",
+      "sha256": "8989d5fc6db2bc8204a706731c2b23d43ab3d4a484496a9b3f3556638b1bd03f",
+      "bytes": 30428
     },
     {
       "physical_stock_id": "kodak_ultramax_400",
       "path": "kodak_ultramax_400.webp",
-      "sha256": "891d62de0f535d542a6fd1e267913ecf3bcb7d0e146323fdeee873fb0162c4d6",
-      "bytes": 27512
+      "sha256": "39c5dd81b570248ff769da478d3e26e9f57dde75e3f6f41fe308bfa0c3d05ca4",
+      "bytes": 12000
     },
     {
       "physical_stock_id": "kodak_verita_200d",
@@ -238,5 +374,23 @@
       "bytes": 33828
     }
   ],
-  "model_source_revision": 4
+  "model_source_revision": 5,
+  "scope": "Current packaged selector artwork; physical packaging illustration does not grant frame-strip support.",
+  "approved_five_roll_source": {
+    "archive": "Filmroom-five-roll-models-review.zip",
+    "sha256": "19bfc4c70d4177f67f869eb2894ece877fb49c85d1933b00586850f2f49621c4",
+    "manifest_sha256": "521688f94a5075619958fb187d1e9ca6d6cc95d8e13c1a904e7f9b0cdedc338b",
+    "thumbnail_bytes_preserved": true,
+    "geometry": "Same approved 135 + bare 120 template, camera, lighting and physical scale",
+    "review_approval_date": "2026-11-06"
+  },
+  "kodachrome_dual_source": {
+    "model": "kodak_kodachrome_64.blend",
+    "model_sha256": "3a2ccb2770b8f71eb98ae99fdc9c42444db1d5cd7ca730a1ac85352777d159eb",
+    "reference": "Kodak 1987 brochure, page 8, actual bare PKR 120 roll",
+    "old_135_texture_preserved": true,
+    "other_24_thumbnails_unchanged": true,
+    "geometry": "Existing approved 135 + bare 120 physical scale, camera and lights",
+    "artwork": "Original simplified typesetting; unseen circumference and tiny type are approximate"
+  }
 }

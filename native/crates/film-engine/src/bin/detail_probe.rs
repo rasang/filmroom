@@ -27,7 +27,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let params = MobileParams::parse(&fs::read_to_string(&a[5])?)?;
     let config = DetailConfig {
+        gpu_attempt: true,
         region_output: false,
+        initial_region: None,
         width: a[3].parse()?,
         height: a[4].parse()?,
         params,

@@ -91,11 +91,11 @@ class ImprintContentTest {
     @Test fun focalIsRealNotEquivalentAndNumbersAreBoundedWithoutStrippingIntegerZeros() {
         assertNull(field(ImprintFieldKind.FOCAL_LENGTH, "FocalLengthIn35mmFilm" to "800"))
         for ((raw, text) in listOf("400" to "400mm", "800" to "800mm", "1200" to "1200mm", "2000" to "2000mm", "4294967295" to "4294967295mm",
-            "123456789/1000000" to "123.5mm", "1/4294967295" to "2.328e-10mm"))
+            "123456789/1000000" to "123mm", "49.5" to "50mm", "1999.5" to "2000mm"))
             assertEquals(raw, text, field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to raw))
         assertEquals("50mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to "50", "FocalLengthIn35mmFilm" to "75"))
-        assertEquals("+0", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "-0.0"))
-        assertEquals("+10", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "10"))
+        assertEquals("±0.0", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "-0.0"))
+        assertEquals("+10.0", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "10"))
     }
 
     @Test fun formattingDoesNotDependOnLocaleAndUnknownMeteringIsOmitted() {
@@ -140,6 +140,25 @@ class ImprintContentTest {
         assertEquals("2024-02-29 23:59:59", ImprintSettings.formatDateTime(checkNotNull(parsed)))
         assertFalse(ImprintSettings().dateEnabled)
         assertEquals("contax_t2", ImprintSettings(dateEnabled = true).effectiveDateStyle)
+    }
+
+    @Test fun imprintPrecisionRoundsOnlyDisplayAndPreservesSourceFacts() {
+        for ((raw, expected) in listOf("1/3" to "+0.3", "-1/3" to "-0.3", "2/3" to "+0.7",
+            "-2/3" to "-0.7", "1" to "+1.0", "-1.25" to "-1.3", "0" to "±0.0", "-0.04" to "±0.0")) {
+            val facts = linkedMapOf("ExposureBiasValue" to raw, "FocalLength" to "499/10")
+            val before = facts.toMap()
+            val result = ImprintContent.fromAttributes(facts, "contax_t2")
+            assertEquals(expected, result.fields.single { it.kind == ImprintFieldKind.EXPOSURE_BIAS }.text)
+            assertEquals("50mm", result.fields.single { it.kind == ImprintFieldKind.FOCAL_LENGTH }.text)
+            assertEquals(before, facts)
+        }
+        for ((raw, expected) in listOf("49.4" to "49mm", "400.5" to "401mm", "0.5" to "1mm",
+            "4294967294.5" to "4294967295mm"))
+            assertEquals(expected, field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to raw))
+        for (raw in listOf("0.1", "1/4294967295", "0", "-1", "NaN", "Infinity", "4294967296"))
+            assertNull(raw, field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to raw))
+        for (raw in listOf("NaN", "Infinity", "100", "-100", "1/0"))
+            assertNull(raw, field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to raw))
     }
 
 }

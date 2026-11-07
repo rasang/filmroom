@@ -1,0 +1,4 @@
+<resources>
+    <item name="recipe_action_share" type="id"/>
+    <item name="recipe_action_delete" type="id"/>
+</resources>

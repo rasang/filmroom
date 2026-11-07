@@ -46,7 +46,14 @@ internal class MediumStripRaster(
         if(snapshot.appearance!!.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION){
             // Explicitly synthetic presentation; never claim a measured negative density curve.
             val ink=((maxOf(rgb[0],rgb[1],rgb[2])-base)/(1-base)).coerceIn(0f,1f)
-            rgb[0]=.58f+(.14f-.58f)*ink;rgb[1]=.29f+(.08f-.29f)*ink;rgb[2]=.12f+(.04f-.12f)*ink
+            if(definition.monochrome){
+                // B&W negatives have no orange mask. Gray density is illustrative,
+                // not a scanner measurement. Frozen color definitions retain their mapping.
+                val gray=.70f+(.08f-.70f)*ink
+                rgb[0]=gray;rgb[1]=gray;rgb[2]=gray
+            }else{
+                rgb[0]=.58f+(.14f-.58f)*ink;rgb[1]=.29f+(.08f-.29f)*ink;rgb[2]=.12f+(.04f-.12f)*ink
+            }
         }
     }
     private fun channel(x:Int,y:Int,shift:Int)=((pixels[y*definition.width+x] ushr shift)and 255)/255.0

@@ -52,12 +52,14 @@ class EditorDetailControllerTest {
         var openFailure:Throwable?=null
         var tileFailure:Throwable?=null
         var openCalls=0
+        val initialRegions=CopyOnWriteArrayList<PixelRect?>()
         var regionOutput=true
         var legacyCalls=0
         var retirementGate:CompletableDeferred<Unit>?=null
         var tileBlock:CountDownLatch?=null
         var openGate:CompletableDeferred<Unit>?=null
         override suspend fun open(source:PhotoSource,parameters:EditorState):EditorDetailSession = openMode(source,parameters,regionOutput)
+        override suspend fun openWithInitialRegion(source:PhotoSource,parameters:EditorState,initialRegion:PixelRect?):EditorDetailSession {initialRegions+=initialRegion;return open(source,parameters)}
         override suspend fun openLegacy(source:PhotoSource,parameters:EditorState):EditorDetailSession {legacyCalls++;return openMode(source,parameters,false)}
         private suspend fun openMode(source:PhotoSource,parameters:EditorState,region:Boolean):EditorDetailSession {
             openCalls++;openFailure?.let{throw it}
@@ -223,6 +225,51 @@ class EditorDetailControllerTest {
             await{p.openCalls==4 && c.status.phase==DetailPhase.Ready}
             assertTrue(p.sessions[p.sessions.size-2].closed);assertFalse(p.sessions.last().regionOutput)
         }finally{initialRetirement.complete(Unit);gate.complete(Unit);c.close()}
+    }
+
+    @Test fun repeatedStableBindsDoNotRestartTheSameSettleTimer(){
+        val p=FakeProvider();val c=EditorDetailController(p,viewport(),{});val source=photo();val params=EditorState()
+        try {
+            c.bind(source,params,true)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+            repeat(20){c.bind(source,params,true);c.demand(false)}
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(90))
+            assertEquals(1,p.openCalls)
+        }finally{c.close()}
+    }
+    @Test fun changedVisibleRectStillRestartsSettleAndHintUsesLatestWorkingGrid(){
+        val p=FakeProvider();val v=viewport();val c=EditorDetailController(p,v,{});val source=photo()
+        try {
+            c.bind(source,EditorState(),true)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+            v.drag(70.0,0.0);c.demand(false)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));assertEquals(0,p.openCalls)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(90));assertEquals(1,p.openCalls)
+            val size=source.outputSize(1536)
+            val expected=v.visibleRect(RenderKey("x","x","x","x","x",size.width,size.height))
+            assertEquals(expected,p.initialRegions.single());assertEquals(1536,size.width)
+        }finally{c.close()}
+    }
+    @Test fun presentationOnlyChangesReuseReadyScienceAndOutput(){
+        val p=FakeProvider();val c=EditorDetailController(p,viewport(),{});val source=photo();val params=EditorState()
+        try {
+            c.bind(source,params,true);await{c.cacheBytes>0};val session=p.sessions.single();val key=c.key
+            val presentation=params.copy(imprint=params.imprint.copy(exposure=true),filmBorder=true,mediumPortrait=true,preferredOutputRoute="print")
+            assertEquals(params.json(includePresentation=false),presentation.json(includePresentation=false))
+            c.bind(source,presentation,true);shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            assertEquals(1,p.openCalls);assertSame(key,c.key);assertFalse(session.closed);assertTrue(c.cacheBytes>0)
+            c.bind(source,presentation.copy(brightness=.25f),true);await{p.openCalls==2 && session.closed}
+        }finally{c.close()}
+    }
+    @Test fun presentationChangesDuringOpenKeepSameBuildAndScienceChangesStillRetire(){
+        val gate=CompletableDeferred<Unit>();val p=FakeProvider().apply{openGate=gate}
+        val c=EditorDetailController(p,viewport(),{});val source=photo();val params=EditorState()
+        try {
+            c.bind(source,params,true);shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertEquals(1,p.openCalls)
+            c.bind(source,params.copy(imprint=params.imprint.copy(exposure=true)),true)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertEquals(1,p.openCalls)
+            gate.complete(Unit);await{c.cacheBytes>0};assertFalse(p.sessions.single().closed)
+        }finally{gate.complete(Unit);c.close()}
     }
 
 }

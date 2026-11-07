@@ -4,7 +4,9 @@ This feature changes the final crop and film-edge presentation only. It does not
 
 ## Available frames
 
-Nine physical stocks support 120: Kodak Portra 160, 400, 800, Gold 200, Ektar 100, Ektachrome E100, Fujifilm Provia 100F, Velvia 100 and historical Pro 400H. Portra 800 +1/+2 are processing aliases of the same physical 800 artwork and edge strip. No 120 option is fabricated for the other profiles. Choosing another stock without a 120 version returns to its existing frame. The 135 path, existing monochrome frames and immutable historical queue records retain their earlier contracts.
+Twelve physical stocks support 120: Kodak Portra 160, 400, 800, Gold 200, Ektar 100, Ektachrome E100, TRI-X 400 (400TX), T-MAX 100, Fujifilm Provia 100F, Velvia 100, historical Pro 400H and Ilford HP5 PLUS. Portra 800 +1/+2 are processing aliases of the same physical 800 artwork and edge strip, for 14 profile IDs. No 120 artwork is fabricated for the other profiles, including those whose historical 120 existence is confirmed but whose edges remain unverified. See `120_FILM_AUDIT_20261106.md` for the complete audit. Still-film 400TX is distinct from the existing motion reversal 7266 profile. The existing 135 path, monochrome motion-picture frames and immutable historical queue records retain their earlier contracts.
+
+Frame controls use separate 135/120 artwork capabilities. For the three newly reviewed 120-only stocks, enabling the frame defaults to 6×6 and the format list omits unavailable 135. A previously valid 120 format is preserved. Switching to a stock without reviewed 120 uses its available 135 frame; if neither exists, the frame is disabled.
 
 The output format is selected directly inside Composition, after one fixed landscape/portrait toggle. The toggle stays outside the horizontally scrolling format choices and uses the selected overlapping-frame icon. Format, orientation and crop form one draft: Cancel restores the whole prior composition, and Confirm creates one undoable edit. A nullable medium-format setting represents the existing 135 output. In 120 mode, perforation-matte selection is disabled because 120 has no perforations. Landscape/portrait is explicit, including square 6×6, where orientation selects which pair of sides carries the long film edges.
 
@@ -24,13 +26,19 @@ The edges are synthesized reference reconstructions, not sampled scans. Each phy
 - Velvia 100: the official 120 diagram explicitly places FUJI before 2 and 4, with a terminal 19. and solid left triangles. Only those locally confirmed omissions are corrected; no universal every-even-number brand cycle is inferred. The opposite blank edge is the diagram's portrayal, not proof for every batch. [Data sheet, page 6](https://asset.fujifilm.com/master/emea/files/2020-10/2f3c7f90a0b0c6e605e84f98b7d489c2/films_velvia-100_datasheet_01.pdf#page=6).
 - Pro 400H: the official diagram supports FUJI before 2 and 19 with terminal 19.; a separate physical strip supports FUJI 6. and 8. Those instances are included without inventing a brand-repeat cycle or production numbers. The opposite blank edge remains diagram-based. [Data sheet, page 6](https://www.fujifilm.com.hk/products/professional_films/pdf/pro_400h_datasheet.pdf#page=6), [actual strip](https://safelightberlin.com/cdn/shop/products/120-color-film-developing-116907.jpg?v=1646324668).
 
+- HP5 PLUS: one inspected continuous Photrio strip supports upper 10–14, left triangles and lower ILFORD HP5 PLUS/batch 4274/A. Nominal finite coverage is 184.159 mm.
+- T-MAX 100: the continuous panorama on UVic dissertation PDF page 76 supports upper 46–49/KODAK 100TMX and lower 5–7/right triangles. Its 174.715 mm nominal span only narrowly covers the 174 mm 6×17 model; it is not calibrated metrology.
+- TRI-X 400 (400TX): the right-hand continuous four-frame 645 strip in the July 2024 fotoPhilosophy report supports upper 45–48/KODAK 400TX and lower 4–6/right triangles, covering 195.454 mm nominally. The short manufacturer schematic is not repeated.
+
+The three B&W sources, hashes, exact observed-mark inventory and limitations are recorded in `tools/medium120/v7/` and the audit. They use neutral illustrative negative display, not an orange mask or a new scientific base-density calibration. No edge-exposure metadata layout is registered for them; date marking falls back to the photo rather than inventing a gap or moving the observed brand legends.
+
 Per-revision calibration, source images' public URLs, coverage bounds and procedural generators are recorded in `app/src/main/assets/medium120/v2/README.txt` and `tools/medium120/`. The four locally rebuilt Kodak spans cover all five default windows. Fuji's inherited full-length atlas bounds describe authored geometry, not a physically measured continuous roll.
 
 These source audit notes retain the evidence and limits; the editor does not display a separate 120 reference notice. Positive/reversal edge colors are authored display colors. Any route-specific negative rendering is a synthetic presentation conversion, not a measured stock transmission model. Source URLs document the evidence; they do not grant permission to redistribute reference photos.
 
 ## Reviewed lower-rail revisions
 
-The current set uses Portra 400 v6, Portra 160/800 v5, Gold 200/Ektar 100/E100 v4, and the three Fuji v2 illustrations. Their exact version IDs, encoded byte counts and hashes are registered in `MediumStripDefinitions.kt`. All 25 historical and current PNGs remain available; obsolete candidates are never substituted for a frozen snapshot.
+The current set uses HP5 PLUS/T-MAX 100/TRI-X 400 v7, Portra 400 v6, Portra 160/800 v5, Gold 200/Ektar 100/E100 v4, and the three Fuji v2 illustrations. Their exact version IDs, encoded byte counts and hashes are registered in `MediumStripDefinitions.kt`. All 28 historical and current PNGs remain available; obsolete candidates are never substituted for a frozen snapshot.
 
 The v4 compiler places reusable authored arrow and digit atoms using a separate coordinate model for each stock. Portra 400, Ektar 100 and E100 use independently fitted three-arrow patterns within their observed finite spans. Gold 200 uses its finite observed sequence. Portra 800 uses an approximate midpoint pattern; its absolute pitch and phase are authored, not factory measurements. A model/placement guard rejects drift, and the upper rails are unchanged.
 
@@ -46,7 +54,7 @@ The editor persists format and explicit orientation independently of science. Fr
 
 ## Artwork
 
-The approved 135 + bare 120 model set replaces 13 physical cartridge thumbnails / 15 profiles. Four 135-only cartridges have the same common-scale reduction as the nine pairs. Push variants share the identical Portra 800 render, with processing badges only in UI text. Film cans and monochrome motion-picture products are unchanged. No carton is shown. See `app/src/main/assets/film-rolls/ASSET_PROVENANCE.md` and the pinned thumbnail manifest.
+The approved 135 + bare 120 model set replaces 13 physical cartridge thumbnails / 15 profiles. Four 135-only cartridges have the same common-scale reduction as the nine pairs. Push variants share the identical Portra 800 render, with processing badges only in UI text. Film cans and monochrome motion-picture products are unchanged. The five added SpektraLab profiles now have separately approved 135 + bare 120 packaging renders. This selector artwork does not grant frame-strip support: the three reviewed 120-only strips remain the only additions, and no new 135 strip is enabled. No carton is shown. See `app/src/main/assets/film-rolls/ASSET_PROVENANCE.md` and the pinned thumbnail manifest.
 
 ## Validation boundary
 

@@ -1,0 +1,57 @@
+{
+  "kodak_tri_x_400": {
+    "author": "35mm Love",
+    "page": "https://www.35mmlove.com/blog/tag/kodak",
+    "image": "https://images.squarespace-cdn.com/content/v1/54b3cecee4b0d4dc5ec9e966/1479283533668-FQLIXUMWTG1HZUS9GVOY/image-asset.jpeg",
+    "date": "2016-11-16 article; emulsion date unknown",
+    "observed": "KODAK 400TX; 29/30 on both edges; smaller 29A/30A with an underlined right arrow below. No barcode visible in selected strip. Round-corner rectangular perforations.",
+    "local": "400tx-contact-screenshot.png",
+    "top_crop": [345,18,698,74], "bottom_crop": [345,300,698,351],
+    "sample": "29 / 29A",
+    "additional": "Laura Rivera, Unsplash, 2022-05-21: https://unsplash.com/photos/a-close-up-of-a-film-strip-with-the-words-kodak-on-it-AFK0iSl-VtE . Actual close-up confirms KODAK 400TX and upper holes, but not complete lower rail. West End Cameras negative strip independently confirms 10/10A and same layout."
+  },
+  "kodak_tmax_100": {
+    "author": "sruddy (Steve Ruddy), Photrio",
+    "page": "https://www.photrio.com/forum/threads/first-time-using-kodak-tmx-100.190569/",
+    "image": "https://www.photrio.com/forum/attachments/b05c9d53-1678-40a8-ae1e-091ee262ef53-jpeg.300506/",
+    "date": "2022-03-14 post; emulsion date unknown",
+    "observed": "KODAK 100TMX; upper 23/24/25/26; lower 23/23A/24/24A/25/25A/26, with underlined arrow-like mark beneath A number. Two rows of rounded rectangular holes. No barcode visible in this reference.",
+    "local": "tmax-full-screenshot.png",
+    "top_crop": [526,439,708,472], "bottom_crop": [526,576,708,607],
+    "sample": "24 / 24A",
+    "additional": "Pablo Mavricich, Troncos, 2018-12-14: https://www.flickr.com/photos/136667433%40N05/45593048504/ . Actual image https://live.staticflickr.com/4807/45593048504_a281df5639_c.jpg has 03/03A/04/04A, triangular arrows, partial 0TMX/TMX and 321-002 followed by solid square. Different specimen, not combined with 2022 layout."
+  },
+  "ilford_hp5_plus_400": {
+    "author": "Kari Otteburn, Photography Stack Exchange",
+    "page": "https://photo.stackexchange.com/questions/114182/when-enlarging-with-no-contrast-filter-photo-comes-out-extremely-dark-what-am",
+    "image": "https://i.sstatic.net/ZLCGx.jpg",
+    "date": "2020-01-21 photo edit; emulsion date unknown",
+    "observed": "ILFORD HP5 PLUS above upper holes; lower 24, triangle+24A, 25, triangle+25A, 26 with interspersed two-height black bar patterns. Rounded rectangular holes, approx eight per image. No upper frame numbers in this sample.",
+    "local": "hp5-screenshot.png",
+    "top_crop": [440,234,872,301], "bottom_crop": [440,562,872,616],
+    "sample": "25 / 25A",
+    "additional": "Manufacturer republishes real sprocket examples at https://www.ilfordphoto.com/friday-favourites-sprockets/ ; page opened, main selected source remains Kari's original negative photograph."
+  },
+  "fujifilm_neopan_acros_100_ii": {
+    "author": "Original poster, r/Darkroom",
+    "page": "https://www.reddit.com/r/Darkroom/comments/1j9l0q9/what_do_you_think_about_these_negatives/",
+    "image": "https://i.redd.it/iumanaoao9oe1.jpeg",
+    "date": "Precise date not independently established; after 2019 ACROS II launch; emulsion date unknown",
+    "observed": "FUJI 100 ACROS II; upper lot-code prefix 5529 with faint suffix omitted. Lower full numbers and solid right triangle plus A half-frame numbers. No barcode visible. Both hole rows visible, rounded rectangles.",
+    "local": "acros-ii-original.jpeg",
+    "top_crop": [1050,565,1570,645], "bottom_crop": [1050,970,1570,1040],
+    "sample": "7 / 7A",
+    "additional": "Gary Wright, Photrio 2020, https://www.photrio.com/forum/threads/help-diagnose-a-development-problem-please.179604/ . Existing archived acros-2020-edge.jpg and acros-2020-sheet.jpg inspected. Same FUJI 100 ACROS II layout, another faint lot prefix 4443; suffix not asserted. Not evidence for 120."
+  },
+  "cinestill_800t": {
+    "author": "ixe, Lomography",
+    "page": "https://www.lomography.com/homes/ixe/photos/25105331",
+    "image": "https://cdn.assets.lomography.com/61/7dfd540f1218b6774a7a9b91e3c40293533334/1216x558x2.jpg?auth=93bbf328e129838c1e3ac2c92aabe0e3015266a6b3b97ab8c5d25a59804df5e0",
+    "date": "2021-07-27 upload, photographed 2021; emulsion date unknown",
+    "observed": "CINESTILL 800T above upper holes; 8020 and faint suffix elsewhere on strip (omitted from chosen crop). Lower 26, solid right triangle+26A, 27, triangle+27A. Rounded rectangular perforations, not the 5219 BH model. No visible barcode.",
+    "local": "cinestill800t-screenshot.png",
+    "top_crop": [520,116,1088,193], "bottom_crop": [520,562,1088,641],
+    "sample": "27 / 27A",
+    "additional": "Sprocket Rocket exposes the rails with scene imagery. Only markings and perforation architecture are referenced; normal 36x24 application gate is a declared adaptation, not this camera's gate."
+  }
+}

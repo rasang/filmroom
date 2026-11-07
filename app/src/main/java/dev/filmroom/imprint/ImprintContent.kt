@@ -110,6 +110,16 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
             return if (plain.length <= 10) plain else decimal.toString().replace("E+", "e").replace("E", "e")
         }
 
+        /** Display-only MZ-S-style precision; modern third stops are rounded, not quantized to half stops. */
+        private fun exposureBias(value: Double): String {
+            val rounded = BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_UP)
+            return when (rounded.signum()) {
+                0 -> "±0.0"
+                1 -> "+" + rounded.toPlainString()
+                else -> rounded.toPlainString()
+            }
+        }
+
         private fun shutter(seconds: Double): String {
             if (seconds < 1.0) {
                 val inverse = 1.0 / seconds
@@ -134,11 +144,13 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
                     ?.let { 2.0.pow(it / 2.0) }
             aperture?.let { add(ImprintField(ImprintFieldKind.APERTURE, "F" + compact(it))) }
             number(f["ExposureBiasValue"], signed = true)?.takeIf { it in -99.0..99.0 }?.let {
-                add(ImprintField(ImprintFieldKind.EXPOSURE_BIAS, (if (it >= 0.0) "+" else "") + compact(it)))
+                add(ImprintField(ImprintFieldKind.EXPOSURE_BIAS, exposureBias(it)))
             }
             // FocalLengthIn35mmFilm is a different measurement and cannot fill this field.
             number(f["FocalLength"])?.takeIf { it > 0.0 && it <= UINT_MAX }?.let {
-                add(ImprintField(ImprintFieldKind.FOCAL_LENGTH, compact(it) + "mm"))
+                val rounded = BigDecimal.valueOf(it).setScale(0, RoundingMode.HALF_UP)
+                // Do not invent a zero-millimetre lens when a positive sub-mm value rounds to zero.
+                if (rounded.signum() > 0) add(ImprintField(ImprintFieldKind.FOCAL_LENGTH, rounded.toPlainString() + "mm"))
             }
         }
     }

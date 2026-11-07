@@ -27,7 +27,7 @@ class ImprintAdjustmentFadeHostTest {
     @Test fun onlyTrackedSliderRemainsAndRepeatedDragRestoresOriginalState() {
         val host = Robolectric.buildActivity(Activity::class.java).setup()
         try {
-            val dialog = ImprintDialog.show(host.get(), EditorState(), metadata) {}
+            val dialog = ImprintDialog.show(host.get(), EditorState(imprint=ImprintSettings(dateEnabled=true)), metadata) {}
             settle()
             val root = dialog.window!!.decorView
             val size = root.findViewWithTag<SeekBar>("imprint-size")
@@ -65,6 +65,8 @@ class ImprintAdjustmentFadeHostTest {
             val dialog = ImprintDialog.show(host.get(), state, metadata, onPreview={ preview=it }) { applyCount++ }
             settle()
             val root = dialog.window!!.decorView
+            assertFalse("Opening a disabled date never paints it", preview!!.dateEnabled)
+            root.findViewWithTag<android.widget.Switch>("imprint-date-switch").performClick()
             root.findViewWithTag<SeekBar>("imprint-size").progress = 83
             root.findViewWithTag<SeekBar>("imprint-glow").progress = 19
             assertEquals(1.43, preview!!.size, 0.0001)
@@ -73,6 +75,8 @@ class ImprintAdjustmentFadeHostTest {
             assertEquals(original, state.imprint)
             // Keyboard/accessibility progress changes preserve all dialog content.
             assertEquals(1f, root.findViewWithTag<View>("imprint-dialog-date-row").alpha, 0f)
+            root.findViewWithTag<android.widget.Switch>("imprint-date-switch").performClick()
+            assertFalse("Turning the date off removes it from the draft preview", preview!!.dateEnabled)
             val saved = ImprintDialog.capture(dialog)
             dialog.cancel(); settle()
             assertNull(preview); assertEquals(0, applyCount)
@@ -111,6 +115,14 @@ class ImprintAdjustmentFadeHostTest {
             // The old bottom-right lettering must be erased, not doubled beneath the draft.
             for(stamp in oldPlan.stamps) for(y in stamp.top until stamp.bottom) for(x in stamp.left until stamp.right)
                 assertEquals(android.graphics.Color.DKGRAY,during[y*width+x])
+            photo.bindImprint(oldPlan)
+            assertArrayEquals(before,pixels())
+            // Switching dates off also removes the already-composited date from the photo,
+            // while cancelling restores the exact committed pixels.
+            photo.bindImprint(ImprintPlan.create(original.copy(dateEnabled=false),metadata,width,height),true)
+            val disabled=pixels()
+            for(stamp in oldPlan.stamps) for(y in stamp.top until stamp.bottom) for(x in stamp.left until stamp.right)
+                assertEquals(android.graphics.Color.DKGRAY,disabled[y*width+x])
             photo.bindImprint(oldPlan)
             assertArrayEquals(before,pixels())
         } finally { photo.close(); settled.recycle(); source.recycle(); host.pause().stop().destroy() }

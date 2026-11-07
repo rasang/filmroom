@@ -1,0 +1,13 @@
+{
+  "output": "/tmp/filmroom-reviewed135-rebuild-20261106-163258",
+  "status": "PASS",
+  "generator_exit_code": 0,
+  "verifier_exit_code": 0,
+  "font_copy_bytes": 1680552,
+  "generator_sha256": "3d8e5839798345d34147687568a5984165f2d70c2cc30dab2b8cc7de9b63bb93",
+  "environment_lock_sha256": "521230aa109cde444158334cc914de0c412c82db7fb1e9551e0309d0c13b2144",
+  "expected_assets_sha256": "a5d5b616eafd4c7b9dab2319212a1433f78947eb244bdd49ad30c68e5d5a9e23",
+  "qa_sha256": "037d8347663518fd17273ab831c8500fa952d5099704a78573bface34b6a343f",
+  "verification_sha256": "951ff24ac24c5e81cc51831c4eb02d07401962e291d6d5f9b8a62c96b0ded4d0",
+  "evidence_retained": true
+}

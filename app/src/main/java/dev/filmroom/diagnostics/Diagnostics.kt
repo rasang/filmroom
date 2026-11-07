@@ -45,6 +45,9 @@ object Diagnostics {
 
     fun end(id: OperationId, outcome: Outcome, info: SafeInfo = SafeInfo()) { runCatching { store?.end(id, outcome, info) } }
 
+    /** Call from IO at process background/memory-pressure boundaries; never blocks the UI. */
+    fun flush() { runCatching { store?.flush() } }
+
     /** Numeric measurements only; no process names, OS logs, identifiers, or dumps. */
     fun memoryInfo(): SafeInfo = runCatching {
         val runtime = Runtime.getRuntime()

@@ -43,6 +43,32 @@ class AutoExposureChoiceHostTest {
     @Test fun actualRailCommitsBothFieldsOnceWithOnePreviewUndoRedoOffAndReset() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { c ->
             val a=c.get();shadowOf(Looper.getMainLooper()).idle();val vm=model(a)
+            fun await(message:String,ready:()->Boolean) {
+                val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
+                while(System.nanoTime()<deadline) {
+                    shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(20))
+                    if(ready())return
+                    Thread.sleep(2)
+                }
+                val state=vm.state.value
+                fun pendingField(name:String)=EditorViewModel::class.java.getDeclaredField(name).apply{isAccessible=true}.get(vm)
+                fail("$message: startup=${state.startupReady} updating=${state.updating} refining=${state.previewRefining} " +
+                    "renderJob=${pendingField("renderJob")} pending=${pendingField("pendingScientificRender")} " +
+                    "parameters=${state.parameters} renderedParameters=${state.renderedParameters}")
+            }
+            val operation=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}
+            await("Startup must finish before installing the UI fixture") {(operation.get(vm) as? kotlinx.coroutines.Job)?.isCompleted==true}
+            // This test owns real rail/history/scheduler behavior, not native AE pixels.
+            // A tiny deterministic pixel boundary keeps missing JNI and source I/O out of it.
+            vm.localDetailEnabled=false;vm.cancelPreviewEngine={};vm.detailPreviewEdge={8}
+            vm.borderMemorySnapshot={dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
+            val renders=java.util.concurrent.atomic.AtomicInteger()
+            vm.renderPreview={source,_,_,_->renders.incrementAndGet();source.copy(Bitmap.Config.ARGB_8888,false)}
+            val renderJob=EditorViewModel::class.java.getDeclaredField("renderJob").apply{isAccessible=true}
+            val pending=EditorViewModel::class.java.getDeclaredField("pendingScientificRender").apply{isAccessible=true}
+            fun settle()=await("Previous render and its pending mailbox must finish") {
+                renderJob.get(vm)==null && pending.get(vm)==null && !vm.state.value.updating && !vm.state.value.previewRefining
+            }
             val initial=EditorState(metering="median")
             val mutable=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(vm) as MutableStateFlow<EditorUiState>
             EditorViewModel::class.java.getDeclaredField("history").apply{isAccessible=true}.set(vm,EditHistory(initial))
@@ -50,12 +76,19 @@ class AutoExposureChoiceHostTest {
             field("group").set(a,"film");field("selected").set(a,"autoExposure");build(a)
             val generation=EditorViewModel::class.java.getDeclaredField("generation").apply{isAccessible=true}
             fun select(index:Int) {
+                // Undo/redo may legitimately coalesce in the scheduler mailbox. Drain that
+                // work before measuring this separate user selection's single request.
+                settle()
                 build(a)
                 val selector=all(a.window.decorView).filterIsInstance<SettledChoiceSelector>().single()
                 val before=generation.getLong(vm)
+                val beforeRenders=renders.get()
                 (((selector.getChildAt(1) as HorizontalScrollView).getChildAt(0) as ViewGroup).getChildAt(index)).performClick()
                 shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400))
+                settle()
                 assertEquals("One user selection schedules exactly one preview",before+1,generation.getLong(vm))
+                assertEquals("The selection reaches the pixel boundary exactly once",beforeRenders+1,renders.get())
+                assertEquals(vm.state.value.parameters,vm.state.value.renderedParameters)
             }
             select(5);val enabled=initial.copy(autoExposure=true,metering="matrix")
             assertEquals(enabled,vm.state.value.parameters)

@@ -1,0 +1,23 @@
+<resources>
+    <string name="preset_qr_title">레시피 QR 코드</string>
+    <string name="preset_qr_import">QR 가져오기</string>
+    <string name="preset_qr_share">QR 공유</string>
+    <string name="preset_qr_scan">QR 코드 스캔</string>
+    <string name="preset_qr_album">이미지에서 읽기</string>
+    <string name="preset_qr_scan_prompt">Filmroom 레시피 QR 코드 전체가 화면에 들어오도록 해 주세요</string>
+    <string name="preset_qr_camera_denied">카메라를 사용할 수 없습니다. QR 코드 이미지를 선택하여 읽을 수 있습니다.</string>
+    <string name="preset_qr_save_new">새 레시피으로 저장</string>
+    <string name="preset_qr_share_image">QR 이미지 공유</string>
+    <string name="preset_qr_image_description">Filmroom 레시피 QR 코드</string>
+    <string name="preset_qr_home">Filmroom 레시피 QR 코드를 스캔하거나 이미지를 선택하세요. 오프라인으로 읽으며, 저장 전에 확인할 수 있습니다. 사진에 자동 적용되지 않습니다.</string>
+    <string name="preset_qr_import_scope">새 레시피으로 저장하며 기존 레시피이나 현재 사진은 변경하지 않습니다. 필름, 모든 편집 설정, 테두리, 구도, 인쇄 표시 및 직접 입력한 날짜가 포함됩니다. 이전 코드에 없는 새 설정에는 기본값을 사용합니다. 나중에 목록에서 직접 적용하세요.</string>
+    <string name="preset_qr_share_scope">이 코드에는 모든 편집 설정, 구도 및 직접 입력한 날짜가 포함되지만 사진이나 원본 메타데이터는 포함되지 않습니다. 코드를 받은 사람은 누구나 읽고 가져올 수 있습니다. 압축하거나 흰 여백을 자르지 말고 원본 크기로 공유하세요.</string>
+    <string name="preset_qr_saved">새 레시피으로 저장했습니다. 현재 사진은 변경되지 않았습니다. 목록으로 돌아가 직접 적용할 수 있습니다.</string>
+    <string name="preset_qr_done">완료</string>
+    <string name="preset_qr_working">기기에서 처리 중…</string>
+    <string name="preset_qr_details">이름: %1$s\n필름: %2$s\n인화지: %3$s</string>
+    <string name="preset_qr_invalid">유효한 Filmroom 레시피 QR 코드를 읽을 수 없습니다. 기존 데이터는 변경되지 않았습니다. 코드 전체가 선명하게 보이는 이미지로 다시 시도하세요.</string>
+    <string name="preset_qr_incompatible">이 코드에는 현재 버전에서 지원하지 않는 형식, 설정 또는 필름이 있습니다. Filmroom을 업데이트한 후 다시 시도하세요. 가져오거나 기존 데이터를 변경하지 않았습니다.</string>
+    <string name="preset_qr_too_large">이 레시피은 단일 QR 코드의 지원 용량을 초과합니다. 어떤 설정도 생략하지 않았습니다. 원본 레시피을 보관하세요. 현재 버전에서는 단일 코드로 공유하거나 가져올 수 없습니다.</string>
+    <string name="preset_qr_share_failed">QR 이미지를 공유하지 못했습니다. 저장 공간을 확인하고 다시 시도하세요.</string>
+</resources>

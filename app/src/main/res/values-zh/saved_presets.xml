@@ -1,0 +1,22 @@
+<resources>
+    <string name="saved_preset_import">配方</string>
+    <string name="saved_preset_save">保存配方</string>
+    <string name="saved_preset_name">配方名称</string>
+    <string name="saved_preset_scope">保存当前胶卷和全部编辑参数，包括边框、构图、印字及自定义日期。仅保存在本机，不包含照片。</string>
+    <string name="saved_preset_cancel">取消</string>
+    <string name="saved_preset_apply">应用</string>
+    <string name="saved_preset_delete">删除</string>
+    <string name="saved_preset_delete_question">删除配方“%1$s”？不会更改当前照片或参数。</string>
+    <string name="saved_preset_loading">正在读取配方…</string>
+    <string name="saved_preset_empty">还没有配方。调整照片后，点下方“保存当前配方”。</string>
+    <string name="saved_preset_choose">选择配方后点“应用”。长按可分享或删除；应用后可撤销。</string>
+    <string name="saved_preset_saved">配方已保存</string>
+    <string name="saved_preset_invalid_name">请输入 1–60 个字符的名称，不含换行或控制字符。</string>
+    <string name="saved_preset_duplicate_name">已有同名配方，请换一个名称。</string>
+    <string name="saved_preset_full">配方存储已满，请先删除不需要的配方。</string>
+    <string name="saved_preset_stale">照片或参数已改变，请关闭后重新打开。</string>
+    <string name="saved_preset_incompatible">此配方包含当前版本不支持的设置或胶卷，未应用；保存的数据仍保留。</string>
+    <string name="saved_preset_unreadable">无法读取配方，原数据未改动。请重试或更新应用。</string>
+    <string name="saved_preset_write_failed">未能保存更改，请检查可用空间后重试。</string>
+    <string name="saved_preset_save_current">保存当前配方</string>
+</resources>

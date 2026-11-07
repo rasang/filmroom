@@ -1,0 +1,935 @@
+{
+  "description": "Opt-in centered printing design. Source PNGs, upper rails, scientific data, and legacy layouts are unchanged. Every visible lower mark and cropped fragment is translated whole and in source order; no inferred or newly drawn glyphs.",
+  "version_policy": "v11 presentation revisions reuse immutable v7 PNGs; v7 snapshots deliberately retain no imprint layout.",
+  "source_evidence": "tools/medium120/v7/authored-evidence.json",
+  "method": "All lower-rail RGB values unequal to (8,8,8), grouping column runs across <=10 blank pixels. Half-open crop/source intervals. One-pixel sourceX guard included in clearance checks. 645 retains all 476 source pixel centers in its 47.5 mm closed physical window and uses 47.5/476 mm per layout pixel. Original sampling formula independently verifies pixel-center coverage and the HP5 right-edge interpolated sample. Existing crop convention excludes bilinear neighbors whose centers lie outside the physical window; non-base exceptions are listed explicitly.",
+  "layouts": [
+    {
+      "stock": "ilford_hp5_plus_400",
+      "format": "MF645",
+      "asset_version": "mf120-v11-hp5plus-imprint-cb94b4135551",
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",
+      "crop_start_px": 3862,
+      "crop_width_px": 476,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.09978991596638656,
+      "physical_sample_px_interval": [
+        3862.0,
+        4337.0
+      ],
+      "preserved_source_centers_inclusive": [
+        3862,
+        4337
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        13.25,
+        34.25
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 73,
+          "right_exclusive": 124,
+          "target_mm": 7.4
+        },
+        {
+          "left": 355,
+          "right_exclusive": 476,
+          "target_mm": 34.95
+        }
+      ],
+      "non_base_source_pixels": 2084,
+      "destination_sampling_intervals_mm": [
+        [
+          7.300210084033614,
+          12.5890756302521
+        ],
+        [
+          34.85021008403362,
+          47.024579831932776
+        ]
+      ]
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "format": "MF66",
+      "asset_version": "mf120-v11-hp5plus-imprint-cb94b4135551",
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",
+      "crop_start_px": 3790,
+      "crop_width_px": 620,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3789.5,
+        4409.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3790,
+        4409
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        20.0,
+        42.0
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 145,
+          "right_exclusive": 196,
+          "target_mm": 14.2
+        },
+        {
+          "left": 427,
+          "right_exclusive": 610,
+          "target_mm": 42.7
+        }
+      ],
+      "non_base_source_pixels": 2770,
+      "destination_sampling_intervals_mm": [
+        [
+          14.1,
+          19.4
+        ],
+        [
+          42.6,
+          61.10000000000001
+        ]
+      ]
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "format": "MF67",
+      "asset_version": "mf120-v11-hp5plus-imprint-cb94b4135551",
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",
+      "crop_start_px": 3720,
+      "crop_width_px": 760,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3719.5,
+        4479.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3720,
+        4479
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        20.0,
+        56.0
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 215,
+          "right_exclusive": 266,
+          "target_mm": 14.2
+        },
+        {
+          "left": 497,
+          "right_exclusive": 680,
+          "target_mm": 56.7
+        }
+      ],
+      "non_base_source_pixels": 2770,
+      "destination_sampling_intervals_mm": [
+        [
+          14.1,
+          19.4
+        ],
+        [
+          56.6,
+          75.10000000000001
+        ]
+      ]
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "format": "MF69",
+      "asset_version": "mf120-v11-hp5plus-imprint-cb94b4135551",
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",
+      "crop_start_px": 3650,
+      "crop_width_px": 900,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3649.5,
+        4549.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3650,
+        4549
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [
+        3649
+      ],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        23.5,
+        66.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 0,
+          "right_exclusive": 67,
+          "target_mm": 1.0
+        },
+        {
+          "left": 285,
+          "right_exclusive": 336,
+          "target_mm": 17.7
+        },
+        {
+          "left": 567,
+          "right_exclusive": 750,
+          "target_mm": 67.2
+        },
+        {
+          "left": 845,
+          "right_exclusive": 859,
+          "target_mm": 87.0
+        }
+      ],
+      "non_base_source_pixels": 3678,
+      "destination_sampling_intervals_mm": [
+        [
+          1.0,
+          7.800000000000001
+        ],
+        [
+          17.599999999999998,
+          22.9
+        ],
+        [
+          67.10000000000001,
+          85.60000000000001
+        ],
+        [
+          86.9,
+          88.5
+        ]
+      ]
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "format": "MF617",
+      "asset_version": "mf120-v11-hp5plus-imprint-cb94b4135551",
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",
+      "crop_start_px": 3230,
+      "crop_width_px": 1740,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3229.5,
+        4969.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3230,
+        4969
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [
+        4970
+      ],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        60.5,
+        113.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 25,
+          "right_exclusive": 76,
+          "target_mm": 10.0
+        },
+        {
+          "left": 306,
+          "right_exclusive": 487,
+          "target_mm": 30.0
+        },
+        {
+          "left": 705,
+          "right_exclusive": 756,
+          "target_mm": 54.7
+        },
+        {
+          "left": 987,
+          "right_exclusive": 1170,
+          "target_mm": 114.2
+        },
+        {
+          "left": 1265,
+          "right_exclusive": 1279,
+          "target_mm": 140.0
+        },
+        {
+          "left": 1399,
+          "right_exclusive": 1450,
+          "target_mm": 148.0
+        },
+        {
+          "left": 1686,
+          "right_exclusive": 1740,
+          "target_mm": 166.0
+        }
+      ],
+      "non_base_source_pixels": 6858,
+      "destination_sampling_intervals_mm": [
+        [
+          9.9,
+          15.2
+        ],
+        [
+          29.9,
+          48.2
+        ],
+        [
+          54.6,
+          59.900000000000006
+        ],
+        [
+          114.10000000000001,
+          132.6
+        ],
+        [
+          139.9,
+          141.5
+        ],
+        [
+          147.9,
+          153.2
+        ],
+        [
+          165.9,
+          171.4
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "format": "MF645",
+      "asset_version": "mf120-v11-tmax100-imprint-15d981f5a232",
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",
+      "crop_start_px": 3862,
+      "crop_width_px": 476,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.09978991596638656,
+      "physical_sample_px_interval": [
+        3862.0,
+        4337.0
+      ],
+      "preserved_source_centers_inclusive": [
+        3862,
+        4337
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        10.95,
+        36.55
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 74,
+          "right_exclusive": 117,
+          "target_mm": 5.95
+        },
+        {
+          "left": 357,
+          "right_exclusive": 381,
+          "target_mm": 37.25
+        }
+      ],
+      "non_base_source_pixels": 591,
+      "destination_sampling_intervals_mm": [
+        [
+          5.8502100840336135,
+          10.340756302521008
+        ],
+        [
+          37.15021008403362,
+          39.74474789915966
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "format": "MF66",
+      "asset_version": "mf120-v11-tmax100-imprint-15d981f5a232",
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",
+      "crop_start_px": 3790,
+      "crop_width_px": 620,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3789.5,
+        4409.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3790,
+        4409
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        15.0,
+        47.0
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 146,
+          "right_exclusive": 189,
+          "target_mm": 9.9
+        },
+        {
+          "left": 429,
+          "right_exclusive": 453,
+          "target_mm": 47.7
+        }
+      ],
+      "non_base_source_pixels": 591,
+      "destination_sampling_intervals_mm": [
+        [
+          9.8,
+          14.3
+        ],
+        [
+          47.6,
+          50.2
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "format": "MF67",
+      "asset_version": "mf120-v11-tmax100-imprint-15d981f5a232",
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",
+      "crop_start_px": 3720,
+      "crop_width_px": 760,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3719.5,
+        4479.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3720,
+        4479
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        18.5,
+        57.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 216,
+          "right_exclusive": 259,
+          "target_mm": 13.4
+        },
+        {
+          "left": 499,
+          "right_exclusive": 523,
+          "target_mm": 58.2
+        }
+      ],
+      "non_base_source_pixels": 591,
+      "destination_sampling_intervals_mm": [
+        [
+          13.3,
+          17.8
+        ],
+        [
+          58.1,
+          60.7
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "format": "MF69",
+      "asset_version": "mf120-v11-tmax100-imprint-15d981f5a232",
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",
+      "crop_start_px": 3650,
+      "crop_width_px": 900,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3649.5,
+        4549.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3650,
+        4549
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [
+        3649,
+        4550
+      ],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        22.5,
+        67.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 0,
+          "right_exclusive": 14,
+          "target_mm": 1.0
+        },
+        {
+          "left": 286,
+          "right_exclusive": 329,
+          "target_mm": 17.5
+        },
+        {
+          "left": 569,
+          "right_exclusive": 593,
+          "target_mm": 68.2
+        },
+        {
+          "left": 860,
+          "right_exclusive": 900,
+          "target_mm": 84.0
+        }
+      ],
+      "non_base_source_pixels": 1017,
+      "destination_sampling_intervals_mm": [
+        [
+          1.0,
+          2.5
+        ],
+        [
+          17.4,
+          21.9
+        ],
+        [
+          68.10000000000001,
+          70.7
+        ],
+        [
+          83.9,
+          88.0
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "format": "MF617",
+      "asset_version": "mf120-v11-tmax100-imprint-15d981f5a232",
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",
+      "crop_start_px": 3230,
+      "crop_width_px": 1740,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3229.5,
+        4969.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3230,
+        4969
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        60.5,
+        113.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 97,
+          "right_exclusive": 141,
+          "target_mm": 10.0
+        },
+        {
+          "left": 410,
+          "right_exclusive": 434,
+          "target_mm": 30.0
+        },
+        {
+          "left": 706,
+          "right_exclusive": 749,
+          "target_mm": 55.5
+        },
+        {
+          "left": 989,
+          "right_exclusive": 1013,
+          "target_mm": 114.2
+        },
+        {
+          "left": 1280,
+          "right_exclusive": 1325,
+          "target_mm": 137.0
+        },
+        {
+          "left": 1597,
+          "right_exclusive": 1619,
+          "target_mm": 160.0
+        }
+      ],
+      "non_base_source_pixels": 1836,
+      "destination_sampling_intervals_mm": [
+        [
+          9.9,
+          14.5
+        ],
+        [
+          29.9,
+          32.5
+        ],
+        [
+          55.4,
+          59.9
+        ],
+        [
+          114.10000000000001,
+          116.7
+        ],
+        [
+          136.9,
+          141.6
+        ],
+        [
+          159.9,
+          162.3
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "format": "MF645",
+      "asset_version": "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",
+      "crop_start_px": 3862,
+      "crop_width_px": 476,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.09978991596638656,
+      "physical_sample_px_interval": [
+        3862.0,
+        4337.0
+      ],
+      "preserved_source_centers_inclusive": [
+        3862,
+        4337
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        10.95,
+        36.55
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 242,
+          "right_exclusive": 281,
+          "target_mm": 37.25
+        }
+      ],
+      "non_base_source_pixels": 370,
+      "destination_sampling_intervals_mm": [
+        [
+          37.15021008403362,
+          41.241596638655466
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "format": "MF66",
+      "asset_version": "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",
+      "crop_start_px": 3790,
+      "crop_width_px": 620,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3789.5,
+        4409.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3790,
+        4409
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [
+        3789
+      ],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        15.0,
+        47.0
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 0,
+          "right_exclusive": 14,
+          "target_mm": 1.0
+        },
+        {
+          "left": 314,
+          "right_exclusive": 353,
+          "target_mm": 47.7
+        }
+      ],
+      "non_base_source_pixels": 466,
+      "destination_sampling_intervals_mm": [
+        [
+          1.0,
+          2.5
+        ],
+        [
+          47.6,
+          51.7
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "format": "MF67",
+      "asset_version": "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",
+      "crop_start_px": 3720,
+      "crop_width_px": 760,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3719.5,
+        4479.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3720,
+        4479
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        18.5,
+        57.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 60,
+          "right_exclusive": 84,
+          "target_mm": 14.0
+        },
+        {
+          "left": 384,
+          "right_exclusive": 423,
+          "target_mm": 58.2
+        },
+        {
+          "left": 695,
+          "right_exclusive": 719,
+          "target_mm": 69.0
+        }
+      ],
+      "non_base_source_pixels": 824,
+      "destination_sampling_intervals_mm": [
+        [
+          13.9,
+          16.5
+        ],
+        [
+          58.1,
+          62.2
+        ],
+        [
+          68.9,
+          71.5
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "format": "MF69",
+      "asset_version": "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",
+      "crop_start_px": 3650,
+      "crop_width_px": 900,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3649.5,
+        4549.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3650,
+        4549
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        22.5,
+        67.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 130,
+          "right_exclusive": 154,
+          "target_mm": 18.0
+        },
+        {
+          "left": 454,
+          "right_exclusive": 493,
+          "target_mm": 68.2
+        },
+        {
+          "left": 765,
+          "right_exclusive": 789,
+          "target_mm": 83.0
+        }
+      ],
+      "non_base_source_pixels": 824,
+      "destination_sampling_intervals_mm": [
+        [
+          17.9,
+          20.5
+        ],
+        [
+          68.10000000000001,
+          72.2
+        ],
+        [
+          82.9,
+          85.5
+        ]
+      ]
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "format": "MF617",
+      "asset_version": "mf120-v11-trix400-imprint-4eeb6adc6f6e",
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",
+      "crop_start_px": 3230,
+      "crop_width_px": 1740,
+      "source_pixels_per_mm": 10,
+      "mm_per_layout_pixel": 0.1,
+      "physical_sample_px_interval": [
+        3229.5,
+        4969.5
+      ],
+      "preserved_source_centers_inclusive": [
+        3230,
+        4969
+      ],
+      "excluded_outside_bilinear_neighbors_with_ink": [],
+      "lower_rows": [
+        25,
+        50
+      ],
+      "clear_mm": [
+        60.5,
+        113.5
+      ],
+      "protect_photo_date": true,
+      "moves": [
+        {
+          "left": 262,
+          "right_exclusive": 303,
+          "target_mm": 15.0
+        },
+        {
+          "left": 550,
+          "right_exclusive": 574,
+          "target_mm": 57.4
+        },
+        {
+          "left": 874,
+          "right_exclusive": 913,
+          "target_mm": 114.2
+        },
+        {
+          "left": 1185,
+          "right_exclusive": 1209,
+          "target_mm": 135.0
+        },
+        {
+          "left": 1480,
+          "right_exclusive": 1519,
+          "target_mm": 156.0
+        }
+      ],
+      "non_base_source_pixels": 1581,
+      "destination_sampling_intervals_mm": [
+        [
+          14.9,
+          19.2
+        ],
+        [
+          57.3,
+          59.9
+        ],
+        [
+          114.10000000000001,
+          118.2
+        ],
+        [
+          134.9,
+          137.5
+        ],
+        [
+          155.9,
+          160.0
+        ]
+      ]
+    }
+  ]
+}

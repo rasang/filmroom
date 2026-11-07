@@ -1,0 +1,1282 @@
+{
+  "host": "Linux x86_64; Rust 1.94.0; single build job; application opt-level=2; dependencies dev profile; no production timing claim",
+  "sensor_oracle": [
+    {
+      "id": 1214,
+      "raw_shape": [
+        3288,
+        5120
+      ],
+      "black": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "white": 4095,
+      "camera_wb": [
+        347.0,
+        302.0,
+        933.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          0,
+          1
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 1.0431933403015137
+    },
+    {
+      "id": 1371,
+      "raw_shape": [
+        4014,
+        6016
+      ],
+      "black": [
+        1024,
+        1024,
+        1024,
+        1024
+      ],
+      "white": 16383,
+      "camera_wb": [
+        545.0,
+        256.0,
+        371.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          0,
+          1
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 4.713648080825806
+    },
+    {
+      "id": 1191,
+      "raw_shape": [
+        3288,
+        5120
+      ],
+      "black": [
+        255,
+        255,
+        255,
+        255
+      ],
+      "white": 4095,
+      "camera_wb": [
+        553.0,
+        302.0,
+        522.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 1.2336938381195068
+    },
+    {
+      "id": 864,
+      "raw_shape": [
+        4032,
+        6160
+      ],
+      "black": [
+        1020,
+        1020,
+        1020,
+        1020
+      ],
+      "white": 16383,
+      "camera_wb": [
+        824.0,
+        302.0,
+        413.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 1.833411455154419
+    },
+    {
+      "id": 865,
+      "raw_shape": [
+        4038,
+        6048
+      ],
+      "black": [
+        1020,
+        1020,
+        1020,
+        1020
+      ],
+      "white": 16383,
+      "camera_wb": [
+        813.0,
+        302.0,
+        418.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 4.623436450958252
+    },
+    {
+      "id": 1178,
+      "raw_shape": [
+        4038,
+        6048
+      ],
+      "black": [
+        1022,
+        1022,
+        1022,
+        1022
+      ],
+      "white": 16383,
+      "camera_wb": [
+        594.0,
+        302.0,
+        557.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 4.431484937667847
+    },
+    {
+      "id": 6124,
+      "raw_shape": [
+        5196,
+        7872
+      ],
+      "black": [
+        1020,
+        1020,
+        1020,
+        1020
+      ],
+      "white": 16383,
+      "camera_wb": [
+        626.0,
+        302.0,
+        497.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 3.1010775566101074
+    },
+    {
+      "id": 7301,
+      "raw_shape": [
+        5196,
+        7872
+      ],
+      "black": [
+        1023,
+        1023,
+        1023,
+        1023
+      ],
+      "white": 16383,
+      "camera_wb": [
+        682.0,
+        302.0,
+        448.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 8.565255165100098
+    },
+    {
+      "id": 7302,
+      "raw_shape": [
+        5196,
+        7872
+      ],
+      "black": [
+        1023,
+        1023,
+        1023,
+        1023
+      ],
+      "white": 16383,
+      "camera_wb": [
+        682.0,
+        302.0,
+        448.0,
+        0.0
+      ],
+      "pattern": [
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          0,
+          1,
+          0,
+          2,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1
+        ]
+      ],
+      "libraw": [
+        0,
+        22,
+        2
+      ],
+      "rawpy": "0.28.0",
+      "ok": true,
+      "seconds": 8.622816562652588
+    }
+  ],
+  "independent_oracle": "rawpy 0.28.0 / LibRaw 0.22.2; compare every encoded sensor u16, including masked margins; no RGB/color equivalence assertion",
+  "development": [
+    {
+      "admission": {
+        "estimatedPeakBytes": 127926272,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 191766528,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 3288,
+          "w": 5120,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 3264,
+          "w": 4896,
+          "x": 28,
+          "y": 12
+        },
+        "developmentPolicy": "camera-matrix-linear-srgb-v1",
+        "encodedHeight": 3288,
+        "encodedWidth": 5120,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 3264,
+        "inputBytes": 26160640,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 191766528,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_BAYER_UNCOMPRESSED",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 4896
+      },
+      "id": 1214,
+      "seconds": 4.327434301376343,
+      "process": {
+        "max_rss_kib": 56740,
+        "seconds": 4.2965065040043555
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.6917210817337036,
+      "below_zero": 0,
+      "above_one": 35509,
+      "output_sha256": "cc49fc02ba7ac8da89b5db0f33b619211bbbb7ade09960c3af56fb1a12dd58a3"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 144441344,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 288000000,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 4014,
+          "w": 6016,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 4000,
+          "w": 6000,
+          "x": 8,
+          "y": 7
+        },
+        "developmentPolicy": "camera-matrix-linear-srgb-v1",
+        "encodedHeight": 4014,
+        "encodedWidth": 6016,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 6000,
+        "inputBytes": 43159264,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 288000000,
+        "outputOrientation": 1,
+        "sourceOrientation": 8,
+        "variant": "RAF_BAYER_UNCOMPRESSED",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 4000
+      },
+      "id": 1371,
+      "seconds": 6.803391218185425,
+      "process": {
+        "max_rss_kib": 67948,
+        "seconds": 6.7793103869771585
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 0.9858732223510742,
+      "below_zero": 0,
+      "above_one": 0,
+      "output_sha256": "bc93b693b90033da5135c5ab8ef9018c2c1d7266882c893ca81042ea0c2e7edd"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 127926272,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 191766528,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 3288,
+          "w": 5120,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 3264,
+          "w": 4896,
+          "x": 28,
+          "y": 12
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 3288,
+        "encodedWidth": 5120,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 3264,
+        "inputBytes": 26146816,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 191766528,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_XTRANS_UNCOMPRESSED",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 4896
+      },
+      "id": 1191,
+      "seconds": 3.8120651245117188,
+      "process": {
+        "max_rss_kib": 67604,
+        "seconds": 3.785488540015649
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.35609769821167,
+      "below_zero": 0,
+      "above_one": 23422,
+      "output_sha256": "40cfb92e7def1b6194b03b3d4999b5fa3e348d53370a2a805a8a48c11ef966f9"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 147095552,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 288000000,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 4032,
+          "w": 6160,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 4000,
+          "w": 6000,
+          "x": 16,
+          "y": 16
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 4032,
+        "encodedWidth": 6160,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 4000,
+        "inputBytes": 50569728,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 288000000,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_XTRANS_UNCOMPRESSED",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 6000
+      },
+      "id": 864,
+      "seconds": 5.547578573226929,
+      "process": {
+        "max_rss_kib": 75388,
+        "seconds": 5.518712682009209
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.1348674297332764,
+      "below_zero": 0,
+      "above_one": 7408,
+      "output_sha256": "e38d12d21141c29ee40d73d8cc78e4462492d0a1775c8d93a381aedc0303146d"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 193874816,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 288000000,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 4038,
+          "w": 6048,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 4000,
+          "w": 6000,
+          "x": 16,
+          "y": 21
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 4038,
+        "encodedWidth": 6048,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 4000,
+        "inputBytes": 23346352,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 288000000,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_XTRANS_LOSSLESS",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 6000
+      },
+      "id": 865,
+      "seconds": 7.819910287857056,
+      "process": {
+        "max_rss_kib": 123092,
+        "seconds": 7.789301699027419
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 0.6564159393310547,
+      "below_zero": 0,
+      "above_one": 0,
+      "output_sha256": "7732f798b8c8813cffb7f7872871885b121c05540202e0522d1b24f3b994d109"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 193874816,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 288000000,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 4038,
+          "w": 6048,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 4000,
+          "w": 6000,
+          "x": 16,
+          "y": 21
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 4038,
+        "encodedWidth": 6048,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 4000,
+        "inputBytes": 25017216,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 288000000,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_XTRANS_LOSSLESS",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 6000
+      },
+      "id": 1178,
+      "seconds": 8.377129316329956,
+      "process": {
+        "max_rss_kib": 125840,
+        "seconds": 8.346073735971004
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.3482693433761597,
+      "below_zero": 0,
+      "above_one": 4959,
+      "output_sha256": "2263d79a1f992ffd5d4297cb777e13040f7030f5c7e8a5040929799fe376f01e"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 178651136,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 477775872,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 5196,
+          "w": 7872,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 5152,
+          "w": 7728,
+          "x": 12,
+          "y": 21
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 5196,
+        "encodedWidth": 7872,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 5152,
+        "inputBytes": 85705728,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 477775872,
+        "outputOrientation": 1,
+        "sourceOrientation": 1,
+        "variant": "RAF_XTRANS_UNCOMPRESSED",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 7728
+      },
+      "id": 6124,
+      "seconds": 9.118804931640625,
+      "process": {
+        "max_rss_kib": 87704,
+        "seconds": 9.0905957960058
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 0.6795986294746399,
+      "below_zero": 0,
+      "above_one": 0,
+      "output_sha256": "b8188b55b7c4c4a7a2973361470d786b33d7e1f0b169187c2a1a0c9591c88c2d"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 260456960,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 477775872,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 5196,
+          "w": 7872,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 5152,
+          "w": 7728,
+          "x": 12,
+          "y": 21
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 5196,
+        "encodedWidth": 7872,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 7728,
+        "inputBytes": 49374720,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 477775872,
+        "outputOrientation": 1,
+        "sourceOrientation": 8,
+        "variant": "RAF_XTRANS_LOSSLESS",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 5152
+      },
+      "id": 7301,
+      "seconds": 15.920015811920166,
+      "process": {
+        "max_rss_kib": 195960,
+        "seconds": 15.890454617969226
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.1653704643249512,
+      "below_zero": 0,
+      "above_one": 49626,
+      "output_sha256": "dcbb75f1c234e64e4acbc00962e6524eb3ad8675f6d4d07ae227c18a126453c0"
+    },
+    {
+      "admission": {
+        "estimatedPeakBytes": 260456960,
+        "memoryBudgetBytes": 268435456,
+        "requiredDiskBytes": 477775872,
+        "stripRows": 128
+      },
+      "ok": true,
+      "probe": {
+        "activeArea": {
+          "h": 5196,
+          "w": 7872,
+          "x": 0,
+          "y": 0
+        },
+        "baselineExposureAppliedEv": 0.0,
+        "defaultCrop": {
+          "h": 5152,
+          "w": 7728,
+          "x": 12,
+          "y": 21
+        },
+        "developmentPolicy": "raf-xtrans-linear-srgb-v1",
+        "encodedHeight": 5196,
+        "encodedWidth": 7872,
+        "format": "RAF",
+        "hasAlternateForwardMatrix": false,
+        "height": 7728,
+        "inputBytes": 29851616,
+        "maxPixels": 52000000,
+        "orientationApplied": true,
+        "outputBytes": 477775872,
+        "outputOrientation": 1,
+        "sourceOrientation": 8,
+        "variant": "RAF_XTRANS_LOSSY",
+        "warnings": [
+          {
+            "code": "CAMERA_RAW_BASIC_DEVELOPMENT",
+            "message": "\u57fa\u7840\u77e9\u9635\u663e\u8272\uff0c\u4e0d\u590d\u523b\u76f8\u673a\u98ce\u683c\u6216\u5168\u90e8\u955c\u5934\u6821\u6b63"
+          }
+        ],
+        "width": 5152
+      },
+      "id": 7302,
+      "seconds": 16.275916814804077,
+      "process": {
+        "max_rss_kib": 169316,
+        "seconds": 16.24838504299987
+      },
+      "finite": true,
+      "min": 0.0,
+      "max": 1.0702853202819824,
+      "below_zero": 0,
+      "above_one": 84793,
+      "output_sha256": "9c8d864241020f770820f8288184939e6e004f76d18fde3ba00ceaa81cc12ddb"
+    }
+  ],
+  "validation_limitations": [
+    "Android device execution, ARM build and final APK not run",
+    "Initial multi-image analysis process was terminated at case five. The retained-memory analysis harness was changed to bounded row reads and remaining five completed successfully.",
+    "Initial host test launch used a read-only default home, before tests executed; corrected to existing writable test-home and reran all17."
+  ],
+  "library_tests": {
+    "passed": 109,
+    "failed": 0,
+    "ignored": 8,
+    "note": "8 pre-existing opt-in external-format reference tests ignored; RAF fixture path set, and 9 separate sensor oracle invocations completed."
+  },
+  "negative_fixtures": [
+    {
+      "id": 1435,
+      "model": "GFX 50S",
+      "code": "PIXEL_LIMIT"
+    },
+    {
+      "id": 7175,
+      "model": "GFX100 II",
+      "code": "PIXEL_LIMIT"
+    },
+    {
+      "id": 1964,
+      "model": "FinePix S3Pro",
+      "code": "UNSUPPORTED_CAMERA_RAW_VARIANT"
+    }
+  ],
+  "android_host": {
+    "passed": 17,
+    "failed": 0,
+    "compiled_current_sources": [
+      "PhotoFormat.kt",
+      "RawMetadata.kt",
+      "RawMetadataAdmission.kt",
+      "PhotoMetadata.kt"
+    ],
+    "test_classes": [
+      "FujifilmRafMetadataHostTest",
+      "RawMetadataAdmissionTest",
+      "PhotoHeadersTest"
+    ],
+    "note": "Focused Kotlin 2.0.21 overlay against cached app classes, Robolectric API35. Real-source metadata read on all9 accepted fixtures and JSON round trip. Not an aggregate Gradle app build."
+  },
+  "cfa_oracle": [
+    {
+      "id": 1191,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 864,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 865,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 1178,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 6124,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 7301,
+      "on_file_cfa_reversed_equals_libraw": true
+    },
+    {
+      "id": 7302,
+      "on_file_cfa_reversed_equals_libraw": true
+    }
+  ],
+  "originals_unchanged": [
+    {
+      "id": 864,
+      "sha256": "aaa648429eeee8e1bea05fccfeeb2ea54ee7052e23db0ee02f049e5b23cecaef",
+      "bytes": 50569728,
+      "unchanged": true
+    },
+    {
+      "id": 865,
+      "sha256": "f756ad5be551a8b3e1b503a8a6f7e8e637fba519c0b0f8c79dd58e94b0287602",
+      "bytes": 23346352,
+      "unchanged": true
+    },
+    {
+      "id": 1178,
+      "sha256": "a23045101b2912e64f154100d646c228c0d16585d21e95e0d1a006e537f7784c",
+      "bytes": 25017216,
+      "unchanged": true
+    },
+    {
+      "id": 1191,
+      "sha256": "0b1046c299d9eb222a8f003bd047f2a34f507da0d1704ac32cefbc82f799d121",
+      "bytes": 26146816,
+      "unchanged": true
+    },
+    {
+      "id": 1214,
+      "sha256": "b2ddb5fe31a3b976d12961c72a2689de8742739df3d8f757614eca65f8df2a61",
+      "bytes": 26160640,
+      "unchanged": true
+    },
+    {
+      "id": 1371,
+      "sha256": "4187cb5caa72320a74e9b4355db01e8e21edd43f3084873f9b9b67169d8d4ad8",
+      "bytes": 43159264,
+      "unchanged": true
+    },
+    {
+      "id": 1435,
+      "sha256": "a7124d13910e0241a6b035154bc1fcdb7be4439371d043b1e1950a0251feb51e",
+      "bytes": 50106976,
+      "unchanged": true
+    },
+    {
+      "id": 1964,
+      "sha256": "038e5a13a22513f53d143e328a66e2de8071809565db696ecac84b4364fcb75b",
+      "bytes": 25760952,
+      "unchanged": true
+    },
+    {
+      "id": 6124,
+      "sha256": "8695176eec781eb0baa2d03cfcd4bf9b5884efb49b9455ab88406f14dda437fc",
+      "bytes": 85705728,
+      "unchanged": true
+    },
+    {
+      "id": 7175,
+      "sha256": "fed86662d870e53b547db4f29af5e2d149acdcb500f8b4213854a0f85ef0b45b",
+      "bytes": 70874736,
+      "unchanged": true
+    },
+    {
+      "id": 7301,
+      "sha256": "e9709b98f4ff96b993dbe4ad20eff0accfa709a58559eb4219f59d1e7181934a",
+      "bytes": 49374720,
+      "unchanged": true
+    },
+    {
+      "id": 7302,
+      "sha256": "7f19c7c5914542b91829ac2e41c8d4c10e414b28b0f7a793001e1a979c8c6056",
+      "bytes": 29851616,
+      "unchanged": true
+    }
+  ]
+}

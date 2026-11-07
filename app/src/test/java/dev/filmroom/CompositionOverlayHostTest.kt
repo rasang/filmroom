@@ -18,7 +18,7 @@ class CompositionOverlayHostTest {
     @org.junit.Before fun chosenLanguageForLegacyFixture(){resetAndroidViewModelFactoryForHostTest();dev.filmroom.i18n.L10n.choose(org.robolectric.RuntimeEnvironment.getApplication(),"zh")} 
     private fun field(a:MainActivity,name:String)=MainActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.get(a) as View
     private fun layout(v:View,w:Int,h:Int){v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h)}
-    @Test fun compositionAndDateToolsFollowFilmStockAcrossLayouts(){
+    @Test fun compositionFollowsFilmStockWithoutLegacyDateTabAcrossLayouts(){
         try { for((w,h) in listOf(320 to 640,360 to 792,792 to 360,480 to 320))for(font in listOf(1f,2f)){
             RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-mdpi");RuntimeEnvironment.setFontScale(font)
             RuntimeEnvironment.getApplication().getSharedPreferences("local-session",0).edit().clear().commit()
@@ -33,14 +33,14 @@ class CompositionOverlayHostTest {
                     assertEquals("parameter-section:composition",strip.tag)
                     val sections=strip.parent as ViewGroup;val index=sections.indexOfChild(strip)
                     assertEquals("parameter-section:filmStock",sections.getChildAt(index-1).tag)
-                    assertEquals("parameter-section:imprint",sections.getChildAt(index+1).tag)
-                    assertEquals("parameter-section:filmFormatMm",sections.getChildAt(index+2).tag)
+                    assertEquals("parameter-section:filmFormatMm",sections.getChildAt(index+1).tag)
+                    assertNull(root.findViewWithTag<View>("parameter-section:imprint"))
                     assertTrue(sections.parent is android.widget.ScrollView)
                 }else{
                     val index=strip.indexOfChild(edit)
                     assertEquals("filmStock",strip.getChildAt(index-1).tag)
-                    assertEquals("imprint",strip.getChildAt(index+1).tag)
-                    assertEquals("filmFormatMm",strip.getChildAt(index+2).tag)
+                    assertEquals("filmFormatMm",strip.getChildAt(index+1).tag)
+                    assertNull(root.findViewWithTag<View>("imprint"))
                 }
                 assertEquals(if(w>h)"crop-adjust" else "composition",edit.tag)
                 assertFalse("No source cannot begin a draft",edit.isEnabled)

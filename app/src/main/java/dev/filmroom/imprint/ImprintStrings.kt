@@ -4,6 +4,7 @@ import android.content.Context
 import dev.filmroom.i18n.L10n
 
 internal enum class ImprintText(val zh:String,val en:String,val ja:String,val ko:String) {
+    SETTINGS("日期参数","Date & data imprint","日付・撮影データの印字","날짜·촬영 정보 인쇄"),
     TITLE("日期和参数","Date & data","日付と撮影データ","날짜 및 촬영 정보"),
     DATE("日期","Date","日付","날짜"),
     DATE_DIALOG("日期印字","Date imprint","日付の印字","날짜 인쇄"),

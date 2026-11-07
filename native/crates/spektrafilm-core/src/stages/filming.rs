@@ -294,7 +294,7 @@ pub fn expose(
     // Auto-exposure
     let mut rgb = image.clone();
     if params.camera.auto_exposure {
-        let ae_ev = measure_autoexposure_ev(&rgb, &rgb_to_xyz, &params.camera.auto_exposure_method);
+        let ae_ev = params.camera.preview_metered_ev.unwrap_or_else(||measure_autoexposure_ev(&rgb, &rgb_to_xyz, &params.camera.auto_exposure_method));
         let scale = from_f32(2.0f32.powf(ae_ev));
         rgb.data.par_iter_mut().for_each(|v| *v *= scale);
     }
@@ -338,6 +338,11 @@ pub fn expose(
         );
     }
 
+    if hal_boost.headroom_active() {
+        raw = spektrafilm_model::diffusion::restore_halation_headroom(
+            &raw, hal_boost.headroom_ev, hal_boost.headroom_from_ev, hal_boost.headroom_to_ev);
+    }
+
     // Diffusion filter (camera): lens diffusion-filter PSF on linear raw.
     // GPU uses a downsampled sum-of-Gaussians (fast preview); CPU keeps the
     // exact FFT convolution (export parity).
@@ -369,7 +374,7 @@ pub fn expose(
     // Halation (on linear raw)
     let halation = &params.film_render.halation;
     if halation.active {
-        raw = spektrafilm_model::diffusion::apply_halation_um(
+        raw = spektrafilm_model::diffusion::apply_halation_um_with_back_reflection(
             &raw,
             pix_um,
             halation.scatter_amount,
@@ -384,6 +389,8 @@ pub fn expose(
             halation.halation_n_bounces,
             halation.halation_bounce_decay,
             halation.halation_renormalize,
+            halation.back_reflection,
+            halation.base_thickness_um,
             backend,
         );
     }

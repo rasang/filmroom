@@ -13,7 +13,7 @@ import java.nio.file.StandardCopyOption
  */
 object BorderCompositor {
     const val MAX_ATLAS_BYTES=16L*1024*1024
-    fun workingBytes(s:BorderSnapshot,raster:BorderRaster):Long=s.sourceWidth*36L+s.outputWidth*36L+raster.residentBytes+128L*1024
+    fun workingBytes(s:BorderSnapshot,raster:BorderRaster):Long=s.sourceWidth*36L+s.outputWidth*36L+raster.residentBytes+128L*1024+if(s.composition.straightenDegrees!=0.0)FinalImageTileCache.workingBytes(s.sourceWidth,s.sourceHeight)+s.outputWidth*12L else 0L
     fun composite(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,imprint:dev.filmroom.imprint.ImprintPlan?=null,checkActive:()->Unit={}) {
         raster.validate(s)
         val effective=imprint?.frameRaster(s,raster) ?: raster
@@ -29,14 +29,22 @@ object BorderCompositor {
         require(s.geometryVersion==1)
         composeSampledRow(s,raster,color,y,BorderSampling(s),photo,photo,0.0,output)
     }
-    internal fun composeSampledRow(s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,y:Int,map:BorderSampling,first:FloatArray,second:FloatArray,fy:Double,output:FloatArray) {
+    internal fun composeSampledRow(s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,y:Int,map:BorderSampling,first:FloatArray,second:FloatArray,fy:Double,output:FloatArray) =
+        composeSampledRow(s,raster,color,y,map,first,second,fy,output,null)
+    /** Preview-only optional ARGB row. Export uses exactly the original linear calculation. */
+    internal fun composeSampledRow(s:BorderSnapshot,raster:BorderRaster,color:OutputColorSpace,y:Int,map:BorderSampling,first:FloatArray,second:FloatArray,fy:Double,output:FloatArray,overlay:IntArray?) {
+        require(overlay==null || overlay.size==s.outputWidth)
         val rgb=FloatArray(3)
         val yd=minOf(y+.5-s.apertureTop,s.apertureTop+s.photoHeight-y-.5)
         for(x in 0 until s.outputWidth){
             val distance=minOf(x+.5-s.apertureLeft,s.apertureLeft+s.photoWidth-x-.5,yd)
             val a=raster.photoCoverage(s,x+.5,y+.5) ?: if(s.featherRadius==0.0)if(distance>=0)1.0 else 0.0 else ((distance+s.featherRadius)/(2*s.featherRadius)).coerceIn(0.0,1.0).let{it*it*(3-2*it)}
             val at=x*3
-            if(a<1.0){raster.sample(s,x+.5,y+.5,rgb);BorderColor.convert(rgb,color)}
+            if(a<1.0){
+                raster.sample(s,x+.5,y+.5,rgb)
+                if(overlay!=null)overlay[x]=InteractiveBorderPreview.pixel(a,rgb)
+                BorderColor.convert(rgb,color)
+            }else if(overlay!=null)overlay[x]=0
             if(a<=0.0){for(c in 0..2)output[at+c]=rgb[c];continue}
             for(c in 0..2){
                 val photo=map.sample(first,second,fy,x,c)

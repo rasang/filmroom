@@ -1,0 +1,94 @@
+{
+  "pass": true,
+  "original135_geometry_unchanged_except_x_translation_mm": -18,
+  "original135_texture_sha256": {
+    "kodak_kodachrome_64.png": "9253800e9985b2b591a021098a26fd37eea720e5982d74a49e872a02e21ca7cb"
+  },
+  "original135_materials_unchanged": true,
+  "120_meshes_identical_to_approved_pair_template": [
+    "Bottom plastic flange",
+    "Paper roll",
+    "Printed backing-paper wrap",
+    "Spool end drive slot",
+    "Top plastic flange"
+  ],
+  "camera_and_lights_unchanged": {
+    "camera": {
+      "location": [
+        15.199999809265137,
+        -480.0,
+        160.0
+      ],
+      "rotation": [
+        1.3122638463974,
+        -9.759393293506946e-11,
+        0.03165609762072563
+      ],
+      "ortho": 105.0
+    },
+    "lights": {
+      "Large softbox / left": {
+        "location": [
+          -120.0,
+          -160.0,
+          280.0
+        ],
+        "rotation": [
+          0.6806375980377197,
+          7.034287818896701e-09,
+          -0.6435010433197021
+        ],
+        "energy": 880000.0,
+        "size": 200.0,
+        "color": [
+          1.0,
+          0.9599999785423279,
+          0.8799999952316284
+        ]
+      },
+      "Soft fill / right": {
+        "location": [
+          160.0,
+          -80.0,
+          160.0
+        ],
+        "rotation": [
+          0.9534226655960083,
+          -1.2047139819060249e-07,
+          1.1071488857269287
+        ],
+        "energy": 576000.0,
+        "size": 160.0,
+        "color": [
+          0.8799999952316284,
+          0.9300000071525574,
+          1.0
+        ]
+      },
+      "Cap rim softbox": {
+        "location": [
+          40.0,
+          120.0,
+          200.0
+        ],
+        "rotation": [
+          0.6482405066490173,
+          1.7077301350809648e-08,
+          2.8198421001434326
+        ],
+        "energy": 480000.0,
+        "size": 160.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    }
+  },
+  "packed_images": {
+    "kodak_kodachrome_64-120.png": "aa111357f615bfd0c33dc36a04d5b237bcd21ddaed1eb03773933891406ef519",
+    "kodak_kodachrome_64.png": "9253800e9985b2b591a021098a26fd37eea720e5982d74a49e872a02e21ca7cb"
+  },
+  "reference_photograph_pixels_used": false
+}

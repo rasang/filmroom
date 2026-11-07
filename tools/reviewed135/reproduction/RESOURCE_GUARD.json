@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python",
+    "-u",
+    "-B",
+    "/workspace/shared/filmroom-reviewed-borders-validation/pending-provenance/run_authorized_rebuild.py"
+  ],
+  "exit_code": 0,
+  "stop_reason": null,
+  "max_session_rss_bytes": 257323008,
+  "min_mem_available_bytes": 2979991552,
+  "min_overlay_available_bytes": 2753908736
+}

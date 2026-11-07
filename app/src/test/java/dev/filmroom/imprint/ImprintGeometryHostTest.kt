@@ -51,8 +51,13 @@ class ImprintGeometryHostTest {
         }
     }
     @Test fun all135CatalogStocksBothOrientationsAllStylesAndPlacementsAreBounded() {
+        val cameraStocks=FrameProfileCatalog.kinds.keys.filter{BorderCatalog.available(it,null)}.toSet()
+        assertEquals(27,cameraStocks.size)
+        assertEquals(CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix")+Reviewed135Definitions.stocks,cameraStocks)
+        assertEquals(emptySet<String>(),FrameProfileCatalog.kinds.keys-cameraStocks)
         var supported=0
-        for(stock in FrameProfileCatalog.kinds.keys + "kodak_2302") {
+        // The legacy 2302 print frame remains covered separately from camera profiles.
+        for(stock in cameraStocks + "kodak_2302") {
             val landscape=BorderSnapshot.authored(stock,"test",1280,960)
             if(ImprintPlan.exposureSupported(landscape))supported++
             for(portrait in listOf(false,true))for(style in styles)for(placement in ImprintSettings.PLACEMENTS) {
@@ -63,11 +68,11 @@ class ImprintGeometryHostTest {
                 assertEquals(0,p.omittedFieldCount)
             }
         }
-        assertEquals(21,supported)
+        assertEquals(26,supported)
         assertFalse(ImprintPlan.exposureSupported(BorderSnapshot.authored("kodak_2302","test",1280,960)))
     }
-    @Test fun nine120StocksFiveFormatsTwoOrientationsFourStylesAndBothDatePlacementsClearAllMarks() {
-        val stocks=MediumFormatStocks.profiles.values.toSet();assertEquals(9,stocks.size)
+    @Test fun ten120StocksFiveFormatsTwoOrientationsFourStylesAndBothDatePlacementsClearAllMarks() {
+        val stocks=MediumFormatStocks.profiles.values.toSet().filter{MediumImprintMarks.layout(medium(it,MediumFormat.MF66,false))!=null};assertEquals(12,stocks.size)
         for(stock in stocks)for(format in MediumFormat.entries)for(portrait in listOf(false,true))
             for(style in styles)for(placement in ImprintSettings.PLACEMENTS) {
                 val b=medium(stock,format,portrait)

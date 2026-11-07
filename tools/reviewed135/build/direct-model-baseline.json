@@ -1,0 +1,241 @@
+{
+  "historical_source_head": "5a11522c4ae37d1989c4df76912f6e581d40f272",
+  "status": "Historical approved derivation baseline, not a calibrated exposure measurement. Runtime adoption is tracked separately in the app.",
+  "assets": [
+    {
+      "stock": "kodak_tri_x_400",
+      "model": "D65 / minimum-normalized profile base / channelwise Dmax contrast bound",
+      "inherited_data_chain": [],
+      "base_endpoint": {
+        "normalized_density": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "linear_srgb": [
+          0.51725340183342,
+          0.5173710810891243,
+          0.5172092631469837
+        ],
+        "srgb8": [
+          190,
+          190,
+          190
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_bound_endpoint": {
+        "normalized_density": [
+          2.523068903099389,
+          2.523068903099389,
+          2.523068903099389
+        ],
+        "linear_srgb": [
+          0.0015510809089464917,
+          0.0015514337921682382,
+          0.0015509485508534617
+        ],
+        "srgb8": [
+          5,
+          5,
+          5
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_geometry_sha256": "0424a7069e733f65fb5eb54345e362204eb84202cc168f71ec9515445b24e724",
+      "approved_A_sha256": "5f60b2909c48706fb8ec5a05aee25bb865c1180ca0684eb8a46204f33bf036df",
+      "png_sha256": "03b61e74768c689d721f74b6d9eb19fe4e19399144f7cb6a1c71b4922115b6c9",
+      "webp_sha256": "58abe9312055daa0f5f7eae544cd0bb4ac2c876c5bd85874528cc71a7e2c157c"
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "model": "D65 / minimum-normalized profile base / channelwise Dmax contrast bound",
+      "inherited_data_chain": [],
+      "base_endpoint": {
+        "normalized_density": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "linear_srgb": [
+          0.6174676211649546,
+          0.617608099951216,
+          0.617414930917545
+        ],
+        "srgb8": [
+          206,
+          206,
+          206
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_bound_endpoint": {
+        "normalized_density": [
+          2.8093754221019585,
+          2.8093754221019585,
+          2.8093754221019585
+        ],
+        "linear_srgb": [
+          0.0009577204630743448,
+          0.0009579383520836142,
+          0.0009576387380957094
+        ],
+        "srgb8": [
+          3,
+          3,
+          3
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_geometry_sha256": "09bbd09ad152b395a6af47ec1a56bb1774bc073f92d8867121051819a7a69a54",
+      "approved_A_sha256": "ecd9e3fa04929eca8bd8dcba1f9662ea66ac796d904f8b12c7ce1da2104547bb",
+      "png_sha256": "904990e6f2fcb1991660e56362a8c6da3399edf14418212f4ca4ec9b45fd9987",
+      "webp_sha256": "6f0fa50096ca17f955f4365ddcb32479b54efba6deef00e4e08fe03a80b068c4"
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "model": "D65 / minimum-normalized profile base / channelwise Dmax contrast bound",
+      "inherited_data_chain": [],
+      "base_endpoint": {
+        "normalized_density": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "linear_srgb": [
+          0.6685758360340268,
+          0.6687279423449507,
+          0.6685187845790121
+        ],
+        "srgb8": [
+          213,
+          213,
+          213
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_bound_endpoint": {
+        "normalized_density": [
+          2.776517616539167,
+          2.776517616539167,
+          2.776517616539167
+        ],
+        "linear_srgb": [
+          0.0011184924568242438,
+          0.0011187469227385534,
+          0.0011183970127195547
+        ],
+        "srgb8": [
+          4,
+          4,
+          4
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_geometry_sha256": "afb7ce7985d51470f82410b81e9924b1ef55251651245b009df19ac3376da73e",
+      "approved_A_sha256": "d56f257a7d7b9b9de83dd044617d3933dc31cff377246364d97ee9390f80b5a7",
+      "png_sha256": "c28bdddcbd350490d60f69ad2a060e1ba182ecd67fd9e88d55429cf47ab27abf",
+      "webp_sha256": "5f6dfc6b83f0592d859c3b01bdfe7aff4282ecad511ec6145ffff96e982b4137"
+    },
+    {
+      "stock": "fujifilm_neopan_acros_100_ii",
+      "model": "D65 / minimum-normalized profile base / channelwise Dmax contrast bound",
+      "inherited_data_chain": [],
+      "base_endpoint": {
+        "normalized_density": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "linear_srgb": [
+          0.7173823313304214,
+          0.7175455415065286,
+          0.7173211150799992
+        ],
+        "srgb8": [
+          220,
+          220,
+          220
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_bound_endpoint": {
+        "normalized_density": [
+          2.8499523127713884,
+          2.8499523127713884,
+          2.8499523127713884
+        ],
+        "linear_srgb": [
+          0.0010134407504925422,
+          0.0010136713163095936,
+          0.0010133542707451875
+        ],
+        "srgb8": [
+          3,
+          3,
+          3
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_geometry_sha256": "36e3b48c5050202aa6502e86dc5e61b1accdc7ab128f5dc17a1c474384db9024",
+      "approved_A_sha256": "6ab165da32b8d2b27b12e5c7f604f21e6a7bd54ecccdfe5ba595f1fefbf85c51",
+      "png_sha256": "cb12d3ecbabcaecbbaf0a530aa5564ea29af48d2805674ad57d344a563d82f99",
+      "webp_sha256": "1992f43727ac9890596fb52d67e9fa0b3d32eaf81e22d99e52337483c168b0fa"
+    },
+    {
+      "stock": "cinestill_800t",
+      "model": "D65 / minimum-normalized profile base / channelwise Dmax contrast bound",
+      "inherited_data_chain": [
+        "kodak_vision3_500t"
+      ],
+      "base_endpoint": {
+        "normalized_density": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "linear_srgb": [
+          0.6176405144140553,
+          0.26393602489405626,
+          0.13231968580308137
+        ],
+        "srgb8": [
+          206,
+          140,
+          102
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_bound_endpoint": {
+        "normalized_density": [
+          1.7451490461850756,
+          1.6390085727640848,
+          1.921321758099494
+        ],
+        "linear_srgb": [
+          0.022821736442279292,
+          0.0035919764993803537,
+          0.0008591143127211401
+        ],
+        "srgb8": [
+          42,
+          12,
+          3
+        ],
+        "display_clipped_channels": []
+      },
+      "marking_geometry_sha256": "8ce54ecc01802669b6e6f4d0ea8e2af070de4c65a663ab28bc43fbd837d28c81",
+      "approved_A_sha256": "e40bcf1b510e2c2c943e6fec9a89a7b973b936522cf049a7efe9242b4cb51c8d",
+      "png_sha256": "3b30dba0fdfb88d76ab7398ee4d4db68c3ba2dd3248d90129e0d0d09db0bd390",
+      "webp_sha256": "ec855b3962e8bd634053e804634fbca9cdb6215757f630d88df1f8625efd886f"
+    }
+  ],
+  "limits": [
+    "Four B&W profiles use their own data. CineStill800T inherits released kodak_vision3_500t data, matching profile resolution.",
+    "Marking endpoint is independent channel maxima, not measured factory exposure.",
+    "No scientific/native/profile bytes changed. No UI capabilities activated.",
+    "Original authored alpha, holes, rounded aperture, text and 25/25A positions remain exact.",
+    "HP5 visible bars preserve authored visual trace, not a valid machine-readable barcode claim.",
+    "D65 viewing model and clipping rules are inherited from existing direct-frame approach; this is not a calibrated film scan."
+  ]
+}

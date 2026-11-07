@@ -22,7 +22,7 @@ class FrameAppearanceContextHostTest {
         val expected=(0 until rows.length()).map{rows.getJSONObject(it)}.filter{it.getString("kind") in setOf("negative","reversal")}
             .associate{it.getString("id") to FrameAppearanceContext.FilmKind.valueOf(it.getString("kind").uppercase())}
         assertEquals(expected,FrameProfileCatalog.kinds)
-        assertEquals(22,expected.size)
+        assertEquals(27,expected.size)
         assertThrows(IllegalArgumentException::class.java){FrameAppearanceContext.forProfile("unknown_negative","direct",true)}
     }
     @Test fun routesAndHolePreferenceAreIndependentAndRoundTrip() {

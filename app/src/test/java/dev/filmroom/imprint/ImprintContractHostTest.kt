@@ -83,7 +83,7 @@ class ImprintContractHostTest {
         val ignored=PhotoMetadata.fromAttributes(mapOf("ExposureProgram" to "3","ExposureMode" to "2","FocalLengthIn35mmFilm" to "50"))
         assertTrue(ImprintContent.from(ignored,setting).fields.isEmpty())
         val partial=PhotoMetadata.fromAttributes(mapOf("FNumber" to "2/1","ExposureProgram" to "99","ExposureBiasValue" to "0/1"))
-        assertEquals(listOf("F2","+0"),ImprintContent.from(partial,setting).fields.map{it.text})
+        assertEquals(listOf("F2","±0.0"),ImprintContent.from(partial,setting).fields.map{it.text})
     }
     @Test fun oldManualDraftsMigratePresentationOnlyAndNewPhotoHasNoCaptureFacts() {
         val legacy=setting.json().put("version",1).put("dateSource","manual").put("manualDate","1999-12-31")

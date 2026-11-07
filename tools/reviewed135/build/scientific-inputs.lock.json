@@ -1,0 +1,10 @@
+{
+  "app/src/main/assets/engine-data/profiles/kodak_tri_x_400.json": "a54be071c6a055a9a49acb7072d10bf0b1bcddf9c0a459b0800a9b14bb66b1f1",
+  "native/crates/spektrafilm-math/src/spectral.rs": "a8830937158f4197884b8692a558cd67182d50dc8674f387cdb3165f389a9fee",
+  "native/crates/spektrafilm-math/src/colorspace.rs": "fc447408ec0926653c61ac572f846f3eb762c1818fd3ecc30ffc53892fc03e97",
+  "app/src/main/assets/engine-data/profiles/kodak_tmax_100.json": "c9160236872034b86fb42b67be3a9252088bfa7bdbb450148b0c20ad83e3033a",
+  "app/src/main/assets/engine-data/profiles/ilford_hp5_plus_400.json": "a09ccdb57816f220ab598e534318a743ef79e16a300f8bd2de7453d451fe8ec5",
+  "app/src/main/assets/engine-data/profiles/fujifilm_neopan_acros_100_ii.json": "4429b45664a06c7ee8d16687bcc7adf656403e534fba584f83762e160abdc4f9",
+  "app/src/main/assets/engine-data/profiles/cinestill_800t.json": "4b5c5771a1d4755cf2f2994bbc0529387d579cc8d9fb6e23fe5d3d856fc13161",
+  "app/src/main/assets/engine-data/profiles/kodak_vision3_500t.json": "d7beca68bf16db88dbb7373fd13a6a1150a57a911a54bb0309a760a6f9883329"
+}

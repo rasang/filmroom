@@ -34,8 +34,13 @@ data class FrameAppearanceContext(
  * guards every profile. No stock-name guessing, asset I/O, or atlas decode on Main. */
 internal object FrameProfileCatalog {
     // BEGIN GENERATED CATALOG
-    const val catalogSha256="047892d6754b6c55c91a3fdcb8a75e252e3400069908a51aa39c617219f09596"
+    const val catalogSha256="2d4fd8b480639691162e88ba4a809357521ac1ebbc7289d6082947c19f5ea53d"
     val kinds:Map<String,FrameAppearanceContext.FilmKind> = mapOf(
+        "kodak_tri_x_400" to FrameAppearanceContext.FilmKind.NEGATIVE,
+        "kodak_tmax_100" to FrameAppearanceContext.FilmKind.NEGATIVE,
+        "fujifilm_neopan_acros_100_ii" to FrameAppearanceContext.FilmKind.NEGATIVE,
+        "ilford_hp5_plus_400" to FrameAppearanceContext.FilmKind.NEGATIVE,
+        "cinestill_800t" to FrameAppearanceContext.FilmKind.NEGATIVE,
         "kodak_doublex" to FrameAppearanceContext.FilmKind.NEGATIVE,
         "kodak_trix" to FrameAppearanceContext.FilmKind.REVERSAL,
         "fujifilm_c200" to FrameAppearanceContext.FilmKind.NEGATIVE,

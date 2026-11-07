@@ -15,9 +15,9 @@ internal object RawMetadataAdmission {
         RandomAccessFile(input, "r").use { file ->
             if (file.length() < 8) return@use 0L
             val header=ByteArray(minOf(file.length(), 16).toInt());file.readFully(header)
-            // ORF/ORI and Canon's CR3 container can initialize the same camera metadata DB.
+            // ORF/ORI, Canon CR3 and Fujifilm RAF can initialize the same camera metadata DB.
             // This is only conservative admission, not an assertion of decoder support.
-            if(PhotoHeaders.isOlympusRaw(header) || PhotoHeaders.isCanonCr3(header)) return@use CAMERA_BYTES
+            if(PhotoHeaders.isOlympusRaw(header) || PhotoHeaders.isCanonCr3(header) || PhotoHeaders.isFujifilmRaf(header)) return@use CAMERA_BYTES
             val little=header[0]==0x49.toByte() && header[1]==0x49.toByte()
             val big=header[0]==0x4d.toByte() && header[1]==0x4d.toByte()
             if(!little && !big) return@use 0L

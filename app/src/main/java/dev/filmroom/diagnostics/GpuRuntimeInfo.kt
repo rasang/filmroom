@@ -17,7 +17,7 @@ enum class GpuReason(val id:String) {
     APPROXIMATE_BANDED_CHAIN("approximate_banded_chain"), APPROXIMATE_TILED_CHAIN("approximate_tiled_chain"), GPU_MEMORY_BUDGET_FALLBACK("gpu_memory_budget_fallback"),
     GPU_BINDING_LIMIT_FALLBACK("gpu_binding_limit_fallback"), GPU_UNAVAILABLE_FALLBACK("gpu_unavailable_fallback"),
     GPU_EXECUTION_FALLBACK("gpu_execution_fallback"), CPU_CHECKPOINT_RESUME("cpu_checkpoint_resume"),
-    GPU_CHECKPOINT_RESTORED("gpu_checkpoint_restored"), UNKNOWN("unknown");
+    PREVIEW_STAGE_CACHE_HIT("preview_stage_cache_hit"), GPU_CHECKPOINT_RESTORED("gpu_checkpoint_restored"), UNKNOWN("unknown");
 }
 
 enum class GpuWorkPhase(val id:String,private val nativePhase:NativePhase) {
@@ -97,13 +97,54 @@ object GpuRuntimeInfo {
             gpuBatchElapsedMs=work.batchElapsedMs,gpuChainWaitMs=work.chainWaitMs,gpuFailedElapsedMs=work.failedElapsedMs)
     }
 
+    fun withPreviewCache(result:JSONObject,info:SafeInfo):SafeInfo {
+        val cache=result.optJSONObject("previewCache") ?: return info
+        fun millis(key:String):Long?=(cache.opt(key) as? Number)?.toDouble()?.takeIf{it.isFinite() && it in 0.0..604_800_000.0}?.toLong()
+        return info.copy(previewScienceCacheHit=cache.opt("hit") as? Boolean,
+            previewFilmLogCacheHit=cache.opt("filmLogHit") as? Boolean,
+            previewFilmLogRetained=cache.opt("filmLogRetained") as? Boolean,
+            previewCorrectedDensityCacheHit=cache.opt("correctedDensityHit") as? Boolean,
+            previewCorrectedDensityRetained=cache.opt("correctedDensityRetained") as? Boolean,
+            previewFilmLogPrefixMs=millis("filmLogPrefixMs"),previewFilmLogSuffixMs=millis("filmLogSuffixMs"),
+            previewScienceCacheBytes=strictCount(cache,"retainedBytes")?.takeIf{it<=64L*1024*1024},
+            previewNativePrepareMs=millis("prepareMs"),previewNativeScienceMs=millis("scienceMs"),previewNativeFinishMs=millis("finishMs"))
+    }
+    private fun prewarmInfo(result:JSONObject,info:SafeInfo):SafeInfo {
+        val prepared=result.optJSONObject("preparedSpectral")
+        val cache=prepared?.optJSONObject("cache")
+        fun nanos(key:String):Long?=when(val raw=prepared?.opt(key)) {
+            is Int->raw.toLong();is Long->raw;else->null
+        }?.takeIf{it in 0..604_800_000_000_000L}
+        fun bytes(key:String):Long?=cache?.takeIf{strictBoolean(it,"available")==true}?.let{strictCount(it,key)}?.takeIf{it<=8L*1024*1024}
+        val prepareMs=(prepared?.opt("pipelinePrepareMs") as? Number)?.toDouble()
+            ?.takeIf{it.isFinite() && it in 0.0..604_800_000.0}?.toLong()
+        return info.copy(
+            preparedPipelinePrepareMs=prepareMs,
+            preparedFrontHits=prepared?.let{strictCount(it,"frontHits")},
+            preparedFrontMisses=prepared?.let{strictCount(it,"frontMisses")},
+            preparedFrontBuildNanoseconds=nanos("frontBuildNanoseconds"),
+            preparedCalibrationHits=prepared?.let{strictCount(it,"calibrationHits")},
+            preparedCalibrationMisses=prepared?.let{strictCount(it,"calibrationMisses")},
+            preparedCalibrationBuildNanoseconds=nanos("calibrationBuildNanoseconds"),
+            preparedCacheLiveBytes=bytes("liveBytes"),
+            preparedCacheRetainedBytes=bytes("retainedBytes"),
+            preparedCalibrationRetainedBytes=bytes("calibrationRetainedBytes"),
+            prewarmAttempts=dev.filmroom.engine.IdlePrewarmMetrics.attempts.get(),
+            prewarmSkipped=dev.filmroom.engine.IdlePrewarmMetrics.skipped.get(),
+            prewarmNativeAttempts=cache?.let{strictCount(it,"prewarmAttempts")},
+            prewarmPublished=cache?.let{strictCount(it,"prewarmPublished")},
+            prewarmUsed=cache?.let{strictCount(it,"prewarmUsed")},
+            prewarmWasted=cache?.let{strictCount(it,"prewarmWasted")},
+            prewarmNativeSkipped=cache?.let{strictCount(it,"prewarmSkipped")},
+            prewarmCancelled=cache?.let{strictCount(it,"prewarmCancelled")})
+    }
     /** Preview uses gpu; file export uses metrics.gpu. Missing/invalid telemetry is not GPU proof. */
     fun fromNativeResult(result:JSONObject):SafeInfo {
         // AE disabled/missing is unknown, not a fabricated zero. Never coerce strings.
         val envelope=if(result.has("meteredEv"))result else result.optJSONObject("metrics")
         val meteredEv=(envelope?.opt("meteredEv") as? Number)?.toDouble()?.takeIf { it.isFinite() && it in -64.0..64.0 }
         val gpu=result.optJSONObject("gpu") ?: result.optJSONObject("metrics")?.optJSONObject("gpu")
-            ?: return SafeInfo(durationMs=duration(result),meteredEv=meteredEv)
+            ?: return prewarmInfo(result,SafeInfo(durationMs=duration(result),meteredEv=meteredEv))
         val requested=strictBoolean(gpu,"requested")
         val nativeActive=strictBoolean(gpu,"active")
         val selfTest=strictBoolean(gpu,"startupSelfTestPassed")
@@ -129,10 +170,10 @@ object GpuRuntimeInfo {
         }
         val tiles=result.optJSONObject("metrics")?.optJSONObject("gpuTiles")
         fun tileDimension(key:String)=tiles?.let{strictCount(it,key)}?.takeIf{it in 1L..40000L}
-        return SafeInfo(durationMs=duration(result),meteredEv=meteredEv,gpuRequested=requested,gpuActive=active,
+        return prewarmInfo(result,SafeInfo(durationMs=duration(result),meteredEv=meteredEv,gpuRequested=requested,gpuActive=active,
             gpuBackend=backend,gpuStage=stage,gpuAdapterModel=adapter,gpuBatches=batches,
             gpuTileCoreWidth=tileDimension("coreWidth"),gpuTileCoreHeight=tileDimension("coreHeight"),
             gpuTileExpandedWidth=tileDimension("expandedWidth"),gpuTileExpandedHeight=tileDimension("expandedHeight"),
-            gpuFallbacks=strictCount(gpu,"cpuFallbacks"),gpuReason=reason(gpu.opt("reason")),gpuSelfTest=selfTest,gpuNumericGuard=numericGuard)
+            gpuFallbacks=strictCount(gpu,"cpuFallbacks"),gpuReason=reason(gpu.opt("reason")),gpuSelfTest=selfTest,gpuNumericGuard=numericGuard))
     }
 }

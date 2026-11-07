@@ -18,7 +18,7 @@ import java.util.GregorianCalendar
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Draft-only date editor. No settings are changed until a valid Apply. */
+/** Draft-only imprint editor. Neither master switch nor its settings commit before Apply. */
 internal object ImprintDialog {
     private val styles = listOf("contax_t2", "yashica_t4", "canon_data_back", "canon_luna")
     private val timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT)
@@ -78,6 +78,8 @@ internal object ImprintDialog {
 
     fun capture(dialog: AlertDialog): Bundle = Bundle().apply {
         val root = checkNotNull(dialog.window).decorView
+        putBoolean("imprint-date-enabled", root.findViewWithTag<Switch>("imprint-date-switch").isChecked)
+        putBoolean("imprint-exposure-enabled", root.findViewWithTag<Switch>("imprint-exposure-switch").isChecked)
         val group = root.findViewWithTag<RadioGroup>("imprint-style")
         putInt("imprint-style", (0 until group.childCount).firstOrNull { group.getChildAt(it).id == group.checkedRadioButtonId } ?: 0)
         putInt("imprint-placement", if (root.findViewWithTag<Switch>("imprint-placement").isChecked) 1 else 0)
@@ -100,6 +102,15 @@ internal object ImprintDialog {
 
     fun show(context: Context, state: EditorState, metadata: PhotoMetadata, draft: Bundle? = null, onPreview: (ImprintSettings?) -> Unit = {}, onApply: (ImprintSettings) -> Unit): AlertDialog {
         val old = state.imprint
+        // The dialog and renderer must agree on the exact current layout. This is a
+        // metadata-only snapshot: no atlas decoding or disk I/O occurs on Main.
+        val border = if (state.filmBorder) runCatching {
+            dev.filmroom.border.BorderCatalog.snapshot(state.frameStock, 1280, 960, 1280, 960,
+                state.composition, state.negativeWhiteHoles, state.outputRoute,
+                state.effectiveMediumFormat, state.effectiveMediumPortrait)
+        }.getOrNull() else null
+        val exposureSupported = ImprintPlan.exposureSupported(border)
+        val edgeDateSupported = border?.geometryVersion == 5 && exposureSupported
         // Keep the framework hierarchy intact: clock-mode actions live inside TimePicker, and
         // wrapping it in scroll views can mismeasure/clip those actions. Use native spinners when
         // a calendar/clock would not fit comfortably instead of making users pan the picker.
@@ -110,11 +121,36 @@ internal object ImprintDialog {
         fun dp(n: Int) = (context.resources.displayMetrics.density * n + .5f).toInt()
         val original = metadata.imprintDateTime()
         val values = restoreDateDraft(draft, ImprintContent.displayDateTime(metadata, old), old.manualDateTime != null)
-        val column = LinearLayout(context).apply {
+        val controls = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(12))
         }
-        val scroll = DraftScrollView(context, values).apply { tag = "imprint-scroll"; addView(column) }
+        val scroll = DraftScrollView(context, values).apply { tag = "imprint-scroll"; addView(controls) }
+        val exposure = Switch(context).apply {
+            tag = "imprint-exposure-switch"; text = t(ImprintText.EXPOSURE)
+            textSize = 14f; minimumHeight = dp(48)
+            isChecked = draft?.getBoolean("imprint-exposure-enabled", old.exposure) ?: old.exposure
+            // Keep the saved preference without offering unavailable film-edge edits.
+            isEnabled = exposureSupported; alpha = if (isEnabled) 1f else .38f
+        }.also { controls.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+        val exposureSettings = TextView(context).apply {
+            tag = "imprint-exposure-preview"; textSize = 14f
+            setTextColor(dev.filmroom.ui.FilmroomPalette.muted)
+            setPadding(0, dp(4), 0, dp(12))
+            val supported = exposureSupported
+            text = if (!supported) t(ImprintText.INACTIVE) else
+                ImprintContent.from(metadata, old.copy(exposure = true)).fields.joinToString("   ") { it.text }
+                    .ifEmpty { t(ImprintText.NO_EXPOSURE) }
+        }.also { controls.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+        val dateEnabled = Switch(context).apply {
+            tag = "imprint-date-switch"; text = t(ImprintText.DATE)
+            textSize = 14f; minimumHeight = dp(48)
+            isChecked = draft?.getBoolean("imprint-date-enabled", old.dateEnabled) ?: old.dateEnabled
+        }.also { controls.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+        // Keep hidden drafts intact so toggling off/on never resets a style, date or 120 placement.
+        val column = LinearLayout(context).apply {
+            tag = "imprint-date-settings"; orientation = LinearLayout.VERTICAL
+        }.also { controls.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         fun label(text: String) = TextView(context).apply {
             this.text = text; textSize = 14f
             setTextColor(dev.filmroom.ui.FilmroomPalette.muted)
@@ -176,7 +212,6 @@ internal object ImprintDialog {
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
         var showDateError = draft?.getBoolean("imprint-date-error", false) ?: false
-        val preview = label("").apply { tag = "imprint-content" }
 
         fun choice(key: ImprintText, labels: List<String>, index: Int, tagName: String): Spinner {
             label(t(key)).tag = "$tagName-label"
@@ -197,7 +232,7 @@ internal object ImprintDialog {
             setPadding(0, dp(10), 0, dp(3))
             isChecked = (draft?.getInt("imprint-placement", ImprintSettings.PLACEMENTS.indexOf(old.datePlacement))
                 ?: ImprintSettings.PLACEMENTS.indexOf(old.datePlacement)) == 1
-            visibility = if (state.filmBorder && state.effectiveMediumFormat != null) View.VISIBLE else View.GONE
+            visibility = if (edgeDateSupported) View.VISIBLE else View.GONE
         }.also { column.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         val corner = choice(ImprintText.POSITION, listOf(ImprintText.BR, ImprintText.BL, ImprintText.TR, ImprintText.TL).map(::t), ImprintSettings.CORNERS.indexOf(old.corner), "imprint-corner")
         fun slider(key: ImprintText, start: Int, tagName: String): SeekBar {
@@ -214,15 +249,21 @@ internal object ImprintDialog {
         }
         val glow = slider(ImprintText.GLOW, (old.glow * 100).roundToInt(), "imprint-glow")
         fun settings(): ImprintSettings = old.copy(
-            dateStyle = styles[buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)],
+            dateStyle = styles[buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)].let {
+                if (!dateEnabled.isChecked && old.dateStyle == "off" && it == old.selectedDateStyle) "off" else it
+            },
+            dateEnabled = dateEnabled.isChecked,
+            exposure = if (exposureSupported) exposure.isChecked else old.exposure,
             corner = ImprintSettings.CORNERS[corner.selectedItemPosition],
             size = .6 + size.progress / 100.0, glow = glow.progress / 100.0,
             datePlacement = if (placement.isChecked) "edge" else "photo",
-            manualDateTime = if (values.manual) values.dateTime()?.let(ImprintSettings::formatDateTime) else null
+            manualDateTime = if (values.manual) values.dateTime()?.let(ImprintSettings::formatDateTime) ?: old.manualDateTime else null
         )
         var adjusting = false
         var lastPreviewKey: String? = null
         fun refresh() {
+            exposureSettings.visibility = if (exposure.isChecked) View.VISIBLE else View.GONE
+            column.visibility = if (dateEnabled.isChecked) View.VISIBLE else View.GONE
             // Edge dates have a fixed 120 placement. Keep the user's photo corner intact.
             val photoPositionEnabled = placement.visibility != View.VISIBLE || !placement.isChecked
             if (!adjusting) {
@@ -245,16 +286,13 @@ internal object ImprintDialog {
             dateValue.text = t(ImprintText.DATE) + " · " + (values.date?.toString() ?: t(ImprintText.CHOOSE_DATE))
             dateValue.contentDescription = dateValue.text
             error.visibility = if (showDateError && values.manual && dateTime == null) View.VISIBLE else View.GONE
-            val selected = buttons.indexOfFirst { it.isChecked }.coerceAtLeast(0)
-            val formatted = dateTime?.toLocalDate()?.let { ImprintContent.formatDate(it, styles[selected]) }
-            preview.text = formatted ?: if (values.manual) t(ImprintText.INVALID_DATE_TIME) else t(ImprintText.MISSING)
             // Preview and output share the same date-only lettering.
             val sample = values.date ?: sampleDate
             sampleNote.text = if (dateTime == null) t(ImprintText.STYLE_SAMPLE) + " · " + sample else ""
             sampleNote.visibility = if (dateTime == null) View.VISIBLE else View.GONE
-            // A preview is presentation-only, including when the date master switch is off.
-            // Incomplete manual input must not silently preview the source date.
-            onPreview(if (values.manual && dateTime == null) null else settings().copy(dateEnabled = true))
+            // Opening the editor must honor both master switches. An invalid manual date
+            // suppresses only the date, never falls back to the previously committed date.
+            onPreview(settings().let { if (values.manual && dateTime == null) it.copy(dateEnabled = false) else it })
             val key = "$sample|${glow.progress}"
             if (lastPreviewKey == key) return
             lastPreviewKey = key
@@ -278,10 +316,10 @@ internal object ImprintDialog {
                 button.contentDescription = t(names[i]) + ": " + (text ?: t(ImprintText.MISSING))
             }
         }
-        val dialog = AlertDialog.Builder(context).setTitle(t(ImprintText.DATE_DIALOG)).setView(scroll)
+        val dialog = AlertDialog.Builder(context).setTitle(t(ImprintText.SETTINGS)).setView(scroll)
             .setNegativeButton(t(ImprintText.CANCEL), null).setPositiveButton(t(ImprintText.APPLY), null).create()
         fun openPicker(kind: String, savedState: Bundle? = null) {
-            if (!dialog.isShowing || scroll.picker?.isShowing == true) return
+            if (!dialog.isShowing || !dateEnabled.isChecked || scroll.picker?.isShowing == true) return
             val picker: AlertDialog = if (kind == "date") {
                 // These fixed seeds position an unselected picker, never replace missing metadata.
                 val seed = values.date ?: sampleDate
@@ -318,6 +356,14 @@ internal object ImprintDialog {
             values.date = original?.toLocalDate(); values.time = original?.toLocalTime()
             values.manual = false; showDateError = false; refresh()
         }
+        exposure.setOnCheckedChangeListener { _, checked ->
+            if (!exposure.isEnabled && checked != old.exposure) exposure.isChecked = old.exposure
+            refresh()
+        }
+        dateEnabled.setOnCheckedChangeListener { _, checked ->
+            if (!checked) { scroll.dismissPicker(); showDateError = false }
+            refresh()
+        }
         group.setOnCheckedChangeListener { _, _ -> refresh() }
         placement.setOnCheckedChangeListener { _, _ -> refresh() }
         val fade = ImprintAdjustmentFade(dialog)
@@ -339,11 +385,14 @@ internal object ImprintDialog {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val dateTime = values.dateTime()
                 // Missing source date is valid; a manual override must contain a selected date.
-                if (values.manual && dateTime == null) {
+                if (dateEnabled.isChecked && values.manual && dateTime == null) {
                     showDateError = true; refresh()
                     val missingControl = dateValue
                     missingControl.requestFocus()
-                    scroll.smoothScrollTo(0, dateValue.top)
+                    val bounds = android.graphics.Rect()
+                    dateValue.getDrawingRect(bounds)
+                    scroll.offsetDescendantRectToMyCoords(dateValue, bounds)
+                    scroll.smoothScrollTo(0, bounds.top)
                     error.announceForAccessibility(error.text)
                     return@setOnClickListener
                 }

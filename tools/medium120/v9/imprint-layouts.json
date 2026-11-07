@@ -1,0 +1,216 @@
+{
+  "asset_version": "mf120-v9-acrosii-5d8eb4aa9d8f",
+  "policy": "Centered imprint; lower marks displaced outward only where needed. Upper rail untouched. This is a layout design, not measured factory positions.",
+  "layouts": [
+    {
+      "format": "MF645",
+      "widthMm": 47.5,
+      "cropStartPx": 3862,
+      "cropWidthPx": 475,
+      "clearStartMm": 10.95,
+      "clearEndMm": 36.55,
+      "moves": [
+        {
+          "left": 357,
+          "right": 399,
+          "targetMm": 37.25,
+          "label": "4586"
+        }
+      ],
+      "marks": [
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            0,
+            101
+          ],
+          "targetMm": 0.0
+        },
+        {
+          "label": "4586",
+          "sourcePx": [
+            357,
+            399
+          ],
+          "targetMm": 37.25
+        }
+      ]
+    },
+    {
+      "format": "MF66",
+      "widthMm": 62,
+      "cropStartPx": 3790,
+      "cropWidthPx": 620,
+      "clearStartMm": 15.75,
+      "clearEndMm": 46.25,
+      "moves": [
+        {
+          "left": 25,
+          "right": 173,
+          "targetMm": 0.25,
+          "label": "FUJI 100 ACROS II"
+        },
+        {
+          "left": 429,
+          "right": 471,
+          "targetMm": 46.95,
+          "label": "4586"
+        }
+      ],
+      "marks": [
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            25,
+            173
+          ],
+          "targetMm": 0.25
+        },
+        {
+          "label": "4586",
+          "sourcePx": [
+            429,
+            471
+          ],
+          "targetMm": 46.95
+        }
+      ]
+    },
+    {
+      "format": "MF67",
+      "widthMm": 76,
+      "cropStartPx": 3720,
+      "cropWidthPx": 760,
+      "clearStartMm": 19.0,
+      "clearEndMm": 57.0,
+      "moves": [
+        {
+          "left": 95,
+          "right": 243,
+          "targetMm": 3.5,
+          "label": "FUJI 100 ACROS II"
+        },
+        {
+          "left": 499,
+          "right": 541,
+          "targetMm": 57.7,
+          "label": "4586"
+        }
+      ],
+      "marks": [
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            95,
+            243
+          ],
+          "targetMm": 3.5
+        },
+        {
+          "label": "4586",
+          "sourcePx": [
+            499,
+            541
+          ],
+          "targetMm": 57.7
+        }
+      ]
+    },
+    {
+      "format": "MF69",
+      "widthMm": 90,
+      "cropStartPx": 3650,
+      "cropWidthPx": 900,
+      "clearStartMm": 24.5,
+      "clearEndMm": 65.5,
+      "moves": [
+        {
+          "left": 165,
+          "right": 313,
+          "targetMm": 9.0,
+          "label": "FUJI 100 ACROS II"
+        },
+        {
+          "left": 569,
+          "right": 611,
+          "targetMm": 66.2,
+          "label": "4586"
+        }
+      ],
+      "marks": [
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            165,
+            313
+          ],
+          "targetMm": 9.0
+        },
+        {
+          "label": "4586",
+          "sourcePx": [
+            569,
+            611
+          ],
+          "targetMm": 66.2
+        }
+      ]
+    },
+    {
+      "format": "MF617",
+      "widthMm": 174,
+      "cropStartPx": 3230,
+      "cropWidthPx": 1740,
+      "clearStartMm": 60.5,
+      "clearEndMm": 113.5,
+      "moves": [
+        {
+          "left": 585,
+          "right": 733,
+          "targetMm": 45.0,
+          "label": "FUJI 100 ACROS II"
+        },
+        {
+          "left": 989,
+          "right": 1031,
+          "targetMm": 114.2,
+          "label": "4586"
+        }
+      ],
+      "marks": [
+        {
+          "label": "4586",
+          "sourcePx": [
+            159,
+            200
+          ],
+          "targetMm": 15.9
+        },
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            585,
+            733
+          ],
+          "targetMm": 45.0
+        },
+        {
+          "label": "4586",
+          "sourcePx": [
+            989,
+            1031
+          ],
+          "targetMm": 114.2
+        },
+        {
+          "label": "FUJI 100 ACROS II",
+          "sourcePx": [
+            1415,
+            1564
+          ],
+          "targetMm": 141.5
+        }
+      ]
+    }
+  ]
+}

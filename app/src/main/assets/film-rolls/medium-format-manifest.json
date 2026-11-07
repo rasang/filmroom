@@ -214,15 +214,15 @@
       "profile_id": "kodak_kodachrome_64",
       "name": "Kodak Kodachrome 64",
       "physical_stock_id": "kodak_kodachrome_64",
-      "form": "135 only",
+      "form": "135 + 120",
       "thumbnail": "thumbnails/kodak_kodachrome_64.webp",
       "source_model": "kodak_kodachrome_64.blend",
-      "sha256": "c00834ed898fddd138a811df0a1455ca621cef97721a5a416f1d7cd447b13a7b",
+      "sha256": "6b61a8e19db8136be43ebe72df43b066ce19a203bf780d33d8a3b8d54bb27c29",
       "alpha_bbox": [
-        88,
-        89,
-        192,
-        209
+        47,
+        39,
+        197,
+        208
       ]
     }
   ]

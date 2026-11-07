@@ -1,0 +1,557 @@
+{
+  "generator": "tools/medium120/v7/generate.py",
+  "font_sha256": {
+    "DejaVuSansCondensed-Bold.ttf": "21f02ebcea75529d3ed9d26e089cd1b9c59a4b784119ba3a96e9bc83cf755ec7"
+  },
+  "assets": [
+    {
+      "stock": "ilford_hp5_plus_400",
+      "source_url": "https://www.photrio.com/forum/attachments/2016-03-01-23-53-50-jpg.151747/",
+      "identity": "ILFORD HP5 PLUS; observed batch 4274; upper 10\u201314; lower A.",
+      "calibration": "Mean photographed square aperture width approximately 201 px mapped to nominal 56 mm. Perspective and sleeve curvature are not metrology.",
+      "source_bounds_px": [
+        32,
+        693
+      ],
+      "reference_center_px": 362.5,
+      "mm_per_source_px": 0.27860696517412936,
+      "coverageStartMm": 317.92039800995025,
+      "coverageEndMm": 502.07960199004975,
+      "defaultCenterMm": 410.0,
+      "monochrome": true,
+      "physical_calibration": false,
+      "limitations": [
+        "The partial terminal legend is only ILFORD HP5, clipped at the observed boundary; PLUS is not inferred.",
+        "4274 is a source-roll batch, not ISO and not a universal HP5 code.",
+        "The source discusses edge misalignment. Vertical placement is normalized inside nominal rails and is not a claim about all manufactured rolls.",
+        "Typography, cap height, pitch, phase and display gray are approximations.",
+        "No third-party photograph pixels are packaged. Blank atlas outside finite coverage means unknown and is unavailable to cropping."
+      ],
+      "marks": [
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "10",
+          "source_x_px": 85,
+          "x_mm": 332.6865671641791,
+          "width_mm": 2.1,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "11",
+          "source_x_px": 230,
+          "x_mm": 373.0845771144279,
+          "width_mm": 2.1,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "12",
+          "source_x_px": 374,
+          "x_mm": 413.2039800995025,
+          "width_mm": 2.1,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "13",
+          "source_x_px": 521,
+          "x_mm": 454.1592039800995,
+          "width_mm": 2.1,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "14",
+          "source_x_px": 673,
+          "x_mm": 496.5074626865672,
+          "width_mm": 2.1,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "4274",
+          "source_x_px": 60,
+          "x_mm": 325.72139303482584,
+          "width_mm": 4.7,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "ILFORD HP5 PLUS",
+          "source_x_px": 160,
+          "x_mm": 353.5820895522388,
+          "width_mm": 18.0,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "4274",
+          "source_x_px": 304,
+          "x_mm": 393.7014925373134,
+          "width_mm": 4.7,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "ILFORD HP5 PLUS",
+          "source_x_px": 405,
+          "x_mm": 421.8407960199005,
+          "width_mm": 18.0,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "A",
+          "source_x_px": 505,
+          "x_mm": 449.7014925373134,
+          "width_mm": 0.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "4274",
+          "source_x_px": 553,
+          "x_mm": 463.07462686567163,
+          "width_mm": 4.7,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "ILFORD HP5",
+          "source_x_px": 656,
+          "x_mm": 491.771144278607,
+          "width_mm": 13.0,
+          "height_mm": 1.12
+        },
+        {
+          "kind": "solid_left_triangle",
+          "rail": 0,
+          "source_x_px": 97,
+          "x_mm": 336.02985074626866,
+          "width_mm": 3.34,
+          "height_mm": 0.84
+        },
+        {
+          "kind": "solid_left_triangle",
+          "rail": 0,
+          "source_x_px": 241,
+          "x_mm": 376.14925373134326,
+          "width_mm": 3.34,
+          "height_mm": 0.84
+        },
+        {
+          "kind": "solid_left_triangle",
+          "rail": 0,
+          "source_x_px": 386,
+          "x_mm": 416.547263681592,
+          "width_mm": 3.34,
+          "height_mm": 0.84
+        },
+        {
+          "kind": "solid_left_triangle",
+          "rail": 0,
+          "source_x_px": 532,
+          "x_mm": 457.22388059701495,
+          "width_mm": 3.34,
+          "height_mm": 0.84
+        },
+        {
+          "kind": "solid_left_triangle",
+          "rail": 0,
+          "source_x_px": 682,
+          "x_mm": 499.01492537313436,
+          "width_mm": 3.34,
+          "height_mm": 0.84
+        }
+      ],
+      "path": "medium120/v7/hp5plus-rails.png",
+      "version": "mf120-v7-hp5plus-cb94b4135551",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 23307,
+      "sha256": "cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a"
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "source_url": "https://dspace.library.uvic.ca/bitstream/handle/1828/3215/Smith_FinalDISS_small.pdf#page=76",
+      "identity": "KODAK 100TMX; upper 46\u201349; lower 5\u20137 and independent right triangles.",
+      "calibration": "Photographed panoramic image aperture approximately 417 px mapped to nominal 56 mm. The resulting 174.715 mm coverage is only 0.715 mm longer than the 6x17 model crop; there is no physical calibration.",
+      "source_bounds_px": [
+        212,
+        1513
+      ],
+      "reference_center_px": 862.5,
+      "mm_per_source_px": 0.1342925659472422,
+      "coverageStartMm": 322.64268585131896,
+      "coverageEndMm": 497.35731414868104,
+      "defaultCenterMm": 410.0,
+      "monochrome": true,
+      "physical_calibration": false,
+      "limitations": [
+        "Right-clipped stock legend is only KODAK 1; unseen trailing letters are not invented.",
+        "This finite panoramic print supports a nominal approximate crop, not measured factory pitch or a full roll.",
+        "A new physical scan could revise the apparent scale. Such a correction must append a new immutable asset version.",
+        "Typography, cap height, pitch, phase and display gray are approximations.",
+        "No third-party photograph pixels are packaged. Blank atlas outside finite coverage means unknown and is unavailable to cropping."
+      ],
+      "marks": [
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "46",
+          "source_x_px": 223,
+          "x_mm": 324.11990407673864,
+          "width_mm": 2.45,
+          "height_mm": 1.28
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "47",
+          "source_x_px": 589,
+          "x_mm": 373.27098321342925,
+          "width_mm": 2.45,
+          "height_mm": 1.28
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "48",
+          "source_x_px": 953,
+          "x_mm": 422.1534772182254,
+          "width_mm": 2.45,
+          "height_mm": 1.28
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "49",
+          "source_x_px": 1319,
+          "x_mm": 471.3045563549161,
+          "width_mm": 2.45,
+          "height_mm": 1.28
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 100TMX",
+          "source_x_px": 346,
+          "x_mm": 340.6378896882494,
+          "width_mm": 15.4,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 100TMX",
+          "source_x_px": 712,
+          "x_mm": 389.78896882494007,
+          "width_mm": 15.4,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 100TMX",
+          "source_x_px": 1078,
+          "x_mm": 438.9400479616307,
+          "width_mm": 15.4,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 1",
+          "source_x_px": 1443,
+          "x_mm": 487.9568345323741,
+          "width_mm": 9.3,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "5",
+          "source_x_px": 311,
+          "x_mm": 335.93764988009593,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "6",
+          "source_x_px": 764,
+          "x_mm": 396.77218225419665,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "7",
+          "source_x_px": 1193,
+          "x_mm": 454.3836930455635,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 289,
+          "x_mm": 332.9832134292566,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 522,
+          "x_mm": 364.27338129496405,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 742,
+          "x_mm": 393.8177458033573,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 953,
+          "x_mm": 422.1534772182254,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1170,
+          "x_mm": 451.294964028777,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1406,
+          "x_mm": 482.98800959232614,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        }
+      ],
+      "path": "medium120/v7/tmax100-rails.png",
+      "version": "mf120-v7-tmax100-15d981f5a232",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 23250,
+      "sha256": "15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51"
+    },
+    {
+      "stock": "kodak_tri_x_400",
+      "source_url": "https://fotophilosophy.wordpress.com/wp-content/uploads/2024/07/img_1469-1.jpg",
+      "identity": "KODAK 400TX; upper 45\u201348; lower 4\u20136 and independent right triangles. Still-negative 400TX, not reversal 7266.",
+      "calibration": "Right strip, rotated clockwise then uniformly scaled to 2400x1350 for inspection. Approximately 410 px cross-film aperture mapped to nominal 56 mm. Source is a photographed expired 120 roll, not a calibrated scan.",
+      "source_bounds_px": [
+        451,
+        1882
+      ],
+      "reference_center_px": 1166.5,
+      "mm_per_source_px": 0.13658536585365855,
+      "coverageStartMm": 312.2731707317073,
+      "coverageEndMm": 507.7268292682927,
+      "defaultCenterMm": 410.0,
+      "monochrome": true,
+      "physical_calibration": false,
+      "limitations": [
+        "Four observed contiguous 645 frames provide 195.454 mm nominal coverage. No source period is extrapolated.",
+        "The independent Kodak 2003 catalog describes two-inch legends and dual numbering, but its non-metric short schematic is not tiled.",
+        "No batch/emulsion code is visible in the selected strip and none is invented. Exposure/fog and vertical strip slope are not reproduced.",
+        "Typography, cap height, pitch, phase and display gray are approximations.",
+        "No third-party photograph pixels are packaged. Blank atlas outside finite coverage means unknown and is unavailable to cropping."
+      ],
+      "marks": [
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "45",
+          "source_x_px": 727,
+          "x_mm": 349.9707317073171,
+          "width_mm": 2.45,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "46",
+          "source_x_px": 1090,
+          "x_mm": 399.55121951219513,
+          "width_mm": 2.45,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "47",
+          "source_x_px": 1444,
+          "x_mm": 447.9024390243902,
+          "width_mm": 2.45,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "48",
+          "source_x_px": 1798,
+          "x_mm": 496.25365853658536,
+          "width_mm": 2.45,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 400TX",
+          "source_x_px": 504,
+          "x_mm": 319.5121951219512,
+          "width_mm": 13.9,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 400TX",
+          "source_x_px": 862,
+          "x_mm": 368.40975609756094,
+          "width_mm": 13.9,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 400TX",
+          "source_x_px": 1220,
+          "x_mm": 417.30731707317074,
+          "width_mm": 13.9,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 0,
+          "text": "KODAK 400TX",
+          "source_x_px": 1576,
+          "x_mm": 465.9317073170732,
+          "width_mm": 13.9,
+          "height_mm": 1.2
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "4",
+          "source_x_px": 743,
+          "x_mm": 352.1560975609756,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "5",
+          "source_x_px": 1190,
+          "x_mm": 413.20975609756096,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "text",
+          "rail": 1,
+          "text": "6",
+          "source_x_px": 1633,
+          "x_mm": 473.71707317073174,
+          "width_mm": 1.25,
+          "height_mm": 1.14
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 489,
+          "x_mm": 317.4634146341463,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 723,
+          "x_mm": 349.42439024390245,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 934,
+          "x_mm": 378.2439024390244,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1171,
+          "x_mm": 410.6146341463415,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1399,
+          "x_mm": 441.7560975609756,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1615,
+          "x_mm": 471.25853658536585,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        },
+        {
+          "kind": "solid_right_triangle",
+          "rail": 1,
+          "source_x_px": 1820,
+          "x_mm": 499.25853658536585,
+          "width_mm": 1.9,
+          "height_mm": 1.0
+        }
+      ],
+      "path": "medium120/v7/trix400-rails.png",
+      "version": "mf120-v7-trix400-4eeb6adc6f6e",
+      "width": 8200,
+      "height": 50,
+      "ppm": 10,
+      "bytes": 20543,
+      "sha256": "4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127"
+    }
+  ]
+}

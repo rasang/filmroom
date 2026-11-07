@@ -11,6 +11,13 @@ import kotlin.math.roundToInt
  */
 internal object InteractiveBorderPreview {
     fun key(s:BorderSnapshot)=s.copy(composition=CompositionTransform(targetAspect=s.composition.targetAspect)).json()
+    /** Also used by the exact preview pass, before it converts this sRGB sample to linear. */
+    internal fun pixel(photo:Double,rgb:FloatArray):Int {
+        val alpha=((1-photo)*255).roundToInt().coerceIn(0,255)
+        if(alpha==0)return 0
+        return (alpha shl 24) or ((rgb[0].coerceIn(0f,1f)*255).roundToInt() shl 16) or
+            ((rgb[1].coerceIn(0f,1f)*255).roundToInt() shl 8) or (rgb[2].coerceIn(0f,1f)*255).roundToInt()
+    }
     fun create(s:BorderSnapshot,raster:BorderRaster,checkActive:()->Unit={}):Bitmap {
         checkActive();raster.validate(s)
         require(maxOf(s.sourceWidth,s.sourceHeight)<=2048)
@@ -25,7 +32,7 @@ internal object InteractiveBorderPreview {
                     val alpha=((1-photo)*255).roundToInt().coerceIn(0,255)
                     if(alpha==0){row[x]=0;continue}
                     raster.sample(s,x+.5,y+.5,rgb)
-                    row[x]=(alpha shl 24) or ((rgb[0].coerceIn(0f,1f)*255).roundToInt() shl 16) or ((rgb[1].coerceIn(0f,1f)*255).roundToInt() shl 8) or (rgb[2].coerceIn(0f,1f)*255).roundToInt()
+                    row[x]=pixel(photo,rgb)
                 }
                 out.setPixels(row,0,row.size,0,y,row.size,1)
             }

@@ -4,6 +4,7 @@ package dev.filmroom.border
 internal object MediumStripDefinitions {
     data class Definition(val stock:String,val path:String,val version:String,val width:Int,val height:Int,val pixelsPerMm:Int,val encodedBytes:Int,val sha256:String,
         val defaultCenterMm:Double=410.0,val coverageStartMm:Double=0.0,val coverageEndMm:Double=820.0,
+        val monochrome:Boolean=false,
     ) {
         init {
             require(defaultCenterMm.isFinite() && coverageStartMm.isFinite() && coverageEndMm.isFinite())
@@ -46,6 +47,16 @@ internal object MediumStripDefinitions {
         Definition("kodak_portra_400","medium120/v5/portra400-rails.png","mf120-v5-portra400-b6bc018bda16",8200,50,10,28606,"b6bc018bda16c372a8f162553514ab74dd4f435a1bacea7bd67b233627d90618",410.0,285.211538,500.865385),
         Definition("kodak_portra_800","medium120/v5/portra800-rails.png","mf120-v5-portra800-64b689c66093",8200,50,10,13946,"64b689c66093f1417fa25cefcb35472d4e2ab802d51b0eef420101e8017fb2cd",410.0,0.0,820.0),
         Definition("kodak_portra_400","medium120/v6/portra400-rails.png","mf120-v6-portra400-3c329d78f008",8200,50,10,29139,"3c329d78f008485437704285ae4441d974b82addc4787cb406c5178578883fd5",410.0,285.211538,500.865385),
+        Definition("ilford_hp5_plus_400","medium120/v7/hp5plus-rails.png","mf120-v7-hp5plus-cb94b4135551",8200,50,10,23307,"cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",410.0,317.92039800995025,502.07960199004975,true),
+        Definition("kodak_tmax_100","medium120/v7/tmax100-rails.png","mf120-v7-tmax100-15d981f5a232",8200,50,10,23250,"15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",410.0,322.64268585131896,497.35731414868104,true),
+        Definition("kodak_tri_x_400","medium120/v7/trix400-rails.png","mf120-v7-trix400-4eeb6adc6f6e",8200,50,10,20543,"4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",410.0,312.2731707317073,507.7268292682927,true),
+        Definition("cinestill_800t","medium120/v8/cinestill800t-rails.png","mf120-v8-cinestill800t-a041a70e696f",8200,50,10,39534,"a041a70e696fd36216498ad68524d1e7c96499789ace8a14a08afe442194743f",410.0,188.0,498.209),
+        Definition("fujifilm_neopan_acros_100_ii","medium120/v9/acrosii-rails.png","mf120-v9-acrosii-5d8eb4aa9d8f",8200,50,10,18696,"5d8eb4aa9d8fd621fd8de674c9003202c43b324eb7fcc50f076f358c493013e6",410.0,320.0,500.0,true),
+        Definition("kodak_kodachrome_64","medium120/v10/kodachrome64-rails.png","mf120-v10-kodachrome64-42ed192f4558",8200,50,10,36386,"42ed192f4558ad7880b98cef6051858d8efb31e5374fd5ff19839704677e4902",410.0,320.0,500.0),
+        // New presentation revisions preserve frozen v7 jobs without changing PNG data.
+        Definition("ilford_hp5_plus_400","medium120/v7/hp5plus-rails.png","mf120-v11-hp5plus-imprint-cb94b4135551",8200,50,10,23307,"cb94b41355514c4d4f2f0d8c5489d0dad239c7d2a42076a642b180c83354843a",410.0,317.92039800995025,502.07960199004975,true),
+        Definition("kodak_tmax_100","medium120/v7/tmax100-rails.png","mf120-v11-tmax100-imprint-15d981f5a232",8200,50,10,23250,"15d981f5a232143cf9716658b1a726191418a78e0812b48360c8723c86bc1f51",410.0,322.64268585131896,497.35731414868104,true),
+        Definition("kodak_tri_x_400","medium120/v7/trix400-rails.png","mf120-v11-trix400-imprint-4eeb6adc6f6e",8200,50,10,20543,"4eeb6adc6f6ea1c5312a5006b501695fdf00279840b0f83d9a8ce2084247d127",410.0,312.2731707317073,507.7268292682927,true),
     )
     internal class Registry(all:List<Definition>) {
         private val byVersion=all.associateBy{it.stock to it.version}

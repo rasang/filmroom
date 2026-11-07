@@ -1,0 +1,50 @@
+{
+  "origin": "Five user-supplied JPEGs, appearance approved 2026-11-06",
+  "files": [
+    {
+      "name": "1000036444.jpg",
+      "size": 339135,
+      "dimensions": [
+        1320,
+        1758
+      ],
+      "sha256": "dbca3a2a931e0ab9ad026c34f7ecf766c528f40cedc4861a3e4bfe449bbcb455"
+    },
+    {
+      "name": "1000036443.jpg",
+      "size": 469892,
+      "dimensions": [
+        1320,
+        1758
+      ],
+      "sha256": "4c44cfe75ad7a52717533eb2e07e0196132c0043b46a5de15e1176e0cba2207c"
+    },
+    {
+      "name": "1000036445.jpg",
+      "size": 333739,
+      "dimensions": [
+        1320,
+        1758
+      ],
+      "sha256": "5c45cb51b8933478ff393ce864b48bedb9542c02a6758d9d628271c2dc8a9693"
+    },
+    {
+      "name": "1000036442.jpg",
+      "size": 299897,
+      "dimensions": [
+        1320,
+        1758
+      ],
+      "sha256": "ec5788ec6bfdf271c0b93316a493b9609fada7e718a37c75996a7205f3a94830"
+    },
+    {
+      "name": "1000036446.jpg",
+      "size": 370944,
+      "dimensions": [
+        1320,
+        1758
+      ],
+      "sha256": "de0ebff24848fe4bc1f8aee850d8838c8ed3cfe61ff4949c919692a77fd1f1fd"
+    }
+  ]
+}

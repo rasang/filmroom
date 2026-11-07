@@ -55,6 +55,11 @@ internal class AuthoredBwBorderRaster(
         taps(snapshot,x,y){i,j,w->if(geometry.imageWindow(i+.5,j+.5,super8Fringe))coverage+=w*(1-(data[j*width+i] ushr 24)/255.0)}
         return coverage.coerceIn(0.0,1.0)
     }
+    override fun holeCoverage(snapshot:BorderSnapshot,x:Double,y:Double):Double {
+        var coverage=0.0
+        taps(snapshot,x,y){i,j,w->if(!geometry.imageWindow(i+.5,j+.5,super8Fringe))coverage+=w*(1-(data[j*width+i] ushr 24)/255.0)}
+        return coverage.coerceIn(0.0,1.0)
+    }
     override fun sample(snapshot:BorderSnapshot,x:Double,y:Double,rgb:FloatArray) {
         var red=0.0;var green=0.0;var blue=0.0;var coverage=0.0
         taps(snapshot,x,y){i,j,w->

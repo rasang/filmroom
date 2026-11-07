@@ -66,6 +66,33 @@ pub fn apply_halation_um(
     halation_n_bounces: u32,
     halation_bounce_decay: f64,
     halation_renormalize: bool,
+    backend: &dyn ComputeBackend,
+) -> ImageBuf {
+    apply_halation_um_with_back_reflection(raw, pixel_size_um, scatter_amount,
+        scatter_spatial_scale, scatter_core_um, scatter_tail_um, scatter_tail_weight,
+        halation_amount, halation_spatial_scale, halation_strength, halation_first_sigma_um,
+        halation_n_bounces, halation_bounce_decay, halation_renormalize, false, 120., backend)
+}
+
+/// Extended physical model. The old public function retains its exact path.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_halation_um_with_back_reflection(
+    raw: &ImageBuf,
+    pixel_size_um: f32,
+    scatter_amount: f64,
+    scatter_spatial_scale: f64,
+    scatter_core_um: [f64; 3],
+    scatter_tail_um: [f64; 3],
+    scatter_tail_weight: [f64; 3],
+    halation_amount: f64,
+    halation_spatial_scale: f64,
+    halation_strength: [f64; 3],
+    halation_first_sigma_um: [f64; 3],
+    halation_n_bounces: u32,
+    halation_bounce_decay: f64,
+    halation_renormalize: bool,
+    back_reflection: bool,
+    base_thickness_um: f64,
     _backend: &dyn ComputeBackend,
 ) -> ImageBuf {
     // Per-channel implementation matching Python's `apply_halation_um`.
@@ -128,7 +155,22 @@ pub fn apply_halation_um(
         halation_strength[2] * halation_amount,
     ];
 
-    if halation_n_bounces >= 1 && (a_tot[0] > 0.0 || a_tot[1] > 0.0 || a_tot[2] > 0.0) {
+    if back_reflection && halation_amount > 0.0 && base_thickness_um > 0.0 {
+        let components = spektrafilm_math::halation::back_reflection_components(
+            base_thickness_um, halation_spatial_scale, halation_amount, pix_um_f64);
+        for c in 0..3 {
+            if a_tot[c] == 0.0 { continue; }
+            let mut halo = vec![ZERO; n_pix];
+            for component in &components {
+                let blurred = gaussian_blur_channel(&channels[c], w, h, component.sigma_px[c] as f32);
+                let weight = from_f64(component.weight[c]);
+                for i in 0..n_pix { halo[i] += weight * blurred[i]; }
+            }
+            let strength = from_f64(a_tot[c]);
+            let norm = from_f64(if halation_renormalize { 1.0 + a_tot[c] } else { 1.0 });
+            for i in 0..n_pix { channels[c][i] = (channels[c][i] + strength * halo[i].max(0.0)) / norm; }
+        }
+    } else if halation_n_bounces >= 1 && (a_tot[0] > 0.0 || a_tot[1] > 0.0 || a_tot[2] > 0.0) {
         let n_bounces = halation_n_bounces as usize;
         // Decay computed in f64 to match Python's `rho ** (k - 1)` and
         // subsequent normalize-by-sum at full f64 precision.
@@ -612,6 +654,20 @@ pub fn apply_diffusion_filter_um(
             .collect();
         out.write_channel(c, &mixed);
     }
+    out
+}
+
+/// CineStill-only source-energy restoration. The caller gates by stock and
+/// enabled halation. The maximum is global and measured after legacy boost.
+pub fn restore_halation_headroom(image: &ImageBuf, ev: f64, from_ev: f64, to_ev: f64) -> ImageBuf {
+    use rayon::prelude::*;
+    let maximum = image.data.iter().map(|v| *v as f64).fold(f64::NEG_INFINITY, f64::max);
+    let mut out = image.clone();
+    out.data.par_chunks_exact_mut(3).for_each(|rgb| {
+        let m = rgb.iter().map(|v| *v as f64).fold(f64::NEG_INFINITY, f64::max);
+        let gain = from_f64(spektrafilm_math::halation::headroom_gain(m, maximum, ev, from_ev, to_ev));
+        for v in rgb { *v *= gain; }
+    });
     out
 }
 
@@ -1229,5 +1285,47 @@ mod resident_prepass_tests {
         let out=blur_scattered_field_controlled(&CpuBackend,&small,&plan,||true).unwrap();
         assert_eq!(out.len(),18);
         assert!(out.iter().all(|v|(*v-0.5).abs()<1e-6));
+    }
+}
+
+#[cfg(test)]
+mod cinestill_back_reflection_tests {
+    use super::*;
+    use spektrafilm_gpu::cpu_backend::CpuBackend;
+    fn apply(image:&ImageBuf,new:bool,amount:f64)->ImageBuf {
+        apply_halation_um_with_back_reflection(image,10.,0.,1.,[2.2,2.,1.6],[9.3,9.7,9.1],
+            [0.78,0.65,0.67],amount,1.,if new{[0.30,0.03,0.003]}else{[0.30,0.10,0.015]},
+            [65.;3],3,0.5,true,new,120.,&CpuBackend)
+    }
+    #[test]
+    fn back_reflection_has_red_long_tail_and_conserves_a_constant_field() {
+        let flat=ImageBuf::from_data(257,3,vec![from_f64(0.184);257*3*3]);
+        let out=apply(&flat,true,1.);
+        assert!(out.data.iter().all(|v|(*v as f64-0.184).abs()<1e-7));
+        let mut source=ImageBuf::new(513,1);
+        for c in 0..3 {source.data[256*3+c]=from_f64(1.);}
+        let old=apply(&source,false,1.);let new=apply(&source,true,1.);
+        let far=|img:&ImageBuf,c:usize|->f64{(290..340).map(|x|img.data[x*3+c]as f64).sum()};
+        assert!(far(&new,0)>20.*far(&old,0));
+        // Compare the fraction of each channel's returned light, rather than
+        // inventing a fixed RGB ratio for an arbitrary finite annulus.
+        let returned=[0.30/1.30,0.03/1.03,0.003/1.003];
+        assert!(far(&new,0)/returned[0]>far(&new,1)/returned[1]);
+        let radius90=|c:usize| {let direct=1.-returned[c];let mut sum=0.;for r in 0..=256 {sum+=new.data[(256+r)*3+c]as f64;if r>0 {sum+=new.data[(256-r)*3+c]as f64;}else{sum-=direct;}if sum>=0.9*returned[c]{return r;}}256};
+        assert!(radius90(0)>radius90(1),"red radius {} green {}",radius90(0),radius90(1));
+        let minimum=new.data.iter().enumerate().min_by(|(_,a),(_,b)|a.total_cmp(b)).unwrap();
+        eprintln!("CINESTILL_PSF min_index={} min_value={} channel_sums={:?}",minimum.0,minimum.1,std::array::from_fn::<_,3,_>(|c|(0..513).map(|x|new.data[x*3+c]as f64).sum::<f64>()));
+        assert!(new.data.iter().all(|v|v.is_finite()&&*v>=from_f64(-1e-8)),"minimum {minimum:?}");
+        assert_eq!(apply(&source,true,0.).data,source.data);
+    }
+    #[test]
+    fn legacy_wrapper_is_bit_identical_and_headroom_preserves_pixel_hue() {
+        let source=ImageBuf::from_data(17,9,(0..17*9*3).map(|i|from_f64((i%79)as f64/20.)).collect());
+        let old=apply_halation_um(&source,10.,0.,1.,[2.2,2.,1.6],[9.3,9.7,9.1],[0.78,0.65,0.67],1.,1.,[0.30,0.10,0.015],[65.;3],3,0.5,true,&CpuBackend);
+        assert_eq!(old.data,apply(&source,false,1.).data);
+        let restored=restore_halation_headroom(&source,4.,1.5,2.5);
+        for (a,b) in source.data.chunks_exact(3).zip(restored.data.chunks_exact(3)) {
+            for c in 1..3 {assert!(((a[0]*b[c]-a[c]*b[0])as f64).abs()<1e-4);}
+        }
     }
 }

@@ -20,7 +20,7 @@ class BwNeutralFiltersHostTest {
         val rows=(0 until catalog.length()).map{catalog.getJSONObject(it)}
         val films=rows.filter{it.getString("kind") in listOf("negative","reversal")}.map{it.getString("id")}
         val papers=rows.filter{it.getString("kind") in listOf("paper","cine_print")}.map{it.getString("id")}
-        assertEquals(22,films.size);assertEquals(9,papers.size)
+        assertEquals(27,films.size);assertEquals(10,papers.size)
         var added=0
         for(film in films)for(paper in papers)for(light in listOf("TH-KG3","D65","D55","A")){
             val state=EditorState(filmStock=film,paperStock=paper,printIlluminant=light)
@@ -32,7 +32,7 @@ class BwNeutralFiltersHostTest {
                 if(present)added++
             }
         }
-        assertEquals(38,added)
+        assertEquals(43,added)
         assertFalse(BwNeutralFilterEntries.contains("unknown","kodak_2302","TH-KG3"))
     }
     @Test fun savedManualChoiceAndValuesSurviveSupportedAndUnsupportedIlluminants(){

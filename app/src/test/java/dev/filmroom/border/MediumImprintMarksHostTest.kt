@@ -40,7 +40,9 @@ class MediumImprintMarksHostTest {
     @Test fun all45LayoutsBothRotationsAndMaterialsRetainSourceColorsAndBounds(){
         val app=ApplicationProvider.getApplicationContext<Application>()
         var layouts=0;var moves=0
-        for(d in MediumStripDefinitions.definitions.values){
+        // These 45 separately reviewed design layouts predate the finite B&W rails.
+        // New physical strips do not automatically authorize moving their brand marks.
+        for(d in MediumStripDefinitions.definitions.values.filter{MediumImprintMarks.layout(frozen(it,MediumFormat.MF66,false,"print"))?.let{l -> !l.protectPhotoDate}==true}){
             val bitmap=app.assets.open(d.path).use{BitmapFactory.decodeStream(it)}!!
             val pixels=IntArray(bitmap.width*bitmap.height)
             bitmap.getPixels(pixels,0,bitmap.width,0,0,bitmap.width,bitmap.height);bitmap.recycle()

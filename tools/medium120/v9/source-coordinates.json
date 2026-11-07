@@ -1,0 +1,98 @@
+{
+  "coordinates": "Primary: reference1.jpg left panel cropped [19,0,657,612], rotated clockwise. Coordinates in resulting 612x638 image. Approximate visible ink bboxes, +/-2 px. Wedge tips checked separately at4x brightness on nearest-neighbor inspection grids.",
+  "nominal_aperture_width_px": 573,
+  "nominal_aperture_width_mm": 56,
+  "px_per_mm": 10.232142857142858,
+  "source_center_px": 306.9642857142857,
+  "source_covered_interval_px": [
+    0,
+    612
+  ],
+  "index_pitch_px": 425,
+  "index_pitch_basis": "Visible 4-to-5 starts differ about425px. It is an estimate from one pair, not factory calibration.",
+  "brand_period_px": 850,
+  "brand_period_basis": "Inferred twice the index pitch. No two consecutive brand legends are visible in the primary image.",
+  "primary_marks": [
+    {
+      "rail": 0,
+      "text": "4",
+      "bbox_px": [
+        53,
+        7,
+        66,
+        20
+      ]
+    },
+    {
+      "rail": 0,
+      "text": "wedge4",
+      "bbox_px": [
+        86,
+        6,
+        120,
+        18
+      ]
+    },
+    {
+      "rail": 0,
+      "text": "5",
+      "bbox_px": [
+        478,
+        5,
+        491,
+        20
+      ]
+    },
+    {
+      "rail": 0,
+      "text": "wedge5",
+      "bbox_px": [
+        510,
+        4,
+        545,
+        18
+      ]
+    },
+    {
+      "rail": 1,
+      "text": "FUJI 100 ACROS II",
+      "bbox_px": [
+        16,
+        620,
+        164,
+        632
+      ]
+    },
+    {
+      "rail": 1,
+      "text": "4586",
+      "bbox_px": [
+        431,
+        620,
+        470,
+        633
+      ]
+    }
+  ],
+  "secondary": {
+    "identity": "Separate physical-negative photograph, not continuous with primary. Supports13, narrow left wedge, FUJI100ACROSII,4586 and isolatedA. Warm scene illumination is not an orange mask.",
+    "observed_marks": [
+      "13",
+      "left_wedge",
+      "FUJI 100 ACROS II",
+      "4586",
+      "A"
+    ],
+    "unreadable": [
+      "clipped preceding number at lower photo edge"
+    ],
+    "use": "Identity and shape corroboration only. Isolated A cadence/phase is unverified and is not inserted into the primary model."
+  },
+  "model": {
+    "defaultCenterMm": 410.0,
+    "sourceCenterMm": 30.0,
+    "coverageStartMm": 320.0,
+    "coverageEndMm": 500.0,
+    "extension": "Explicit authored periodic approximation outside the primary60mm visible interval. Inferred index progression and two-index brand/code cycle; not a continuous source scan."
+  }
+}

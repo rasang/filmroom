@@ -1,0 +1,23 @@
+<resources>
+    <string name="preset_qr_title">配方二维码</string>
+    <string name="preset_qr_import">导入二维码</string>
+    <string name="preset_qr_share">分享二维码</string>
+    <string name="preset_qr_scan">扫描二维码</string>
+    <string name="preset_qr_album">从相册识别</string>
+    <string name="preset_qr_scan_prompt">将 Filmroom 配方二维码完整放入取景框</string>
+    <string name="preset_qr_camera_denied">未能使用相机。你仍可从相册选择二维码图片。</string>
+    <string name="preset_qr_save_new">存为新配方</string>
+    <string name="preset_qr_share_image">分享二维码图片</string>
+    <string name="preset_qr_image_description">Filmroom 配方二维码</string>
+    <string name="preset_qr_home">扫描或选择一张 Filmroom 配方二维码图片，全程离线。识别后先确认，不会自动应用到照片。</string>
+    <string name="preset_qr_import_scope">将存为新配方，不会覆盖已有配方或更改当前照片。包含胶卷、全部编辑参数、边框、构图、印字及自定义日期；旧二维码缺少的新参数使用默认值。之后可在配方列表中手动应用。</string>
+    <string name="preset_qr_share_scope">二维码包含此配方的全部编辑设置、构图和自定义日期，不含照片或原图元信息。任何收到二维码的人都能读取和导入。请分享原尺寸图片，避免压缩或裁掉白边。</string>
+    <string name="preset_qr_saved">已存为新配方。当前照片未改变，可返回配方列表后手动应用。</string>
+    <string name="preset_qr_done">完成</string>
+    <string name="preset_qr_working">正在本机处理…</string>
+    <string name="preset_qr_details">名称：%1$s\n胶卷：%2$s\n相纸：%3$s</string>
+    <string name="preset_qr_invalid">无法识别有效的 Filmroom 配方二维码，原有数据未改动。请选择清晰、完整的二维码图片重试。</string>
+    <string name="preset_qr_incompatible">此二维码包含当前版本不支持的格式、设置或胶卷。请更新 Filmroom 后再试，未导入或更改原有数据。</string>
+    <string name="preset_qr_too_large">此配方超出单张二维码的安全容量，未删减任何参数。当前无法用单码分享或导入，请保留原配方。</string>
+    <string name="preset_qr_share_failed">未能分享二维码图片，请检查可用空间后重试。</string>
+</resources>

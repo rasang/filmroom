@@ -130,14 +130,19 @@ impl InputGamutCompress {
     /// `ref_xy` is the film reference illuminant chromaticity — the
     /// compression's achromatic axis. Returns `lut` unchanged when inactive.
     pub fn remap(&self, lut: &TcLut, ref_xy: [f64; 2]) -> TcLut {
+        self.remap_controlled(lut, ref_xy, &mut || true).expect("unconditional gamut preparation")
+    }
+
+    pub fn remap_controlled(&self, lut: &TcLut, ref_xy: [f64; 2], checkpoint: &mut dyn FnMut() -> bool) -> Result<TcLut, String> {
         if !self.active {
-            return lut.clone();
+            return Ok(lut.clone());
         }
         let size = lut.size;
         let ch = lut.channels;
         let inv = 1.0 / (size as f64 - 1.0);
         let mut data = vec![0.0f64; size * size * ch];
         for i in 0..size {
+            if !checkpoint() { return Err("Spectral preparation cancelled".into()); }
             for j in 0..size {
                 // Step 1: tc cell → CIE xy.
                 let (x, y) = spectral::tc_to_xy(i as f64 * inv, j as f64 * inv);
@@ -152,11 +157,11 @@ impl InputGamutCompress {
                 data[base..base + ch].copy_from_slice(&sample[..ch]);
             }
         }
-        TcLut {
+        Ok(TcLut {
             size,
             channels: ch,
             data,
-        }
+        })
     }
 }
 

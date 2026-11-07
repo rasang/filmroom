@@ -44,6 +44,30 @@ pub fn boost_planes(paths:&[PathBuf;3],pixels:u64,boost_ev:f64,boost_range:f64,p
     Ok(())
 }
 
+/// Exact full-frame headroom reduction and channel-shared pointwise gain.
+/// Operates on owned scratch after legacy boost, before spatial filtering.
+pub fn headroom_planes(paths:&[PathBuf;3],pixels:u64,ev:f64,from_ev:f64,to_ev:f64,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(u64,u64))->io::Result<()> {
+    if pixels==0 || !ev.is_finite() || !(0.0..=8.0).contains(&ev) || !from_ev.is_finite() || !to_ev.is_finite() || to_ev<=from_ev {return Err(invalid("Invalid halation headroom"));}
+    if ev==0. {return Ok(());}
+    let mut maximum=f64::NEG_INFINITY;let mut done=0;
+    for path in paths {
+        if fs::metadata(path)?.len()!=pixels*8 {return Err(invalid("Invalid headroom plane size"));}
+        let mut f=File::open(path)?;let mut at=0;
+        while at<pixels {check(&mut cancelled)?;let len=(pixels-at).min(BLOCK as u64)as usize;for v in read64(&mut f,len)? {maximum=maximum.max(v);}at+=len as u64;done+=len as u64;progress(done,6*pixels);}
+    }
+    if maximum<=0. {progress(6*pixels,6*pixels);return Ok(());}
+    let mut files=paths.iter().map(|p|OpenOptions::new().read(true).write(true).open(p)).collect::<io::Result<Vec<_>>>()?;
+    let mut at=0;
+    while at<pixels {
+        check(&mut cancelled)?;let len=(pixels-at).min(BLOCK as u64)as usize;
+        let mut planes=files.iter_mut().map(|f|read64(f,len)).collect::<io::Result<Vec<_>>>()?;
+        for i in 0..len {let m=planes[0][i].max(planes[1][i]).max(planes[2][i]);let gain=spektrafilm_math::halation::headroom_gain(m,maximum,ev,from_ev,to_ev);for ch in 0..3 {planes[ch][i]*=gain;}}
+        for ch in 0..3 {files[ch].seek(SeekFrom::Start(at*8))?;write64(&mut files[ch],&planes[ch])?;}
+        at+=len as u64;done+=3*len as u64;progress(done,6*pixels);
+    }
+    Ok(())
+}
+
 /// Sequential lognormal percentages BEFORE blur and division by100. Caller
 /// applies exact global Gaussian blur (if >0), then *0.01, then scanner offset.
 /// One field is shared by all channels and must be generated only once.
@@ -84,6 +108,18 @@ pub fn write_microstructure_field(output:&Path,width:u32,height:u32,channel:usiz
   for params in [(2.,0.3,1.),(0.5,1.,4.),(3.,0.,0.)]{for ch in 0..3{fs::write(&paths[ch],image.data.chunks_exact(3).flat_map(|p|(p[ch]as f64).to_le_bytes()).collect::<Vec<_>>()).unwrap();}
    let want=spektrafilm_model::diffusion::boost_highlights(&image,params.0,params.1,params.2);boost_planes(&paths,w as u64*h as u64,params.0,params.1,params.2,||false,|_,_|{}).unwrap();for ch in 0..3{for(a,p)in values(&paths[ch]).iter().zip(want.data.chunks_exact(3)){assert_eq!(a.to_bits(),(p[ch]as f64).to_bits());}}
   }fs::remove_dir_all(root).unwrap();
+ }
+ #[test]fn cinestill_headroom_planes_match_whole_frame_after_legacy_boost(){
+  let root=root("headroom");let paths=std::array::from_fn(|i|root.join(format!("p{i}")));let(w,h)=(257u32,129u32);
+  let data:Vec<_>=(0..w*h*3).map(|i|from_f64(0.001+(i*17%997)as f64/97.)).collect();let input=ImageBuf::from_data(w,h,data);
+  for boost in [0.,2.] {
+   let image=spektrafilm_model::diffusion::boost_highlights(&input,boost,0.3,4.);
+   for ch in 0..3{fs::write(&paths[ch],image.data.chunks_exact(3).flat_map(|p|(p[ch]as f64).to_le_bytes()).collect::<Vec<_>>()).unwrap();}
+   let want=spektrafilm_model::diffusion::restore_halation_headroom(&image,4.,1.5,2.5);
+   headroom_planes(&paths,w as u64*h as u64,4.,1.5,2.5,||false,|_,_|{}).unwrap();
+   for ch in 0..3{for(a,p)in values(&paths[ch]).iter().zip(want.data.chunks_exact(3)){assert_eq!(a.to_bits(),(p[ch]as f64).to_bits());}}
+  }
+  fs::remove_dir_all(root).unwrap();
  }
  #[test]fn glare_field_and_global_blur_match_original(){
   let root=root("glare");let(w,h)=(31u32,23u32);let raw=root.join("raw");let blurred=root.join("blurred");write_glare_field(&raw,w,h,1.2,0.7,42,||false,|_,_|{}).unwrap();let want=spektrafilm_model::glare::compute_random_glare_amount(w,h,1.2,0.7,2.,42);

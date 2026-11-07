@@ -34,7 +34,10 @@ internal object HeicMemoryPolicy {
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56e47360aaca))
         // Original output + decoder frame + orientation intermediate + YUV/reference buffers.
         // Budget for full image even if a platform advertises region/subsample decoding.
+        dev.filmroom.diagnostics.ImportObservation.current()?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_ESTIMATE
         val estimate = Math.addExact(Math.addExact(FIXED_BYTES, Math.multiplyExact(pixels, 32L)),encodedBytes)
+        runCatching { dev.filmroom.diagnostics.ImportObservation.current()?.let { it.memory=(it.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(estimatedBytes=estimate)
+            if(estimate>2L*1024*1024*1024)it.failure(dev.filmroom.diagnostics.ImportMemoryFailure.HEIC_ESTIMATE_LIMIT) } }
         if(estimate>2L*1024*1024*1024)throw PhotoException(PhotoException.Reason.TOO_LARGE,
             dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_9ff6012fdde9))
         return estimate
@@ -48,6 +51,7 @@ internal interface HeicPixels : AutoCloseable {
     fun readRow(y: Int, argb: IntArray)
 }
 internal interface HeicBackend {
+    val supportsIndependentTiles: Boolean get() = false
     fun supported(): Boolean
     fun decode(file: File, info: HeicContainer.Info, job: CoroutineContext): HeicPixels
 }
@@ -143,6 +147,7 @@ internal object HeicPlatformPolicy {
 }
 
 internal object AndroidHeicBackend : HeicBackend {
+    override val supportsIndependentTiles = true
     override fun supported() = ImageDecoder.isMimeTypeSupported("image/heif")
     override fun decode(file: File, info: HeicContainer.Info, job: CoroutineContext): HeicPixels {
         var bitmap: Bitmap? = null
@@ -182,23 +187,63 @@ internal object AndroidHeicBackend : HeicBackend {
 internal class HeicImport(
     private val memory: () -> NativeMemorySnapshot,
     private val backend: HeicBackend = AndroidHeicBackend,
+    private val gridEnabled: Boolean,
 ) {
+    // Preserve the existing constructor and its default-backend ABI. Candidate use
+    // is explicit until Android pixel/PSS/export acceptance is completed.
+    constructor(memory: () -> NativeMemorySnapshot, backend: HeicBackend = AndroidHeicBackend) :
+        this(memory, backend, false)
     suspend fun write(file: File, info: HeicContainer.Info, target: File, job: CoroutineContext) {
         job.ensureActive()
         if (!backend.supported()) rejectHeic(CodecErrorCode.HEIC_NO_PLATFORM_DECODER,
             dev.filmroom.R.string.text_dfe135051811,CodecStage.DECODE)
-        val estimate = HeicMemoryPolicy.estimatedBytes(info,file.length())
+        val fullEstimate = HeicMemoryPolicy.estimatedBytes(info,file.length())
+        val plan = try {
+            if(gridEnabled && backend.supportsIndependentTiles)
+                HeicGridInput.planOrNull(file,info) {job.ensureActive()} else null
+        } catch (error: HeicGridInput.Rejected) {
+            val reason = when(error.failure) {
+                HeicContainer.Failure.INVALID -> PhotoException.Reason.UNREADABLE
+                HeicContainer.Failure.LIMIT -> PhotoException.Reason.TOO_LARGE
+                HeicContainer.Failure.UNSUPPORTED -> PhotoException.Reason.UNSUPPORTED
+            }
+            val code = when(error.failure) {
+                HeicContainer.Failure.INVALID -> CodecErrorCode.HEIC_CONTAINER_INVALID
+                HeicContainer.Failure.LIMIT -> CodecErrorCode.HEIC_CONTAINER_LIMIT
+                HeicContainer.Failure.UNSUPPORTED -> CodecErrorCode.HEIC_CONTAINER_UNSUPPORTED
+            }
+            throw PhotoException(reason, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_0f079bb732f5),
+                error, codecCode=code, codecStage=CodecStage.VALIDATE)
+        }
+        val estimate = plan?.estimatedBytes ?: fullEstimate
+        if(plan!=null) job[dev.filmroom.diagnostics.ImportObservation]?.let { observation ->
+            observation.memory=(observation.memory ?: dev.filmroom.diagnostics.ImportMemoryInfo()).copy(estimatedBytes=estimate)
+        }
         val expected = LinearRgb.byteCount(info.displayWidth, info.displayHeight)
-        if (target.parentFile!!.usableSpace < expected + PhotoLimits.IMPORT_RESERVE_BYTES) {
+        if (target.parentFile!!.usableSpace < expected + (plan?.maximumViewBytes ?: 0L) + PhotoLimits.IMPORT_RESERVE_BYTES) {
             throw PhotoException(PhotoException.Reason.STORAGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_ba94a97c604b))
         }
         require(!target.exists())
         var created = false
         var completed = false
         try {
+            job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_ADMISSION
             NativeWorkReservations.run(estimate, memory) {
                 job.ensureActive()
-                backend.decode(file, info, job).use { pixels ->
+                job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_PLATFORM
+                if(plan!=null) {
+                    check(target.createNewFile());created=true
+                    HeicGridSpool.write(plan,backend,target,job) { written ->
+                        val snapshot=memory()
+                        val headroom=if(snapshot.thresholdBytes>=0 && snapshot.availableBytes>snapshot.thresholdBytes)
+                            snapshot.availableBytes-snapshot.thresholdBytes else 0L
+                        val capacity=(headroom-64L*1024*1024).coerceAtLeast(0)/2
+                        if(snapshot.lowMemory || estimate+16L*1024*1024>capacity)throw NativeWorkUnavailable()
+                        if(target.parentFile!!.usableSpace<expected-written+plan.maximumViewBytes+PhotoLimits.IMPORT_RESERVE_BYTES)
+                            throw HeicPrimaryInput.Storage()
+                    }
+                } else backend.decode(file, info, job).use { pixels ->
+                    job[dev.filmroom.diagnostics.ImportObservation]?.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.HEIC_SPOOL
                     job.ensureActive()
                     if (pixels.width != info.displayWidth || pixels.height != info.displayHeight)
                         throw IOException("HEIC decoder changed dimensions")
@@ -230,10 +275,14 @@ internal class HeicImport(
             job.ensureActive()
             if (target.length() != expected) throw IOException("Incomplete HEIC linear source")
             completed = true
+        } catch (_: HeicPrimaryInput.Storage) {
+            throw PhotoException(PhotoException.Reason.STORAGE,
+                dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_ba94a97c604b))
         } catch (_: NativeWorkUnavailable) {
             throw PhotoException(PhotoException.Reason.TOO_LARGE,
                 dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_f1632bf9ae5b))
         } catch (error: OutOfMemoryError) {
+            job[dev.filmroom.diagnostics.ImportObservation]?.let { it.failure(if(it.memoryStage==dev.filmroom.diagnostics.ImportMemoryStage.HEIC_PLATFORM)dev.filmroom.diagnostics.ImportMemoryFailure.HEIC_PLATFORM_ALLOCATION else dev.filmroom.diagnostics.ImportMemoryFailure.JVM_ALLOCATION) }
             throw PhotoException(PhotoException.Reason.TOO_LARGE,
                 dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_389695202ee7), error)
         } finally { if (!completed && created) target.delete() }

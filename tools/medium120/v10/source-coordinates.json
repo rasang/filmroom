@@ -1,0 +1,68 @@
+{
+  "coordinates": "Musicians reproduction, 1400x1349 JPEG, rotated clockwise to1349x1400. Hand-inspected visible mark boxes, approximately +/-2px. No camera-notch shape is modeled. Nominal cross-film aperture estimated from portrait x80..1340; camera skew and notches make this approximate.",
+  "nominal_aperture_cross_px": 1260,
+  "nominal_aperture_cross_mm": 56,
+  "px_per_mm": 22.5,
+  "source_center_px": 674.5,
+  "source_covered_interval_px": [
+    0,
+    1349
+  ],
+  "brand_period_px": 1162,
+  "brand_period_basis": "Approximate start136 of complete block to start1298 of next clipped KO block. Only one complete block; constant repetition beyond it is inferred.",
+  "index_period_px": 1162,
+  "index_period_basis": "Presentation assumption equal to brand pitch. Only index9 is observed; no physical sequential-index cadence is claimed.",
+  "primary_marks": [
+    {
+      "rail": 0,
+      "text": "KODAK PKR 6033",
+      "kind": "reverse_panel",
+      "bbox_px": [
+        136,
+        9,
+        506,
+        41
+      ]
+    },
+    {
+      "rail": 1,
+      "text": "PKR",
+      "kind": "text",
+      "bbox_px": [
+        633,
+        1363,
+        732,
+        1394
+      ]
+    },
+    {
+      "rail": 1,
+      "text": "outline_right_triangle",
+      "kind": "triangle",
+      "bbox_px": [
+        738,
+        1364,
+        795,
+        1393
+      ]
+    },
+    {
+      "rail": 1,
+      "text": "9",
+      "kind": "text",
+      "bbox_px": [
+        802,
+        1363,
+        833,
+        1394
+      ]
+    }
+  ],
+  "model": {
+    "defaultCenterMm": 410.0,
+    "coverageStartMm": 320.0,
+    "coverageEndMm": 500.0,
+    "rail_width_mm": 2.5,
+    "extension": "Finite authored periodic approximation. Observed label and index9 remain distinguished from inferred adjacent8/10 and repetitions."
+  }
+}

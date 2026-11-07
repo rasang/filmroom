@@ -1,0 +1,152 @@
+{
+  "asset_version": "mf120-v10-kodachrome64-42ed192f4558",
+  "policy": "Centered date/exposure; complete conflicting lower PKR-triangle-number groups copied outward. Upper reverse-panel untouched; layout design,not factory positions.",
+  "layouts": [
+    {
+      "format": "MF645",
+      "widthMm": 47.5,
+      "cropStartPx": 3862,
+      "cropWidthPx": 475,
+      "clearStartMm": 10.95,
+      "clearEndMm": 36.55,
+      "moves": [
+        {
+          "left": 219,
+          "right": 310,
+          "targetMm": 37.25,
+          "label": "PKR outline triangle index"
+        }
+      ],
+      "marks": [
+        {
+          "sourcePx": [
+            219,
+            310
+          ],
+          "targetMm": 37.25
+        }
+      ]
+    },
+    {
+      "format": "MF66",
+      "widthMm": 62,
+      "cropStartPx": 3790,
+      "cropWidthPx": 620,
+      "clearStartMm": 15.0,
+      "clearEndMm": 47.0,
+      "moves": [
+        {
+          "left": 291,
+          "right": 382,
+          "targetMm": 47.7,
+          "label": "PKR outline triangle index"
+        }
+      ],
+      "marks": [
+        {
+          "sourcePx": [
+            291,
+            382
+          ],
+          "targetMm": 47.7
+        }
+      ]
+    },
+    {
+      "format": "MF67",
+      "widthMm": 76,
+      "cropStartPx": 3720,
+      "cropWidthPx": 760,
+      "clearStartMm": 18.5,
+      "clearEndMm": 57.5,
+      "moves": [
+        {
+          "left": 361,
+          "right": 452,
+          "targetMm": 58.2,
+          "label": "PKR outline triangle index"
+        }
+      ],
+      "marks": [
+        {
+          "sourcePx": [
+            361,
+            452
+          ],
+          "targetMm": 58.2
+        }
+      ]
+    },
+    {
+      "format": "MF69",
+      "widthMm": 90,
+      "cropStartPx": 3650,
+      "cropWidthPx": 900,
+      "clearStartMm": 22.5,
+      "clearEndMm": 67.5,
+      "moves": [
+        {
+          "left": 431,
+          "right": 522,
+          "targetMm": 68.2,
+          "label": "PKR outline triangle index"
+        }
+      ],
+      "marks": [
+        {
+          "sourcePx": [
+            0,
+            5
+          ],
+          "targetMm": 0.0
+        },
+        {
+          "sourcePx": [
+            431,
+            522
+          ],
+          "targetMm": 68.2
+        }
+      ]
+    },
+    {
+      "format": "MF617",
+      "widthMm": 174,
+      "cropStartPx": 3230,
+      "cropWidthPx": 1740,
+      "clearStartMm": 60.5,
+      "clearEndMm": 113.5,
+      "moves": [
+        {
+          "left": 851,
+          "right": 942,
+          "targetMm": 114.2,
+          "label": "PKR outline triangle index"
+        }
+      ],
+      "marks": [
+        {
+          "sourcePx": [
+            334,
+            425
+          ],
+          "targetMm": 33.4
+        },
+        {
+          "sourcePx": [
+            851,
+            942
+          ],
+          "targetMm": 114.2
+        },
+        {
+          "sourcePx": [
+            1367,
+            1469
+          ],
+          "targetMm": 136.7
+        }
+      ]
+    }
+  ]
+}

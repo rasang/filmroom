@@ -24,9 +24,10 @@ data class MediumFrameGeometry(val format:MediumFormat,val portrait:Boolean) {
         else (centerMm-(format.longitudinalMm+6.0)/2+x) to y
 }
 
-/** Profile aliases share exactly one physical strip. Unsupported 135-only stocks fail closed. */
+/** Profile aliases share exactly one physical strip. Unreviewed strips fail closed.
+ * Absence here does not imply that a stock never existed in 120. See the source audit. */
 object MediumFormatStocks {
-    val profiles:Map<String,String> = listOf("kodak_portra_160","kodak_portra_400","kodak_portra_800","kodak_gold_200","kodak_ektar_100","kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100","fujifilm_pro_400h").associateWith{it} + mapOf(
+    val profiles:Map<String,String> = listOf("kodak_portra_160","kodak_portra_400","kodak_portra_800","kodak_gold_200","kodak_ektar_100","kodak_ektachrome_100","fujifilm_provia_100f","fujifilm_velvia_100","fujifilm_pro_400h","ilford_hp5_plus_400","kodak_tmax_100","kodak_tri_x_400","cinestill_800t","fujifilm_neopan_acros_100_ii","kodak_kodachrome_64").associateWith{it} + mapOf(
         "kodak_portra_800_push1" to "kodak_portra_800", "kodak_portra_800_push2" to "kodak_portra_800")
     fun available(stock:String)=profiles.containsKey(stock)
     fun physicalStock(stock:String)=requireNotNull(profiles[stock]){"No reviewed 120 strip for $stock"}

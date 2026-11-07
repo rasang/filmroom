@@ -4,6 +4,11 @@ package dev.filmroom.model
  * Generated from the bundled filter DB; host tests verify every pair and illuminant. */
 internal object BwNeutralFilterEntries {
     private val pairs=setOf(
+        "cinestill_800t|kodak_2302|TH-KG3",
+        "kodak_tri_x_400|ilford_multigrade_iv_rc|TH-KG3",
+        "kodak_tmax_100|ilford_multigrade_iv_rc|TH-KG3",
+        "fujifilm_neopan_acros_100_ii|ilford_multigrade_iv_rc|TH-KG3",
+        "ilford_hp5_plus_400|ilford_multigrade_iv_rc|TH-KG3",
         "kodak_trix|kodak_ultra_endura|TH-KG3",
         "kodak_doublex|kodak_ultra_endura|TH-KG3",
         "kodak_trix|kodak_endura_premier|TH-KG3",

@@ -7,9 +7,9 @@ import java.io.File
 
 /** Final-stage float crop only: no source/film/AE mutation, no encoding or 8-bit roundtrip. */
 object CropCompositor {
-    fun workingBytes(s:CropSnapshot)=s.sourceWidth*36L+s.outputWidth*36L+128L*1024
+    fun workingBytes(s:CropSnapshot)=s.sourceWidth*36L+s.outputWidth*36L+128L*1024+if(s.settings.transform.straightenDegrees!=0.0)dev.filmroom.border.FinalImageTileCache.workingBytes(s.sourceWidth,s.sourceHeight)+s.outputWidth*12L else 0L
     fun additionalDiskBytes(s:CropSnapshot,withImprint:Boolean=false)=if(s.isIdentity && !withImprint)0L else Math.addExact(Math.multiplyExact(s.outputBytes,3L),8L*1024*1024)
-    internal fun map(s:CropSnapshot)=FinalImageSampling(s.sourceWidth,s.sourceHeight,s.outputWidth,s.sourceRect,0.0,0.0,s.outputWidth,s.outputHeight)
+    internal fun map(s:CropSnapshot)=FinalImageSampling(s.sourceWidth,s.sourceHeight,s.outputWidth,s.sourceRect,0.0,0.0,s.outputWidth,s.outputHeight,transform=s.settings.effectiveTransform(s.canonicalWidth,s.canonicalHeight),canonicalWidth=s.canonicalWidth,canonicalHeight=s.canonicalHeight)
     internal fun row(map:FinalImageSampling,first:FloatArray,second:FloatArray,fy:Double,out:FloatArray){
         for(x in map.x0.indices)for(c in 0..2)out[x*3+c]=map.sample(first,second,fy,x,c).toFloat()
     }

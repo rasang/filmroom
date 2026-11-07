@@ -30,7 +30,7 @@ class ExportPreviewEmphasisHostTest {
   v.setForeground(false);assertFalse(v.animating);v.release()
  }
  @Test fun controlledBeforeAfterFramesAndReducedMotion(){
-  val dir=File("/workspace/shared/scan-preview17-staging/visuals").apply{mkdirs()};val v=view(true)
+  val dir=File(System.getProperty("filmroom.imprint.evidenceDir") ?: "/workspace/shared/scan-preview17-staging/visuals").apply{mkdirs()};val v=view(true)
   fun save(name:String){File(dir,"$name.png").outputStream().use{bitmap(v).compress(Bitmap.CompressFormat.PNG,100,it)}}
   save("stage2-peak-original");v.setBreathing(true,true)
   repeat(10){(field(v,"emphasis")as ValueAnimator).setCurrentFraction(it/9f);save("strength-${it.toString().padStart(2,'0')}")}

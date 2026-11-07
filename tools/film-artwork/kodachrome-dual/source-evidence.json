@@ -1,0 +1,12 @@
+{
+  "source_url": "https://www.pacificrimcamera.com/rl/03708/03708.pdf",
+  "source_page": 8,
+  "source_pdf_sha256": "9e1d5b4ef475e11f90d536f936582bc135d9186a655636d71a33d9a95ad1e0bd",
+  "observed": "Bare PKR120 roll, yellow backing paper and horizontal black stripes, red band, PKR/120/KODACHROME text, black flanges",
+  "approximate": "Simplified type; unreadable tiny print and unseen circumference; generic approved 120 spool geometry including drive slot rather than photogrammetric reconstruction",
+  "preserved": "Original 135 label image and material, 135 mesh with x translation only, original camera and lights",
+  "input_hashes": {
+    "approved-pair-template.blend": "a7f74d888b76499cc3e4c1567382c8c7fc0d1eac291cd7572ee085713c14d53c",
+    "approved-single135.blend": "46dd348a1701f09d5b2fda34c623bd7a1b6870b6d801ee8e68f7033efb98f762"
+  }
+}

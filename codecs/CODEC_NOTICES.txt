@@ -1,3 +1,5 @@
+Fujifilm RAF candidate source update: Rawler 0.7.2 is locally modified for bounded RAF metadata, logical compressed-length checks, entropy boundary validation and cancellable decoding. The checked-in modified vendor source and checksums, not the original registry archive, are required to rebuild. Existing LGPL-2.1/LibRaw/RawSpeed copyright notices remain in the source. Filmroom's separate basic X-Trans interpolation is GPL-3.0-or-later application code. See codecs/FUJIFILM_RAF_NOTICE.md and docs/FUJIFILM_RAF.md for scope and actual validation status. This supersedes any older generic claim below that no Rawler source was modified.
+
 # Source and licenses
 
 The adapter is GPL-3.0-or-later. Its integration follows the approved Spektrafilm Rust reference:

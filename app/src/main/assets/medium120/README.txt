@@ -20,4 +20,22 @@ Runtime v1 contract (2026-11-03): Each PNG losslessly packs the source master's 
 
 Nominal windows are 56×41.5, 56×56, 70×56, 84×56 and 168×56mm. The 3mm at either longitudinal end is a design allowance, not a measured camera gate. 645 landscape rotates the strip clockwise; portrait rotates that orientation back. 6×6 orientation is stored explicitly. Rectangular aperture feather is presentation only.
 
-Positive display preserves the authored illustrative RGB. Negative direct route uses the same ink mask with a synthetic orange base and dark lettering (sRGB base 0.58/0.29/0.12, ink 0.14/0.08/0.04). This is a display illustration, not measured transmission, sensitometry or a calibrated inverse scan. E100, Provia and Velvia remain reversal/positive. The existing route and hole-matte preference remain frozen in each snapshot; hole preference has no visual effect because 120 has no perforations. Asset identity and frozen appearance jointly select these versioned display semantics.
+Positive display preserves the authored illustrative RGB. Negative direct route uses the same ink mask with a synthetic orange base and dark lettering (sRGB base 0.58/0.29/0.12, ink 0.14/0.08/0.04). This is a display illustration, not measured transmission, sensitometry or a calibrated inverse scan. E100, Provia and Velvia remain reversal/positive. The existing route and hole-matte preference remain frozen in each snapshot; hole preference has no visual effect because these selected 120 models have no perforations (some historical/converted products do). Asset identity and frozen appearance jointly select these versioned display semantics.
+
+v7 adds three finite reference-guided monochrome strips: Ilford HP5 PLUS and Kodak
+T-MAX 100 plus TRI-X 400 (400TX, not 7266). These are self-authored approximations, not photographic pixels or
+physically calibrated scans. The T-MAX nominal coverage is only 174.715 mm,
+so its 6x17 crop has a narrow model margin. Unknown regions cannot be cropped.
+Neutral-gray negative presentation avoids inventing an orange mask for B&W.
+See tools/medium120/v7/README.md and docs/120_FILM_AUDIT_20261106.md for all
+sources, unsupported-but-real 120 products, and remaining evidence gaps.
+
+V8 (2026-11-06): CineStill800T uses five user-approved visual references. It is an unperforated authored appearance, not an authenticated continuous-roll scan. Four short unobserved seams are explicitly approximated blank; source photos are not packaged. All formats crop the same finite 310.209mm authored span. See tools/medium120/v8/README.md for precise sources, marks and limitations. Original65mm5219 and historical perforated CineStill120 prototypes are separate products.
+
+v9 adds Acros II 120 from the user-approved comparison left panel and a separate
+physical-negative photograph. About 59.8mm is directly observed; the finite 180mm
+model uses explicitly declared periodic extension for the larger formats. No
+first-generation Acros marks, photograph pixels or orange mask are used. Date
+and exposure stay centered while conflicting lower marks move outward. See tools/medium120/v9/README.md.
+
+Kodachrome 64 Professional 120 v10: authored KODAK PKR 6033 reverse-panel and PKR/hollow-triangle/index 9 from the Musicians reproduction. All five formats crop one finite 180 mm model. Adjacent indices, cadence, typeface and tint are approximate; only about 60 mm is directly visible. See tools/medium120/v10/README.md and source/evidence manifests. No 135 code 5033, perforations, camera notches or scientific profile changes.

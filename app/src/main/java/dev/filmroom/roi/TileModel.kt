@@ -1,6 +1,7 @@
 package dev.filmroom.roi
 
 import android.graphics.Bitmap
+import dev.filmroom.diagnostics.DetailTiming
 import kotlin.math.*
 
 /** Strings must identify immutable snapshots, never a mutable path/parameter object. */
@@ -29,10 +30,12 @@ data class TileId(val x: Int, val y: Int) {
 }
 enum class TileQuality { Exact, ApproximateTestOnly }
 /** Provider transfers exclusive ownership; it must not recycle or mutate after returning. */
-data class TileResult(val key: RenderKey, val coreRect: PixelRect, val sampleRect: PixelRect, val bitmap: Bitmap, val quality: TileQuality) {
+data class TileResult(val key: RenderKey, val coreRect: PixelRect, val sampleRect: PixelRect, val bitmap: Bitmap, val quality: TileQuality, val diagnosticTiming:DetailTiming?=null) {
     val outputRect get() = coreRect // Global logical coverage, excluding display-filter samples.
 }
 fun interface TileProvider {
+    fun startTiming():DetailTiming?=null
+    fun renderTimed(key:RenderKey,outputRect:PixelRect,cancelled:()->Boolean,timing:DetailTiming?):TileResult=render(key,outputRect,cancelled)
     /** Only worker calls this. Return the requested core and its 1px valid-image sampleRect.
      * RegionScheduler requests a tight visible rectangle; legacy TileScheduler requests fixed cells.
      * Render gutter from the SAME global coordinates/phase, not replicated core edges.

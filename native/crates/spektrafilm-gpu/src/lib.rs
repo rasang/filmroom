@@ -2,6 +2,8 @@
 pub const RESIDENT_APPROXIMATION_VERSION: &str = "resident-f32-psf6-cap64-fir256-grain-rms-v1";
 
 pub mod cpu_backend;
+#[cfg(feature = "resource-audit")]
+pub mod resource_audit;
 #[cfg(feature = "cuda-backend")]
 pub mod cuda_backend;
 #[cfg(feature = "wgpu-backend")]
@@ -9,8 +11,10 @@ pub mod wgpu_backend;
 
 use spektrafilm_math::image::ImageBuf;
 
-/// Maximum four stratified samples for a 256 x 256 negative thumbnail.
-pub const MAX_FILM_DENSITY_SAMPLES: usize = 256 * 256 * 4;
+/// Maximum four stratified samples for a 384 x 384 negative thumbnail.
+/// Caller admission still owns all sample/gather memory; device binding and
+/// dispatch limits are checked independently before optional capture starts.
+pub const MAX_FILM_DENSITY_SAMPLES: usize = 384 * 384 * 4;
 
 /// A caller-owned thumbnail sample ID and coordinates local to the input tile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -258,7 +262,8 @@ impl<'a> ChainImage<'a> {
 /// DIR couplers, …) doesn't churn every callsite.
 #[derive(Clone)]
 pub struct FilmChainParams<'a> {
-    /// Large export only: fence bounded spatial batches, preserving GPU intermediates.
+    pub start_at: ChainStart,
+    /// Large export and bounded preview tiles: fence spatial batches, preserving GPU intermediates.
     pub stage_batched: bool,
     pub image: ChainImage<'a>,
     /// RGB → film-raw front pass (the configured upsampler).
@@ -398,6 +403,10 @@ pub struct DiffusionGpuPlan {
     pub coeffs: Vec<[f32; 3]>,
 }
 
+/// Input color domain of the resident chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainStart { Rgb, FilmLog, CorrectedDensity }
+
 /// Where the resident film chain should stop, and what it returns. The
 /// default is [`ChainStop::Full`]; the other variants exist for the banded
 /// diffusion pre-pass, which taps the chain state at a diffusion filter's
@@ -405,6 +414,10 @@ pub struct DiffusionGpuPlan {
 /// whole frame instead of per band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainStop {
+    /// Exact f32 density after DIR, before grain.
+    CorrectedDensity,
+    /// Camera optics completed; returns unclamped f32 film log exposure.
+    FilmLog,
     /// Run the whole chain; the readback holds the final RGB.
     Full,
     /// Stop right after the front pass + highlight boost; the readback holds
@@ -479,6 +492,10 @@ impl DiffusionScatteredGpu<'_> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct HighlightBoostGpuParams {
+    /// Film-specific shared RGB headroom after the user highlight boost.
+    pub headroom_ev: f32,
+    pub headroom_from_ev: f32,
+    pub headroom_to_ev: f32,
     /// Whole-image front-pass maximum for banded exports, never a band maximum.
     pub max_raw_override: Option<f32>,
     pub boost_ev: f32,
@@ -616,12 +633,45 @@ pub struct GlareGpuParams {
     pub full_width: u32,
 }
 
+/// Physical PSF support. Small kernels match the CPU round-half-up FIR;
+/// wide kernels retain full 3σ support without the historical radius cap.
+/// Reserve signed-index headroom for shader x/y + kernel offsets.
+pub fn back_reflection_fir_radius(sigma_px: f32) -> Option<u32> {
+    let sigma = sigma_px as f64;
+    let radius = if sigma_px < 3.0 { (3.0 * sigma + 0.5).floor() } else { (3.0 * sigma).ceil() };
+    (sigma_px.is_finite() && sigma_px >= 0.0 && radius < (i32::MAX / 4) as f64)
+        .then_some(radius as u32)
+}
+
+/// Conservative twelve-kernel storage plus construction/upload scratch.
+/// Shared by whole/tiled exports and detail preflight, including disabled-GPU builds.
+pub fn back_reflection_working_bytes(base_um: f64, scale: f64, amount: f64, pitch_um: f64) -> Option<u64> {
+    if ![base_um,scale,amount,pitch_um].iter().all(|v|v.is_finite())
+        || base_um<=0. || scale<0. || amount<0. || pitch_um<=0. { return None; }
+    let mut bytes=0u64;
+    for component in spektrafilm_math::halation::back_reflection_components(base_um,scale,amount,pitch_um) {
+        for sigma in component.sigma_px {
+            let radius=back_reflection_fir_radius(sigma as f32)?;
+            let kernel=u64::from(radius).checked_mul(2)?.checked_add(1)?;
+            bytes=bytes.checked_add(kernel.checked_mul(24)?.checked_add(256)?)?;
+        }
+    }
+    Some(bytes)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HalationComponentGpu {
+    pub weight: [f32; 3],
+    pub sigma_px: [f32; 3],
+}
+
 /// Halation parameters for the GPU-resident scatter + multi-bounce pass.
-/// Mirrors the field layout of the CPU `apply_halation_um`, but pre-converts
-/// the per-channel µm sigmas to a single pixel-space sigma (the GPU path
-/// uses the average across channels, matching the existing CPU impl).
+/// Historical stocks retain averaged pixel-space widths. Physical back-
+/// reflection keeps all four fitted components and their per-channel widths.
 #[derive(Debug, Clone, Copy)]
 pub struct HalationGpuParams {
+    /// Four physical PSF components, with independently calibrated RGB widths.
+    pub back_reflection: Option<[HalationComponentGpu; 4]>,
     pub scatter_amount: f32,
     pub scatter_core_px: f32,
     pub scatter_tail_px: f32,
@@ -631,10 +681,8 @@ pub struct HalationGpuParams {
     pub scatter_tail_weight: [f32; 3],
     pub halation_amount: f32,
     pub halation_strength_avg: f32,
-    /// Per-channel `halation_strength[c] * halation_amount`. Used only
-    /// for the renormalize pass (which is per-channel even though the
-    /// blur/add use the averaged scalar). When `halation_renormalize`
-    /// is false this is ignored.
+    /// Per-channel `halation_strength[c] * halation_amount`, used by the
+    /// final additive pass and optional energy renormalization.
     pub halation_a_tot: [f32; 3],
     pub halation_first_sigma_px: f32,
     pub halation_n_bounces: u32,
@@ -725,7 +773,8 @@ mod density_capture_tests {
     #[test] fn bounded_capture_contract() {
         assert_eq!(film_density_capture_gpu_bytes(0), None);
         assert_eq!(film_density_capture_gpu_bytes(1), Some(44));
-        assert_eq!(film_density_capture_gpu_bytes(MAX_FILM_DENSITY_SAMPLES), Some(7_340_048));
+        assert_eq!(film_density_capture_gpu_bytes(MAX_FILM_DENSITY_SAMPLES), Some(16_515_088));
+        assert_eq!(film_density_capture_gpu_bytes(MAX_FILM_DENSITY_SAMPLES + 1), None);
         assert_eq!(film_density_capture_gpu_bytes(usize::MAX), None);
         let mut c = FilmDensityCapture { samples: vec![FilmDensitySample { index: 99, x: 2, y: 3 }], result: None };
         assert!(c.valid_for(3, 4));

@@ -105,6 +105,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 | JPEG / PNG | 系统解码；PNG 透明区域合成到白色背景。 |
 | HEIC | 受限的普通静态 8 位 HEVC 主图/网格图；依赖设备解码器及足够内存。支持范围内的 P3 转为 sRGB SDR，不是 HDR 编辑。 |
 | NEF / CR2 / ARW | 已实现普通 Bayer、Canon mRAW/sRAW、Nikon HE/HE* 与 small NEF、Sony 小尺寸/ARW6 等已验证分支；读取真实像素，不用嵌入预览替代。具体编码与资源限制见下文。 |
+| RAF | 富士 Bayer 与 X-Trans 的受限基础显色候选；已测未压缩、无损/有损压缩样片，保留原始像素与 EXIF。具体机型、模式、GFX/旧式布局限制及验证状态见 [RAF 范围](docs/FUJIFILM_RAF.md)。 |
 | DNG | 新增受限 16 位三通道 LinearRaw JPEG XL 条带导入，见[JXL 范围](docs/JPEG_XL_DNG.md)； 既有 16 位路径，以及新增已验证的 12/14 位三通道 LinearRaw SOF3 条带路径；S23 系列 4 份公开样本通过主机整幅像素/线性色彩对照，其中仅 1 份明确为 Expert RAW。不是全品牌/全模式保证。 |
 | Panasonic RW2 | 13 份样本验证 v4、v5（14 位）、v6、v7（14 位）及受约束的 v8/CF2；包括 GH6、S5 II X、G9 II、GH7、S1R II 的已测模式。特殊编码与超限文件仍可能被拒绝，详见[边界](codecs/README.md)。 |
 

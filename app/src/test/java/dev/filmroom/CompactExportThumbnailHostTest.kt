@@ -26,7 +26,10 @@ import java.util.UUID
 class CompactExportThumbnailHostTest {
  private fun views(v:View):List<View> = listOf(v)+(if(v is ViewGroup)(0 until v.childCount).flatMap{views(v.getChildAt(it))}else emptyList())
  private fun job(state:ExportJobState)=ExportJob(UUID.randomUUID().toString(),1,EditorState(),4000,3000,ExportFormat.JPEG,95,state,ExportDisplayProgress(8,1,1),mediaUri=if(state==ExportJobState.COMPLETED)"content://media/external/images/media/42" else null)
- private fun render(a:ExportQueueActivity,j:ExportJob){ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,listOf(j))}
+ private fun render(a:ExportQueueActivity,j:ExportJob){
+  // These are terminal-layout fixtures, not a live three-image presentation.
+  a.previewSequenceEnabled=false
+  ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(a,listOf(j))}
  private fun layout(a:ExportQueueActivity,w:Int,h:Int):View {
   val v=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
   v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h);return v
@@ -35,7 +38,9 @@ class CompactExportThumbnailHostTest {
  private fun capture(root:View,name:String){
   val photo=javaClass.getResourceAsStream("/queue/public-source.jpg").use{BitmapFactory.decodeStream(it)}
   views(root).filterIsInstance<ExportPreviewView>().forEach{it.show(photo,"public-layout-fixture");(it.parent as ViewGroup).let{p->(0 until p.childCount).map(p::getChildAt).filterIsInstance<ImageView>().forEach{v->v.visibility=View.GONE}}}
-  val out=File("/workspace/shared/compact-thumbnail18/host").apply{mkdirs()}
+  // Keep screenshots local to this run rather than overwriting historical evidence.
+  val out=File(System.getenv("FILMROOM_COMPACT_THUMBNAIL_EVIDENCE_DIR")
+   ?: File(RuntimeEnvironment.getApplication().cacheDir,"compact-export-thumbnail-evidence").path).apply{mkdirs()}
   val b=Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888);root.draw(Canvas(b));File(out,"$name.png").outputStream().use{b.compress(Bitmap.CompressFormat.PNG,100,it)};b.recycle()
  }
  @Test fun capturePortraitCompleted(){setup(360,780,1f);try{Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use{c->render(c.get(),job(ExportJobState.COMPLETED).copy(metadataWarning="fixture",message="已保存\n部分照片元信息未能完整保留，详情见原始诊断。"));capture(layout(c.get(),360,780),"portrait")}}finally{RuntimeEnvironment.setFontScale(1f)}}

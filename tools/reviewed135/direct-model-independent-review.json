@@ -1,0 +1,140 @@
+{
+  "status": "PASS_WITH_STATED_MODEL_LIMITS",
+  "source_head": "5a11522c4ae37d1989c4df76912f6e581d40f272",
+  "source_worktree_clean": true,
+  "checked_assets": [
+    {
+      "stock": "kodak_tri_x_400",
+      "profile_data_chain": [],
+      "source_inputs_match_manifest_and_HEAD": true,
+      "valid_wavelengths": 81,
+      "runtime_bw_normalization_endpoint_equivalent": true,
+      "base_srgb": [
+        190,
+        190,
+        190
+      ],
+      "marking_srgb": [
+        5,
+        5,
+        5
+      ],
+      "display_clipped": false,
+      "png_webp_decoded_rgba_exact": true,
+      "alpha_exact_A_and_v2": true,
+      "alpha0_rgb_zero": true,
+      "independent_pixel_reconstruction_exact": true,
+      "transparent_pixels": 1518553,
+      "partial_alpha_pixels": 21028
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "profile_data_chain": [],
+      "source_inputs_match_manifest_and_HEAD": true,
+      "valid_wavelengths": 81,
+      "runtime_bw_normalization_endpoint_equivalent": true,
+      "base_srgb": [
+        206,
+        206,
+        206
+      ],
+      "marking_srgb": [
+        3,
+        3,
+        3
+      ],
+      "display_clipped": false,
+      "png_webp_decoded_rgba_exact": true,
+      "alpha_exact_A_and_v2": true,
+      "alpha0_rgb_zero": true,
+      "independent_pixel_reconstruction_exact": true,
+      "transparent_pixels": 1518553,
+      "partial_alpha_pixels": 21028
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "profile_data_chain": [],
+      "source_inputs_match_manifest_and_HEAD": true,
+      "valid_wavelengths": 81,
+      "runtime_bw_normalization_endpoint_equivalent": true,
+      "base_srgb": [
+        213,
+        213,
+        213
+      ],
+      "marking_srgb": [
+        4,
+        4,
+        4
+      ],
+      "display_clipped": false,
+      "png_webp_decoded_rgba_exact": true,
+      "alpha_exact_A_and_v2": true,
+      "alpha0_rgb_zero": true,
+      "independent_pixel_reconstruction_exact": true,
+      "transparent_pixels": 1518557,
+      "partial_alpha_pixels": 21020
+    },
+    {
+      "stock": "fujifilm_neopan_acros_100_ii",
+      "profile_data_chain": [],
+      "source_inputs_match_manifest_and_HEAD": true,
+      "valid_wavelengths": 81,
+      "runtime_bw_normalization_endpoint_equivalent": true,
+      "base_srgb": [
+        220,
+        220,
+        220
+      ],
+      "marking_srgb": [
+        3,
+        3,
+        3
+      ],
+      "display_clipped": false,
+      "png_webp_decoded_rgba_exact": true,
+      "alpha_exact_A_and_v2": true,
+      "alpha0_rgb_zero": true,
+      "independent_pixel_reconstruction_exact": true,
+      "transparent_pixels": 1518553,
+      "partial_alpha_pixels": 21028
+    },
+    {
+      "stock": "cinestill_800t",
+      "profile_data_chain": [
+        "kodak_vision3_500t"
+      ],
+      "source_inputs_match_manifest_and_HEAD": true,
+      "valid_wavelengths": 76,
+      "runtime_bw_normalization_endpoint_equivalent": null,
+      "base_srgb": [
+        206,
+        140,
+        102
+      ],
+      "marking_srgb": [
+        42,
+        12,
+        3
+      ],
+      "display_clipped": false,
+      "png_webp_decoded_rgba_exact": true,
+      "alpha_exact_A_and_v2": true,
+      "alpha0_rgb_zero": true,
+      "independent_pixel_reconstruction_exact": true,
+      "transparent_pixels": 1518553,
+      "partial_alpha_pixels": 21028
+    }
+  ],
+  "visual_review": "Inspected the full five-stock positive/direct comparison pixels. Names, 25/25A, arrows, HP5 visible bar trace, holes and aperture layout remain visibly consistent. Direct polarity is appropriate for a negative light-table illustration.",
+  "model_review": "Matches v12 D65 spectral endpoint method and continuous linear-display-light coverage projection. Four B&W own profiles retain exact neutral endpoint equivalence after native lane normalization. CineStill resolves the existing 500T alias without modifying scientific data.",
+  "limitations": [
+    "D65 endpoint illustrations, not measurements of film-base appearance or factory edge exposure. Independent per-channel maximum values are a contrast bound, not necessarily one common exposure.",
+    "CineStill uses inherited Vision3 500T spectra; no separate measured CineStill base or marking spectrum is claimed.",
+    "Approved A is used for alpha, while direct RGB is reconstructed from v2 coverage. A subtle material texture is not carried into the direct candidate; this is intentional clean coverage, not exact A RGB retention.",
+    "Soft coverage is a raster linear-RGB projection, not the original latent-image mask. Mark coordinates and geometric alpha are exact; anti-aliased tonal values are intentionally remapped.",
+    "HP5 bars remain an authored visible trace, not a decoded/validated machine-readable DX code.",
+    "Pillow PNG/WebP equality and static model checks passed. No Android codec, compositor, APK, or runtime route test was performed. No compilation or source/integration edits."
+  ],
+  "defects": []
+}

@@ -1,0 +1,6 @@
+SpektraLab profile data, pinned commit 02d82b56cf65f0f8e802a708612edc4e9a4790af
+https://github.com/JamesQiu2005/SpektraLab
+Four B&W camera profiles by Hanze Qiu. Original color profiles by Andrea Volpato (spektrafilm).
+Film/paper profiles are licensed CC BY-SA 4.0 according to the pinned repository README, Credits and licence section. https://creativecommons.org/licenses/by-sa/4.0/
+Original product profile bytes and metadata are preserved. Filmroom adapts replicated B&W channels at load time; retains three paper emulsions; resolves the 800T alias using the unmodified 500T profile. Filmroom retains its own processing implementation; this is not output parity with the SpektraLab Metal renderer.
+Manufacturer data-sheet assumptions and source details remain in NOTICE.md and each profile.

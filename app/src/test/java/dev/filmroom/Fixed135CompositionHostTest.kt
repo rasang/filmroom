@@ -127,11 +127,11 @@ class Fixed135CompositionHostTest {
     @Test fun bitmapPreviewAndFloatExportUseTheSameCropSamplerAndFeather(){
         val dir=Files.createTempDirectory("fixed135-preview").toFile()
         try {
-            for((w,h) in listOf(96 to 64,64 to 96,97 to 97)){
+            for((w,h) in listOf(96 to 64,64 to 96,97 to 97))for(angle in listOf(-15.0,0.0,8.7)){
                 val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
                 val pixels=IntArray(w*h){i->val x=i%w;val y=i/w;(0xff shl 24)or((x*255/(w-1))shl 16)or((y*255/(h-1))shl 8)or 71}
                 bitmap.setPixels(pixels,0,w,0,0,w,h)
-                val s=snapshot(w,h,CompositionTransform(.57,.41,1.7))
+                val s=snapshot(w,h,CompositionTransform(.57,.41,1.7,straightenDegrees=angle))
                 val input=File(dir,"input.rgb");val output=File(dir,"out.rgb")
                 write(input,w,h){x,y,c->LinearRgb.srgb8ToLinear[(pixels[y*w+x] ushr (16-c*8))and 255]}
                 BorderCompositor.composite(input,output,s,Fixture(),OutputColorSpace.SRGB)

@@ -162,16 +162,14 @@ impl Header {
 }
 
 impl Strip {
-  fn decompress_strip(&self, src: &PaddedBuf, header: &Header, params: &Params, q_bases: Option<&[u8]>, out: &mut PixU16) {
+  fn decompress_strip(&self, src: &PaddedBuf, header: &Header, params: &Params, q_bases: Option<&[u8]>, out: &mut PixU16, cancelled: &(dyn Fn() -> bool + Sync)) -> Result<()> {
     let mut info_block = CompressedBlock::new(header, params);
     log::debug!("Fuji strip offset: {}, len: {}", self.offset, self.size);
 
-    let mut pump = if self.offset + self.size == src.len() {
-      BitPumpMSB::new(&src[self.offset..]) // use extra bytes from PaddedBuf
-    } else {
-      let extra_bytes = 16;
-      BitPumpMSB::new(&src[self.offset..self.offset + self.size + extra_bytes])
-    };
+    // Lookahead may read padding, but no decoded sample may consume beyond
+    // the declared entropy block (including the final block at EOF).
+    let bytes = src.get(self.offset..self.offset + self.size + 16).ok_or("RAF entropy range")?;
+    let mut pump = BitPumpMSB::new(bytes);
 
     let mtable = [
       (XT_LINE_R0, XT_LINE_R3),
@@ -187,6 +185,7 @@ impl Strip {
     let mut params = params.clone();
 
     for cur_line in 0..self.height() as usize {
+      if cancelled() { return Err("Decode cancelled".into()); }
       debug_assert_eq!(header.is_lossless(), q_bases.is_none());
       // init grads and main qtable
       if !header.is_lossless() {
@@ -219,6 +218,8 @@ impl Strip {
         info_block.fuji_bayer_decode_block(&mut pump, &params);
       }
 
+      if pump.remaining_bits() < 16 * 8 { return Err("RAF entropy block truncated".into()); }
+
       // copy data from line buffers and advance
       for i in mtable.iter() {
         debug_assert!(i.0 < i.1);
@@ -245,6 +246,7 @@ impl Strip {
         info_block.linebuf[i.0][params.line_width + 1] = info_block.linebuf[i.0 - 1][params.line_width];
       }
     }
+    Ok(())
   }
 }
 
@@ -253,7 +255,7 @@ impl Strip {
 /// Each pump need as litte bit more overhead at the end.
 /// For the final strip, we need the extra bytes from PaddedBuf
 /// to prevent out-of-range errors in BitPump.
-pub(super) fn decompress_fuji(buf: &PaddedBuf, width: usize, height: usize, _bps: usize, corrected_cfa: &CFA) -> Result<PixU16> {
+pub(super) fn decompress_fuji(buf: &PaddedBuf, width: usize, height: usize, _bps: usize, corrected_cfa: &CFA, cancelled: &(dyn Fn() -> bool + Sync)) -> Result<PixU16> {
   let mut stream = ByteStream::new(buf, Endian::Big);
   let header = Header {
     signature: stream.get_u16(),
@@ -329,15 +331,15 @@ pub(super) fn decompress_fuji(buf: &PaddedBuf, width: usize, height: usize, _bps
   let out = SharedPix2D::new(PixU16::new(width, height));
 
   // Process each strip
-  strips.par_iter().for_each(|strip| {
+  strips.par_iter().try_for_each(|strip| {
     let line_step = (header.total_lines as usize + 0xF) & !0xF;
     // Each strip has it's own q_bases
     let q_bases_strip = q_bases.as_ref().map(|buf| &buf[strip.n * line_step..]);
     // DANGEROUS: We need multiple mut refs here. This should be
     // safe as be only write pixels to pre-allocated memory.
     let outbuf = unsafe { out.inner_mut() };
-    strip.decompress_strip(buf, &header, &params, q_bases_strip, outbuf);
-  });
+    strip.decompress_strip(buf, &header, &params, q_bases_strip, outbuf, cancelled)
+  })?;
 
   Ok(out.into_inner())
 }

@@ -1,0 +1,102 @@
+{
+  "LICENSES.md": {
+    "bytes": 2530,
+    "sha256": "6134096663642e34ec9ea3e55dc562ea68643a23359245cf17c348d5ebac7c77"
+  },
+  "README.md": {
+    "bytes": 5521,
+    "sha256": "6dfd1e1598941f79925c0fb3f35115d649545a2a3330ba25abd6ec0e0041aeaf"
+  },
+  "direct-model-baseline.json": {
+    "bytes": 7516,
+    "sha256": "65fe7c7cbcb15e57230053b7955826c72fc98c64231a76aae85caa6f9967eb3e"
+  },
+  "environment-lock.json": {
+    "bytes": 606,
+    "sha256": "521230aa109cde444158334cc914de0c412c82db7fb1e9551e0309d0c13b2144"
+  },
+  "expected-assets.json": {
+    "bytes": 4428,
+    "sha256": "a5d5b616eafd4c7b9dab2319212a1433f78947eb244bdd49ad30c68e5d5a9e23"
+  },
+  "fonts/DejaVu-LICENSE.txt": {
+    "bytes": 3859,
+    "sha256": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9"
+  },
+  "fonts/DejaVuSansCondensed-Bold.ttf": {
+    "bytes": 667844,
+    "sha256": "21f02ebcea75529d3ed9d26e089cd1b9c59a4b784119ba3a96e9bc83cf755ec7"
+  },
+  "fonts/DejaVuSansCondensed.ttf": {
+    "bytes": 682828,
+    "sha256": "6de96c09bf752e3774583eea6bc3fb0b60f1733c595f22a926c89219ba8ade43"
+  },
+  "fonts/FilmroomReviewMono-Bold.ttf": {
+    "bytes": 329880,
+    "sha256": "4ddde89b0b3d117dd4d16f677658f674a67845c71397b82f79364ea5fa9c0ddb"
+  },
+  "fonts/MODIFICATION.md": {
+    "bytes": 413,
+    "sha256": "3e28a05d193addb40a95b25b77eac12e559a8f83b25f9daf2e3510f6ba9ecac9"
+  },
+  "fonts/font-inputs.lock.json": {
+    "bytes": 321,
+    "sha256": "986be05165f9afc0bb78601a8838696bccf25787f05cc1fcbc4c17b2912dbc84"
+  },
+  "generate.py": {
+    "bytes": 9107,
+    "sha256": "3d8e5839798345d34147687568a5984165f2d70c2cc30dab2b8cc7de9b63bb93"
+  },
+  "hp5-observed-bar-trace.json": {
+    "bytes": 3315,
+    "sha256": "5b44b76f772e133d74d3eb4f53ac23b85e493736bff135a4fc566ab610252f11"
+  },
+  "material-A.json": {
+    "bytes": 557,
+    "sha256": "3dd88366065d7016bea4bf90db2fb5c63fdc9924bd52403c5ead423c3b962c12"
+  },
+  "original-A-qa.json": {
+    "bytes": 1547,
+    "sha256": "2c31d5f4693145271490a7c1da183235279831eda0db635a0066c9d3b5bd9504"
+  },
+  "requirements.txt": {
+    "bytes": 200,
+    "sha256": "a9224bf496045dd1d582dce16778d0fa6125d1d744c9857d0b233e2743529379"
+  },
+  "scientific-inputs.lock.json": {
+    "bytes": 1073,
+    "sha256": "f8be1a299dc3d37db46c7eaf10cceed99ed9e5693b9250feebe64b745e453ccf"
+  },
+  "source-inputs.lock.json": {
+    "bytes": 2258,
+    "sha256": "ed966f20db1351133ee875501bcdf19b50ce7ea639550f76942a11c4db50d4e5"
+  },
+  "source-provenance.json": {
+    "bytes": 3650,
+    "sha256": "9a7debdbdcc024dc3b4c4f447366a89b28cb4718f83e86f18337858e85564353"
+  },
+  "sources.json": {
+    "bytes": 4901,
+    "sha256": "eeecd0256e1df7b82de017aefee3af83a385203cfc19b06eb0230ad1a6ebc5ed"
+  },
+  "specs.json": {
+    "bytes": 3385,
+    "sha256": "d0600131d682a746f6dafe0833ebb02398aca5776da042c7f670eebd4adb5699"
+  },
+  "stage_direct.py": {
+    "bytes": 3456,
+    "sha256": "94cddbaad7c2baf3511a28a3afea7c1dd4f8bcd545944dff98d12f8bf541f663"
+  },
+  "stage_geometry.py": {
+    "bytes": 2725,
+    "sha256": "9c88387d9e947dc162dc70fba5ceeb6458d990f2d88b90aee121f2e83f75490a"
+  },
+  "stage_material.py": {
+    "bytes": 1500,
+    "sha256": "c91e42f8df11e83a428aaa781fbaf3400aefb04c633d5cb4f0e3cc11994b5f82"
+  },
+  "verify_outputs.py": {
+    "bytes": 2963,
+    "sha256": "b4c488c6466a262dae8b1b15216ae5fa4a019d51bc65f1cf07bdb94b79e5edb4"
+  }
+}

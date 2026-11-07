@@ -1,0 +1,27 @@
+{
+  "parameters": {
+    "bw_body": 8,
+    "bw_ink": 125,
+    "cine_body": [
+      8,
+      7,
+      10
+    ],
+    "cine_ink": [
+      175,
+      155,
+      106
+    ],
+    "smooth_amplitude": 1.0,
+    "fine_sigma": 0.55,
+    "ink_sigma": 1.1
+  },
+  "seed_formula": "int(sha256((stock_id + \"A\" + \"material-study\").encode()).hexdigest()[:8], 16)",
+  "seeds": {
+    "kodak_tri_x_400": 3155237142,
+    "kodak_tmax_100": 1933206193,
+    "ilford_hp5_plus_400": 3385717028,
+    "fujifilm_neopan_acros_100_ii": 1922074115,
+    "cinestill_800t": 2249254012
+  }
+}

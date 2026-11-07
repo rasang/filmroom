@@ -283,6 +283,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "jni",
+ "libc",
  "naga",
  "pollster",
  "rayon",

@@ -11,6 +11,8 @@ public class NativeFilmBridge {
   public native String nativeExportFile(long handle, String inputPath, String outputPath, int width, int height, String params);
   public native String nativePlanExport(long handle, int width, int height, String params);
   public native String nativeGetProgress(long handle);
+  public native String nativeEncodedReuseProbe(String params);
+  public native void nativeSetPreviewCacheBudget(long handle, long bytes);
   static ByteBuffer direct(int n) { return ByteBuffer.allocateDirect(n).order(ByteOrder.nativeOrder()); }
   static void require(boolean c, String m) { if(!c) throw new AssertionError(m); }
   static String code(String r) { return r; }

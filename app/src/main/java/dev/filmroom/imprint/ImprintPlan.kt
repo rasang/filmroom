@@ -52,21 +52,30 @@ class ImprintPlan private constructor(
             if(!settings.enabled)return ImprintPlan(width,height,emptyList())
             val content=ImprintContent.from(metadata,settings);val stamps=mutableListOf<Stamp>();var omitted=0
             val tone=if(border?.appearance?.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION)ImprintTone.DARK
-                else if(border?.stock in setOf("kodak_doublex","kodak_trix","kodak_2302"))ImprintTone.MONOCHROME else ImprintTone.WARM
+                else if(border?.stock in dev.filmroom.model.FilmProfileCapabilities.monochromeFilms || border?.stock=="kodak_2302")ImprintTone.MONOCHROME else ImprintTone.WARM
             val medium=border?.takeIf{it.geometryVersion==5}?.let{MediumImprintMarks.layout(it)}
+            val reviewed135=border?.let{Reviewed135ImprintGeometry.layout(it)}
             val bw=border?.takeIf{it.geometryVersion==4}?.layout
             val unit=if(bw!=null)40.0 else 1.0
             val ppm=border?.pixelsPerMm ?: 1.0
             val rotated=border?.mediumLayout?.rotated ?: (border?.portrait ?: false)
             val nativeWidth=when {medium!=null->medium.widthMm;bw!=null->bw.width;border!=null->38.0;else->width.toDouble()}
             val nativeHeight=when {border?.geometryVersion==5->61.0;bw!=null->bw.height;border!=null->35.0;else->height.toDouble()}
-            fun add(r:ImprintRaster,bodyX:Double,bodyY:Double):Boolean {
+            fun add(r:ImprintRaster,bodyX:Double,bodyY:Double,reviewedGapCenter:Double?=null):Boolean {
                 val left=(bodyX*ppm-r.coreLeft).roundToInt();val top=(bodyY*ppm-r.coreTop).roundToInt()
                 val stamp=if(rotated){val rr=r.rotatedClockwise();Stamp(rr,((border?.frameOriginX ?: 0.0)+nativeHeight*ppm-top-r.height).roundToInt(),((border?.frameOriginY ?: 0.0)+left).roundToInt())}
                     else Stamp(r,((border?.frameOriginX ?: 0.0)+left).roundToInt(),((border?.frameOriginY ?: 0.0)+top).roundToInt())
-                if(stamp.left<0 || stamp.top<0 || stamp.right>width || stamp.bottom>height)return false
+                // A new phase may land between output pixels. Round its absolute
+                // gap-axis position once, not local then absolute. Legacy snapshots
+                // retain the historical two-step arithmetic on both axes.
+                val aligned=if(reviewedGapCenter==null)stamp else {
+                    val origin=if(rotated)border?.frameOriginY ?: 0.0 else border?.frameOriginX ?: 0.0
+                    val coordinate=(origin+reviewedGapCenter*ppm-r.coreWidth/2.0-r.coreLeft).roundToInt()
+                    if(rotated)stamp.copy(top=coordinate)else stamp.copy(left=coordinate)
+                }
+                if(aligned.left<0 || aligned.top<0 || aligned.right>width || aligned.bottom>height)return false
                 if(stamps.sumOf{it.raster.residentBytes}+stamp.raster.residentBytes>MAX_WORKING_BYTES)return false
-                stamps+=stamp;return true
+                stamps+=aligned;return true
             }
             if(settings.datePlacement=="photo" || medium==null)content.date?.let { text ->
                 val ax=when {border?.geometryVersion==5->3.0;bw!=null->bw.left;border!=null->1.0;else->0.0}
@@ -78,8 +87,16 @@ class ImprintPlan private constructor(
                 val desired=(if(border!=null)(if(border.geometryVersion==5).98 else .96)*unit*ppm else min(aw,ah)*.026)*settings.size
                 val r=fit(text,settings.effectiveDateStyle,desired,(aw-2*mx)*ppm,(ah-2*my)*ppm,settings.glow,tone,MAX_WORKING_BYTES-stamps.sumOf{it.raster.residentBytes},rotated)
                 if(r!=null){
-                    val x=if(settings.corner.endsWith("right"))ax+aw-mx-r.coreWidth/ppm else ax+mx
-                    val y=if(settings.corner.startsWith("bottom"))ay+ah-my-r.coreHeight/ppm else ay+my
+                    // Newly reviewed layouts keep the whole padded mask on the photo,
+                    // including the minimum pixel glow padding at small preview sizes.
+                    // Existing reviewed layouts retain their exact placement arithmetic.
+                    val guardPhotoPadding=medium?.protectPhotoDate==true
+                    val leftMargin=if(guardPhotoPadding)max(mx,(r.coreLeft+1)/ppm)else mx
+                    val rightMargin=if(guardPhotoPadding)max(mx,(r.width-r.coreLeft-r.coreWidth+1)/ppm)else mx
+                    val topMargin=if(guardPhotoPadding)max(my,(r.coreTop+1)/ppm)else my
+                    val bottomMargin=if(guardPhotoPadding)max(my,(r.height-r.coreTop-r.coreHeight+1)/ppm)else my
+                    val x=if(settings.corner.endsWith("right"))ax+aw-rightMargin-r.coreWidth/ppm else ax+leftMargin
+                    val y=if(settings.corner.startsWith("bottom"))ay+ah-bottomMargin-r.coreHeight/ppm else ay+topMargin
                     if(!add(r,x,y))omitted++
                 }else omitted++
             }
@@ -105,12 +122,12 @@ class ImprintPlan private constructor(
                     // gap empty rather than moving lettering onto a perforation.
                     val half=fields.size/2
                     val offset=if(fields.size%2==1) index-half else if(index<half) index-half else index-half+1
-                    val center=(19.0+offset*4.75)*unit
+                    val center=((reviewed135?.centralGapMm ?: 19.0)+offset*(reviewed135?.pitchMm ?: 4.75))*unit
                     val r=ImprintRaster.create(field.text,"pentax_mzs",fh,CAPTURE_DATA_GLOW,tone)
                     val base=if(border.stock in setOf("fujifilm_c200","fujifilm_xtra_400","fujifilm_pro_400h"))30.48 else 31.28
                     val x=center-r.coreWidth/ppm/2
                     val y=nativeHeight-base*unit-r.coreHeight/ppm
-                    if(!add(r,x,y))omitted++
+                    if(!add(r,x,y,if(reviewed135!=null)center else null))omitted++
                 }
             }else if(medium!=null){
                 data class Piece(val text:String,val style:String,val date:Boolean=false)

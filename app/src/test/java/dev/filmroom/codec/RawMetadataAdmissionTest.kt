@@ -54,6 +54,21 @@ class RawMetadataAdmissionTest {
             assertEquals(0L,RawMetadataAdmission.estimatedBytes(input))
         }finally{root.deleteRecursively()}
     }
+    @Test fun rafSignatureUsesCameraLeaseWithoutTrustingExtension() {
+        val root=kotlin.io.path.createTempDirectory("raf-probe-hint").toFile()
+        try {
+            val input=File(root,"renamed.jpg")
+            input.writeBytes("FUJIFILMCCD-RAW 0201".toByteArray(Charsets.US_ASCII))
+            assertEquals(32*mib,RawMetadataAdmission.estimatedBytes(input))
+            assertTrue(dev.filmroom.io.formats.PhotoHeaders.isFujifilmRaf(input.readBytes()))
+            val hint=dev.filmroom.io.formats.PhotoHeaders.sniff(input.readBytes())
+            assertEquals(dev.filmroom.io.formats.PhotoFormat.CAMERA_RAW,hint.format)
+            assertTrue(hint.requiresFullDecoderValidation)
+            input.writeBytes("FUJIFILMinvalid".toByteArray(Charsets.US_ASCII))
+            assertEquals(0L,RawMetadataAdmission.estimatedBytes(input))
+            assertFalse(dev.filmroom.io.formats.PhotoHeaders.isFujifilmRaf(input.readBytes()))
+        }finally{root.deleteRecursively()}
+    }
     @Test fun cr3OrfAndOriContentKeepTheCameraMetadataLease() {
         val root=kotlin.io.path.createTempDirectory("additional-raw-hint").toFile()
         try {

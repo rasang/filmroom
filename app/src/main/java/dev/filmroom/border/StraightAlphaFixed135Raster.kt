@@ -82,6 +82,30 @@ class StraightAlphaFixed135Raster(
         val index=when(nearest){dt->topDonors[xx-left];dl->leftDonors[yy-top];db->bottomDonors[xx-left];else->rightDonors[yy-top]}
         return data[index]
     }
+    override fun holeCoverage(snapshot:BorderSnapshot,x:Double,y:Double):Double {
+        val localX=(x-snapshot.frameOriginX)/snapshot.pixelsPerMm
+        val localY=(y-snapshot.frameOriginY)/snapshot.pixelsPerMm
+        val lx=if(snapshot.portrait)localY else localX
+        val ly=if(snapshot.portrait)35-localX else localY
+        val rawX=lx/38*width-.5;val rawY=ly/35*height-.5
+        val footprint=(width/38.0)/snapshot.pixelsPerMm
+        fun clear(xx:Int,yy:Int)=1-(pixel(xx,yy) ushr 24)/255.0
+        if(footprint>1.0){
+            val loX=rawX+.5-footprint/2;val hiX=rawX+.5+footprint/2
+            val loY=rawY+.5-footprint/2;val hiY=rawY+.5+footprint/2
+            val x0=floor(loX).toInt().coerceIn(0,width-1);val x1=(ceil(hiX).toInt()-1).coerceIn(0,width-1)
+            val y0=floor(loY).toInt().coerceIn(0,height-1);val y1=(ceil(hiY).toInt()-1).coerceIn(0,height-1)
+            var result=0.0
+            for(j in y0..y1){val wy=(minOf(hiY,if(j==height-1)Double.POSITIVE_INFINITY else j+1.0)-maxOf(loY,if(j==0)Double.NEGATIVE_INFINITY else j.toDouble()))/footprint
+                for(i in x0..x1){val wx=(minOf(hiX,if(i==width-1)Double.POSITIVE_INFINITY else i+1.0)-maxOf(loX,if(i==0)Double.NEGATIVE_INFINITY else i.toDouble()))/footprint
+                    result+=wx*wy*clear(i,j)}}
+            return result.coerceIn(0.0,1.0)
+        }
+        val sx=rawX.coerceIn(0.0,width-1.0);val sy=rawY.coerceIn(0.0,height-1.0)
+        val x0=floor(sx).toInt();val y0=floor(sy).toInt();val x1=minOf(x0+1,width-1);val y1=minOf(y0+1,height-1)
+        val fx=sx-x0;val fy=sy-y0
+        return ((clear(x0,y0)*(1-fx)+clear(x1,y0)*fx)*(1-fy)+(clear(x0,y1)*(1-fx)+clear(x1,y1)*fx)*fy).coerceIn(0.0,1.0)
+    }
     override fun sample(snapshot:BorderSnapshot,x:Double,y:Double,rgb:FloatArray) {
         val localX=(x-snapshot.frameOriginX)/snapshot.pixelsPerMm
         val localY=(y-snapshot.frameOriginY)/snapshot.pixelsPerMm

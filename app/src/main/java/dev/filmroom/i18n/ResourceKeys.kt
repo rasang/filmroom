@@ -1,6 +1,9 @@
 package dev.filmroom.i18n
 internal object ResourceKeys {
     val names:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.print_medium_bw_paper to "print_medium_bw_paper",
+        dev.filmroom.R.string.print_medium_bw_film to "print_medium_bw_film",
+        dev.filmroom.R.string.print_medium_bw_help to "print_medium_bw_help",
         dev.filmroom.R.string.gpu_completion_uncertain to "gpu_completion_uncertain",
         dev.filmroom.R.string.image_edge_limit_32768 to "image_edge_limit_32768",
         dev.filmroom.R.string.image_edge_limit_30000 to "image_edge_limit_30000",
@@ -1013,6 +1016,9 @@ internal object ResourceKeys {
         "text_3691a3aa4ece" to 0,
         "text_b9afff7ca1b0" to 0,
         "text_3b789c2037e2" to 0,
+        "print_medium_bw_paper" to 0,
+        "print_medium_bw_film" to 0,
+        "print_medium_bw_help" to 0,
         "text_7b528c395978" to 0,
         "text_e76a25844aa5" to 0,
         "text_61d5477ed69a" to 0,

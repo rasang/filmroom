@@ -1,5 +1,6 @@
 package dev.filmroom.io
 
+import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
@@ -52,18 +53,32 @@ object LinearRgbPng {
         iccProfile: ByteArray? = null,
         exifMetadata: ByteArray? = null,
         exportMillis: Long? = null,
+        pixelPayload: OutputStream? = null,
     ) {
         LinearRgb.byteCount(width, height)
         checkActive()
         val target = DataOutputStream(output)
-        target.write(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))
+        // The optional sink sees only a complete metadata-free PNG; main output is unchanged.
+        val pixels=DataOutputStream(object:OutputStream() {
+            private var side=pixelPayload
+            override fun write(value:Int)=write(byteArrayOf(value.toByte()),0,1)
+            override fun write(bytes:ByteArray,offset:Int,length:Int) {
+                target.write(bytes,offset,length)
+                try {side?.write(bytes,offset,length)}
+                catch(c:java.util.concurrent.CancellationException){throw c}
+                catch(e:InterruptedException){throw e}
+                catch(_:Exception){runCatching{side?.close()};side=null}
+                catch(_:OutOfMemoryError){runCatching{side?.close()};side=null}
+            }
+        })
+        pixels.write(SIGNATURE)
         val header = ByteBuffer.allocate(13).order(ByteOrder.BIG_ENDIAN)
             .putInt(width).putInt(height).put(8).put(2).put(0).put(0).put(0).array()
-        writeChunk(target, "IHDR", header, header.size)
+        writeChunk(pixels, "IHDR", header, header.size)
         if(colorSpace==OutputColorSpace.SRGB) {
             // Standard PNG sRGB chunk identifies both primaries and transfer.
             require(iccProfile==null) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_86c64f79957e) }
-            writeChunk(target, "sRGB", byteArrayOf(0), 1)
+            writeChunk(pixels, "sRGB", byteArrayOf(0), 1)
         } else {
             val profile=iccProfile ?: throw IOException(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7e611ddedc63))
             colorSpace.validateProfile(profile)
@@ -72,20 +87,10 @@ object LinearRgbPng {
             // ASCII profile keyword, NUL, compression method0, zlib profile.
             packed.write(colorSpace.id.toByteArray(Charsets.US_ASCII));packed.write(0);packed.write(0)
             DeflaterOutputStream(packed).use{it.write(profile)}
-            val chunk=packed.toByteArray();writeChunk(target,"iCCP",chunk,chunk.size)
+            val chunk=packed.toByteArray();writeChunk(pixels,"iCCP",chunk,chunk.size)
         }
-        exifMetadata?.let {
-            require(it.size in 8..60000)
-            writeChunk(target,"eXIf",it,it.size)
-        }
-        exportMillis?.let {
-            val time=java.time.Instant.ofEpochMilli(it).atOffset(java.time.ZoneOffset.UTC)
-            val bytes=ByteBuffer.allocate(7).order(ByteOrder.BIG_ENDIAN).putShort(time.year.toShort())
-                .put(time.monthValue.toByte()).put(time.dayOfMonth.toByte()).put(time.hour.toByte())
-                .put(time.minute.toByte()).put(time.second.toByte()).array()
-            writeChunk(target,"tIME",bytes,bytes.size)
-        }
-        val chunks = IdatChunks(target, checkActive)
+        writeMetadata(target,exifMetadata,exportMillis)
+        val chunks = IdatChunks(pixels, checkActive)
         val deflater = Deflater(6, false)
         try {
             val compressed = DeflaterOutputStream(chunks, deflater, 64 * 1024)
@@ -106,10 +111,75 @@ object LinearRgbPng {
             compressed.finish()
             chunks.finish()
             checkActive()
-            writeChunk(target, "IEND", ByteArray(0), 0)
+            writeChunk(pixels, "IEND", ByteArray(0), 0)
             target.flush()
         } finally {
             deflater.end()
+        }
+    }
+
+    private val SIGNATURE=byteArrayOf(0x89.toByte(),0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a)
+
+    private fun writeMetadata(target:DataOutputStream,exif:ByteArray?,millis:Long?) {
+        exif?.let {require(it.size in 8..60000);writeChunk(target,"eXIf",it,it.size)}
+        millis?.let {
+            val time=java.time.Instant.ofEpochMilli(it).atOffset(java.time.ZoneOffset.UTC)
+            val bytes=ByteBuffer.allocate(7).order(ByteOrder.BIG_ENDIAN).putShort(time.year.toShort())
+                .put(time.monthValue.toByte()).put(time.dayOfMonth.toByte()).put(time.hour.toByte())
+                .put(time.minute.toByte()).put(time.second.toByte()).array()
+            writeChunk(target,"tIME",bytes,bytes.size)
+        }
+    }
+
+    /** Accept ONLY our bounded metadata-free container. No previous EXIF/GPS/time/unknown
+     * ancillary chunk can pass through. IDAT bytes and their original boundaries stay identical.
+     * Exact content hashing is checked by the owner before this stream reaches MediaStore. */
+    fun replayPixelPayload(input:InputStream,output:OutputStream,width:Int,height:Int,
+        colorSpace:OutputColorSpace=OutputColorSpace.SRGB,iccProfile:ByteArray?=null,
+        exifMetadata:ByteArray?=null,exportMillis:Long?=null,checkActive:()->Unit={}) {
+        val source=DataInputStream(input);val target=DataOutputStream(output)
+        val signature=ByteArray(8).also{source.readFully(it)}
+        if(!signature.contentEquals(SIGNATURE))throw IOException("Invalid cached PNG signature")
+        target.write(signature)
+        var stage=0;var idats=0;var total=8L
+        while(true) {
+            checkActive()
+            val size=source.readInt();val type=ByteArray(4).also{source.readFully(it)}
+            if(size !in 0..(128*1024) || total+size+12>32L*1024*1024)throw IOException("Invalid cached PNG chunk size")
+            val bytes=ByteArray(size).also{source.readFully(it)};val expectedCrc=source.readInt()
+            val crc=CRC32().apply{update(type);update(bytes)}
+            if(crc.value.toInt()!=expectedCrc)throw IOException("Invalid cached PNG checksum")
+            val name=type.toString(Charsets.US_ASCII)
+            when {
+                stage==0 && name=="IHDR" -> {
+                    val expected=ByteBuffer.allocate(13).order(ByteOrder.BIG_ENDIAN).putInt(width).putInt(height).put(8).put(2).put(0).put(0).put(0).array()
+                    if(!bytes.contentEquals(expected))throw IOException("Incompatible cached PNG dimensions")
+                    stage=1
+                }
+                stage==1 && name=="sRGB" && colorSpace==OutputColorSpace.SRGB -> {
+                    if(iccProfile!=null || !bytes.contentEquals(byteArrayOf(0)))throw IOException("Incompatible cached PNG color")
+                    stage=2
+                }
+                stage==1 && name=="iCCP" && colorSpace!=OutputColorSpace.SRGB -> {
+                    val profile=iccProfile ?: throw IOException("Missing cached PNG profile")
+                    colorSpace.validateProfile(profile)
+                    val packed=ByteArrayOutputStream();packed.write(colorSpace.id.toByteArray(Charsets.US_ASCII));packed.write(0);packed.write(0)
+                    DeflaterOutputStream(packed).use{it.write(profile)}
+                    if(!bytes.contentEquals(packed.toByteArray()))throw IOException("Incompatible cached PNG profile")
+                    stage=2
+                }
+                stage>=2 && name=="IDAT" -> {
+                    if(size==0 || size>64*1024)throw IOException("Invalid cached PNG IDAT")
+                    if(idats++==0)writeMetadata(target,exifMetadata,exportMillis)
+                    stage=3
+                }
+                stage==3 && name=="IEND" && size==0 -> {
+                    if(source.read()!=-1)throw IOException("Trailing cached PNG bytes")
+                    writeChunk(target,name,bytes,size);target.flush();checkActive();return
+                }
+                else -> throw IOException("Unexpected cached PNG chunk")
+            }
+            writeChunk(target,name,bytes,size);total+=size+12
         }
     }
 

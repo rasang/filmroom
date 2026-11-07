@@ -85,6 +85,9 @@ pub fn parse_raf_format(file: &RawSource, offset: u32) -> Result<IFD> {
   for _ in 0..num {
     let tag = stream.read_u16::<BigEndian>()?;
     let len = stream.read_u16::<BigEndian>()? as usize;
+    if !crate::metadata_budget::charge(len, false) {
+      return Err("RAF metadata budget exceeded".into());
+    }
     //eprintln!("RAF tag: 0x{:X}, len: {}", tag, len);
 
     match RafTags::try_from(tag) {
@@ -228,7 +231,12 @@ impl<'a> RafDecoder<'a> {
 }
 
 impl<'a> Decoder for RafDecoder<'a> {
-  fn raw_image(&self, file: &RawSource, _params: &RawDecodeParams, dummy: bool) -> Result<RawImage> {
+  fn raw_image(&self, file: &RawSource, params: &RawDecodeParams, dummy: bool) -> Result<RawImage> {
+    self.raw_image_with_cancel(file, params, dummy, &|| false)
+  }
+  fn raw_image_with_cancel(&self, file: &RawSource, _params: &RawDecodeParams, dummy: bool,
+    cancelled: &(dyn Fn() -> bool + Sync)) -> Result<RawImage> {
+    if cancelled() { return Err("Decode cancelled".into()); }
     let raw = self.ifd.find_first_ifd_with_tag(FujiIFD::StripOffsets).ok_or("No StripOffsets found")?;
     let (width, height) = if raw.has_entry(FujiIFD::RawImageFullWidth) {
       (
@@ -245,6 +253,8 @@ impl<'a> Decoder for RafDecoder<'a> {
       let sizes = fetch_tiff_tag!(raf, TiffCommonTag::ImageWidth);
       (sizes.force_usize(1), sizes.force_usize(0))
     };
+
+    crate::check_bounded_raw_size(width, height)?;
 
     let bps = match raw.get_entry(TiffCommonTag::RafBitsPerSample) {
       Some(val) => val.force_u32(0) as usize,
@@ -266,6 +276,10 @@ impl<'a> Decoder for RafDecoder<'a> {
 
     // Strip offset is relative to IFD base
     let offset = raw.base as u64 + fetch_tiff_tag!(raw, FujiIFD::StripOffsets).force_u64(0);
+    // Filmroom: metadata probing must not copy a whole sensor block for padding.
+    let image = if dummy {
+      alloc_image_plain!(width, height, true)
+    } else {
     let src = if raw.has_entry(FujiIFD::StripByteCounts) {
       let strip_count = fetch_tiff_tag!(raw, FujiIFD::StripByteCounts).force_u64(0);
       file.subview_padded(offset, strip_count)?
@@ -276,7 +290,7 @@ impl<'a> Decoder for RafDecoder<'a> {
 
     log::debug!("BPS: {}, width: {}, height: {}, offset: {}", bps, width, height, offset);
 
-    let image = if self.camera.find_hint("double_width") {
+    if self.camera.find_hint("double_width") {
       // Some fuji SuperCCD cameras include a second raw image next to the first one
       // that is identical but darker to the first. The two combined can produce
       // a higher dynamic range image. Right now we're ignoring it.
@@ -290,9 +304,9 @@ impl<'a> Decoder for RafDecoder<'a> {
     } else if self.camera.clean_model == "DBP for GX680" {
       assert_eq!(bps, 16);
       dbp::decode_dbp(&src, width, height, dummy)?
-    } else if src.len() < bps * width * height / 8 {
+    } else if src.size() < bps * width * height / 8 {
       if !dummy {
-        decompress_fuji(&src, width, height, bps, &corrected_cfa)?
+        decompress_fuji(&src, width, height, bps, &corrected_cfa, cancelled)?
       } else {
         alloc_image_plain!(width, height, dummy)
       }
@@ -311,6 +325,7 @@ impl<'a> Decoder for RafDecoder<'a> {
           return Err(RawlerError::unsupported(&self.camera, format!("RAF: Don't know how to decode bps {}", bps)));
         }
       }
+    }
     };
 
     let blacklevel = self.get_blacklevel(&corrected_cfa)?;

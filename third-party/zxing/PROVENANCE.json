@@ -1,0 +1,19 @@
+{
+  "artifacts": [
+    {
+      "file": "core-3.5.3.jar",
+      "sha256": "8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82",
+      "url": "https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar"
+    },
+    {
+      "file": "zxing-android-embedded-4.3.0.aar",
+      "sha256": "4ab03353127c34e55cbb80fbc9a34031decbcfb1ec5e8f991944d2d494621a33",
+      "url": "https://repo.maven.apache.org/maven2/com/journeyapps/zxing-android-embedded/4.3.0/zxing-android-embedded-4.3.0.aar"
+    }
+  ],
+  "license": "Apache-2.0",
+  "upstream": [
+    "https://github.com/zxing/zxing",
+    "https://github.com/journeyapps/zxing-android-embedded"
+  ]
+}

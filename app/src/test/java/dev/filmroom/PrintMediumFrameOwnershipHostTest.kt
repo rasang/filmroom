@@ -30,7 +30,11 @@ class PrintMediumFrameOwnershipHostTest {
     private fun snapshot(p:EditorState,w:Int=180,h:Int=120)=BorderCatalog.snapshot(p.frameStock,w,h,w,h,p.composition,p.negativeWhiteHoles,p.outputRoute)
     @Test fun everyCaptureFilmKeepsItsFrameAndCompositionWhenPaperChangesTo2302() {
         BorderCatalog.initialize(app.assets)
-        for((stock,kind) in FrameProfileCatalog.kinds)for(portrait in listOf(false,true)) {
+        val supported135=FrameProfileCatalog.kinds.filterKeys{BorderCatalog.available(it,null)}
+        assertEquals(27,supported135.size)
+        assertEquals(CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix")+Reviewed135Definitions.stocks,supported135.keys)
+        assertEquals(FrameProfileCatalog.kinds.keys,supported135.keys)
+        for((stock,kind) in supported135)for(portrait in listOf(false,true)) {
             val routes=if(kind==FrameAppearanceContext.FilmKind.REVERSAL)listOf("direct")else listOf("print","direct")
             for(route in routes)for(white in listOf(false,true)) {
                 val p=EditorState(filmStock=stock,outputRoute=route,filmBorder=true,negativeWhiteHoles=white,

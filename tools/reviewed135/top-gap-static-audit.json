@@ -1,0 +1,1394 @@
+{
+  "proposal": "Only new exact versions, and only gap axis, use finalLeftOrTop = round(frameOriginGapAxis + actualGapCenterMm*ppm - originalCoreWidth/2 - originalCoreLeft). Other axis keeps original baseline31.28 math. No clipping, clamping, per-field resizing, mark reordering, or asset edits.",
+  "actual_gap_centers_mm": {
+    "kodak_tri_x_400": 18.6375,
+    "kodak_tmax_100": 18.2375,
+    "ilford_hp5_plus_400": 17.5875,
+    "fujifilm_neopan_acros_100_ii": 20.5375,
+    "cinestill_800t": 19.0375
+  },
+  "minimum_fitted_ppm_in_matrix": 3.75,
+  "proof": "Each actual native opaque gap has width2.675mm. Remove .025mm source texel at both edges =>2.625mm safe. Baseline fit bounds whole raster width<=2.35ppm. One final rounding adds <=.5px each side, so needed width<=2.35+1/ppm. The smallest possible padded height is7px, hence any fit has ppm>=7/1.9; therefore required width<=2.6214286mm<2.625mm, including minimum pixel padding. Works for every field width that passes common fit, not just matrix strings.",
+  "stocks": {
+    "kodak_tri_x_400": {
+      "examined": 128884,
+      "bad": [],
+      "scale_samples": [
+        {
+          "ppm": 10.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            23,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            8.0,
+            3.0,
+            10.3,
+            4.0
+          ],
+          "clear_left_mm": 0.20000000000000018,
+          "clear_right_mm": 0.17499999999999893
+        },
+        {
+          "ppm": 10.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            13.1,
+            3.0,
+            14.6,
+            4.0
+          ],
+          "clear_left_mm": 0.5499999999999989,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            16,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            17.8,
+            3.0,
+            19.4,
+            4.0
+          ],
+          "clear_left_mm": 0.5,
+          "clear_right_mm": 0.5750000000000028
+        },
+        {
+          "ppm": 10.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            22.6,
+            3.0,
+            24.1,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            18,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            27.2,
+            3.0,
+            29.0,
+            4.0
+          ],
+          "clear_left_mm": 0.3999999999999986,
+          "clear_right_mm": 0.4750000000000014
+        },
+        {
+          "ppm": 20.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            42,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            8.1,
+            3.1,
+            10.2,
+            3.9
+          ],
+          "clear_left_mm": 0.2999999999999998,
+          "clear_right_mm": 0.27500000000000036
+        },
+        {
+          "ppm": 20.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            25,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            13.25,
+            3.1,
+            14.5,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.7249999999999996
+        },
+        {
+          "ppm": 20.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            28,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            17.95,
+            3.1,
+            19.35,
+            3.9
+          ],
+          "clear_left_mm": 0.6499999999999986,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 20.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            26,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            22.75,
+            3.1,
+            24.05,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            31,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            27.35,
+            3.1,
+            28.9,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5750000000000028
+        },
+        {
+          "ppm": 40.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            89,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            8.025,
+            3.1,
+            10.25,
+            3.9
+          ],
+          "clear_left_mm": 0.22500000000000053,
+          "clear_right_mm": 0.22499999999999964
+        },
+        {
+          "ppm": 40.0,
+          "text": "250",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            52,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            13.25,
+            3.1,
+            14.55,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6749999999999989
+        },
+        {
+          "ppm": 40.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            58,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            17.925,
+            3.1,
+            19.375,
+            3.9
+          ],
+          "clear_left_mm": 0.625,
+          "clear_right_mm": 0.6000000000000014
+        },
+        {
+          "ppm": 40.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            53,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            22.725,
+            3.1,
+            24.05,
+            3.9
+          ],
+          "clear_left_mm": 0.6750000000000007,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            64,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            27.35,
+            3.1,
+            28.95,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5250000000000021
+        }
+      ]
+    },
+    "kodak_tmax_100": {
+      "examined": 128884,
+      "bad": [],
+      "scale_samples": [
+        {
+          "ppm": 10.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            23,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            7.6,
+            3.0,
+            9.9,
+            4.0
+          ],
+          "clear_left_mm": 0.1999999999999993,
+          "clear_right_mm": 0.17499999999999893
+        },
+        {
+          "ppm": 10.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            12.7,
+            3.0,
+            14.2,
+            4.0
+          ],
+          "clear_left_mm": 0.5499999999999989,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            16,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            17.4,
+            3.0,
+            19.0,
+            4.0
+          ],
+          "clear_left_mm": 0.5,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 10.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            22.2,
+            3.0,
+            23.7,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            18,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            26.8,
+            3.0,
+            28.6,
+            4.0
+          ],
+          "clear_left_mm": 0.40000000000000213,
+          "clear_right_mm": 0.47499999999999787
+        },
+        {
+          "ppm": 20.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            42,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            7.7,
+            3.1,
+            9.8,
+            3.9
+          ],
+          "clear_left_mm": 0.2999999999999998,
+          "clear_right_mm": 0.2749999999999986
+        },
+        {
+          "ppm": 20.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            25,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            12.85,
+            3.1,
+            14.1,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.7249999999999996
+        },
+        {
+          "ppm": 20.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            28,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            17.55,
+            3.1,
+            18.95,
+            3.9
+          ],
+          "clear_left_mm": 0.6500000000000021,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 20.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            26,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            22.35,
+            3.1,
+            23.65,
+            3.9
+          ],
+          "clear_left_mm": 0.7000000000000028,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            31,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            26.95,
+            3.1,
+            28.5,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 40.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            89,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            7.625,
+            3.1,
+            9.85,
+            3.9
+          ],
+          "clear_left_mm": 0.22499999999999964,
+          "clear_right_mm": 0.22499999999999964
+        },
+        {
+          "ppm": 40.0,
+          "text": "250",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            52,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            12.85,
+            3.1,
+            14.15,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6749999999999989
+        },
+        {
+          "ppm": 40.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            58,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            17.525,
+            3.1,
+            18.975,
+            3.9
+          ],
+          "clear_left_mm": 0.625,
+          "clear_right_mm": 0.5999999999999979
+        },
+        {
+          "ppm": 40.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            53,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            22.325,
+            3.1,
+            23.65,
+            3.9
+          ],
+          "clear_left_mm": 0.6750000000000007,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            64,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            26.95,
+            3.1,
+            28.55,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5249999999999986
+        }
+      ]
+    },
+    "ilford_hp5_plus_400": {
+      "examined": 128884,
+      "bad": [],
+      "scale_samples": [
+        {
+          "ppm": 10.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            23,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            6.9,
+            3.0,
+            9.2,
+            4.0
+          ],
+          "clear_left_mm": 0.15000000000000036,
+          "clear_right_mm": 0.22500000000000142
+        },
+        {
+          "ppm": 10.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            12.1,
+            3.0,
+            13.6,
+            4.0
+          ],
+          "clear_left_mm": 0.5999999999999996,
+          "clear_right_mm": 0.5750000000000011
+        },
+        {
+          "ppm": 10.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            16,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            16.8,
+            3.0,
+            18.4,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5250000000000021
+        },
+        {
+          "ppm": 10.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            21.6,
+            3.0,
+            23.1,
+            4.0
+          ],
+          "clear_left_mm": 0.6000000000000014,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 10.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            18,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            26.2,
+            3.0,
+            28.0,
+            4.0
+          ],
+          "clear_left_mm": 0.4499999999999993,
+          "clear_right_mm": 0.4250000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            42,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            7.05,
+            3.1,
+            9.15,
+            3.9
+          ],
+          "clear_left_mm": 0.2999999999999998,
+          "clear_right_mm": 0.27500000000000036
+        },
+        {
+          "ppm": 20.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            25,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            12.2,
+            3.1,
+            13.45,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.7250000000000014
+        },
+        {
+          "ppm": 20.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            28,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            16.9,
+            3.1,
+            18.3,
+            3.9
+          ],
+          "clear_left_mm": 0.6499999999999986,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 20.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            26,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            21.7,
+            3.1,
+            23.0,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            31,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            26.3,
+            3.1,
+            27.85,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 40.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            89,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            6.975,
+            3.1,
+            9.2,
+            3.9
+          ],
+          "clear_left_mm": 0.22499999999999964,
+          "clear_right_mm": 0.22500000000000142
+        },
+        {
+          "ppm": 40.0,
+          "text": "250",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            52,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            12.2,
+            3.1,
+            13.5,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            58,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            16.875,
+            3.1,
+            18.325,
+            3.9
+          ],
+          "clear_left_mm": 0.625,
+          "clear_right_mm": 0.6000000000000014
+        },
+        {
+          "ppm": 40.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            53,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            21.675,
+            3.1,
+            23.0,
+            3.9
+          ],
+          "clear_left_mm": 0.6750000000000007,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            64,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            26.3,
+            3.1,
+            27.9,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5250000000000021
+        }
+      ]
+    },
+    "fujifilm_neopan_acros_100_ii": {
+      "examined": 128884,
+      "bad": [],
+      "scale_samples": [
+        {
+          "ppm": 10.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            23,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            9.9,
+            3.0,
+            12.2,
+            4.0
+          ],
+          "clear_left_mm": 0.20000000000000107,
+          "clear_right_mm": 0.1750000000000007
+        },
+        {
+          "ppm": 10.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            15.0,
+            3.0,
+            16.5,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            16,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            19.7,
+            3.0,
+            21.3,
+            4.0
+          ],
+          "clear_left_mm": 0.5,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 10.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            24.5,
+            3.0,
+            26.0,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            18,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            29.1,
+            3.0,
+            30.9,
+            4.0
+          ],
+          "clear_left_mm": 0.40000000000000213,
+          "clear_right_mm": 0.4750000000000014
+        },
+        {
+          "ppm": 20.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            42,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            10.0,
+            3.1,
+            12.1,
+            3.9
+          ],
+          "clear_left_mm": 0.3000000000000007,
+          "clear_right_mm": 0.27500000000000036
+        },
+        {
+          "ppm": 20.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            25,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            15.15,
+            3.1,
+            16.4,
+            3.9
+          ],
+          "clear_left_mm": 0.7000000000000011,
+          "clear_right_mm": 0.7250000000000014
+        },
+        {
+          "ppm": 20.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            28,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            19.85,
+            3.1,
+            21.25,
+            3.9
+          ],
+          "clear_left_mm": 0.6500000000000021,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 20.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            26,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            24.65,
+            3.1,
+            25.95,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            31,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            29.25,
+            3.1,
+            30.8,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 40.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            89,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            9.925,
+            3.1,
+            12.15,
+            3.9
+          ],
+          "clear_left_mm": 0.22500000000000142,
+          "clear_right_mm": 0.22499999999999964
+        },
+        {
+          "ppm": 40.0,
+          "text": "250",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            52,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            15.15,
+            3.1,
+            16.45,
+            3.9
+          ],
+          "clear_left_mm": 0.7000000000000011,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            58,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            19.825,
+            3.1,
+            21.275,
+            3.9
+          ],
+          "clear_left_mm": 0.625,
+          "clear_right_mm": 0.6000000000000014
+        },
+        {
+          "ppm": 40.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            53,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            24.625,
+            3.1,
+            25.95,
+            3.9
+          ],
+          "clear_left_mm": 0.6750000000000007,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            64,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            29.25,
+            3.1,
+            30.85,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5249999999999986
+        }
+      ]
+    },
+    "cinestill_800t": {
+      "examined": 128884,
+      "bad": [],
+      "scale_samples": [
+        {
+          "ppm": 10.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            23,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            8.4,
+            3.0,
+            10.7,
+            4.0
+          ],
+          "clear_left_mm": 0.20000000000000107,
+          "clear_right_mm": 0.1750000000000007
+        },
+        {
+          "ppm": 10.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            13.5,
+            3.0,
+            15.0,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            16,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            18.2,
+            3.0,
+            19.8,
+            4.0
+          ],
+          "clear_left_mm": 0.5,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 10.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            15,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            23.0,
+            3.0,
+            24.5,
+            4.0
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 10.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            18,
+            10
+          ],
+          "padding_px": 3,
+          "full_rect_mm": [
+            27.6,
+            3.0,
+            29.4,
+            4.0
+          ],
+          "clear_left_mm": 0.40000000000000213,
+          "clear_right_mm": 0.4750000000000014
+        },
+        {
+          "ppm": 20.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            42,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            8.5,
+            3.1,
+            10.6,
+            3.9
+          ],
+          "clear_left_mm": 0.3000000000000007,
+          "clear_right_mm": 0.27500000000000036
+        },
+        {
+          "ppm": 20.0,
+          "text": "250",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            25,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            13.65,
+            3.1,
+            14.9,
+            3.9
+          ],
+          "clear_left_mm": 0.7000000000000011,
+          "clear_right_mm": 0.7249999999999996
+        },
+        {
+          "ppm": 20.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            28,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            18.35,
+            3.1,
+            19.75,
+            3.9
+          ],
+          "clear_left_mm": 0.6500000000000021,
+          "clear_right_mm": 0.625
+        },
+        {
+          "ppm": 20.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            26,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            23.15,
+            3.1,
+            24.45,
+            3.9
+          ],
+          "clear_left_mm": 0.6999999999999993,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 20.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.39366000000000007,
+          "raster_size_px": [
+            31,
+            16
+          ],
+          "padding_px": 4,
+          "full_rect_mm": [
+            27.75,
+            3.1,
+            29.3,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5749999999999993
+        },
+        {
+          "ppm": 40.0,
+          "text": "ISO400",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            89,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            8.425,
+            3.1,
+            10.65,
+            3.9
+          ],
+          "clear_left_mm": 0.22500000000000142,
+          "clear_right_mm": 0.22499999999999964
+        },
+        {
+          "ppm": 40.0,
+          "text": "250",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            52,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            13.65,
+            3.1,
+            14.95,
+            3.9
+          ],
+          "clear_left_mm": 0.7000000000000011,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "F5.6",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            58,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            18.325,
+            3.1,
+            19.775,
+            3.9
+          ],
+          "clear_left_mm": 0.625,
+          "clear_right_mm": 0.6000000000000014
+        },
+        {
+          "ppm": 40.0,
+          "text": "+0.5",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            53,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            23.125,
+            3.1,
+            24.45,
+            3.9
+          ],
+          "clear_left_mm": 0.6750000000000007,
+          "clear_right_mm": 0.6750000000000007
+        },
+        {
+          "ppm": 40.0,
+          "text": "50mm",
+          "common_font_height_mm": 0.43740000000000007,
+          "raster_size_px": [
+            64,
+            32
+          ],
+          "padding_px": 7,
+          "full_rect_mm": [
+            27.75,
+            3.1,
+            29.35,
+            3.9
+          ],
+          "clear_left_mm": 0.5500000000000007,
+          "clear_right_mm": 0.5249999999999986
+        }
+      ]
+    }
+  }
+}

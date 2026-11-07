@@ -69,6 +69,9 @@ impl Default for DiffusionFilterParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraParams {
+    /// Versioned pre-imaging composite identity; absent preserves legacy cache keys.
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    pub pre_imaging_version: Option<u32>,
     /// Fixed output-grid physical pitch for tiles; None uses full-image dimensions.
     #[serde(default)]
     pub pixel_size_um_override: Option<f32>,
@@ -76,6 +79,11 @@ pub struct CameraParams {
     pub exposure_compensation_ev: f32,
     #[serde(default = "default_true")]
     pub auto_exposure: bool,
+    /// Validated full-photo AE from preview ownership or an export full-source pass.
+    /// None requests measurement from the current image; exports reject external overrides.
+    /// Separate from user compensation because print calibration depends on that value.
+    #[serde(default, skip_serializing_if="Option::is_none")]
+    pub preview_metered_ev: Option<f32>,
     #[serde(default = "default_center_weighted")]
     pub auto_exposure_method: String,
     #[serde(default)]
@@ -93,9 +101,11 @@ pub struct CameraParams {
 impl Default for CameraParams {
     fn default() -> Self {
         Self {
+            pre_imaging_version: None,
             pixel_size_um_override: None,
             exposure_compensation_ev: 0.0,
             auto_exposure: true,
+            preview_metered_ev: None,
             auto_exposure_method: "center_weighted".into(),
             lens_blur_um: 0.0,
             film_format_mm: 35.0,
@@ -303,6 +313,29 @@ pub struct HalationParams {
     pub halation_bounce_decay: f64,
     #[serde(default = "default_true")]
     pub halation_renormalize: bool,
+    /// Only explicitly opted-in stocks use the fitted base back-reflection PSF.
+    #[serde(default)]
+    pub back_reflection: bool,
+    #[serde(default = "default_base_thickness_um")]
+    pub base_thickness_um: f64,
+    #[serde(default = "default_headroom_ev")]
+    pub headroom_ev: f64,
+    #[serde(default = "default_headroom_from_ev")]
+    pub headroom_from_ev: f64,
+    #[serde(default = "default_headroom_to_ev")]
+    pub headroom_to_ev: f64,
+}
+
+fn default_base_thickness_um() -> f64 { 120.0 }
+fn default_headroom_ev() -> f64 { 4.0 }
+fn default_headroom_from_ev() -> f64 { 1.5 }
+fn default_headroom_to_ev() -> f64 { 2.5 }
+
+impl HalationParams {
+    pub fn headroom_active(&self) -> bool {
+        self.active && self.back_reflection && self.halation_amount > 0.
+            && self.headroom_ev > 0. && self.headroom_to_ev > self.headroom_from_ev
+    }
 }
 
 fn default_one_f64() -> f64 {
@@ -346,6 +379,11 @@ impl Default for HalationParams {
             halation_n_bounces: 3,
             halation_bounce_decay: 0.5,
             halation_renormalize: true,
+            back_reflection: false,
+            base_thickness_um: default_base_thickness_um(),
+            headroom_ev: default_headroom_ev(),
+            headroom_from_ev: default_headroom_from_ev(),
+            headroom_to_ev: default_headroom_to_ev(),
         }
     }
 }

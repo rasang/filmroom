@@ -6,6 +6,7 @@ data class DiagnosticShare(val file: File, val summary: String, val eventCount: 
 
 /** Metadata is numeric/enum-like only, not Build.MODEL/DEVICE/FINGERPRINT strings. */
 internal enum class DiagnosticAbi(val id: String) { ARM64("arm64-v8a"), ARMV7("armeabi-v7a"), X86("x86"), X86_64("x86_64"), UNKNOWN("unknown") }
+internal object DiagnosticEngineVersion { const val BUILD=13; const val INTERFACE=2 }
 internal data class DiagnosticMetadata(
     val appVersionCode: Long = 0, val androidApi: Int = 0, val abi: DiagnosticAbi = DiagnosticAbi.UNKNOWN,
     val processorCount: Int = 0, val heapMaxBytes: Long = 0, val memoryClassMb: Int = 0,
@@ -14,7 +15,7 @@ internal data class DiagnosticMetadata(
         require(appVersionCode in 0..1_000_000_000 && androidApi in 0..1000 && processorCount in 0..1024)
         require(heapMaxBytes in 0..(1L shl 40) && memoryClassMb in 0..1_000_000)
     }
-    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb)
+    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb, DiagnosticEngineVersion.BUILD, DiagnosticEngineVersion.INTERFACE)
 }
 
 internal object ChineseDiagnostics {
@@ -25,6 +26,7 @@ internal object ChineseDiagnostics {
         Operation.SHARE_DIAGNOSTICS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_73fff6a5d6e6); Operation.CLEANUP -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f8281de2df36)
     }
     private fun stage(value: Stage): String = when (value) {
+        Stage.IMPORT_INPUT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7fc4b2dbd50)
         Stage.START -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d2bb025a2e51); Stage.DECODE_HEADER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4077a1f6397d); Stage.DECODE_STRIPE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_56e09dd8e1fc)
         Stage.NATIVE_ENTER -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_77f67305d365); Stage.NATIVE_PROGRESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2bd9ae163aa5); Stage.NATIVE_EXIT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_98407f5c987e); Stage.ENCODE_START -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_222b0d3c08c4)
         Stage.ENCODE_PROGRESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9e388ac3f491); Stage.MEDIA_INSERTED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2560088669b6); Stage.MEDIA_COMMITTED -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6ef11d1e8c02)
@@ -53,7 +55,7 @@ internal object ChineseDiagnostics {
     fun json(snapshot: DiagnosticSnapshot, metadata: DiagnosticMetadata): String = buildString {
         // All strings originate in fixed enums/allowlists. No general-purpose raw JSON pass-through.
         append("{\"schemaVersion\":1,\"appVersionCode\":").append(metadata.appVersionCode)
-        append(",\"engineBuildRevision\":7,\"engineInterfaceVersion\":2,\"androidApi\":").append(metadata.androidApi)
+        append(",\"engineBuildRevision\":").append(DiagnosticEngineVersion.BUILD).append(",\"engineInterfaceVersion\":").append(DiagnosticEngineVersion.INTERFACE).append(",\"androidApi\":").append(metadata.androidApi)
         append(",\"abi\":").append(jsonString(metadata.abi.id)).append(",\"processorCount\":").append(metadata.processorCount)
         append(",\"heapMaxBytes\":").append(metadata.heapMaxBytes).append(",\"memoryClassMb\":").append(metadata.memoryClassMb)
         append(",\"minutes\":").append(snapshot.minutes).append(",\"snapshotUtcMs\":").append(snapshot.snapshotWallMs)

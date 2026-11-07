@@ -71,7 +71,7 @@ fn write_output_rgb(output:&mut File,rgb:&ImageBuf,exposure:f64)->Result<()> {
 fn expose(input:&Path,pipe:&Pipeline,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<([PathBuf;3],Option<f32>)> {
  let paths=std::array::from_fn(|_|s.path("film-raw"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut f=File::open(input).map_err(io)?;let rows=rows_per_chunk(w);let lut=pipe.tc_lut().ok_or_else(||error("UNSUPPORTED_EXPORT_OPTIONS","Streamed exposure requires Hanatos spectral upsampling"))?;
  let exposure=from_f32(2.0f32.powf(pipe.params.camera.exposure_compensation_ev));
- let metered_ev=if pipe.params.camera.auto_exposure {p.begin_work("auto_exposure");p.pass("auto_exposure",0,1);let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);let ev=crate::streamed_global::auto_exposure_ev(input,w,h,&pipe.params.camera.auto_exposure_method,&matrix,&mut *c).map_err(io)?;p.pass("auto_exposure",1,1);p.end_work();Some(ev)}else{None};
+ let metered_ev=if !pipe.params.camera.auto_exposure {None}else if let Some(ev)=pipe.params.camera.preview_metered_ev {Some(ev)}else {p.begin_work("auto_exposure");p.pass("auto_exposure",0,1);let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);let ev=crate::streamed_global::auto_exposure_ev(input,w,h,&pipe.params.camera.auto_exposure_method,&matrix,&mut *c).map_err(io)?;p.pass("auto_exposure",1,1);p.end_work();Some(ev)};
  let ae=metered_ev.map(|ev|from_f32(2.0f32.powf(ev))).unwrap_or(from_f64(1.));
  p.begin_work("film_exposure");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut bytes=vec![0u8;w as usize*hh as usize*12];f.read_exact(&mut bytes).map_err(io)?;let mut v=Vec::with_capacity(bytes.len()/4);for b in bytes.chunks_exact(4){let x=f32::from_le_bytes(b.try_into().unwrap());if !x.is_finite(){return Err(error("INVALID_PIXELS","Nonfinite input spool"));}v.push((from_f64(x as f64)*ae)*exposure);}let rgb=ImageBuf::from_data(w,hh,v);let raw=CpuBackend.hanatos2025_rgb_to_raw(&rgb,lut,&pipe.params.io.input_color_space,pipe.front_illuminant_spd(),pipe.params.settings.use_cat16);write_image_planes(&mut out,&raw)?;p.pass("film_exposure",(y+hh) as u64,h as u64);}
  drop(out);s.observe()?;p.end_work();Ok((paths,metered_ev))
@@ -83,7 +83,13 @@ fn halation(paths:&mut [PathBuf;3],params:&RuntimeParams,pitch:f32,w:u32,h:u32,s
    if sigma>0.||decay>0. {let core=s.blur(&paths[ch],w,h,sigma.max(1e-6) as f32,"film_scatter",c,p)?;let tail=s.exponential(&paths[ch],w,h,decay.max(1e-6) as f32,"film_scatter",c,p)?;let sa=v.scatter_amount;let wt=v.scatter_tail_weight[ch];inplace_with(&paths[ch],&[&core,&tail],n,c,|a,x|(1.-sa)*a+sa*((1.-wt)*x[0]+wt*x[1]))?;s.remove(&core)?;s.remove(&tail)?;}
  }}
  let strengths=v.halation_strength.map(|a|a*v.halation_amount);
- if v.halation_n_bounces>=1&&strengths.iter().any(|&a|a>0.) {let mut weights:Vec<f64>=(0..v.halation_n_bounces).map(|k|v.halation_bounce_decay.powi(k as i32)).collect();let sum:f64=weights.iter().sum();for x in &mut weights{*x/=sum;}
+ if v.back_reflection && v.halation_amount>0. && v.base_thickness_um>0. {
+  let components=spektrafilm_math::halation::back_reflection_components(v.base_thickness_um,v.halation_spatial_scale,v.halation_amount,pitch as f64);
+  for ch in 0..3 {if strengths[ch]==0. {continue;}let acc=s.path("halation-back-reflection");let f=new_file(&acc)?;f.set_len(n*8).map_err(io)?;drop(f);s.observe()?;
+   for component in &components {let blur=s.blur(&paths[ch],w,h,component.sigma_px[ch] as f32,"film_halation",c,p)?;let weight=component.weight[ch];inplace_with(&acc,&[&blur],n,c,|a,x|a+weight*x[0])?;s.remove(&blur)?;}
+   let norm=if v.halation_renormalize {1.+strengths[ch]}else{1.};inplace_with(&paths[ch],&[&acc],n,c,|a,x|(a+strengths[ch]*x[0].max(0.))/norm)?;s.remove(&acc)?;
+  }
+ } else if v.halation_n_bounces>=1&&strengths.iter().any(|&a|a>0.) {let mut weights:Vec<f64>=(0..v.halation_n_bounces).map(|k|v.halation_bounce_decay.powi(k as i32)).collect();let sum:f64=weights.iter().sum();for x in &mut weights{*x/=sum;}
   for ch in 0..3 {let first=v.halation_first_sigma_um[ch]*v.halation_spatial_scale/pitch as f64;if strengths[ch]==0.||first<=0.{continue;}let acc=s.path("halation-sum");let f=new_file(&acc)?;f.set_len(n*8).map_err(io)?;drop(f);s.observe()?;
    for(k,&weight)in weights.iter().enumerate(){let blur=s.blur(&paths[ch],w,h,(first*((k+1)as f64).sqrt()).max(1e-6) as f32,"film_halation",c,p)?;inplace_with(&acc,&[&blur],n,c,|a,x|a+weight*x[0])?;s.remove(&blur)?;}
    inplace_with(&paths[ch],&[&acc],n,c,|a,x|a+strengths[ch]*x[0])?;s.remove(&acc)?;
@@ -159,7 +165,7 @@ fn grain_density(execution:Option<&crate::export_execution::ExportPermit>,mut de
 // final completion unit. These are work fractions, never duration estimates.
 fn light_work_count(params:&RuntimeParams,pitch:f32)->u64 {
  let v=&params.film_render.halation;
- let mut count=u64::from(v.boost_ev>0.)+u64::from(params.camera.diffusion_filter.active)+3*u64::from(params.camera.lens_blur_um>0.);
+ let mut count=u64::from(v.boost_ev>0.)+u64::from(v.headroom_active())+u64::from(params.camera.diffusion_filter.active)+3*u64::from(params.camera.lens_blur_um>0.);
  if !v.active {return count;}
  for ch in 0..3 {
   let sigma=v.scatter_core_um[ch]*v.scatter_spatial_scale/pitch as f64;
@@ -167,7 +173,7 @@ fn light_work_count(params:&RuntimeParams,pitch:f32)->u64 {
   if v.scatter_amount>0.&&(sigma>0.||decay>0.){count+=4;}
   let strength=v.halation_strength[ch]*v.halation_amount;
   let first=v.halation_first_sigma_um[ch]*v.halation_spatial_scale/pitch as f64;
-  if v.halation_n_bounces>=1&&v.halation_strength.iter().any(|a|a*v.halation_amount>0.)&&strength!=0.&&first>0.{count+=v.halation_n_bounces as u64;}
+  if v.back_reflection {if strength>0.&&v.base_thickness_um>0.{count+=4;}} else if v.halation_n_bounces>=1&&v.halation_strength.iter().any(|a|a*v.halation_amount>0.)&&strength!=0.&&first>0.{count+=v.halation_n_bounces as u64;}
  }
  count
 }
@@ -266,6 +272,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let pipe=Pipeline::new_with_spectral(film,paper,params,data_dir).map_err(|e|error("PIPELINE_ERROR",e))?;let prepared=pipe.prepare_streamed_finish_spatial(&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?;let setup_ms=start.elapsed().as_secs_f64()*1000.;let backend=crate::adreno::AdrenoDensityBackend::with_enabled(use_gpu&&resident_fallback.is_none());cancel(&mut cancelled)?;let mut scratch=Scratch::new(scratch_dir)?;let mut stages=Vec::new();
  let mut output_guard=OutputGuard{path:output_path.to_path_buf(),keep:false};
  let rows=rows_per_chunk(width);
+ // Scan sampling fits its original 3 MiB allowance; scientific FFT geometry stays unchanged.
  let fft_memory_cap=(memory_budget_mib as u64*1024*1024).saturating_sub(115*1024*1024+256*(width as u64).max(32768)+crate::export_execution::EXPORT_STACK_RESERVE_BYTES+SPATIAL_MEMORY as u64);
  let print_diffusion= !pipe.params.io.scan_film && pipe.params.enlarger.diffusion_filter.active;
  let mut metered_ev=checkpoints.as_ref().and_then(|c|c.metered_ev());
@@ -273,7 +280,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let mut logs:[PathBuf;3]=std::array::from_fn(|_|scratch.path("restored"));
  if resume_stage==2||resume_stage==3 {checkpoints.as_ref().unwrap().restore(&logs,&mut cancelled).map_err(checkpoint_error)?;scratch.observe()?;}
  if resume_stage<2 {
- progress.begin_stage(2,1+u64::from(pipe.params.camera.auto_exposure),"film_exposure");
+ progress.begin_stage(2,1+u64::from(pipe.params.camera.auto_exposure && pipe.params.camera.preview_metered_ev.is_none()),"film_exposure");
  let at=Instant::now();let exposed=expose(input_path,&pipe,width,height,&mut scratch,&mut cancelled,&mut progress)?;logs=exposed.0;metered_ev=exposed.1;stages.push(StageMetrics{stage:"film_exposure",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
  if let Some(c)=checkpoints.as_mut(){c.commit(2,&logs,metered_ev,&mut cancelled).map_err(checkpoint_error)?;}
  progress.finish_stage();
@@ -282,6 +289,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let light_work=light_work_count(&pipe.params,pitch);
  if light_work>0 {progress.begin_stage(3,light_work,"film_scatter_halation");}
  if pipe.params.film_render.halation.boost_ev>0. {let at=Instant::now();let v=&pipe.params.film_render.halation;progress.begin_work("highlight_boost");crate::streamed_global::boost_planes(&logs,n,v.boost_ev as f64,v.boost_range as f64,v.protect_ev as f64,&mut cancelled,|done,total|progress.pass("highlight_boost",done,total)).map_err(io)?;progress.end_work();stages.push(StageMetrics{stage:"highlight_boost",elapsed_ms:at.elapsed().as_secs_f64()*1000.});}
+ if pipe.params.film_render.halation.headroom_active() {let at=Instant::now();let v=&pipe.params.film_render.halation;progress.begin_work("highlight_boost");crate::streamed_global::headroom_planes(&logs,n,v.headroom_ev,v.headroom_from_ev,v.headroom_to_ev,&mut cancelled,|done,total|progress.pass("highlight_boost",done,total)).map_err(io)?;progress.end_work();stages.push(StageMetrics{stage:"halation_headroom",elapsed_ms:at.elapsed().as_secs_f64()*1000.});}
  let at_diffusion=Instant::now();
  if pipe.params.camera.diffusion_filter.active {
    let d=&pipe.params.camera.diffusion_filter;
@@ -355,7 +363,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let sharpening=(sharp_radius>0. && sharp_amount>0.) || pipe.params.scanner.lens_blur>0.;
  let scan_paths:[PathBuf;3]=std::array::from_fn(|_|scratch.path("scan-linear"));
  let mut scan_files=if sharpening {scan_paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?}else{Vec::new()};
- let mut scan_preview=if crate::scan_preview::path(output_path).is_some(){crate::scan_preview::Sampler::new(width,height).ok()}else{None};
+ let mut scan_preview=if crate::scan_preview::path(output_path).is_some(){crate::scan_preview::Sampler::new(width,height,&pipe.params.io.output_color_space,exposure).ok()}else{None};
  progress.begin_work("printing_scanning");for y in(0..height).step_by(rows as usize){cancel(&mut cancelled)?;let hh=rows.min(height-y);let mut planes=Vec::new();for f in &mut files{planes.push(read64(f,width as usize*hh as usize)?);}let image=image_from_planes(&planes,width,hh);
    let developed=if print_diffusion{Some(prepared.develop_print_raw_chunk(&image,&CpuBackend).map_err(|e|error("PIPELINE_ERROR",e))?)}else{None};
    let mut rgb=if let Some(developed)=developed.as_ref(){
@@ -368,7 +376,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  }
  progress.end_work();
  // Real full-frame scan RGB exists now; later scanner blur/sharpen still belongs to stage6.
- if let Some(preview)=scan_preview {if let Err(e)=preview.publish(output_path,&pipe.params.io.output_color_space,exposure,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}}
+ if let Some(preview)=scan_preview {if let Err(e)=preview.publish(output_path,&mut cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}}
  drop(scan_files);drop(files);drop(glare_input);if let Some(q)=&glare_path{scratch.remove(q)?;}for q in &density{scratch.remove(q)?;}scratch.observe()?;
  if sharpening {
    let at_sharpen=Instant::now();

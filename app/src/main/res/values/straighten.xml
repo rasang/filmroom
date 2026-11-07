@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composition_straighten_value">水平 %1$s</string>
+    <string name="composition_straighten_reset">归零</string>
+</resources>

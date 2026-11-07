@@ -86,7 +86,8 @@ data class EditorState(
     val filmDevelopmentTime: Float = 0f,
     val paperDevelopmentTime: Float = 0f,
     val imprint: dev.filmroom.imprint.ImprintSettings = dev.filmroom.imprint.ImprintSettings(),
-    val filmBorder: Boolean = false, // output presentation only; reset defaults OFF
+    val filmBorder: Boolean = false, // reset defaults OFF
+    val filmBorderStage: Int = 0, // 0 frozen legacy post-composite, 1 source/edge pre-imaging
     val mediumFormat: dev.filmroom.border.MediumFormat? = null, // presentation only; null retains 135
     val mediumPortrait: Boolean = false, // explicit even for a square aperture
     val negativeWhiteHoles: Boolean = true, // presentation preference; reversal output remains white
@@ -95,18 +96,32 @@ data class EditorState(
     // null follows each film's default; explicit choice survives a forced reversal/direct route.
     val preferredOutputRoute: String? = null,
 ) {
-    val isMonochromeFilm get()=filmStock=="kodak_doublex" || filmStock=="kodak_trix"
-    val isMonochromePrint get()=paperStock=="kodak_2302"
+    init { require(filmBorderStage in 0..1) }
+    val preImagingBorder get()=filmBorder && filmBorderStage==1
+    val isMonochromeFilm get()=filmStock in FilmProfileCapabilities.monochromeFilms
+    val isMonochromePrint get()=paperStock in FilmProfileCapabilities.monochromePrints
     val neutralDatabaseSupported get()=(!isMonochromeFilm && !isMonochromePrint) || BwNeutralFilterEntries.contains(filmStock,paperStock,printIlluminant)
     val effectiveNeutralFiltersFromDatabase get()=neutralFiltersFromDatabase && neutralDatabaseSupported
     val frameStock get()=dev.filmroom.border.BorderCatalog.frameStock(filmStock,paperStock,outputRoute)
+    internal val frameFormats get()=FrameFormatCapabilities(
+        dev.filmroom.border.BorderCatalog.available(frameStock,null),
+        dev.filmroom.border.BorderCatalog.PROTOTYPE_ENABLED && dev.filmroom.border.MediumFormatStocks.available(frameStock))
+    fun selectFilmBorder(enabled:Boolean):EditorState {
+        if(!enabled)return copy(filmBorder=false)
+        val formats=frameFormats
+        if(!formats.available)return copy(filmBorder=false)
+        val selected=formats.formatForEnable(effectiveMediumFormat)
+        val framed=copy(filmBorder=true,filmBorderStage=1)
+        return if(selected==effectiveMediumFormat)framed else framed.selectMediumFormat(selected,mediumPortrait)
+    }
     val effectiveMediumFormat get()=mediumFormat?.takeIf{dev.filmroom.border.MediumFormatStocks.available(frameStock)}
     val effectiveMediumPortrait get()=effectiveMediumFormat!=null && mediumPortrait
-    val negativeWhiteHolesSupported get()=effectiveMediumFormat==null && (outputRoute=="print" || outputRoute=="direct") && dev.filmroom.border.FrameProfileCatalog.kinds[frameStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE
+    val negativeWhiteHolesSupported get()=frameFormats.has135 && effectiveMediumFormat==null && (outputRoute=="print" || outputRoute=="direct") && dev.filmroom.border.FrameProfileCatalog.kinds[frameStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE
     fun controlSupported(id:String):Boolean=when(id){
         "neutralFiltersFromDatabase"->neutralDatabaseSupported
         "filmDevelopmentTime"->filmStock=="kodak_doublex"
-        "paperDevelopmentTime"->isMonochromePrint && outputRoute=="print"
+        "halationBounces","halationDecay"->filmStock!="cinestill_800t"
+        "paperDevelopmentTime"->paperStock=="kodak_2302" && outputRoute=="print"
         "saturation","dirInterLayer","grainRedScale","grainGreenScale","grainBlueScale","halationColor"->!isMonochromeFilm
         "warmth","paperGammaFast","paperGammaSlow","paperGammaRed","paperGammaGreen","paperGammaBlue","paperDeveloperExhaustion"->!isMonochromePrint
         else->true
@@ -123,19 +138,24 @@ data class EditorState(
         // Legacy negative/direct states can only have arisen from a manual route choice.
         val preference=preferredOutputRoute ?: if(dev.filmroom.border.FrameProfileCatalog.kinds[filmStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE && outputRoute=="direct")"direct" else null
         val reversal=dev.filmroom.border.FrameProfileCatalog.kinds[id]==dev.filmroom.border.FrameAppearanceContext.FilmKind.REVERSAL
-        return copy(filmStock=id,mediumFormat=mediumFormat?.takeIf{dev.filmroom.border.MediumFormatStocks.available(id)},
+        val selectedMedium=mediumFormat?.takeIf{dev.filmroom.border.MediumFormatStocks.available(id)}
+        val selected=copy(filmStock=id,mediumFormat=selectedMedium,
             mediumPortrait=mediumPortrait && dev.filmroom.border.MediumFormatStocks.available(id),filmFormatMm=if(filmFormatMm==(if(filmStock=="kodak_trix")8f else 35f)) {if(id=="kodak_trix")8f else 35f}else filmFormatMm,paperStock=if(paperStock==previousDefaultPaper)defaultPaper else paperStock,
             outputRoute=if(reversal)"direct" else preference ?: defaultRoute,preferredOutputRoute=preference)
+        return if(filmBorder)selected.selectFilmBorder(true)else selected
     }
     /** Restore processing controls while leaving the user's composition and output preferences intact. */
     fun processingDefaults(defaultPaper:String,defaultRoute:String)=EditorState(
         filmStock=filmStock,paperStock=defaultPaper,outputRoute=defaultRoute,filmFormatMm=if(filmStock=="kodak_trix")8f else 35f,
-        imprint=imprint,filmBorder=filmBorder,mediumFormat=mediumFormat,mediumPortrait=mediumPortrait,negativeWhiteHoles=negativeWhiteHoles,composition=composition,crop=crop,
+        imprint=imprint,filmBorder=filmBorder,filmBorderStage=filmBorderStage,mediumFormat=mediumFormat,mediumPortrait=mediumPortrait,negativeWhiteHoles=negativeWhiteHoles,composition=composition,crop=crop,
         useGpu=useGpu,outputColorSpace=outputColorSpace,outputGamut=outputGamut,
     )
+    /** Only the active editor session is upgraded. Saved recipes and frozen queues use fromJson unchanged. */
+    fun forLiveSessionRestore():EditorState = if(filmBorder && filmBorderStage==0)copy(filmBorderStage=1)else this
+
     /** Switching the output frame does not silently alter grain/optical filmFormatMm. */
     fun selectMediumFormat(format:dev.filmroom.border.MediumFormat?,portrait:Boolean):EditorState {
-        require(format==null || dev.filmroom.border.MediumFormatStocks.available(frameStock))
+        require(format in frameFormats.formats)
         return copy(mediumFormat=format,mediumPortrait=format!=null && portrait,
             composition=composition.copy(targetAspect=dev.filmroom.border.BorderCatalog.frameAspect(frameStock,portrait,format)))
     }
@@ -157,7 +177,7 @@ data class EditorState(
     fun json(mode: String = "preview", includePresentation: Boolean = true) = JSONObject().apply {
         if(includePresentation){
             put("imprint",imprint.json())
-            put("filmBorder",filmBorder)
+            put("filmBorder",filmBorder);put("filmBorderStage",filmBorderStage)
             mediumFormat?.let{put("mediumFormat",it.name);put("mediumPortrait",mediumPortrait)}
             put("negativeWhiteHoles",negativeWhiteHoles)
             put("composition",composition.json())
@@ -251,6 +271,10 @@ data class EditorState(
                 filmDevelopmentTime=j.optDouble("filmDevelopmentTime",0.0).toFloat(),paperDevelopmentTime=j.optDouble("paperDevelopmentTime",0.0).toFloat(),
                 imprint=j.optJSONObject("imprint")?.let{dev.filmroom.imprint.ImprintSettings.fromJson(it)} ?: dev.filmroom.imprint.ImprintSettings(),
                 filmBorder=j.optBoolean("filmBorder",false),
+                filmBorderStage=if(!j.has("filmBorderStage"))0 else j.get("filmBorderStage").let{value->
+                    require(value is Int || value is Long){"filmBorderStage must be an integer"}
+                    val stage=(value as Number).toLong();require(stage in 0..1);stage.toInt()
+                },
                 mediumFormat=j.optString("mediumFormat").takeIf{it.isNotEmpty()}?.let{dev.filmroom.border.MediumFormat.valueOf(it)},
                 mediumPortrait=j.optBoolean("mediumPortrait",false),
                 negativeWhiteHoles=j.optBoolean("negativeWhiteHoles",true),

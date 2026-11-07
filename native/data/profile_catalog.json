@@ -206,7 +206,7 @@
     },
     {
       "id": "kodak_trix",
-      "name": "Kodak Tri-X 7266 \u00b7 Super 8",
+      "name": "Kodak Tri-X 7266 · Super 8",
       "kind": "reversal",
       "defaultPaper": "kodak_2302",
       "defaultRoute": "direct"
@@ -216,6 +216,48 @@
       "name": "Kodak B&W Print Film 2302",
       "kind": "cine_print",
       "defaultPaper": "kodak_2302",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "cinestill_800t",
+      "name": "CineStill 800T",
+      "kind": "negative",
+      "defaultPaper": "kodak_2383",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "fujifilm_neopan_acros_100_ii",
+      "name": "Fujifilm Neopan 100 Acros II",
+      "kind": "negative",
+      "defaultPaper": "ilford_multigrade_iv_rc",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "ilford_hp5_plus_400",
+      "name": "Ilford HP5 Plus 400",
+      "kind": "negative",
+      "defaultPaper": "ilford_multigrade_iv_rc",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "ilford_multigrade_iv_rc",
+      "name": "Ilford Multigrade IV RC",
+      "kind": "paper",
+      "defaultPaper": "ilford_multigrade_iv_rc",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_tmax_100",
+      "name": "Kodak T-Max 100",
+      "kind": "negative",
+      "defaultPaper": "ilford_multigrade_iv_rc",
+      "defaultRoute": "print"
+    },
+    {
+      "id": "kodak_tri_x_400",
+      "name": "Kodak Tri-X 400",
+      "kind": "negative",
+      "defaultPaper": "ilford_multigrade_iv_rc",
       "defaultRoute": "print"
     }
   ]

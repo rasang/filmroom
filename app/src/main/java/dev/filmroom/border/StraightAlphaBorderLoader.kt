@@ -29,7 +29,7 @@ object StraightAlphaBorderLoader {
     fun load(spec:Spec,open:()->InputStream,checkActive:()->Unit={}):BorderRaster {
         val pixels=decodeStraight(spec,open,checkActive)
         checkActive()
-        val raster=if(BwFrameGeometry.forStock(spec.stock)!=null)AuthoredBwBorderRaster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb) else StraightAlphaFixed135Raster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb)
+        val raster=if(Reviewed135Definitions.matches(spec.stock,spec.version))Reviewed135BorderRaster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb) else if(BwFrameGeometry.forStock(spec.stock)!=null)AuthoredBwBorderRaster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb) else StraightAlphaFixed135Raster(spec.stock,spec.version,spec.width,spec.height,pixels,spec.featherTotalAt3072,spec.holeMatteSrgb)
         checkActive()
         return raster
     }

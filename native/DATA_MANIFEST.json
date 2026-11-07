@@ -83,9 +83,10 @@
     },
     {
       "path": "filters/neutral_print_filters.json",
-      "sha256": "eb287267df909ce8a8d0e348e52ca0fbb639b86566d0de2c5dff274de2ed8a0f",
+      "sha256": "9846e3d02601ce03ddaa633cf90c4eb742dee446b8579bec7083a10bc9bc2a62",
       "matchesPinnedPython": false,
-      "upstreamBwAdditions": "andreavolpato/spektrafilm@6cd00c8d4f30b5b550f50f4bbd3753c9f2a48507; existing 160 entries unchanged"
+      "upstreamBwAdditions": "andreavolpato/spektrafilm@6cd00c8d4f30b5b550f50f4bbd3753c9f2a48507; existing 160 entries unchanged",
+      "modification": "Append SpektraLab product stocks and calibrated filter packs; preserve historical entries."
     },
     {
       "path": "icc/README.md",
@@ -1089,7 +1090,68 @@
       "sha256": "3c04bb2e7701eae97eaaf14100cbf80c8f00dd07db3deda3f14b37ac060ca2be",
       "upstreamRustRevision": "9dd59b0380194b93686aaa230a8bb9680aa270a4",
       "matchesPinnedPython": false
+    },
+    {
+      "path": "profile_catalog.json",
+      "sha256": "2d4fd8b480639691162e88ba4a809357521ac1ebbc7289d6082947c19f5ea53d",
+      "matchesPinnedPython": false,
+      "modification": "Append SpektraLab product stocks and calibrated filter packs; preserve historical entries."
+    },
+    {
+      "path": "profiles/cinestill_800t.json",
+      "sha256": "4b5c5771a1d4755cf2f2994bbc0529387d579cc8d9fb6e23fe5d3d856fc13161",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/cinestill_800t.json",
+      "matchesPinnedSpektraLab": true
+    },
+    {
+      "path": "profiles/fujifilm_neopan_acros_100_ii.json",
+      "sha256": "4429b45664a06c7ee8d16687bcc7adf656403e534fba584f83762e160abdc4f9",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/fujifilm_neopan_acros_100_ii.json",
+      "matchesPinnedSpektraLab": true
+    },
+    {
+      "path": "profiles/ilford_hp5_plus_400.json",
+      "sha256": "a09ccdb57816f220ab598e534318a743ef79e16a300f8bd2de7453d451fe8ec5",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/ilford_hp5_plus_400.json",
+      "matchesPinnedSpektraLab": true
+    },
+    {
+      "path": "profiles/ilford_multigrade_iv_rc.json",
+      "sha256": "0f776f1f26f04aca4ec438ed377dc1acf4073dc1a8ae32c51607a6cb1a02521d",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/ilford_multigrade_iv_rc.json",
+      "matchesPinnedSpektraLab": true
+    },
+    {
+      "path": "profiles/kodak_tmax_100.json",
+      "sha256": "c9160236872034b86fb42b67be3a9252088bfa7bdbb450148b0c20ad83e3033a",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/kodak_tmax_100.json",
+      "matchesPinnedSpektraLab": true
+    },
+    {
+      "path": "profiles/kodak_tri_x_400.json",
+      "sha256": "a54be071c6a055a9a49acb7072d10bf0b1bcddf9c0a459b0800a9b14bb66b1f1",
+      "matchesPinnedPython": false,
+      "source": "https://github.com/JamesQiu2005/SpektraLab",
+      "sourceRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af",
+      "sourcePath": "engine/resources_product/profiles/kodak_tri_x_400.json",
+      "matchesPinnedSpektraLab": true
     }
   ],
-  "modifiedBundledFiles": []
+  "modifiedBundledFiles": [],
+  "spektralabRevision": "02d82b56cf65f0f8e802a708612edc4e9a4790af"
 }

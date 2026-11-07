@@ -79,6 +79,20 @@ class ExportAwarePreviewHostTest {
             assertEquals(listOf(.1f to false,.2f to false),h.calls)
         }finally{release.complete(Unit);export?.cancelAndJoin();f?.dispose();Dispatchers.resetMain()}
     }
+    @Test fun warmQueueActivityStillAllowsOrdinaryQuickAndRefinedPreview()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));var f:Fixture?=null
+        try {
+            f=fixture();val h=f
+            ExportWorkAdmissions.withQueueActivity {
+                assertTrue(ExportWorkAdmissions.prewarmBlocked);assertFalse(ExportWorkAdmissions.active.value)
+                h.vm.parameters(EditorState(brightness=.3f))
+                waitFor{h.state.value.compositionSource?.width==192 && !h.state.value.previewRefining}
+                assertEquals(listOf(.3f to false,.3f to true),h.calls)
+                assertEquals(h.state.value.parameters,h.state.value.renderedParameters)
+            }
+            assertFalse(ExportWorkAdmissions.prewarmBlocked)
+        } finally {f?.dispose();Dispatchers.resetMain()}
+    }
     @Test fun presentationCommitDoesNotCreateRefinementForUnsettledScience()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler));var f:Fixture?=null
         try {

@@ -44,7 +44,7 @@ class DetailSourceScopeHostTest {
             val grid=File(real,"cache/detail-preview/${detail.relativePath}")
             assertArrayEquals(samples,grid.readBytes())
             assertEquals(2,detail.width);assertEquals(1,detail.height)
-            detail.close();assertFalse(grid.exists());assertTrue(original.exists());assertTrue(linear.exists())
+            detail.close();assertTrue(grid.exists());source.clearLinearPreview();source.detailGridCache.awaitRetirements();assertFalse(grid.exists());assertTrue(original.exists());assertTrue(linear.exists())
         }finally{outer.deleteRecursively()}
     }
     @Test fun rejectsLexicalTraversalOutsideRootAndUntrustedEquivalentAlias() {

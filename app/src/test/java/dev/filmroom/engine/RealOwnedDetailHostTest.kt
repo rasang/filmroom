@@ -36,7 +36,15 @@ class RealOwnedDetailHostTest {
             try {
                 val tile=session.tile(0,0)
                 assertEquals(DetailRect(0,0,32,24),tile.core);assertEquals(tile.core,tile.sample)
-                assertEquals(session.key,tile.key);assertTrue(tile.cpuFallback)
+                assertEquals(session.key,tile.key)
+                if(System.getenv("FILMROOM_REQUIRE_DETAIL_GPU")=="1") {
+                    assertEquals("wgpu",tile.actualBackend);assertFalse(tile.cpuFallback)
+                    assertEquals("ApproximateSameWorkingGrid",tile.quality)
+                } else {
+                    assertTrue(tile.actualBackend in setOf("cpu","wgpu"))
+                    assertEquals(tile.actualBackend=="cpu",tile.cpuFallback)
+                }
+                assertTrue(tile.backendReason.isNotBlank())
                 assertEquals(32,tile.bitmap.width);assertEquals(24,tile.bitmap.height)
                 val region=session.region(DetailRect(5,6,10,8)){false}
                 assertEquals(DetailRect(4,5,12,10),region.sample)

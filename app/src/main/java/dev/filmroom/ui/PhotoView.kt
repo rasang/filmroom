@@ -67,6 +67,12 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     private var compositionDirty = false
     private var compositionSource: Bitmap? = null
     private var interactiveFrame: Bitmap? = null
+    /** Pre-imaged source is the adopted full scientific frame (including imaged imprints), never the original photo. */
+    var preImagingCompositionPreview:Boolean=false
+        set(value){
+            if(field==value)return
+            field=value;compositionDirty=false;liveComposition=false;handle=0;invalidate()
+        }
     private var liveComposition = false
     private var lastBoundComposition = CompositionTransform()
     internal val compositionGeometryReady: Boolean get() {
@@ -78,7 +84,8 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         return kotlin.math.abs(requested-shown)<=1e-9*maxOf(1.0,shown)
     }
     internal val isLiveComposition get() = liveComposition && usableInteractiveFrame() && compositionGeometryReady
-    private fun usableInteractiveFrame() = compositionSource?.isRecycled == false && ((interactiveFrame?.isRecycled == false && presentation != null) || cropPresentation!=null)
+    private fun usableInteractiveFrame() = compositionSource?.isRecycled == false && ((interactiveFrame?.isRecycled == false && presentation != null) || cropPresentation!=null ||
+        (preImagingCompositionPreview && presentation?.let{compositionSource?.width==it.outputWidth && compositionSource?.height==it.outputHeight}==true))
     private var compositionChanged: ((CompositionTransform, Boolean)->Unit)? = null
     private var lockedViewer: DoubleArray? = null
     private var pendingViewer: DoubleArray? = null
@@ -86,14 +93,14 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     /** Canonical processed-photo bounds; independent of the fixed border/viewer transform. */
     internal fun compositionPhotoRect(transform:CompositionTransform=composition): RectF? {
         if(presentation==null && cropPresentation==null)return null
-        if(freeEdit)return viewportRect()
         val aperture=compositionAperture() ?: return null
         val c=transform.clamped(canonicalWidth,canonicalHeight)
-        val scale=maxOf(aperture.width().toDouble()/canonicalWidth,aperture.height().toDouble()/canonicalHeight)*c.zoom
-        val w=canonicalWidth*scale;val h=canonicalHeight*scale
+        val r=c.rect(canonicalWidth,canonicalHeight)
+        val w=aperture.width()/r.width;val h=aperture.height()/r.height
         val left=aperture.centerX()-c.centerX*w;val top=aperture.centerY()-c.centerY*h
         return RectF(left.toFloat(),top.toFloat(),(left+w).toFloat(),(top+h).toFloat())
     }
+    private fun displayedComposition()=if(isLiveComposition || freeEdit)composition else exactComposition() ?: composition
     private fun presentedPhotoRect():RectF?=exactComposition()?.let{compositionPhotoRect(if(isLiveComposition || freeEdit)composition else it)}
     internal fun compositionAperture(): RectF? {
         val p=presentation
@@ -112,10 +119,15 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         val a=compositionAperture() ?: return viewport.visibleRect(key)
         val p=presentedPhotoRect() ?: return null
         if(p.width()<=0 || p.height()<=0 || !a.intersect(0f,0f,width.toFloat(),height.toFloat()))return null
-        val x0=kotlin.math.floor(((a.left-p.left)/p.width()).coerceIn(0f,1f)*key.virtualFullWidth).toInt()
-        val y0=kotlin.math.floor(((a.top-p.top)/p.height()).coerceIn(0f,1f)*key.virtualFullHeight).toInt()
-        val x1=kotlin.math.ceil(((a.right-p.left)/p.width()).coerceIn(0f,1f)*key.virtualFullWidth).toInt()
-        val y1=kotlin.math.ceil(((a.bottom-p.top)/p.height()).coerceIn(0f,1f)*key.virtualFullHeight).toInt()
+        val aperture=compositionAperture() ?: return null
+        val points=floatArrayOf(a.left,a.top,a.right,a.top,a.right,a.bottom,a.left,a.bottom)
+        Matrix().apply{setRotate(-displayedComposition().straightenDegrees.toFloat(),aperture.centerX(),aperture.centerY());mapPoints(points)}
+        val xs=(0..3).map{((points[it*2]-p.left)/p.width()).coerceIn(0f,1f)}
+        val ys=(0..3).map{((points[it*2+1]-p.top)/p.height()).coerceIn(0f,1f)}
+        val x0=kotlin.math.floor(xs.min()*key.virtualFullWidth).toInt()
+        val y0=kotlin.math.floor(ys.min()*key.virtualFullHeight).toInt()
+        val x1=kotlin.math.ceil(xs.max()*key.virtualFullWidth).toInt()
+        val y1=kotlin.math.ceil(ys.max()*key.virtualFullHeight).toInt()
         if(x1<=x0 || y1<=y0)return null
         return PixelRect(x0,y0,x1,y1)
     }
@@ -149,9 +161,9 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         // A new processed source/asset invalidates a gesture; never commit its crop into new content.
         if(!sameContent && (presentation!=null || crop!=null))compositionDirty=false
         if(compositionEditing && (!active || this.presentation?.stock!=presentation?.stock))finishCompositionGesture()
-        if(!sameContent || (crop==null && (interactiveBorder==null || presentation==null))){liveComposition=false;compositionDirty=false}
+        if(!sameContent || (crop==null && presentation==null)){liveComposition=false;compositionDirty=false}
         // A delayed bind carrying the previously bound parameters must not undo a newer local MOVE.
-        if(!liveComposition || transform!=lastBoundComposition)composition=transform
+        if((!liveComposition && !compositionDirty) || transform!=lastBoundComposition)composition=transform
         lastBoundComposition=transform
         this.presentation=presentation;cropPresentation=crop;freeCropping=free;compositionSource=source;interactiveFrame=interactiveBorder;compositionChanged=onChanged
         if(!compositionDirty && exactComposition()==composition && transform==composition)liveComposition=false
@@ -186,6 +198,11 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     private fun applyViewer(state:DoubleArray){
         viewport.restore(state[0],0.0,0.0)
         viewport.restore(state[0],(.5-state[1])*viewport.imageWidth,(.5-state[2])*viewport.imageHeight)
+    }
+    fun straighten(degrees:Double,commit:Boolean){
+        if(!compositionEditing || !compositionGeometryReady || !degrees.isFinite())return
+        editComposition(composition.copy(straightenDegrees=degrees.coerceIn(-CompositionTransform.MAX_STRAIGHTEN,CompositionTransform.MAX_STRAIGHTEN)).clamped(canonicalWidth,canonicalHeight))
+        if(commit)finishCompositionGesture()
     }
     private fun editComposition(value:CompositionTransform){
         if(value==composition)return
@@ -245,7 +262,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     fun resetZoom(){compositionDirty=false;lockedViewer=null;pendingViewer=null;pendingTransform=null;viewport.reset();changed()}
     fun pan(dx: Double,dy: Double){
         if(compositionEditing){if(!compositionGeometryReady)return;val a=compositionAperture() ?: return
-            if(freeEdit){val r=composition.rect(canonicalWidth,canonicalHeight);editComposition(composition.copy(centerX=(composition.centerX+dx/viewport.imageWidth).coerceIn(r.width/2,1-r.width/2),centerY=(composition.centerY+dy/viewport.imageHeight).coerceIn(r.height/2,1-r.height/2)));return}
+            if(freeEdit){val r=composition.rect(canonicalWidth,canonicalHeight);editComposition(composition.copy(centerX=(composition.centerX+dx/viewport.imageWidth).coerceIn(r.width/2,1-r.width/2),centerY=(composition.centerY+dy/viewport.imageHeight).coerceIn(r.height/2,1-r.height/2)).clamped(canonicalWidth,canonicalHeight));return}
             editComposition(composition.pan(dx,dy,a.width().toDouble(),a.height().toDouble(),canonicalWidth,canonicalHeight));return}
         viewport.drag(dx,dy);changed()
     }
@@ -273,6 +290,9 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         canvas.drawBitmap(b,null,target,paint)
         onNextPreviewDraw?.also{onNextPreviewDraw=null}?.invoke(b)
         if(isLiveComposition || freeEdit || (imprintDraftPreview && usableInteractiveFrame() && compositionGeometryReady)){
+            if(preImagingCompositionPreview){
+                drawProcessedComposition(canvas)
+            }else{
             val p=presentation;val aperture=if(freeEdit)viewportRect()else compositionAperture()!!
             val photo=compositionPhotoRect()!!
             val save=canvas.save()
@@ -291,18 +311,21 @@ class PhotoView(context: Context): View(context), AutoCloseable {
                 val clip=RectF(aperture).apply{offset(dx,dy)}
                 val destination=RectF(photo).apply{offset(dx,dy)}
                 val repeatSave=canvas.save();canvas.clipRect(clip)
+                val center=compositionAperture()!!
+                canvas.rotate(composition.straightenDegrees.toFloat(),center.centerX()+dx,center.centerY()+dy)
                 canvas.drawBitmap(compositionSource!!,null,destination,paint)
                 canvas.restoreToCount(repeatSave)
             }
             canvas.restoreToCount(save)
             interactiveFrame?.takeUnless{it.isRecycled}?.let{canvas.drawBitmap(it,null,target,paint)}
             if(!drawLiveImprint(canvas))canvas.drawBitmap(b,null,target,paint) // Preserve exact settled glyphs under low memory.
+            }
         }
         // Canvas is a transient interaction approximation. Exact shared-renderer output is canonical
         // after matching crop/source/asset handoff; detail uses the currently visible photo mapping.
         val aperture=compositionAperture();val photoRect=presentedPhotoRect()
         val key=detail?.key
-        if(key==null){if(freeEdit)drawCropHandles(canvas);return}
+        if(key==null){if(compositionEditing)drawAlignmentGrid(canvas);if(freeEdit)drawCropHandles(canvas);return}
         val save=canvas.save()
         canvas.clipRect(0,0,width,height);canvas.clipRect(target)
         imprintPlan?.let{plan->for(stamp in plan.stamps){
@@ -322,6 +345,10 @@ class PhotoView(context: Context): View(context), AutoCloseable {
                 canvas.clipPath(mask)
             }else canvas.clipRect(interior)
         }
+        if(aperture!=null){
+            if(presentation==null)canvas.clipRect(aperture)
+            canvas.rotate(displayedComposition().straightenDegrees.toFloat(),aperture.centerX(),aperture.centerY())
+        }
         canvas.translate(sourceBounds.left,sourceBounds.top)
         canvas.scale(sourceBounds.width()/key.virtualFullWidth,sourceBounds.height()/key.virtualFullHeight)
         detail?.forEachDrawable { tile ->
@@ -330,14 +357,59 @@ class PhotoView(context: Context): View(context), AutoCloseable {
                 canvas.clipRect(core.left,core.top,core.right,core.bottom)
                 sampleTarget.set(sample.left.toFloat(),sample.top.toFloat(),sample.right.toFloat(),sample.bottom.toFloat())
                 canvas.drawBitmap(tile.bitmap,null,sampleTarget,paint)
+                tile.diagnosticTiming?.drawn();detail?.onTileDrawn(tile.diagnosticTiming)
                 canvas.restoreToCount(tileSave)
             }
         }
         canvas.restoreToCount(save)
+        if(compositionEditing)drawAlignmentGrid(canvas)
         if(freeEdit)drawCropHandles(canvas)
+    }
+    /** Transient delta on the adopted scientific image. Missing old crop pixels keep the adopted
+     * base; no original-photo pixels, frame lettering, or approximate frame can enter export. */
+    private fun drawProcessedComposition(canvas:Canvas){
+        val p=presentation ?: return
+        val source=compositionSource?.takeUnless{it.isRecycled} ?: return
+        val aperture=compositionAperture() ?: return
+        // onDraw already painted the adopted frame once. Repainting its antialiased outer edge
+        // would change frame pixels; imprints are already imaged and receive no second overlay.
+        fun points(t:CompositionTransform):FloatArray {
+            val a=t.sourcePoint(0.0,0.0,canonicalWidth,canonicalHeight)
+            val b=t.sourcePoint(1.0,0.0,canonicalWidth,canonicalHeight)
+            val c=t.sourcePoint(0.0,1.0,canonicalWidth,canonicalHeight)
+            return floatArrayOf(a.first.toFloat(),a.second.toFloat(),b.first.toFloat(),b.second.toFloat(),c.first.toFloat(),c.second.toFloat())
+        }
+        val sourceWindow=RectF(p.apertureLeft.toFloat(),p.apertureTop.toFloat(),(p.apertureLeft+p.photoWidth).toFloat(),(p.apertureTop+p.photoHeight).toFloat())
+        val bitmapPoints=floatArrayOf(sourceWindow.left,sourceWindow.top,sourceWindow.right,sourceWindow.top,sourceWindow.left,sourceWindow.bottom)
+        val screenPoints=floatArrayOf(aperture.left,aperture.top,aperture.right,aperture.top,aperture.left,aperture.bottom)
+        val toCanonical=Matrix();val toScreen=Matrix();val delta=Matrix()
+        if(toCanonical.setPolyToPoly(bitmapPoints,0,points(p.composition),0,3) && toScreen.setPolyToPoly(points(composition),0,screenPoints,0,3)){
+            delta.setConcat(toScreen,toCanonical)
+            fun interior(rect:RectF,scaleX:Float,scaleY:Float):Path {
+                val r=RectF(rect)
+                r.inset((maxOf(.5,p.featherRadius)*scaleX).toFloat(),(maxOf(.5,p.featherRadius)*scaleY).toFloat())
+                return Path().apply{
+                    if(p.geometryVersion==4){
+                        r.inset((4*p.pixelsPerMm*scaleX).toFloat(),(4*p.pixelsPerMm*scaleY).toFloat())
+                        val radius=(if(p.stock=="kodak_trix")40 else if(p.stock=="kodak_2302")12 else 4)*p.pixelsPerMm
+                        addRoundRect(r,(radius*scaleX).toFloat(),(radius*scaleY).toFloat(),Path.Direction.CW)
+                    }else addRect(r,Path.Direction.CW)
+                }
+            }
+            val available=interior(sourceWindow,1f,1f).apply{transform(delta)}
+            val visible=interior(aperture,target.width()/p.outputWidth,target.height()/p.outputHeight)
+            val save=canvas.save();canvas.clipRect(target);canvas.clipPath(visible);canvas.clipPath(available)
+            canvas.drawBitmap(source,delta,paint);canvas.restoreToCount(save)
+        }
     }
     private val cropLine=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.WHITE;style=Paint.Style.STROKE;strokeWidth=2f*resources.displayMetrics.density}
     private val cropShade=Paint().apply{color=0x66000000}
+    private fun drawAlignmentGrid(canvas:Canvas){
+        val r=compositionAperture() ?: return
+        val save=canvas.save();canvas.clipRect(r);cropLine.alpha=130;cropLine.strokeWidth=resources.displayMetrics.density
+        for(i in 1..3){val f=i/4f;canvas.drawLine(r.left+r.width()*f,r.top,r.left+r.width()*f,r.bottom,cropLine);canvas.drawLine(r.left,r.top+r.height()*f,r.right,r.top+r.height()*f,cropLine)}
+        canvas.restoreToCount(save);cropLine.alpha=255;cropLine.strokeWidth=2f*resources.displayMetrics.density
+    }
     private fun drawCropHandles(canvas:Canvas){
         val r=compositionAperture() ?: return;val t=viewportRect()
         canvas.drawRect(t.left,t.top,t.right,r.top,cropShade);canvas.drawRect(t.left,r.bottom,t.right,t.bottom,cropShade)
@@ -373,11 +445,11 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         val rw=right-l;val rh=bottom-top
         if(rw<=0.0 || rh<=0.0)return
         val aspect=rw*canonicalWidth/(rh*canonicalHeight)
-        val zoom=minOf(1.0,aspect/(canonicalWidth.toDouble()/canonicalHeight))/rw
+        val zoom=minOf(1.0,aspect/(canonicalWidth.toDouble()/canonicalHeight))/rw/CompositionTransform(targetAspect=aspect,straightenDegrees=composition.straightenDegrees).rotationCover(canonicalWidth,canonicalHeight)
         // Extreme source aspects can make a handle request impossible within the serialized contract.
         // Reject that MOVE, preserving the last valid crop rather than crashing or stretching it.
         if(!aspect.isFinite() || aspect !in (1.0/30000.0)..30000.0 || !zoom.isFinite() || zoom<1.0-1e-9 || zoom>16.0+1e-9)return
-        editComposition(CropSettings.fromRect(CompositionTransform.Rect(l,top,rw,rh),canonicalWidth,canonicalHeight).transform)
+        editComposition(CropSettings.fromRect(CompositionTransform.Rect(l,top,rw,rh),canonicalWidth,canonicalHeight,straightenDegrees=composition.straightenDegrees).transform)
     }
     override fun onTouchEvent(e:MotionEvent):Boolean {
         if(e.actionMasked==MotionEvent.ACTION_DOWN){moving=true;detail?.demand(true)}

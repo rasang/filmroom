@@ -31,9 +31,10 @@ class CoalescedCompositionHostTest {
     private class Fixture:BorderRaster {
         override val stock="kodak_portra_400";override val version="drag-fixture"
         override val railRatio=.2;override val endRatio=.03;override val residentBytes=12L;override val featherTotalAt3072=4.0
-        val blockNext=AtomicBoolean(false);val blockTopLeftVisit=AtomicInteger(0)
+        val blockNext=AtomicBoolean(false);val blockTopLeftVisit=AtomicInteger(0);val failNext=AtomicBoolean(false)
         val entered=CountDownLatch(1);val release=CountDownLatch(1)
         override fun sample(snapshot:BorderSnapshot,x:Double,y:Double,rgb:FloatArray){
+            if(failNext.compareAndSet(true,false))error("Injected presentation failure")
             val selectedVisit=x==.5 && y==.5 && blockTopLeftVisit.get()>0 && blockTopLeftVisit.decrementAndGet()==0
             if(blockNext.compareAndSet(true,false) || selectedVisit){entered.countDown();check(release.await(10,TimeUnit.SECONDS))}
             rgb.fill(.2f)
@@ -244,8 +245,8 @@ class CoalescedCompositionHostTest {
                 state.collect{it.renderedParameters?.let(published::add)}
             }
             m.beginComposition()
-            // A new portrait geometry builds its overlay first, then begins exact composition.
-            fixture.raster.blockTopLeftVisit.set(2)
+            // A new portrait geometry now builds overlay + exact image in one traversal.
+            fixture.raster.blockTopLeftVisit.set(1)
             m.chooseCompositionMode(CropMode.RATIO_2_3);waitFor{fixture.raster.entered.count==0L}
             val blockedJob=EditorViewModel::class.java.getDeclaredField("renderJob").apply{isAccessible=true}.get(m) as Job
             assertSame(baseline.rendered,state.value.rendered)
@@ -335,6 +336,28 @@ class CoalescedCompositionHostTest {
                 if(!white)darkPixel=pixel else assertNotEquals(darkPixel,pixel)
                 assertEquals(state.value.parameters,state.value.renderedParameters)
             }
+        }finally{dispose(h);Dispatchers.resetMain()}
+    }
+
+    @Test fun failedFusedPresentationRetainsDisplayedBitmapsAndRetryUsesScienceCache()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));var h:Harness?=null
+        try {
+            val fixture=prepare();h=fixture;val m=fixture.model;val state=fixture.state
+            val previous=state.value;val science=fixture.scienceCalls
+            fixture.raster.failNext.set(true)
+            m.parameters(state.value.parameters.copy(composition=CompositionTransform(targetAspect=2.0/3.0)))
+            waitFor{state.value.message!=null && !state.value.previewRefining}
+            assertSame(previous.rendered,state.value.rendered)
+            assertSame(previous.interactiveBorder,state.value.interactiveBorder)
+            assertSame(previous.compositionSource,state.value.compositionSource)
+            assertFalse(checkNotNull(previous.rendered).isRecycled)
+            assertFalse(checkNotNull(previous.interactiveBorder).isRecycled)
+            m.retry();waitFor{state.value.canExport && !state.value.previewRefining}
+            assertNull(state.value.message);assertEquals(science,fixture.scienceCalls)
+            assertSame(previous.compositionSource,state.value.compositionSource)
+            assertNotSame(previous.interactiveBorder,state.value.interactiveBorder)
+            assertFalse(checkNotNull(previous.interactiveBorder).isRecycled)
+            assertEquals(state.value.parameters,state.value.renderedParameters)
         }finally{dispose(h);Dispatchers.resetMain()}
     }
 

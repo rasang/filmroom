@@ -1,0 +1,276 @@
+{
+  "generator": "tools/medium120/v10/generate.py",
+  "font_sha256": {
+    "DejaVuSans.ttf": "57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e",
+    "DejaVuSans-Bold.ttf": "a4c5bc453ca281d90ea079e596da7ae0dfeb5777497c29ec254e76d97ff6f890"
+  },
+  "asset": {
+    "stock": "kodak_kodachrome_64",
+    "monochrome": false,
+    "film_kind": "reversal",
+    "perforated": false,
+    "defaultCenterMm": 410.0,
+    "coverageStartMm": 320.0,
+    "coverageEndMm": 500.0,
+    "primaryObservedStartMm": 380.02222222222224,
+    "primaryObservedEndMm": 439.9777777777778,
+    "physical_calibration": false,
+    "continuous_source": false,
+    "periodic_extension": true,
+    "inferredIndexPitchMm": 51.644444444444446,
+    "approximateBrandPitchMm": 51.644444444444446,
+    "source_coordinates_sha256": "83b6ce20aae0c73c2fb87ab75d981ab35c3e87587b963027b44b48293c7a1a73",
+    "source_hashes_sha256": "f424a2ca999290d0ac8221175b8b8c1b841f3f72fa05e52b70325539f29f1fbf",
+    "base": [
+      8,
+      8,
+      8,
+      255
+    ],
+    "ink": [
+      171,
+      199,
+      177,
+      255
+    ],
+    "marks": [
+      {
+        "label": "KODAK PKR 6033",
+        "kind": "reverse_panel",
+        "rail": 0,
+        "x_mm": 334.4222222222222,
+        "width_mm": 16.444444444444446,
+        "rail_y_mm": 0.4,
+        "height_mm": 1.4222222222222223,
+        "source_bbox_px": [
+          136,
+          9,
+          506,
+          41
+        ],
+        "phase_px": -1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "PKR",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 356.5111111111111,
+        "width_mm": 4.4,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          633,
+          1363,
+          732,
+          1394
+        ],
+        "phase_px": -1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "outline_right_triangle",
+        "kind": "triangle",
+        "rail": 1,
+        "x_mm": 361.1777777777778,
+        "width_mm": 2.533333333333333,
+        "rail_y_mm": 0.8999999999999999,
+        "height_mm": 1.288888888888889,
+        "source_bbox_px": [
+          738,
+          1364,
+          795,
+          1393
+        ],
+        "phase_px": -1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "8",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 364.02222222222224,
+        "width_mm": 1.3777777777777778,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          802,
+          1363,
+          833,
+          1394
+        ],
+        "phase_px": -1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "KODAK PKR 6033",
+        "kind": "reverse_panel",
+        "rail": 0,
+        "x_mm": 386.06666666666666,
+        "width_mm": 16.444444444444446,
+        "rail_y_mm": 0.4,
+        "height_mm": 1.4222222222222223,
+        "source_bbox_px": [
+          136,
+          9,
+          506,
+          41
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "label": "PKR",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 408.15555555555557,
+        "width_mm": 4.4,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          633,
+          1363,
+          732,
+          1394
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "label": "outline_right_triangle",
+        "kind": "triangle",
+        "rail": 1,
+        "x_mm": 412.82222222222225,
+        "width_mm": 2.533333333333333,
+        "rail_y_mm": 0.8999999999999999,
+        "height_mm": 1.288888888888889,
+        "source_bbox_px": [
+          738,
+          1364,
+          795,
+          1393
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "label": "9",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 415.6666666666667,
+        "width_mm": 1.3777777777777778,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          802,
+          1363,
+          833,
+          1394
+        ],
+        "phase_px": 0,
+        "evidence": "primary_observed"
+      },
+      {
+        "label": "KODAK PKR 6033",
+        "kind": "reverse_panel",
+        "rail": 0,
+        "x_mm": 437.7111111111111,
+        "width_mm": 16.444444444444446,
+        "rail_y_mm": 0.4,
+        "height_mm": 1.4222222222222223,
+        "source_bbox_px": [
+          136,
+          9,
+          506,
+          41
+        ],
+        "phase_px": 1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "PKR",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 459.8,
+        "width_mm": 4.4,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          633,
+          1363,
+          732,
+          1394
+        ],
+        "phase_px": 1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "outline_right_triangle",
+        "kind": "triangle",
+        "rail": 1,
+        "x_mm": 464.4666666666667,
+        "width_mm": 2.533333333333333,
+        "rail_y_mm": 0.8999999999999999,
+        "height_mm": 1.288888888888889,
+        "source_bbox_px": [
+          738,
+          1364,
+          795,
+          1393
+        ],
+        "phase_px": 1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "10",
+        "kind": "text",
+        "rail": 1,
+        "x_mm": 467.31111111111113,
+        "width_mm": 2.411111111111111,
+        "rail_y_mm": 0.8555555555555554,
+        "height_mm": 1.3777777777777778,
+        "source_bbox_px": [
+          802,
+          1363,
+          833,
+          1394
+        ],
+        "phase_px": 1162,
+        "evidence": "periodic_approximation"
+      },
+      {
+        "label": "KODAK PKR 6033",
+        "kind": "reverse_panel",
+        "rail": 0,
+        "x_mm": 489.3555555555556,
+        "width_mm": 16.444444444444446,
+        "rail_y_mm": 0.4,
+        "height_mm": 1.4222222222222223,
+        "source_bbox_px": [
+          136,
+          9,
+          506,
+          41
+        ],
+        "phase_px": 2324,
+        "evidence": "periodic_approximation"
+      }
+    ],
+    "limitations": [
+      "Kodak1987 brochure proves PKR120 ISO64 K-14.6033 is the120 product code, not135 code5033.",
+      "The Musicians reproduction visibly shows reverse-panel KODAK PKR6033 and opposite PKR,outline right triangle,9. Its exact capture date and scan calibration are not established by the image itself.",
+      "Only9 is observed. Other indices and uniform cadence use an explicit presentation assumption; the partial next KO panel suggests about51.36mm brand repetition but is not factory metrology.",
+      "Only about59.62mm is visible. All5 nominal formats crop the finite180mm model; longer crops require periodic approximation.",
+      "Typeface,nominal56mm aperture,2.5mm rails,neutral dark base,greenish legend color and3mm end margins are illustrative. No measured optical density or spectral response is claimed.",
+      "Hasselblad camera-gate notches are excluded. No photograph pixels,sprocket holes,135DX bars,orange mask or scientific profile changes.",
+      "Optional centered imprint moves copy complete lower-rail groups outward. These are layout designs,not original factory positions."
+    ],
+    "path": "medium120/v10/kodachrome64-rails.png",
+    "version": "mf120-v10-kodachrome64-42ed192f4558",
+    "sha256": "42ed192f4558ad7880b98cef6051858d8efb31e5374fd5ff19839704677e4902",
+    "bytes": 36386,
+    "width": 8200,
+    "height": 50,
+    "ppm": 10
+  }
+}

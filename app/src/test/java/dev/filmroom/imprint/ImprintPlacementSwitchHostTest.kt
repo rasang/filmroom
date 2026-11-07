@@ -37,8 +37,14 @@ class ImprintPlacementSwitchHostTest {
     @Test fun placementSwitchOnlyAppearsForAnActive120Border() {
         val host = Robolectric.buildActivity(Activity::class.java).setup()
         try {
-            for (state in listOf(medium, medium.copy(mediumFormat=null), medium.copy(filmBorder=false))) {
-                val dialog = ImprintDialog.show(host.get(), state, metadata) {}
+            val states=listOf(medium, medium.copy(mediumFormat=null), medium.copy(filmBorder=false)) +
+                dev.filmroom.border.Reviewed135Definitions.stocks.flatMap { stock ->
+                    listOf("print","direct").flatMap { route -> listOf(
+                        EditorState(filmStock=stock,outputRoute=route,filmBorder=true),
+                        EditorState(filmStock=stock,outputRoute=route,filmBorder=true,mediumFormat=MediumFormat.MF66)) }
+                }
+            for (state in states) {
+                val dialog = ImprintDialog.show(host.get(), state.copy(imprint=ImprintSettings(dateEnabled=true)), metadata) {}
                 idle()
                 assertEquals(if (state.filmBorder && state.effectiveMediumFormat != null) View.VISIBLE else View.GONE, toggle(dialog).visibility)
                 assertFalse(toggle(dialog).isChecked)
@@ -55,8 +61,10 @@ class ImprintPlacementSwitchHostTest {
             val legacy = Bundle().apply { putInt("imprint-placement", 1) }
             val dialog = ImprintDialog.show(host.get(), medium.copy(imprint=old), metadata, legacy) { applied=it }
             idle(); assertTrue(toggle(dialog).isChecked)
+            dialog.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=true
             toggle(dialog).performClick(); assertFalse(toggle(dialog).isChecked)
             toggle(dialog).performClick(); assertTrue(toggle(dialog).isChecked)
+            dialog.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=false
             val saved = ImprintDialog.capture(dialog)
             dialog.dismiss(); assertNull(applied)
             val restored = ImprintDialog.show(host.get(), medium.copy(imprint=old), metadata, saved) { applied=it }
@@ -65,7 +73,9 @@ class ImprintPlacementSwitchHostTest {
             assertEquals("edge", applied!!.datePlacement)
             assertFalse(applied!!.dateEnabled)
             val photo = ImprintDialog.show(host.get(), medium.copy(imprint=applied!!), metadata) { applied=it }
-            idle(); toggle(photo).performClick()
+            idle(); photo.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=true
+            toggle(photo).performClick()
+            photo.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=false
             photo.getButton(AlertDialog.BUTTON_POSITIVE).performClick(); idle()
             assertEquals("photo", applied!!.datePlacement)
             assertFalse(applied!!.dateEnabled)
@@ -80,7 +90,7 @@ class ImprintPlacementSwitchHostTest {
             val dialog = ImprintDialog.show(host.get(), EditorState(imprint=old), metadata) { applied=it }
             idle(); assertEquals(View.GONE, toggle(dialog).visibility)
             assertTrue(toggle(dialog).isChecked)
-            assertFalse(dialog.window!!.decorView.findViewWithTag<android.widget.TextView>("imprint-content").text.contains(ImprintText.EDGE_DATE_INACTIVE.text(host.get())))
+            assertNull(dialog.window!!.decorView.findViewWithTag<View>("imprint-content"))
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick(); idle()
             assertEquals(old, applied)
         } finally { host.pause().stop().destroy() }

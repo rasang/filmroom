@@ -21,6 +21,7 @@ internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInput
         }
         val parsed=dev.filmroom.codec.RawMetadata.parse(metadata)
         val width=parsed.width;val height=parsed.height
+        job[dev.filmroom.diagnostics.ImportObservation]?.apply { rawFormat=parsed.format;dimensions(width,height);memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.RAW_PREVIEW }
         if(raw.length()!=parsed.bytes)throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_52dca03550a9))
         job.ensureActive()
         val preview=LinearSpool.preview(raw,width,height,maxEdge,job)

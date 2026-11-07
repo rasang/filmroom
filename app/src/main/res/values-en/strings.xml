@@ -78,7 +78,7 @@
     <string name="text_76420433f22d" formatted="false">Export</string>
     <string name="text_926a50b98ece" formatted="false">Undo</string>
     <string name="text_03717b6f1070" formatted="false">Redo</string>
-    <string name="text_ae384296a4ac" formatted="false">Reset preset</string>
+    <string name="text_ae384296a4ac" formatted="false">Restore defaults</string>
     <string name="text_df3d58c7d84b" formatted="false">Settings</string>
     <string name="text_1f14f4b50d0b" formatted="false">Bring your photos into Filmroom</string>
     <string name="text_95c277eafaea" formatted="false">Authentic film and photographic paper processing\nAll calculations run on your device</string>
@@ -274,7 +274,7 @@
     <string name="text_c2a291b64f6b" formatted="false">Scan</string>
     <string name="text_ec00bc673f05" formatted="false">Choose paper</string>
     <string name="text_3691a3aa4ece" formatted="false">Paper / print style</string>
-    <string name="text_b9afff7ca1b0" formatted="false"> · Motion-picture print film</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · Color motion-picture print film</string>
     <string name="text_3b789c2037e2" formatted="false"> · Color paper</string>
     <string name="text_7b528c395978" formatted="false">135 composition</string>
     <string name="text_e76a25844aa5" formatted="false">Recompose</string>
@@ -299,7 +299,7 @@
     <string name="text_4e3db4596715" formatted="true">About %1$s</string>
     <string name="text_de32e20193ad" formatted="false">Got it</string>
     <string name="text_f94fbbaa8f93" formatted="true">Reset %1$s</string>
-    <string name="text_f2961369ae98" formatted="false">Restore the current film stock\'s preset settings?</string>
+    <string name="text_f2961369ae98" formatted="false">Restore the current film stock\'s default settings?</string>
     <string name="text_c265e02073e5" formatted="false">Resets exposure, light effects, grain, paper and other color settings. Keeps composition and watermark settings.</string>
     <string name="text_e0534b8a4e46" formatted="false">Restore</string>
     <string name="text_d1c4835b23ed" formatted="false">\nTransparent areas are composited over white</string>
@@ -347,7 +347,7 @@
     <string name="text_d14f6e1f0a6f" formatted="false">Save new photo</string>
     <string name="text_e8e6e48f180e" formatted="false">Editing preferences</string>
     <string name="text_2413c386102e" formatted="false">Reset settings when importing a new photo</string>
-    <string name="text_712623100497" formatted="false">When on, restores the current film stock\'s preset. When off, keeps your color adjustments. Composition is always reset for a new photo.</string>
+    <string name="text_712623100497" formatted="false">When on, restores the current film stock\'s defaults. When off, keeps your color adjustments. Composition is always reset for a new photo.</string>
     <string name="text_7daa923cc7e5" formatted="false">Restore last photo on startup</string>
     <string name="text_5f08fa1da11e" formatted="false">Only affects the next app launch. Does not clear current edits or background exports.</string>
     <string name="text_84a61a56ecc6" formatted="false">Choose how far back to include logs</string>
@@ -405,7 +405,7 @@
     <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\nEncoding: UTF-8; single text file (not ZIP)\n\n=== Summary ===\n</string>
     <string name="text_7af205e83135" formatted="false">\n\n=== Full sanitized event details ===\n</string>
     <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
-    <string name="text_60ef08049a72" formatted="true">App: Filmroom; version code: %1$s; engine build: 4; interface: 1\nAndroid API: %2$s; ABI: %3$s; processors: %4$s; Java heap limit: %5$s bytes; memory class: %6$s MB</string>
+    <string name="text_60ef08049a72" formatted="true">App: Filmroom; version code: %1$s; engine build: %7$s; interface: %8$s\nAndroid API: %2$s; ABI: %3$s; processors: %4$s; Java heap limit: %5$s bytes; memory class: %6$s MB</string>
     <string name="text_5c1712cb2d38" formatted="false">Current run</string>
     <string name="text_b1336f82fea4" formatted="false">Restore editing</string>
     <string name="text_5a9df9227ec6" formatted="false">Preview rendering</string>
@@ -786,4 +786,8 @@
     <string name="gpu_progress_processing">GPU image processing</string>
     <string name="gpu_progress_tile">Tile %1$d/%2$d</string>
     <string name="gpu_progress_last_completed">Last completed: %1$s (%2$d ms)</string>
+    <string name="print_medium_bw_paper" formatted="false"> · Black-and-white paper</string>
+    <string name="print_medium_bw_film" formatted="false"> · Black-and-white motion-picture print film</string>
+    <string name="print_medium_bw_help" formatted="false">The selected print medium is black and white. Color film also produces a black-and-white print on it.</string>
+    <string name="preview_histogram_description">Brightness histogram of the current photo preview</string>
 </resources>

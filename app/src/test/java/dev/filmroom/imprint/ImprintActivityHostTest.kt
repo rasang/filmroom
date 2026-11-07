@@ -223,7 +223,7 @@ class ImprintActivityHostTest {
             val original=Bitmap.createBitmap(384,256,Bitmap.Config.ARGB_8888).apply{eraseColor(0xff527682.toInt())}
             val p=EditorState()
             flow.value=EditorUiState(photo=source,original=original,rendered=original.copy(Bitmap.Config.ARGB_8888,false),parameters=p,renderedParameters=p)
-            await("imprint tool binds"){all(field(a,"tools") as View).any{it.tag=="imprint" || it.tag=="parameter-section:imprint"}}
+            await("film tool binds"){all(field(a,"tools") as View).any{it.tag=="filmStock" || it.tag=="parameter-section:filmStock"}}
             layout()
             if(a.resources.configuration.fontScale>1.35f && a.resources.configuration.orientation!=android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
                 // Open the real accessibility expansion, never click a detached tool selector.
@@ -240,11 +240,11 @@ class ImprintActivityHostTest {
             }
         }
         fun selectTool(id:String){all(controlsRoot).singleOrNull{it.tag==id}?.performClick();layout()}
-        fun imprintTools(){selectTool("imprint")}
+        fun imprintTools(){filmTools()}
         fun filmTools(){selectTool("filmStock")}
         fun tagged(tag:String)=all(controlsRoot).single{it.tag==tag}
         fun open():AlertDialog {
-            idleUi();imprintTools();tagged("imprint-date-preview").performClick();idleUi()
+            idleUi();filmTools();tagged("imprint-settings-button").performClick();idleUi()
             val dialog=field(a,"imprintDialog") as AlertDialog
             assertTrue(dialog.isShowing);return dialog
         }
@@ -258,11 +258,9 @@ class ImprintActivityHostTest {
             "canExport=${s.canExport} editable=${s.editable} busy=${s.busy} updating=${s.updating} refining=${s.previewRefining} sameParameters=${s.renderedParameters==s.parameters} samePlan=${boundPlan(photo(a))===s.imprintPlan} plan=${s.imprintPlan} bound=${boundPlan(photo(a))} message=${s.message} engine=${s.engineUnavailable} compare=${s.compare} border=${s.parameters.filmBorder} exposure=${s.parameters.imprint.exposure}"
         }){flow.value.canExport && flow.value.renderedParameters==flow.value.parameters && boundPlan(photo(a))===flow.value.imprintPlan}
         fun applyDate() {
-            imprintTools()
-            if(!(tagged("imprint-date-switch") as Switch).isChecked)tagged("imprint-date-switch").performClick()
-            settle()
-            assertTrue(flow.value.parameters.imprint.dateEnabled)
-            assertEquals("contax_t2",flow.value.parameters.imprint.selectedDateStyle)
+            val dialog=open()
+            dialog.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=true
+            apply(dialog,flow.value.parameters.imprint.copy(dateStyle="contax_t2",dateEnabled=true))
             assertFalse(checkNotNull(flow.value.imprintPlan).isEmpty)
         }
         override fun close() {
@@ -277,6 +275,7 @@ class ImprintActivityHostTest {
     }
     private fun draftDateTime(dialog:AlertDialog)=ImprintDialog.capture(dialog).getString("imprint-datetime")
     private fun openDatePicker(dialog:AlertDialog):DatePickerDialog {
+        dialog.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked=true
         dialog.window!!.decorView.findViewWithTag<Button>("imprint-date-value").performClick();idleUi()
         return (ShadowAlertDialog.getLatestAlertDialog() as DatePickerDialog).also{assertTrue(it.isShowing)}
     }
@@ -295,12 +294,14 @@ class ImprintActivityHostTest {
         assertNotNull(root.findViewWithTag<TextView>("imprint-date-error"))
     }
     private fun assertSelectorGap(f:Fixture) {
-        val root=f.controlsRoot as ViewGroup
-        fun bounds(view:View)=android.graphics.Rect().also{view.getDrawingRect(it);root.offsetDescendantRectToMyCoords(view,it)}
-        val selector=bounds(f.tagged("imprint"));val dateRow=bounds(f.tagged("imprint-date-row"))
-        val required=(12*f.a.resources.displayMetrics.density+.5f).toInt()
-        assertTrue("Selected date/data tile and date row need at least 12dp actual separation: ${dateRow.top-selector.bottom}px",
-            dateRow.top-selector.bottom>=required)
+        val holes=f.tagged("negative-white-holes-switch")
+        val settings=f.tagged("imprint-settings-button")
+        assertSame(holes.parent,settings.parent)
+        val row=holes.parent as ViewGroup
+        assertEquals(row.indexOfChild(holes)+1,row.indexOfChild(settings))
+        assertTrue("Settings follow white holes without overlap",settings.left>=holes.right)
+        assertTrue(settings.height>=48)
+        assertTrue(all(f.controlsRoot).none { it.tag=="imprint" || it.tag=="parameter-section:imprint" })
     }
     private fun captureDialog(name:String,dialog:AlertDialog,width:Int,height:Int) {
         capture(name,dialog.window!!.decorView,width,height)
@@ -380,7 +381,7 @@ class ImprintActivityHostTest {
             f.apply(restored,applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-03 12:34:56"))
             assertEquals(applied.copy(dateStyle="canon_luna",manualDateTime="2000-01-03 12:34:56"),f.flow.value.parameters.imprint)
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
-            assertEquals("00年1月3日",(f.tagged("imprint-date-preview") as ImprintDatePreviewButton).displayedDate)
+            assertEquals("00年1月3日",ImprintContent.from(f.source.photoMetadata,f.flow.value.parameters.imprint).date)
             val reopened=f.open();assertEquals("2000-01-03 12:34:56",draftDateTime(reopened))
             reopened.window!!.decorView.findViewWithTag<View>("imprint-restore-capture").performClick()
             assertEquals("2025-04-28 12:34:56",draftDateTime(reopened))
@@ -389,9 +390,10 @@ class ImprintActivityHostTest {
             assertFalse("Restoring the source date does not enable a border",f.flow.value.parameters.filmBorder)
             assertEquals("Restoring the source date preserves the edge-data preference",
                 applied.exposure,f.flow.value.parameters.imprint.exposure)
-            f.imprintTools()
-            val edge=f.tagged("imprint-exposure-switch") as Switch
+            val unavailable=f.open()
+            val edge=unavailable.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
             assertFalse(edge.isEnabled);assertEquals(applied.exposure,edge.isChecked);assertEquals(.38f,edge.alpha,0f)
+            click(unavailable,AlertDialog.BUTTON_NEGATIVE)
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
         }
     }
@@ -455,110 +457,126 @@ class ImprintActivityHostTest {
             assertNull(f.flow.value.parameters.imprint.manualDateTime)
             assertFalse("Reset on import starts with no border",f.flow.value.parameters.filmBorder)
             assertTrue("Reset on import retains the edge-data preference",f.flow.value.parameters.imprint.exposure)
-            f.imprintTools()
-            val edge=f.tagged("imprint-exposure-switch") as Switch
+            // The restored model retains this disabled preference even if the host engine
+            // is unavailable after the real import and the settings entry is disabled.
+            val unavailable=ImprintDialog.show(f.a,f.flow.value.parameters,f.flow.value.photo!!.photoMetadata){}
+            val edge=unavailable.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
             assertFalse(edge.isEnabled);assertTrue(edge.isChecked);assertEquals(.38f,edge.alpha,0f)
+            unavailable.dismiss()
             assertEquals(f.frozen,f.source.photoMetadata.toJson())
             assertTrue(incoming.exists())
             assertNull(ImprintContent.displayDateTime(f.flow.value.photo!!.photoMetadata,f.flow.value.parameters.imprint))
         }
     }
-    @Test fun independentDateAndExposureSwitchesFollowCompositionInPortraitAndLandscape() {
+    @Test fun settingsEntryAndIndependentSwitchesWorkInPortraitAndLandscape() {
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
-            val composition=f.tagged("composition");val imprint=f.tagged("imprint")
-            assertSame(composition.parent,imprint.parent)
-            val strip=composition.parent as ViewGroup
-            assertEquals(strip.indexOfChild(composition)+1,strip.indexOfChild(imprint))
-            f.imprintTools()
-            assertEquals(2,all(field(f.a,"tools") as View).filterIsInstance<Switch>().size)
-            assertFalse((f.tagged("imprint-date-switch") as Switch).isChecked)
-            assertFalse((f.tagged("imprint-exposure-switch") as Switch).isChecked)
-            assertEquals("'25 04 28",(f.tagged("imprint-date-preview") as ImprintDatePreviewButton).displayedDate)
-            assertFalse(f.tagged("imprint-exposure-switch").isEnabled)
-            f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
-            assertTrue(f.tagged("imprint-exposure-switch").isEnabled)
-            f.tagged("imprint-exposure-switch").performClick();f.settle()
-            assertTrue(f.flow.value.parameters.imprint.exposure);assertFalse(f.flow.value.parameters.imprint.dateEnabled)
-            f.tagged("imprint-date-switch").performClick();f.settle()
-            assertTrue(f.flow.value.parameters.imprint.exposure);assertTrue(f.flow.value.parameters.imprint.dateEnabled)
-            f.layout();assertSelectorGap(f);capture("portrait-date-data-panel",f.root)
-            f.tagged("imprint-date-switch").performClick();f.settle()
-            assertTrue(f.flow.value.parameters.imprint.exposure);assertFalse(f.flow.value.parameters.imprint.dateEnabled)
+            f.filmTools();f.layout();assertSelectorGap(f)
+            assertTrue(all(f.controlsRoot).filterIsInstance<Button>().none { it.text==f.a.getString(dev.filmroom.R.string.text_61ea0b0d9ed0) })
+            val initial=f.flow.value.parameters.imprint
+            val off=f.open();val offRoot=off.window!!.decorView
+            assertFalse(offRoot.findViewWithTag<Switch>("imprint-date-switch").isChecked)
+            assertFalse(offRoot.findViewWithTag<Switch>("imprint-exposure-switch").isChecked)
+            assertEquals(View.GONE,offRoot.findViewWithTag<View>("imprint-date-settings").visibility)
+            assertEquals(View.GONE,offRoot.findViewWithTag<View>("imprint-exposure-preview").visibility)
+            assertTrue("Opening a disabled date must not paint a preview",boundPlan(photo(f.a))?.isEmpty!=false)
+            assertEquals(initial,f.flow.value.parameters.imprint)
+            click(off,AlertDialog.BUTTON_NEGATIVE)
+            f.filmTools();f.tagged("film-border-switch").performClick();f.settle()
+            val dialog=f.open();val root=dialog.window!!.decorView
+            val exposure=root.findViewWithTag<Switch>("imprint-exposure-switch")
+            val date=root.findViewWithTag<Switch>("imprint-date-switch")
+            assertSame(exposure.parent,date.parent)
+            assertTrue((exposure.parent as ViewGroup).indexOfChild(exposure)<(date.parent as ViewGroup).indexOfChild(date))
+            exposure.performClick();idleUi()
+            assertEquals(View.VISIBLE,root.findViewWithTag<View>("imprint-exposure-preview").visibility)
+            assertEquals(View.GONE,root.findViewWithTag<View>("imprint-date-settings").visibility)
+            date.performClick();idleUi()
+            assertEquals(View.VISIBLE,root.findViewWithTag<View>("imprint-date-settings").visibility)
+            assertEquals(initial,f.flow.value.parameters.imprint)
+            f.apply(dialog,initial.copy(dateStyle="contax_t2",dateEnabled=true,exposure=true))
+            val disable=f.open();disable.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").performClick()
+            f.apply(disable,f.flow.value.parameters.imprint.copy(dateEnabled=false))
             val before=f.flow.value.parameters.imprint
             RuntimeEnvironment.setQualifiers("w800dp-h400dp-land-mdpi");f.controller.recreate();f.layout()
-            await("landscape imprint section binds"){all(f.root).any{it.tag=="parameter-section:imprint"}}
-            val cropSection=f.tagged("parameter-section:composition");val dateSection=f.tagged("parameter-section:imprint")
-            assertSame(cropSection.parent,dateSection.parent)
-            val sections=cropSection.parent as ViewGroup
-            assertEquals(sections.indexOfChild(cropSection)+1,sections.indexOfChild(dateSection))
-            f.layout();reveal(dateSection);capture("landscape-date-data-section",f.root)
+            await("landscape film settings binds"){all(f.root).any{it.tag=="imprint-settings-button"}}
+            f.layout();assertSelectorGap(f)
             assertEquals(before,f.flow.value.parameters.imprint)
-            assertTrue((f.tagged("imprint-exposure-switch") as Switch).isChecked)
-            assertFalse((f.tagged("imprint-date-switch") as Switch).isChecked)
-            val dialog=f.open();assertPickerControls(dialog);captureDialog("landscape-date-style-dialog",dialog,800,360)
-            val landscapeDate=openDatePicker(dialog)
-            capturePicker("landscape-native-date-picker",landscapeDate,800,360)
-            click(landscapeDate,AlertDialog.BUTTON_NEGATIVE)
-            chooseStyle(dialog,1)
-            f.apply(dialog,f.flow.value.parameters.imprint.copy(dateStyle="yashica_t4"))
-            assertFalse("Style edits must not silently enable dates",f.flow.value.parameters.imprint.dateEnabled)
+            val landscape=f.open();val landscapeRoot=landscape.window!!.decorView
+            assertTrue(landscapeRoot.findViewWithTag<Switch>("imprint-exposure-switch").isChecked)
+            assertFalse(landscapeRoot.findViewWithTag<Switch>("imprint-date-switch").isChecked)
+            val picker=openDatePicker(landscape)
+            capturePicker("landscape-native-date-picker",picker,800,360)
+            click(picker,AlertDialog.BUTTON_NEGATIVE)
+            chooseStyle(landscape,1)
+            landscapeRoot.findViewWithTag<Switch>("imprint-date-switch").isChecked=false
+            f.apply(landscape,before.copy(dateStyle="yashica_t4"))
+            assertFalse(f.flow.value.parameters.imprint.dateEnabled)
             assertTrue(f.flow.value.parameters.imprint.exposure)
+        }
+    }
+    @Test fun pendingBothMasterSwitchesOffSurviveRealActivityRecreationAndCancel() {
+        Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
+            val saved=ImprintSettings("canon_luna","top_left",1.31,.29,true,dateEnabled=true,manualDateTime="2001-02-03 04:05:06")
+            f.vm.parameters(f.flow.value.parameters.copy(filmBorder=true,imprint=saved));f.settle()
+            val dialog=f.open()
+            dialog.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").performClick()
+            dialog.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch").performClick();idleUi()
+            assertTrue(checkNotNull(boundPlan(photo(f.a))).isEmpty)
+            assertEquals(saved,f.flow.value.parameters.imprint)
+            RuntimeEnvironment.setQualifiers("w800dp-h400dp-land-mdpi");f.controller.recreate();idleUi()
+            await("pending disabled imprint draft restored") { (field(f.a,"imprintDialog") as? AlertDialog)?.isShowing==true }
+            val restored=field(f.a,"imprintDialog") as AlertDialog
+            assertNotSame(dialog,restored)
+            assertFalse(restored.window!!.decorView.findViewWithTag<Switch>("imprint-date-switch").isChecked)
+            assertFalse(restored.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch").isChecked)
+            assertEquals(View.GONE,restored.window!!.decorView.findViewWithTag<View>("imprint-date-settings").visibility)
+            assertTrue(checkNotNull(boundPlan(photo(f.a))).isEmpty)
+            assertEquals(saved,f.flow.value.parameters.imprint)
+            click(restored,AlertDialog.BUTTON_NEGATIVE);f.settle()
+            assertEquals(saved,f.flow.value.parameters.imprint)
+            assertFalse(checkNotNull(boundPlan(photo(f.a))).isEmpty)
         }
     }
     @Test fun exposureIsDisabledWithoutBorderAndRestoresSelectionAfterRepeatedToggles() {
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
-            f.imprintTools()
-            val disabled=f.tagged("imprint-exposure-switch") as Switch
+            val blocked=f.open();val disabled=blocked.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
             assertFalse(disabled.isEnabled);assertEquals(.38f,disabled.alpha,0f)
             assertFalse(disabled.createAccessibilityNodeInfo().isEnabled)
-            // Defensive callback guard also blocks synthetic/programmatic checked changes.
-            disabled.isChecked=true;idleUi()
-            assertFalse(f.flow.value.parameters.imprint.exposure)
-            assertTrue(f.tagged("imprint-date-switch").isEnabled)
-            assertTrue(f.tagged("imprint-date-preview").isEnabled)
-            f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
-            val active=f.tagged("imprint-exposure-switch") as Switch
-            assertTrue(active.isEnabled);assertEquals(1f,active.alpha,0f)
-            active.performClick();f.settle()
+            disabled.isChecked=true;idleUi();assertFalse(disabled.isChecked)
+            f.apply(blocked,f.flow.value.parameters.imprint)
+            f.filmTools();f.tagged("film-border-switch").performClick();f.settle()
+            val active=f.open();val enabled=active.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
+            assertTrue(enabled.isEnabled);enabled.performClick()
+            f.apply(active,f.flow.value.parameters.imprint.copy(exposure=true))
             val saved=f.flow.value.parameters.imprint
-            assertTrue(saved.exposure)
-            assertFalse(checkNotNull(f.flow.value.imprintPlan).isEmpty)
             repeat(2) {
-                f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
-                val off=f.tagged("imprint-exposure-switch") as Switch
+                f.filmTools();f.tagged("film-border-switch").performClick();f.settle()
+                val hidden=f.open();val off=hidden.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
                 assertFalse(off.isEnabled);assertTrue(off.isChecked)
-                assertFalse(off.createAccessibilityNodeInfo().isEnabled)
                 assertEquals(saved,f.flow.value.parameters.imprint)
-                assertTrue(checkNotNull(f.flow.value.imprintPlan).isEmpty)
-                // A detached previously-enabled control must not edit the no-border state.
-                active.isChecked=false;idleUi()
-                assertEquals(saved,f.flow.value.parameters.imprint)
-                f.filmTools();f.tagged("film-border-switch").performClick();f.settle();f.imprintTools()
-                val on=f.tagged("imprint-exposure-switch") as Switch
+                assertTrue(checkNotNull(boundPlan(photo(f.a))).isEmpty)
+                click(hidden,AlertDialog.BUTTON_NEGATIVE)
+                f.filmTools();f.tagged("film-border-switch").performClick();f.settle()
+                val available=f.open();val on=available.window!!.decorView.findViewWithTag<Switch>("imprint-exposure-switch")
                 assertTrue(on.isEnabled);assertTrue(on.isChecked)
-                assertTrue(on.createAccessibilityNodeInfo().isEnabled)
+                assertFalse(checkNotNull(boundPlan(photo(f.a))).isEmpty)
+                click(available,AlertDialog.BUTTON_NEGATIVE)
                 assertEquals(saved,f.flow.value.parameters.imprint)
-                assertFalse(checkNotNull(f.flow.value.imprintPlan).isEmpty)
             }
         }
     }
-    @Test fun narrowLargeFontDateControlsStackWithoutOverlapping() {
+    @Test fun narrowLargeFontSettingsAndSwitchesStayAccessibleWithoutOverlap() {
         RuntimeEnvironment.setQualifiers("w320dp-h800dp-port-mdpi");RuntimeEnvironment.setFontScale(1.5f)
         Fixture(Robolectric.buildActivity(MainActivity::class.java).setup()).use { f ->
-            f.imprintTools();f.layout()
-            val row=f.tagged("imprint-date-row") as LinearLayout
-            val date=f.tagged("imprint-date-switch");val preview=f.tagged("imprint-date-preview")
-            assertEquals(LinearLayout.VERTICAL,row.orientation)
-            assertSame(row,date.parent);assertSame(row,preview.parent)
-            assertTrue(date.height>=48);assertTrue(preview.height>0)
-            assertTrue("Stacked date preview needs at least 8dp actual separation",
-                preview.top-date.bottom>=(8*f.a.resources.displayMetrics.density+.5f).toInt())
-            assertSelectorGap(f)
-            assertTrue(preview.left>=0 && preview.right<=row.width)
-            assertTrue(f.tagged("imprint-exposure-switch").height>=48)
-            capture("narrow-large-font-date-data-panel",f.controlsRoot)
-            val dialog=f.open();assertPickerControls(dialog)
+            f.filmTools();f.layout();assertSelectorGap(f)
+            val dialog=f.open();val root=dialog.window!!.decorView
+            val date=root.findViewWithTag<Switch>("imprint-date-switch")
+            date.performClick();idleUi()
             captureDialog("narrow-large-font-date-style-dialog",dialog,320,760)
+            val exposure=root.findViewWithTag<Switch>("imprint-exposure-switch")
+            assertTrue(exposure.height>=48);assertTrue(date.height>=48)
+            assertTrue(date.top>=exposure.bottom)
+            assertPickerControls(dialog)
             val datePicker=openDatePicker(dialog)
             capturePicker("narrow-large-font-native-date-picker",datePicker,320,760)
             click(datePicker,AlertDialog.BUTTON_NEGATIVE)

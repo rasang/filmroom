@@ -2,6 +2,8 @@
 //! One active worker per context; callers retain Arc ownership through worker exit.
 mod fft;
 mod global;
+#[cfg(feature = "adreno-gpu")]
+mod gpu;
 use crate::mobile::MobileParams;
 pub use fft::CacheStats as DetailPrintCacheStats;
 pub use global::PregrainMetrics;
@@ -18,6 +20,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    time::Instant,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -29,6 +32,8 @@ const MIB: usize = 1024 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DetailError {
     Cancelled,
+    GpuCompletionUncertain,
+    GpuExecutionFailed,
     InvalidGeometry(String),
     BudgetExceeded { required: usize, budget: usize },
     StorageBudgetExceeded { required: u64, budget: u64 },
@@ -128,7 +133,11 @@ pub struct DetailIdentity {
 }
 #[derive(Clone, Debug)]
 pub struct DetailConfig {
+    /// Operational admission only; never rewrites scientific params.use_gpu.
+    pub gpu_attempt: bool,
     pub region_output: bool,
+    /// Demand-only proof-tile hint in this working grid; excluded from science identity.
+    pub initial_region: Option<Rect>,
     pub width: u32,
     pub height: u32,
     pub params: MobileParams,
@@ -144,29 +153,69 @@ pub struct DetailConfig {
 #[serde(rename_all = "camelCase")]
 pub struct ResourcePlan {
     pub region_output: bool,
+    pub gpu_attempt: bool,
+    pub gpu_execution_budget_bytes: usize,
+    pub gpu_plan_reason: &'static str,
+    pub cpu_peak_reserved_bytes: usize,
     pub peak_reserved_bytes: usize,
     pub disk_reserved_bytes: u64,
     pub stage_cache_bytes: usize,
     pub spectrum_cache_bytes: usize,
     pub max_dimension: u32,
 }
-/// The detail renderer is currently CPU-only. `useGpu` remains an automatic
-/// attempt preference in identity; true requests explicitly fall back to CPU.
+/// Actual execution identity. GPU uses the separately versioned resident approximation;
+/// CPU remains the exact full-working-grid implementation. Never infer this from useGpu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailBackendInfo {
     pub actual_backend: &'static str,
     pub requested_gpu: bool,
     pub cpu_fallback: bool,
+    pub reason: &'static str,
+    pub accelerated_stage: &'static str,
+    pub gpu_batches: u64,
 }
 impl DetailBackendInfo {
+    pub fn quality(&self) -> &'static str {
+        if self.actual_backend == "wgpu" {"ApproximateSameWorkingGrid"} else {"ExactSameWorkingGrid"}
+    }
     pub fn for_requested_gpu(requested_gpu: bool) -> Self {
         Self {
             actual_backend: "cpu",
             requested_gpu,
             cpu_fallback: requested_gpu,
+            reason: if requested_gpu {"gpu_not_built"} else {"disabled_by_user"},
+            accelerated_stage: "none", gpu_batches: 0,
         }
     }
+}
+/// Per-operation diagnostics only. No source identity or geometry is exposed.
+/// All phase times are elapsed milliseconds. Region counters/times describe only
+/// this call (including its misses), never a difference from the last successful call.
+/// Absent phases were not measured; errors/cancellation never publish success metrics.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailPerformance {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tile_cache_hits: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tile_cache_misses: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_submit_delta: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_read_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_copy_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_prepare_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pipeline_prepare_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub global_fields_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_tile_ms: Option<f64>,
 }
 #[derive(Debug)]
 pub struct OwnedDetailTile {
@@ -215,14 +264,86 @@ pub struct DetailContext {
     backend: DetailBackendInfo,
     plan: ResourcePlan,
     pipe: Pipeline,
-    prepared: PreparedStreamedFinish,
-    planes: global::PregrainPlanes,
+    prepared: Option<PreparedStreamedFinish>,
+    planes: Option<global::PregrainPlanes>,
+    #[cfg(feature = "adreno-gpu")]
+    gpu: Option<gpu::GpuDetail>,
     kernel: Option<ExactDiffusionKernel>,
     support: usize,
     brightness: f64,
     render_guard: Mutex<()>,
     worker: Mutex<Worker>,
     _root: PrivateRoot,
+}
+/// Native output stays outside the execution envelope and persistent caches.
+fn gpu_output_bytes(config: &DetailConfig) -> usize {
+    if config.region_output {config.width as usize * config.height as usize * 16 + 128 * 1024}
+    else {(CELL+2)*(CELL+2)*16 + 128 * 1024}
+}
+/// Same diffusion model/grid as Pipeline::gpu_diffusion_working_bytes. Stock
+/// calibration changes halation; its opted-in kernel reserve is included too.
+/// Use actual downsampled grids rather than pessimistically charging 192*n for
+/// both filters when they are off, no-ops, direct-scan, or downsampled.
+fn planned_gpu_field_bytes(config: &DetailConfig) -> Option<usize> {
+    let p=config.params.runtime();
+    let pitch=p.camera.film_format_mm*1000./config.width.max(config.height) as f32;
+    let mut bytes=std::mem::size_of::<spektrafilm_core::pipeline::DiffusionScatteredFields>();
+    for (active,filter) in [
+        (p.camera.diffusion_filter.active,&p.camera.diffusion_filter),
+        (!p.io.scan_film && p.enlarger.diffusion_filter.active,&p.enlarger.diffusion_filter),
+    ] {
+        if !active {continue;}
+        if let Some(plan)=spektrafilm_model::diffusion::diffusion_gpu_plan(
+            &filter.to_model(),pitch as f64,config.width,config.height) {
+            bytes=bytes.checked_add((plan.small_w as usize).checked_mul(plan.small_h as usize)?.checked_mul(192)?)?;
+        }
+    }
+    // The only current physical-PSF opt-in is this exact product stock.
+    // Preflight has no profile yet, but geometry does not depend on its curves.
+    let h=&p.film_render.halation;
+    if config.params.film_stock=="cinestill_800t" && h.active && h.halation_amount>0. && h.base_thickness_um>0. {
+        let kernels=spektrafilm_gpu::back_reflection_working_bytes(h.base_thickness_um,
+            h.halation_spatial_scale,h.halation_amount,pitch as f64)?;
+        bytes=bytes.checked_add(usize::try_from(kernels).ok()?)?;
+    }
+    Some(bytes)
+}
+/// Prepay an honest GPU execution envelope, bounded by the request cap. The
+/// whole-grid 256*n bound covers every possible composed halo; actual execution
+/// still selects budget/binding-admissible tiles. A low-cap request retains the
+/// ORIGINAL CPU plan, rather than failing merely because GPU was requested.
+fn planned_execution_reservation(config: &DetailConfig, cpu_peak: usize)
+    -> Result<(usize,usize,&'static str),DetailError> {
+    let cpu=|reason|Ok((cpu_peak,0,reason));
+    if !config.params.use_gpu {return cpu("disabled_by_user");}
+    if !config.gpu_attempt {return cpu("gpu_admission_cpu_attempt");}
+    if !cfg!(feature="adreno-gpu") {return cpu("gpu_not_built");}
+    if config.params.auto_exposure && config.params.preview_metering.is_none() {
+        return cpu("shared_preview_metering_required");
+    }
+    let overflow=||DetailError::InvalidGeometry("GPU reservation overflow".into());
+    let field_bytes=planned_gpu_field_bytes(config).ok_or_else(overflow)?;
+    let outside=gpu_output_bytes(config).checked_add(config.stage_cache_bytes)
+        .and_then(|n|n.checked_add(config.spectrum_cache_bytes)).ok_or_else(overflow)?;
+    let Some(available)=config.memory_budget_bytes.checked_sub(outside) else {return cpu("gpu_detail_memory_budget");};
+    // The shared tile planner accepts 128..512 MiB execution envelopes. Round
+    // DOWN the cap and UP the requested bound, never borrow unreserved fractions.
+    let available_mib=(available/MIB).min(512);
+    let n=config.width as usize*config.height as usize;
+    let whole=96usize.checked_mul(MIB).and_then(|v|v.checked_add(n.checked_mul(256)?))
+        .and_then(|v|v.checked_add(field_bytes)).ok_or_else(overflow)?;
+    let desired_mib=whole.checked_add(MIB-1).ok_or_else(overflow)?.checked_div(MIB).unwrap().max(128);
+    let execution=desired_mib.min(available_mib)*MIB;
+    // Reserve 96 MiB fixed even if a completed GPU attempt later enters the CPU
+    // path. An operational CPU-only attempt never initializes GPU and needs no
+    // extra 32 MiB beyond its established CPU plan.
+    let cpu_after_gpu=cpu_peak.checked_add(32*MIB).ok_or_else(overflow)?;
+    if execution<128*MIB || execution<=96*MIB+field_bytes || cpu_after_gpu>config.memory_budget_bytes {
+        return cpu("gpu_detail_memory_budget");
+    }
+    let peak=outside.checked_add(execution).ok_or_else(overflow)?.max(cpu_after_gpu);
+    if peak>config.memory_budget_bytes {return cpu("gpu_detail_memory_budget");}
+    Ok((peak,execution,"gpu_prepaid_execution"))
 }
 impl DetailContext {
     pub fn preflight(config: &DetailConfig) -> Result<ResourcePlan, DetailError> {
@@ -235,6 +356,7 @@ impl DetailContext {
                 "Reversal stocks require their direct route, not print".into(),
             ));
         }
+        if config.params.pre_imaging.is_some() {return Err(DetailError::Unsupported("Pre-imaging composite is not supported by detail ROI ownership".into()));}
         config
             .params
             .validate()
@@ -242,6 +364,9 @@ impl DetailContext {
         let (w, h) = (config.width as usize, config.height as usize);
         if w == 0 || h == 0 || w.max(h) > 1536 {
             return Err(DetailError::InvalidGeometry("Explicit working grid must be nonempty and <=1536; no implicit original-size allocation".into()));
+        }
+        if config.initial_region.is_some_and(|r| !r.valid(w,h)) {
+            return Err(DetailError::InvalidGeometry("Initial region outside working grid".into()));
         }
         if config.source_revision.is_empty()
             || config.mapping_revision.is_empty()
@@ -289,16 +414,17 @@ impl DetailContext {
         // Legacy cells retain their original estimate and can be chosen on ROI admission refusal.
         let region_extra=if config.region_output {n*16+128*1024}else{0};
         let scratch = n * 24 + region_extra + fft_side * fft_side * 64 + 64 * MIB + if print_fft {256*1024} else {0};
-        let peak = scratch
+        let cpu_peak = scratch
             .checked_add(config.stage_cache_bytes)
             .and_then(|n| n.checked_add(config.spectrum_cache_bytes))
             .ok_or_else(|| DetailError::InvalidGeometry("Budget overflow".into()))?;
-        if peak > config.memory_budget_bytes {
+        if cpu_peak > config.memory_budget_bytes {
             return Err(DetailError::MemoryPlanExceeded {
-                required: peak,
-                budget: config.memory_budget_bytes,
+                required: cpu_peak, budget: config.memory_budget_bytes,
             });
         }
+        let (peak, gpu_execution_budget_bytes, gpu_plan_reason) =
+            planned_execution_reservation(config, cpu_peak)?;
         let base_disk = (n as u64) * 128 + 64 * MIB as u64;
         let radius = (w.min(h) / 2).saturating_sub(1).max(1);
         let camera_disk = if p.diffusion_filter != "off" && p.diffusion_strength > 0. {
@@ -314,6 +440,10 @@ impl DetailContext {
         }
         Ok(ResourcePlan {
             region_output: config.region_output,
+            gpu_attempt: gpu_execution_budget_bytes > 0,
+            gpu_execution_budget_bytes,
+            gpu_plan_reason,
+            cpu_peak_reserved_bytes: cpu_peak,
             peak_reserved_bytes: peak,
             disk_reserved_bytes: disk,
             stage_cache_bytes: config.stage_cache_bytes,
@@ -328,6 +458,7 @@ impl DetailContext {
         private_parent: &Path,
         cancel: &CancellationToken,
     ) -> Result<Arc<Self>, DetailError> {
+        crate::mobile::gpu_completion_guard().map_err(|_|DetailError::GpuCompletionUncertain)?;
         cancel.check()?;
         let _interactive=crate::export_execution::interactive_work();
         let plan = Self::preflight(&config)?;
@@ -374,17 +505,70 @@ impl DetailContext {
         drop(output);
         drop(input);
         cancel.check()?;
+        let profile_started=Instant::now();
         let film = load_profile_by_name(data_dir, &config.params.film_stock)
             .map_err(|e| DetailError::Processing(e.to_string()))?;
         let paper = load_profile_by_name(data_dir, &config.params.paper_stock)
             .map_err(|e| DetailError::Processing(e.to_string()))?;
-        let mut params = config.params.runtime_for_film(&film);
+        let _profile_prepare_ms=profile_started.elapsed().as_secs_f64()*1000.;
+        if let Some(m)=&config.params.preview_metering {
+            if !m.matches_detail_mapping(&config.mapping_revision) {
+                return Err(DetailError::InvalidGeometry("Metering source revision differs from detail source".into()));
+            }
+        }
+        let mut params = config.params.preview_runtime_for_film(&film);
         let pitch = params.camera.film_format_mm * 1000. / config.width.max(config.height) as f32;
         params.camera.pixel_size_um_override = Some(pitch);
         params.film_render.grain.coordinate_origin = Some([0, 0]);
+        let pipeline_started=Instant::now();
         let pipe = Pipeline::new_with_spectral(film, paper, params, data_dir)
             .map_err(|e| DetailError::Processing(e.to_string()))?;
         cancel.check()?;
+        let _pipeline_prepare_ms=pipeline_started.elapsed().as_secs_f64()*1000.;
+        #[allow(unused_mut)]
+        let mut identity = DetailIdentity {
+            source_revision: config.source_revision.clone(),
+            mapping_revision: config.mapping_revision.clone(),
+            data_revision: config.data_revision.clone(),
+            parameters: serde_json::to_string(&config.params)
+                .map_err(|e| DetailError::Processing(e.to_string()))?,
+            width: config.width, height: config.height,
+            algorithm: "owned-detail-v1-f64-fixed256-gutter1",
+        };
+        #[allow(unused_mut)]
+        let mut backend = DetailBackendInfo::for_requested_gpu(config.params.use_gpu);
+        if config.params.use_gpu && !plan.gpu_attempt {backend.reason = plan.gpu_plan_reason;}
+        #[cfg(feature = "adreno-gpu")]
+        if plan.gpu_attempt {
+            let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(||
+                gpu::GpuDetail::build(&pipe, &owned, &config, &plan, cancel)));
+            gpu::check_completion(cancel)?;
+            match attempt {
+                Ok(Ok(mut gpu)) => {
+                    gpu.performance.profile_prepare_ms=Some(_profile_prepare_ms);
+                    gpu.performance.pipeline_prepare_ms=Some(_pipeline_prepare_ms);
+                    identity.algorithm = gpu::ALGORITHM;
+                    backend = DetailBackendInfo {actual_backend: "wgpu", requested_gpu: true,
+                        cpu_fallback: false, reason: "approximate_resident_detail",
+                        accelerated_stage: "full-resident-detail-chain", gpu_batches: gpu.completed_submits()};
+                    return Ok(Arc::new(Self {
+                        identity, backend, plan: plan.clone(), pipe,
+                        prepared: None, planes: None, gpu: Some(gpu), kernel: None,
+                        support: 0, brightness: 2f64.powf(config.params.brightness_ev),
+                        render_guard: Mutex::new(()), worker: Mutex::new(Worker {
+                            blocks: BTreeMap::new(), bytes: 0, clock: 0,
+                            fft: fft::ValidFft::new(0),
+                            #[cfg(test)] stats: RegionWorkStats::default(),
+                        }), _root: root,
+                    }));
+                }
+                Ok(Err(gpu::BuildFailure::Fatal(e))) => return Err(e),
+                Ok(Err(gpu::BuildFailure::Fallback(reason))) => backend.reason = reason,
+                Err(_) => backend.reason = "gpu_setup_panicked",
+            }
+            // Failed attempt and all of its fields/cache have dropped here. The
+            // private source still belongs to root and is needed by CPU setup.
+        }
         let support = global::grain_support(&pipe, pitch)?;
         let prepared = pipe
             .prepare_streamed_finish_spatial(&CpuBackend)
@@ -412,16 +596,6 @@ impl DetailContext {
             cancel,
         )?;
         fs::remove_file(owned)?;
-        let identity = DetailIdentity {
-            source_revision: config.source_revision,
-            mapping_revision: config.mapping_revision,
-            data_revision: config.data_revision,
-            parameters: serde_json::to_string(&config.params)
-                .map_err(|e| DetailError::Processing(e.to_string()))?,
-            width: config.width,
-            height: config.height,
-            algorithm: "owned-detail-v1-f64-fixed256-gutter1",
-        };
         cancel.check()?;
         let fft = if kernel.is_some() {
             let side = (258 + config.width.min(config.height) as usize) * 11 / 10 + 16;
@@ -435,10 +609,12 @@ impl DetailContext {
         cancel.check()?;
         Ok(Arc::new(Self {
             identity,
-            backend: DetailBackendInfo::for_requested_gpu(config.params.use_gpu),
+            backend,
             pipe,
-            prepared,
-            planes,
+            prepared: Some(prepared),
+            planes: Some(planes),
+            #[cfg(feature = "adreno-gpu")]
+            gpu: None,
             kernel,
             support,
             brightness: 2f64.powf(config.params.brightness_ev),
@@ -455,19 +631,34 @@ impl DetailContext {
         }))
     }
     pub fn backend_info(&self) -> DetailBackendInfo {
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu)=&self.gpu {return DetailBackendInfo {gpu_batches:gpu.completed_submits(),..self.backend};}
         self.backend
     }
+    pub fn build_performance(&self) -> Option<DetailPerformance> {
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu)=&self.gpu {return Some(gpu.performance.clone());}
+        None
+    }
     pub fn pregrain_metrics(&self) -> &PregrainMetrics {
-        &self.planes.metrics
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {return &gpu.metrics;}
+        &self.planes.as_ref().expect("CPU planes").metrics
     }
     pub fn metered_ev(&self) -> Option<f32> {
-        self.planes.metered_ev
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {return gpu.metered_ev;}
+        self.planes.as_ref().expect("CPU planes").metered_ev
     }
     pub fn pixel_pitch_um(&self) -> f32 {
-        self.planes.pitch
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {return gpu.pitch;}
+        self.planes.as_ref().expect("CPU planes").pitch
     }
     pub fn retained_disk_bytes(&self) -> u64 {
-        self.planes.disk_bytes()
+        #[cfg(feature = "adreno-gpu")]
+        if self.gpu.is_some() {return self.identity.width as u64 * self.identity.height as u64 * 12;}
+        self.planes.as_ref().expect("CPU planes").disk_bytes()
     }
     pub fn identity(&self) -> &DetailIdentity {
         &self.identity
@@ -476,6 +667,8 @@ impl DetailContext {
         &self.plan
     }
     pub fn clear_cache(&self) -> Result<(), DetailError> {
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {return gpu.clear_cache();}
         let mut w = self
             .worker
             .lock()
@@ -490,6 +683,8 @@ impl DetailContext {
         Ok(w.fft.stats())
     }
     pub fn cache_bytes(&self) -> Result<usize, DetailError> {
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {return gpu.cache_bytes();}
         let w = self
             .worker
             .lock()
@@ -502,6 +697,7 @@ impl DetailContext {
     pub fn render_region(
         self: &Arc<Self>, core: Rect, cancel: &CancellationToken,
     ) -> Result<OwnedDetailTile, DetailError> {
+        crate::mobile::gpu_completion_guard().map_err(|_|DetailError::GpuCompletionUncertain)?;
         cancel.check()?;
         if !self.plan.region_output {return Err(DetailError::Unsupported("Context uses legacy cell output budget".into()));}
         let (w,h)=(self.identity.width as usize,self.identity.height as usize);
@@ -509,11 +705,16 @@ impl DetailContext {
         let sample=core.expand(1,w,h);
         let mut rgb=vec![0f32;sample.w*sample.h*3];
         self.render_region_into(core,&mut rgb,cancel)?;
-        Ok(OwnedDetailTile{identity:self.identity.clone(),backend:self.backend,core_rect:core,sample_rect:sample,rgb})
+        Ok(OwnedDetailTile{identity:self.identity.clone(),backend:self.backend_info(),core_rect:core,sample_rect:sample,rgb})
     }
     /// Caller owns a full, exclusive output slice through return. Cancellation may
     /// leave partial bytes, which must never be published as a completed region.
     pub fn render_region_into(self:&Arc<Self>,core:Rect,rgb:&mut[f32],cancel:&CancellationToken)->Result<(),DetailError> {
+        self.render_region_into_measured(core,rgb,cancel).map(|_|())
+    }
+    pub(super) fn render_region_into_measured(self:&Arc<Self>,core:Rect,rgb:&mut[f32],cancel:&CancellationToken)
+        -> Result<Option<DetailPerformance>,DetailError> {
+        crate::mobile::gpu_completion_guard().map_err(|_|DetailError::GpuCompletionUncertain)?;
         cancel.check()?;
         let _render_guard=self.render_guard.try_lock().map_err(|_|DetailError::Processing("Context already has an active worker".into()))?;
         if !self.plan.region_output {return Err(DetailError::Unsupported("Context uses legacy cell output budget".into()));}
@@ -521,6 +722,11 @@ impl DetailContext {
         if !core.valid(w,h) {return Err(DetailError::InvalidGeometry("Region outside working grid".into()));}
         let sample=core.expand(1,w,h);
         if rgb.len()!=sample.w*sample.h*3 {return Err(DetailError::InvalidGeometry("Region output shape".into()));}
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {
+            let _interactive=crate::export_execution::interactive_work();
+            return gpu.render_into(&self.pipe, sample, rgb, cancel).map(Some);
+        }
         let mut copy_sample=|part:Rect,owned:Rect|->Result<(),DetailError>{
             cancel.check()?;
             let output=self.render_sample(part,part,cancel)?;
@@ -553,7 +759,7 @@ impl DetailContext {
                 }
             }
         }
-        cancel.check()?;Ok(())
+        cancel.check()?;Ok(None)
     }
     pub fn render_cell(
         self: &Arc<Self>,
@@ -561,6 +767,7 @@ impl DetailContext {
         cell_y: usize,
         cancel: &CancellationToken,
     ) -> Result<OwnedDetailTile, DetailError> {
+        crate::mobile::gpu_completion_guard().map_err(|_|DetailError::GpuCompletionUncertain)?;
         let _interactive=crate::export_execution::interactive_work();
         cancel.check()?;
         let _render_guard=self.render_guard.try_lock().map_err(|_|DetailError::Processing("Context already has an active worker".into()))?;
@@ -588,6 +795,13 @@ impl DetailContext {
     fn render_sample(self: &Arc<Self>, core: Rect, sample: Rect, cancel: &CancellationToken) -> Result<OwnedDetailTile, DetailError> {
         let _interactive=crate::export_execution::interactive_work();
         let (w,h)=(self.identity.width as usize,self.identity.height as usize);
+        #[cfg(feature = "adreno-gpu")]
+        if let Some(gpu) = &self.gpu {
+            let mut rgb=vec![0.; sample.w*sample.h*3];
+            gpu.render_into(&self.pipe, sample, &mut rgb, cancel)?;
+            return Ok(OwnedDetailTile {identity:self.identity.clone(), backend:self.backend_info(),
+                core_rect:core, sample_rect:sample, rgb});
+        }
         let needed = sample.expand(self.kernel.as_ref().map_or(0, |k| k.radius), w, h);
         let mut worker = self
             .worker
@@ -665,14 +879,14 @@ impl DetailContext {
             let scanned = if self.pipe.params.io.scan_film {
                 // Direct reversal route: the cache contains grained film density,
                 // never paper irradiance. Prepared finish has no printing stage.
-                self.prepared
+                self.prepared.as_ref().expect("CPU finish")
                     .process_density_chunk_unclipped(&chunk, &CpuBackend)
             } else {
                 let paper = self
-                    .prepared
+                    .prepared.as_ref().expect("CPU finish")
                     .develop_print_raw_chunk(&chunk, &CpuBackend)
                     .map_err(DetailError::Processing)?;
-                self.prepared
+                self.prepared.as_ref().expect("CPU finish")
                     .scan_print_density_chunk_unclipped(&paper)
                     .map_err(DetailError::Processing)?
             };
@@ -697,7 +911,7 @@ impl DetailContext {
         cancel.check()?;
         Ok(OwnedDetailTile {
             identity: self.identity.clone(),
-            backend: self.backend,
+            backend: self.backend_info(),
             core_rect: core,
             sample_rect: sample,
             rgb,
@@ -716,7 +930,7 @@ impl DetailContext {
                     h: 64.min(rect.h - yy),
                 };
                 let input = part.expand(self.support, w, h);
-                let pre = self.planes.read_rect(input, cancel)?;
+                let pre = self.planes.as_ref().expect("CPU planes").read_rect(input, cancel)?;
                 let mut params = self.pipe.params.clone();
                 params.film_render.grain.coordinate_origin = Some([input.x as u32, input.y as u32]);
                 let grain = filming::grain_density(pre, &self.pipe.film, &params, &CpuBackend);
@@ -725,7 +939,7 @@ impl DetailContext {
                 let raw = if self.pipe.params.io.scan_film {
                     valid
                 } else {
-                    self.prepared
+                    self.prepared.as_ref().expect("CPU finish")
                         .expose_print_raw_chunk(&valid)
                         .map_err(DetailError::Processing)?
                 };
@@ -760,7 +974,98 @@ fn crop(
 mod tests {
     use super::*;
     fn config(w: u32, h: u32) -> DetailConfig {
-        DetailConfig{region_output:true,width:w,height:h,params:MobileParams::parse(r#"{"paperStock":"kodak_2383","useGpu":false,"autoExposure":true,"metering":"partial","diffusionFilter":"black_pro_mist","printDiffusionFilter":"black_pro_mist","brightnessEv":0.859999895}"#).unwrap(),source_revision:"fixture-v1".into(),mapping_revision:"oriented-v1".into(),data_revision:"bundled-v1".into(),memory_budget_bytes:512*MIB,disk_budget_bytes:1024*1024*1024,stage_cache_bytes:CELL*CELL*24,spectrum_cache_bytes:64*MIB}
+        DetailConfig{gpu_attempt:true,region_output:true,initial_region:None,width:w,height:h,params:MobileParams::parse(r#"{"paperStock":"kodak_2383","useGpu":false,"autoExposure":true,"metering":"partial","diffusionFilter":"black_pro_mist","printDiffusionFilter":"black_pro_mist","brightnessEv":0.859999895}"#).unwrap(),source_revision:"fixture-v1".into(),mapping_revision:"oriented-v1".into(),data_revision:"bundled-v1".into(),memory_budget_bytes:512*MIB,disk_budget_bytes:1024*1024*1024,stage_cache_bytes:CELL*CELL*24,spectrum_cache_bytes:64*MIB}
+    }
+    #[test]
+    fn cinestill_detail_kernel_preflight_matches_resolved_pipeline() {
+        for (stock,amount) in [("cinestill_800t",1.),("cinestill_800t",0.),("kodak_portra_400",1.)] {
+            let mut c=config(512,256);c.params.film_stock=stock.into();c.params.halation_amount=amount;
+            let film=load_profile_by_name(&data(),stock).unwrap();
+            let paper=load_profile_by_name(&data(),&c.params.paper_stock).unwrap();
+            let mut params=c.params.preview_runtime_for_film(&film);
+            params.camera.pixel_size_um_override=Some(params.camera.film_format_mm*1000./512.);
+            let pipe=Pipeline::new_with_spectral(film,paper,params,&data()).unwrap();
+            let expected=pipe.gpu_diffusion_working_bytes(c.width,c.height).unwrap()
+                +std::mem::size_of::<spektrafilm_core::pipeline::DiffusionScatteredFields>() as u64;
+            assert_eq!(planned_gpu_field_bytes(&c).unwrap() as u64,expected,"{stock} amount={amount}");
+            assert_eq!(pipe.gpu_halation_working_bytes(c.width,c.height).unwrap()>0,stock=="cinestill_800t" && amount>0.);
+        }
+    }
+
+    #[test]
+    fn initial_region_is_geometry_checked_and_does_not_change_admission() {
+        let mut c=config(383,271);
+        let original=serde_json::to_value(DetailContext::preflight(&c).unwrap()).unwrap();
+        c.initial_region=Some(Rect{x:260,y:260,w:123,h:11});
+        assert_eq!(serde_json::to_value(DetailContext::preflight(&c).unwrap()).unwrap(),original);
+        for r in [Rect{x:0,y:0,w:0,h:1},Rect{x:0,y:271,w:1,h:1},
+            Rect{x:382,y:0,w:2,h:1},Rect{x:usize::MAX,y:0,w:2,h:1}] {
+            c.initial_region=Some(r);
+            assert!(matches!(DetailContext::preflight(&c),Err(DetailError::InvalidGeometry(_))));
+        }
+    }
+    #[test]
+    fn initial_region_cpu_fallback_keeps_identity_pixels_and_precancel() {
+        let dir=root();let (source,_,original)=input(&dir,16,12);
+        let mut c=config(16,12);c.params.use_gpu=true;c.gpu_attempt=false;
+        let token=CancellationToken::new();
+        let baseline=DetailContext::build(c.clone(),&data(),&source,&dir,&token).unwrap();
+        let r=Rect{x:4,y:3,w:8,h:6};c.initial_region=Some(r);
+        let hinted=DetailContext::build(c.clone(),&data(),&source,&dir,&token).unwrap();
+        assert_eq!(hinted.identity(),baseline.identity());
+        assert_eq!(hinted.backend_info(),baseline.backend_info());
+        assert!(hinted.backend_info().cpu_fallback);
+        assert_eq!(hinted.render_region(r,&token).unwrap().rgb,baseline.render_region(r,&token).unwrap().rgb);
+        assert!(hinted.build_performance().is_none());
+        let sample=r.expand(1,16,12);let mut pixels=vec![0.;sample.w*sample.h*3];
+        assert!(hinted.render_region_into_measured(r,&mut pixels,&token).unwrap().is_none());
+        drop(hinted);drop(baseline);
+        let cancelled=CancellationToken::new();cancelled.cancel();
+        assert!(matches!(DetailContext::build(c,&data(),&source,&dir,&cancelled),Err(DetailError::Cancelled)));
+        assert_eq!(fs::read(&source).unwrap(),original);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(),1);fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn performance_serialization_has_only_fixed_optional_numeric_fields() {
+        assert_eq!(serde_json::to_value(DetailPerformance::default()).unwrap(),serde_json::json!({}));
+        let m=DetailPerformance{tile_cache_hits:Some(2),tile_cache_misses:Some(0),gpu_submit_delta:Some(0),
+            source_read_ms:Some(0.),chain_ms:Some(0.),result_copy_ms:Some(0.125),..Default::default()};
+        assert_eq!(serde_json::to_value(m).unwrap(),serde_json::json!({"tileCacheHits":2,"tileCacheMisses":0,
+            "gpuSubmitDelta":0,"sourceReadMs":0.0,"chainMs":0.0,"resultCopyMs":0.125}));
+    }
+    #[test]
+    fn operational_cpu_admission_preserves_requested_gpu_and_original_peak() {
+        let mut c=config(383,271);c.params.auto_exposure=false;
+        let cpu=DetailContext::preflight(&c).unwrap();
+        c.params.use_gpu=true;c.gpu_attempt=false;
+        c.memory_budget_bytes=cpu.peak_reserved_bytes;
+        let requested=serde_json::to_string(&c.params).unwrap();
+        let operational=DetailContext::preflight(&c).unwrap();
+        assert!(!operational.gpu_attempt);assert_eq!(operational.gpu_execution_budget_bytes,0);
+        assert_eq!(operational.gpu_plan_reason,"gpu_admission_cpu_attempt");
+        assert_eq!(operational.peak_reserved_bytes,cpu.peak_reserved_bytes);
+        assert_eq!(operational.cpu_peak_reserved_bytes,cpu.peak_reserved_bytes);
+        assert!(c.params.use_gpu);assert_eq!(serde_json::to_string(&c.params).unwrap(),requested);
+        // Automatic GPU planning at this same tight cap must also keep the
+        // admissible CPU route, without requesting the unavailable GPU reserve.
+        c.gpu_attempt=true;
+        let bounded=DetailContext::preflight(&c).unwrap();
+        assert!(!bounded.gpu_attempt);assert_eq!(bounded.peak_reserved_bytes,cpu.peak_reserved_bytes);
+        c.memory_budget_bytes=cpu.peak_reserved_bytes-1;
+        assert!(matches!(DetailContext::preflight(&c),Err(DetailError::MemoryPlanExceeded{..})));
+    }
+    #[test]
+    fn operational_cpu_build_reports_fallback_without_changing_science_identity() {
+        let dir=root();let (source,_,original)=input(&dir,16,12);
+        let mut c=config(16,12);c.params.use_gpu=true;c.gpu_attempt=false;
+        let expected=serde_json::to_string(&c.params).unwrap();
+        let ctx=DetailContext::build(c,&data(),&source,&dir,&CancellationToken::new()).unwrap();
+        assert_eq!(ctx.identity().parameters,expected);
+        assert_eq!(ctx.backend_info().actual_backend,"cpu");assert!(ctx.backend_info().requested_gpu);
+        assert!(ctx.backend_info().cpu_fallback);assert_eq!(ctx.backend_info().gpu_batches,0);
+        assert_eq!(ctx.backend_info().reason,"gpu_admission_cpu_attempt");
+        drop(ctx);assert_eq!(fs::read(&source).unwrap(),original);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(),1);fs::remove_dir_all(dir).unwrap();
     }
     fn root() -> PathBuf {
         static N: AtomicU64 = AtomicU64::new(0);
@@ -1079,10 +1384,9 @@ mod tests {
             cpu.backend_info(),
             DetailBackendInfo::for_requested_gpu(false)
         );
-        assert_eq!(
-            fallback.backend_info(),
-            DetailBackendInfo::for_requested_gpu(true)
-        );
+        assert_eq!(fallback.backend_info().actual_backend, "cpu");
+        assert!(fallback.backend_info().cpu_fallback);
+        assert!(!fallback.backend_info().reason.is_empty());
         let a = cpu.render_cell(0, 0, &token).unwrap();
         let b = fallback.render_cell(0, 0, &token).unwrap();
         assert_eq!(a.rgb, b.rgb);

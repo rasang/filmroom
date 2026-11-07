@@ -31,7 +31,11 @@ import org.robolectric.annotation.GraphicsMode
 class NegativeWhiteHolesAvailabilityHostTest {
     private fun all(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{all(v.getChildAt(it))}else emptyList()
     @Test fun capabilityMatchesActualRendererMatteSelectionForEveryProfileAndRoute() {
-        for((stock,kind) in FrameProfileCatalog.kinds) {
+        val supported135=FrameProfileCatalog.kinds.filterKeys{BorderCatalog.available(it,null)}
+        assertEquals(27,supported135.size)
+        assertEquals(CandidateBorderDefinitions.profiles.keys+setOf("kodak_doublex","kodak_trix")+Reviewed135Definitions.stocks,supported135.keys)
+        assertEquals(FrameProfileCatalog.kinds.keys,supported135.keys)
+        for((stock,kind) in supported135) {
             for(route in if(kind==FrameAppearanceContext.FilmKind.REVERSAL)listOf("direct")else listOf("print","direct")) {
                 for(paper in listOf(EditorState().paperStock,"kodak_2302")) {
                     val state=EditorState(filmStock=stock,paperStock=paper,outputRoute=route)
@@ -39,6 +43,7 @@ class NegativeWhiteHolesAvailabilityHostTest {
                     val contexts=listOf(false,true).map{FrameAppearanceContext.forProfile(effective,route,it)}
                     val mattes=contexts.map { c ->
                         when {
+                            effective in Reviewed135Definitions.stocks -> Reviewed135Definitions.selected(effective,c).spec.holeMatteSrgb
                             effective in BwBorderDefinitions.profiles -> BwBorderDefinitions.selected(effective,c).spec.holeMatteSrgb
                             c.material==FrameAppearanceContext.Material.NEGATIVE_TRANSMISSION -> DirectBorderDefinitions.selectedDefinition(effective,c).spec.holeMatteSrgb
                             else -> CandidateBorderDefinitions.selectedDefinition(effective,c.negativeWhiteHoles).spec.holeMatteSrgb

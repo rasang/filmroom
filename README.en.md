@@ -105,6 +105,7 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | JPEG / PNG | System decoding; transparent PNG areas are composited over white. |
 | HEIC | A limited subset of ordinary, static 8-bit HEVC primary/grid images; requires a device decoder and sufficient memory. Supported P3 input is converted to sRGB SDR, not edited as HDR. |
 | NEF / CR2 / ARW | Implemented tested ordinary Bayer, Canon mRAW/sRAW, Nikon HE/HE* and small NEF, and Sony reduced-size/ARW6 branches. Decodes actual pixels, never an embedded-preview substitute. Encoding and resource limits are described below. |
+| RAF | Bounded basic Fujifilm Bayer/X-Trans candidate with tested uncompressed, lossless and lossy samples; original pixels and EXIF are retained. See [RAF scope](docs/FUJIFILM_RAF.md) for tested modes, GFX/legacy limits and validation status. |
 | DNG | Adds constrained 16-bit three-channel LinearRaw JPEG XL strips; see [JXL scope](docs/JPEG_XL_DNG.md).  Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
 | Panasonic RW2 | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
 

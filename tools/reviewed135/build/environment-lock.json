@@ -1,0 +1,19 @@
+{
+  "python": "3.12.14",
+  "packages": {
+    "Pillow": "13.0.0",
+    "numpy": "2.3.5",
+    "fonttools": "4.61.1"
+  },
+  "libwebp": "1.6.0",
+  "freetype2": "2.14.3",
+  "compiled_versions_status": "Recorded during parent-authorized standalone rebuild; exact bytes are additionally checked against the approved targets.",
+  "encoder_options": {
+    "format": "WEBP",
+    "lossless": true,
+    "exact": true,
+    "quality": 80,
+    "method": 4
+  },
+  "guarantee": "Byte equality is tested only in the recorded environment; alternate encoders must still match pinned decoded RGBA to claim equivalent pixels."
+}

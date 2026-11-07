@@ -1,0 +1,22 @@
+<resources>
+    <string name="saved_preset_import">レシピ</string>
+    <string name="saved_preset_save">レシピを保存</string>
+    <string name="saved_preset_name">レシピ名</string>
+    <string name="saved_preset_scope">フィルムと現在の編集設定をすべて保存します。フレーム、構図、日付写し込みと指定日時も含みます。写真は含めず、この端末にのみ保存します。</string>
+    <string name="saved_preset_cancel">キャンセル</string>
+    <string name="saved_preset_apply">適用</string>
+    <string name="saved_preset_delete">削除</string>
+    <string name="saved_preset_delete_question">「%1$s」を削除しますか？現在の写真と設定は変更されません。</string>
+    <string name="saved_preset_loading">レシピを読み込み中…</string>
+    <string name="saved_preset_empty">レシピはまだありません。写真を調整して、下の「現在のレシピを保存」を選んでください。</string>
+    <string name="saved_preset_choose">レシピを選んで適用します。長押しで共有・削除できます。適用後は取り消せます。</string>
+    <string name="saved_preset_saved">レシピを保存しました</string>
+    <string name="saved_preset_invalid_name">改行や制御文字を含まない1～60文字の名前を入力してください。</string>
+    <string name="saved_preset_duplicate_name">同じ名前のレシピがあります。別の名前を入力してください。</string>
+    <string name="saved_preset_full">レシピの保存容量がいっぱいです。不要なレシピを削除してください。</string>
+    <string name="saved_preset_stale">写真または設定が変更されました。閉じてから開き直してください。</string>
+    <string name="saved_preset_incompatible">このレシピには未対応の設定またはフィルムが含まれています。適用せず、保存データを保持しています。</string>
+    <string name="saved_preset_unreadable">レシピを読み取れません。既存データは変更していません。再試行するかアプリを更新してください。</string>
+    <string name="saved_preset_write_failed">変更を保存できませんでした。空き容量を確認して再試行してください。</string>
+    <string name="saved_preset_save_current">現在のレシピを保存</string>
+</resources>

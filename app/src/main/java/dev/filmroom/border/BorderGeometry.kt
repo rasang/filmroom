@@ -51,6 +51,7 @@ data class BorderSnapshot(
         require(canonicalWidth in 1..30000 && canonicalHeight in 1..30000 && canonicalWidth.toLong()*canonicalHeight<=150_000_000L)
         require(rail in 1..7500 && end in 1..7500)
         if(geometryVersion==1){
+            require(composition.straightenDegrees==0.0)
             require(sourceWidth==photoWidth && sourceHeight==photoHeight)
             require(rail<=ceil(minOf(photoWidth,photoHeight)*.23).toInt().coerceAtLeast(1))
             require(end<=ceil(minOf(photoWidth,photoHeight)*.04).toInt().coerceAtLeast(1))
@@ -68,6 +69,7 @@ data class BorderSnapshot(
         put("frame",if(geometryVersion==5)"synthetic-120-reference-v1" else if(geometryVersion==4)"reviewed-reference" else "25/25A");put("featherTotalAt3072",featherTotalAt3072)
         if(geometryVersion>=2){
             put("sourceWidth",sourceWidth);put("sourceHeight",sourceHeight);put("canonicalWidth",canonicalWidth);put("canonicalHeight",canonicalHeight)
+            if(composition.straightenDegrees!=0.0)put("straightenDegrees",composition.straightenDegrees)
             put("centerX",composition.centerX);put("centerY",composition.centerY);put("zoom",composition.zoom)
             if(geometryVersion>=3)put("targetAspect",composition.targetAspect)
         }
@@ -75,11 +77,11 @@ data class BorderSnapshot(
     companion object {
         fun fromJson(text:String):BorderSnapshot=JSONObject(text).let{j->
             require(j.getString("frame")==if(j.getInt("geometryVersion")==5)"synthetic-120-reference-v1" else if(j.getInt("geometryVersion")==4)"reviewed-reference" else "25/25A")
-            val version=j.getInt("geometryVersion");require(version==5 || (!j.has("mediumFormat") && !j.has("mediumPortrait") && !j.has("stripCenterMm")));require(version>=3 || !j.has("targetAspect"));val pw=j.getInt("photoWidth");val ph=j.getInt("photoHeight")
+            val version=j.getInt("geometryVersion");require(version>=2 || !j.has("straightenDegrees"));require(version==5 || (!j.has("mediumFormat") && !j.has("mediumPortrait") && !j.has("stripCenterMm")));require(version>=3 || !j.has("targetAspect"));val pw=j.getInt("photoWidth");val ph=j.getInt("photoHeight")
             BorderSnapshot(j.getString("stock"),j.getString("assetVersion"),version,pw,ph,j.getInt("rail"),j.getInt("end"),j.getDouble("featherTotalAt3072"),
                 if(version>=2)j.getInt("sourceWidth")else pw,if(version>=2)j.getInt("sourceHeight")else ph,
                 if(version>=2)j.getInt("canonicalWidth")else pw,if(version>=2)j.getInt("canonicalHeight")else ph,
-                if(version>=2)CompositionTransform(j.getDouble("centerX"),j.getDouble("centerY"),j.getDouble("zoom"),if(version>=3)j.getDouble("targetAspect")else null)else CompositionTransform(),
+                if(version>=2)CompositionTransform(j.getDouble("centerX"),j.getDouble("centerY"),j.getDouble("zoom"),if(version>=3)j.getDouble("targetAspect")else null,if(j.has("straightenDegrees"))j.getDouble("straightenDegrees")else 0.0)else CompositionTransform(),
                 if(j.has("appearance"))FrameAppearanceContext.fromJson(j.getJSONObject("appearance"))else null,
                 if(version==5)MediumFormat.valueOf(j.getString("mediumFormat"))else null,
                 if(version==5)j.getBoolean("mediumPortrait")else false,

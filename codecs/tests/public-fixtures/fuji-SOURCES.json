@@ -1,0 +1,149 @@
+{
+  "purpose": "Public CC0 RAF compatibility fixtures, originals not distributed",
+  "fixtures": [
+    {
+      "id": 864,
+      "make": "Fujifilm",
+      "model": "X-T2",
+      "mode": "14bit 14bit uncompressed (3:2)",
+      "remark": "Uncompressed, Colour chart",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/864/nice/Fujifilm - X-T2 - 14bit 14bit uncompressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/864/exif/20170114_173532_TFW04723.RAF.exif.txt",
+      "sha256": "aaa648429eeee8e1bea05fccfeeb2ea54ee7052e23db0ee02f049e5b23cecaef",
+      "bytes": 50569728
+    },
+    {
+      "id": 865,
+      "make": "Fujifilm",
+      "model": "X-T2",
+      "mode": "14bit 14bit compressed (3:2)",
+      "remark": "Compressed(Lossless) raw, colour chart",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/865/nice/Fujifilm - X-T2 - 14bit 14bit compressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/865/exif/20170114_174341_TFW04727.RAF.exif.txt",
+      "sha256": "f756ad5be551a8b3e1b503a8a6f7e8e637fba519c0b0f8c79dd58e94b0287602",
+      "bytes": 23346352
+    },
+    {
+      "id": 1178,
+      "make": "Fujifilm",
+      "model": "X-T20",
+      "mode": "14bit 14bit compressed (3:2)",
+      "remark": "",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1178/nice/Fujifilm - X-T20 - 14bit 14bit compressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1178/exif/DSCF0527.RAF.exif.txt",
+      "sha256": "a23045101b2912e64f154100d646c228c0d16585d21e95e0d1a006e537f7784c",
+      "bytes": 25017216
+    },
+    {
+      "id": 1191,
+      "make": "Fujifilm",
+      "model": "X-Pro1",
+      "mode": "12bit 12bit uncompressed (3:2)",
+      "remark": "",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1191/nice/Fujifilm - X-Pro1 - 12bit 12bit uncompressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1191/exif/DSCF2131.RAF.exif.txt",
+      "sha256": "0b1046c299d9eb222a8f003bd047f2a34f507da0d1704ac32cefbc82f799d121",
+      "bytes": 26146816
+    },
+    {
+      "id": 1214,
+      "make": "Fujifilm",
+      "model": "X-A1",
+      "mode": "12bit 12bit uncompressed (3:2)",
+      "remark": "",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1214/nice/Fujifilm - X-A1 - 12bit 12bit uncompressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1214/exif/DSCF2482.RAF.exif.txt",
+      "sha256": "b2ddb5fe31a3b976d12961c72a2689de8742739df3d8f757614eca65f8df2a61",
+      "bytes": 26160640
+    },
+    {
+      "id": 1371,
+      "make": "Fujifilm",
+      "model": "X-A3",
+      "mode": "14bit 14bit uncompressed (3:2)",
+      "remark": "please contribute the non-vertical sample :)",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1371/nice/Fujifilm - X-A3 - 14bit 14bit uncompressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1371/exif/DSCF7241.RAF.exif.txt",
+      "sha256": "4187cb5caa72320a74e9b4355db01e8e21edd43f3084873f9b9b67169d8d4ad8",
+      "bytes": 43159264
+    },
+    {
+      "id": 1435,
+      "make": "Fujifilm",
+      "model": "GFX 50S",
+      "mode": "14bit 14bit compressed (3:2)",
+      "remark": "",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1435/nice/Fujifilm - GFX 50S - 14bit 14bit compressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1435/exif/20170525_0037TEST.RAF.exif.txt",
+      "sha256": "a7124d13910e0241a6b035154bc1fcdb7be4439371d043b1e1950a0251feb51e",
+      "bytes": 50106976
+    },
+    {
+      "id": 1964,
+      "make": "Fujifilm",
+      "model": "FinePix S3Pro",
+      "mode": "3:2",
+      "remark": "This picture was taken back when my S3Pro was still working perfectly.",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/1964/nice/Fujifilm - FinePix S3Pro - 3:2.RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/1964/exif/DSCF3694.RAF.exif.txt",
+      "sha256": "038e5a13a22513f53d143e328a66e2de8071809565db696ecac84b4364fcb75b",
+      "bytes": 25760952
+    },
+    {
+      "id": 6124,
+      "make": "Fujifilm",
+      "model": "X-T5",
+      "mode": "14bit 14bit uncompressed (3:2)",
+      "remark": "UNCOMPRESSED",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/6124/nice/Fujifilm - X-T5 - 14bit 14bit uncompressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/6124/exif/DSCF0023.RAF.exif.txt",
+      "sha256": "8695176eec781eb0baa2d03cfcd4bf9b5884efb49b9455ab88406f14dda437fc",
+      "bytes": 85705728
+    },
+    {
+      "id": 7175,
+      "make": "Fujifilm",
+      "model": "GFX100 II",
+      "mode": "16bit 16bit compressed (4:3)",
+      "remark": "",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/7175/nice/Fujifilm - GFX100 II - 16bit 16bit compressed (4:3).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/7175/exif/_DSF0265.RAF.exif.txt",
+      "sha256": "fed86662d870e53b547db4f29af5e2d149acdcb500f8b4213854a0f85ef0b45b",
+      "bytes": 70874736
+    },
+    {
+      "id": 7301,
+      "make": "Fujifilm",
+      "model": "X100VI",
+      "mode": "14bit 14bit lossless compressed (3:2)",
+      "remark": "lossless compressed",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/7301/nice/Fujifilm - X100VI - 14bit 14bit lossless compressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/7301/exif/DSCF0075.RAF.exif.txt",
+      "sha256": "e9709b98f4ff96b993dbe4ad20eff0accfa709a58559eb4219f59d1e7181934a",
+      "bytes": 49374720
+    },
+    {
+      "id": 7302,
+      "make": "Fujifilm",
+      "model": "X100VI",
+      "mode": "14bit 14bit compressed (3:2)",
+      "remark": "compressed (lossy)",
+      "license": "CC0-1.0",
+      "source_url": "https://raw.pixls.us/getfile.php/7302/nice/Fujifilm - X100VI - 14bit 14bit compressed (3:2).RAF",
+      "source_exif_url": "https://raw.pixls.us/getfile.php/7302/exif/DSCF0076.RAF.exif.txt",
+      "sha256": "7f19c7c5914542b91829ac2e41c8d4c10e414b28b0f7a793001e1a979c8c6056",
+      "bytes": 29851616
+    }
+  ]
+}

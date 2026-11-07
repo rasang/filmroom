@@ -45,6 +45,76 @@ class CompositionToolbarActivityHostTest {
     private fun all(v:View):List<View> = listOf(v)+(if(v is ViewGroup)(0 until v.childCount).flatMap{all(v.getChildAt(it))}else emptyList())
     private fun idle()=shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10))
     private fun await(done:()->Boolean){repeat(1500){idle();if(done())return;Thread.sleep(5)};error("Toolbar Activity timeout")}
+
+    /** Identity scientific stub with the current pre-imaging delivery contract.
+     * Real snapshot/catalog/compositor remain active; no native film-colour claim. */
+    private suspend fun toolbarPreview(source:Bitmap,params:EditorState,photo:PhotoSource?):Bitmap {
+        if(!params.preImagingBorder)return source.copy(Bitmap.Config.ARGB_8888,false)
+        val original=checkNotNull(photo)
+        val presentation=checkNotNull(kotlinx.coroutines.currentCoroutineContext()[dev.filmroom.engine.PreviewPresentationContext])
+        return dev.filmroom.border.BorderPreview.owned {
+            val border=dev.filmroom.border.PreImagingInput.snapshot(params,source.width,source.height,
+                original.originalWidth,original.originalHeight)
+            val raster=BorderCatalog.resolve(border)
+            dev.filmroom.border.BorderPreview.compose(source,border,raster).also{presentation.border=border}
+        }
+    }
+
+    @Test fun straightenWheelRotatesLiveResetsCancelsAndCommitsAsOneUndo(){
+        val app=RuntimeEnvironment.getApplication();app.getSharedPreferences("local-session",0).edit().clear().commit()
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try{
+            val a=controller.get();val vm=model(a);val state=state(vm)
+            val operation=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}
+            await{(operation.get(vm) as? Job)?.isCompleted==true}
+            vm.borderMemorySnapshot={NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
+            vm.localDetailEnabled=false;val photo=field(a,"photo") as PhotoView;photo.disableDetail()
+            var scienceCalls=0
+            vm.renderPreview={source,_,_,_->scienceCalls++;source.copy(Bitmap.Config.ARGB_8888,false)};vm.detailPreviewEdge={240}
+            val source=Bitmap.createBitmap(360,240,Bitmap.Config.ARGB_8888).apply{
+                val c=Canvas(this);c.drawColor(Color.rgb(135,173,181));val p=Paint(Paint.ANTI_ALIAS_FLAG)
+                p.color=Color.rgb(218,190,140);c.drawRect(0f,134f,360f,240f,p)
+                p.color=Color.rgb(43,75,71);c.drawPath(android.graphics.Path().apply{moveTo(0f,140f);lineTo(360f,177f);lineTo(360f,240f);lineTo(0f,240f);close()},p)
+                p.color=Color.rgb(243,214,145);c.drawCircle(272f,56f,20f,p)
+                p.color=Color.rgb(38,61,57);c.drawRect(88f,85f,99f,166f,p);c.drawCircle(93f,82f,24f,p)
+            }
+            state.value=EditorUiState(photo=PhotoSource(File(app.cacheDir,"straighten-source"),"fixture.jpg","image/jpeg",3600,2400,0),original=source)
+            vm.parameters(EditorState());await{state.value.canExport}
+            val root=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+            val tools=field(a,"tools") as ViewGroup
+            fun layout(){root.measure(View.MeasureSpec.makeMeasureSpec(400,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(800,View.MeasureSpec.EXACTLY));root.layout(0,0,400,800)}
+            fun tagged(tag:String)=all(tools).single{it.tag==tag}
+            fun capture(name:String){
+                val output=System.getenv("FILMROOM_STRAIGHTEN_QA_DIR") ?: return
+                layout();val b=Bitmap.createBitmap(400,800,Bitmap.Config.ARGB_8888);root.draw(Canvas(b))
+                val dir=File(output).apply{mkdirs()};File(dir,"$name.png").outputStream().use{b.compress(Bitmap.CompressFormat.PNG,100,it)};b.recycle()
+                File(dir,"README.txt").writeText("Actual MainActivity native Android Canvas host render, 400×800. Synthetic landscape and stubbed scientific engine. Not an emulator/device screenshot or film-color acceptance.\n")
+            }
+            layout();(field(a,"compositionButton") as Button).performClick();await{state.value.compositionEditing};layout()
+            fun settled(){await{!state.value.updating && state.value.renderedParameters==state.value.parameters && !photo.isLiveComposition}}
+            val baseline=state.value.parameters;val count=scienceCalls
+            val dial=tagged("composition-straighten-dial") as dev.filmroom.ui.StraightenDialView
+            assertFalse(tagged("composition-straighten-reset").isEnabled)
+            val resetButton=tagged("composition-straighten-reset") as Button
+            assertEquals("",resetButton.text.toString());assertEquals("归零",resetButton.contentDescription.toString())
+            assertTrue(resetButton.width>=48 && resetButton.height>=48);assertNotNull(resetButton.compoundDrawables[0])
+            fun touch(action:Int,x:Float){val e=android.view.MotionEvent.obtain(0,0,action,x,40f,0);dial.onTouchEvent(e);e.recycle();idle()}
+            capture("straighten-zero")
+            touch(android.view.MotionEvent.ACTION_DOWN,30f);touch(android.view.MotionEvent.ACTION_MOVE,130f)
+            assertEquals(8.0,state.value.parameters.crop.transform.straightenDegrees,0.0);assertTrue(photo.isLiveComposition)
+            assertSame(dial,tagged("composition-straighten-dial"));assertEquals(count,scienceCalls)
+            capture("straighten-live-positive")
+            touch(android.view.MotionEvent.ACTION_UP,130f);settled();assertEquals(count,scienceCalls)
+            capture("straighten-settled-positive")
+            tagged("composition-straighten-reset").performClick();settled();assertEquals(0.0,state.value.parameters.crop.transform.straightenDegrees,0.0)
+            photo.straighten(-5.9,true);settled();capture("straighten-level")
+            tagged("crop-cancel").performClick();await{state.value.canExport};assertEquals(baseline,state.value.parameters)
+            (field(a,"compositionButton") as Button).performClick();await{state.value.compositionEditing}
+            photo.straighten(5.0,true);settled();tagged("crop-confirm").performClick();await{state.value.canExport}
+            assertEquals(5.0,state.value.parameters.crop.transform.straightenDegrees,0.0)
+            (field(a,"undo") as Button).performClick();await{state.value.canExport};assertEquals(baseline,state.value.parameters)
+        }finally{controller.pause().stop().destroy();BorderCatalog.clearCache();BorderCatalog.initialize(app.assets)}
+    }
     @Test fun repeatedCropKeepsToolAndIconInstancesAndControlsReadLatestCrop(){
         val app=RuntimeEnvironment.getApplication()
         app.getSharedPreferences("local-session",0).edit().clear().commit()
@@ -59,7 +129,7 @@ class CompositionToolbarActivityHostTest {
             val root=a.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
             root.measure(View.MeasureSpec.makeMeasureSpec(400,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(800,View.MeasureSpec.EXACTLY));root.layout(0,0,400,800)
             BorderCatalog.initialize(app.assets){vm.borderMemorySnapshot()}
-            vm.renderPreview={source,_,_,_->source.copy(Bitmap.Config.ARGB_8888,false)};vm.detailPreviewEdge={96}
+            vm.renderPreview={source,params,photo,_->toolbarPreview(source,params,photo)};vm.detailPreviewEdge={96}
             val original=Bitmap.createBitmap(96,72,Bitmap.Config.ARGB_8888).apply{eraseColor(0xff527682.toInt())}
             val initial=original.copy(Bitmap.Config.ARGB_8888,false);val params=EditorState()
             state.value=EditorUiState(photo=PhotoSource(File(app.cacheDir,"toolbar-source"),"fixture.jpg","image/jpeg",640,480,0),original=original,rendered=initial,parameters=params,renderedParameters=params)
@@ -68,6 +138,9 @@ class CompositionToolbarActivityHostTest {
             fun category(id:String){all(field(a,"categoryBar") as View).single{it.tag==id}.performClick();idle()}
             val action=field(a,"compositionButton") as Button
             toggle().performClick();await{state.value.presentation!=null && state.value.canExport}
+            assertTrue(state.value.parameters.preImagingBorder)
+            assertTrue(photo.preImagingCompositionPreview)
+            assertNull(state.value.interactiveBorder)
             category("adjust")
             val tools=field(a,"tools") as ViewGroup
             all(tools).single{it.tag=="brightness"}.performClick();idle()
@@ -140,7 +213,7 @@ class CompositionToolbarActivityHostTest {
             await{(operation.get(vm) as? Job)?.isCompleted==true}
             vm.borderMemorySnapshot={NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)}
             vm.localDetailEnabled=false;(field(a,"photo") as PhotoView).disableDetail()
-            vm.renderPreview={source,_,_,_->source.copy(Bitmap.Config.ARGB_8888,false)};vm.detailPreviewEdge={96}
+            vm.renderPreview={source,params,photo,_->toolbarPreview(source,params,photo)};vm.detailPreviewEdge={96}
             val source=Bitmap.createBitmap(96,72,Bitmap.Config.ARGB_8888).apply{
                 val canvas=Canvas(this);canvas.drawColor(Color.rgb(132,181,204))
                 val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.rgb(242,202,115)};canvas.drawCircle(73f,16f,7f,paint)
@@ -207,6 +280,9 @@ class CompositionToolbarActivityHostTest {
             assertEquals(before,state.value.parameters)
             BorderCatalog.initialize(app.assets){vm.borderMemorySnapshot()}
             all(tools).filterIsInstance<Switch>().single{it.tag=="film-border-switch"}.performClick();await{state.value.canExport}
+            assertTrue(state.value.parameters.preImagingBorder)
+            assertTrue((field(a,"photo") as PhotoView).preImagingCompositionPreview)
+            assertNull(state.value.interactiveBorder)
             val framed=state.value.parameters
             action.performClick();await{state.value.compositionEditing}
             assertEquals(0,all(tools).count{(it.tag as? String)?.startsWith("crop-mode:")==true})
@@ -441,11 +517,30 @@ class CompositionToolbarActivityHostTest {
                 assertFalse(strip.isHorizontalScrollBarEnabled)
                 assertTrue("Overflow scrolls instead of squeezing labels",strip.getChildAt(0).width>strip.width)
                 assertTrue(controls[0].right<=controls[1].left)
+                val dateControl=all(tools).filterIsInstance<Button>().single{it.tag=="imprint-settings-button"}
+                assertTrue("Date control follows white-hole control",controls[1].right<=dateControl.left)
+                assertEquals(1,dateControl.lineCount);assertTrue(dateControl.height>=48)
+                val row=strip.getChildAt(0)
+                val maximum=(row.width-strip.width).coerceAtLeast(0)
+                assertTrue(maximum>0)
+                // White holes are now the middle item, not the end of the row. Every
+                // complete touch target must be reachable at the 320dp/2x-font setting.
+                val rowControls=listOf<View>(controls[0],controls[1],dateControl)
+                for(control in rowControls){
+                    assertTrue("${control.tag} fits one viewport",control.width<=strip.width)
+                    val position=(control.right-strip.width).coerceIn(0,maximum)
+                    strip.scrollTo(position,0)
+                    assertEquals("Actual scroll position for ${control.tag}",position,strip.scrollX)
+                    assertTrue("${control.tag} is fully reachable",control.left>=strip.scrollX && control.right<=strip.scrollX+strip.width)
+                }
+                strip.scrollTo(0,0)
+                assertTrue("First control is visible at start",controls[0].left>=strip.scrollX && controls[0].right<=strip.scrollX+strip.width)
+                strip.scrollTo(maximum,0)
+                assertTrue("Last control is visible at end",dateControl.left>=strip.scrollX && dateControl.right<=strip.scrollX+strip.width)
                 System.getenv("FILMROOM_HOLES_UI_QA_DIR")?.let{path->
                     val directory=File(path).canonicalFile
                     require(!directory.toPath().startsWith(File(System.getProperty("user.dir")).canonicalFile.toPath()))
                     directory.mkdirs()
-                    val row=strip.getChildAt(0)
                     val prefix="${stock}-border${border}-white${white}"
                     fun save(name:String,w:Int,h:Int,draw:(Canvas)->Unit){
                         val image=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
@@ -454,8 +549,6 @@ class CompositionToolbarActivityHostTest {
                     }
                     // Full actual Android row, not reconstructed text or mock switches.
                     save("full-row",row.width,row.height){row.draw(it)}
-                    val maximum=(row.width-strip.width).coerceAtLeast(0)
-                    assertTrue(maximum>0)
                     for(end in listOf(false,true)){
                         val expected=if(end)maximum else 0
                         strip.scrollTo(expected,0)
@@ -467,8 +560,16 @@ class CompositionToolbarActivityHostTest {
                             canvas.translate((row.left-strip.scrollX).toFloat(),(row.top-strip.scrollY).toFloat())
                             row.draw(canvas)
                         }
-                        if(end)assertTrue("White-hole control is inside end viewport",controls[1].right<=strip.scrollX+strip.width && controls[1].left>=strip.scrollX)
+                        if(end)assertTrue("Date control is inside end viewport",dateControl.right<=strip.scrollX+strip.width && dateControl.left>=strip.scrollX)
                     }
+                    strip.scrollTo((controls[1].right-strip.width).coerceIn(0,maximum),0)
+                    save("white-control",strip.width,strip.height){canvas->
+                        canvas.clipRect(0,0,strip.width,strip.height)
+                        canvas.translate((row.left-strip.scrollX).toFloat(),(row.top-strip.scrollY).toFloat())
+                        row.draw(canvas)
+                    }
+                    assertTrue("White-hole control is inside its viewport",controls[1].left>=strip.scrollX && controls[1].right<=strip.scrollX+strip.width)
+                    strip.scrollTo(maximum,0)
                     File(directory,"$prefix-layout.txt").writeText("Actual Activity row in large-font dialog; native Android Canvas. row=${row.width}x${row.height}; viewport=${strip.width}x${strip.height}; maxScroll=$maximum; endScroll=${strip.scrollX}; whiteControl=${controls[1].left}..${controls[1].right}. Full-row is unscrolled; start/end explicitly apply real viewport translation. Host render, not device screenshot.\n")
                 }
             }

@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "out": "/workspace/shared/filmroom-reviewed-borders-integration/app/src/main/assets/fixed135",
+      "exit_code": 2,
+      "result": "Build refused: --out must not be inside the repository or source bundle"
+    },
+    {
+      "out": "/workspace/shared/filmroom-reviewed-borders-validation/pending-provenance",
+      "exit_code": 2,
+      "result": "Build refused: --out must not contain the repository or source bundle"
+    },
+    {
+      "out": "relative-output",
+      "exit_code": 2,
+      "result": "Build refused: --out must be an explicit absolute path outside the repository"
+    },
+    {
+      "out": "/workspace/shared",
+      "exit_code": 2,
+      "result": "Build refused: --out must not contain the repository or source bundle"
+    }
+  ],
+  "writes_to_test_destinations": false
+}

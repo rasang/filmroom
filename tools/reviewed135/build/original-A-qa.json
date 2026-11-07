@@ -1,0 +1,51 @@
+{
+  "status": "PASS",
+  "scope": "Historical A-only records selected from original material-study QA; not a new run",
+  "checks": [
+    {
+      "stock": "kodak_tri_x_400",
+      "variant": "A",
+      "seed": 3155237142,
+      "alpha_exact_v2": true,
+      "png_webp_rgba_exact": true,
+      "transparent_rgb_zero": true,
+      "sha256": "4d2d1c9c341974005286f879e8f8df07848b34abf3f014dc373c95ae74bc9de7"
+    },
+    {
+      "stock": "kodak_tmax_100",
+      "variant": "A",
+      "seed": 1933206193,
+      "alpha_exact_v2": true,
+      "png_webp_rgba_exact": true,
+      "transparent_rgb_zero": true,
+      "sha256": "fa788d4a657e634a717695beea7710510ba292b7bed2c46fbf102b95b40bef66"
+    },
+    {
+      "stock": "ilford_hp5_plus_400",
+      "variant": "A",
+      "seed": 3385717028,
+      "alpha_exact_v2": true,
+      "png_webp_rgba_exact": true,
+      "transparent_rgb_zero": true,
+      "sha256": "ee340ae1338562f33bd8ad2fd2995b2194ea721822d7b9f4a0c486eea8bc5d0e"
+    },
+    {
+      "stock": "fujifilm_neopan_acros_100_ii",
+      "variant": "A",
+      "seed": 1922074115,
+      "alpha_exact_v2": true,
+      "png_webp_rgba_exact": true,
+      "transparent_rgb_zero": true,
+      "sha256": "04868a199e4812a5eb89cab81f605d6397f057950a6e7708063a398402c62b40"
+    },
+    {
+      "stock": "cinestill_800t",
+      "variant": "A",
+      "seed": 2249254012,
+      "alpha_exact_v2": true,
+      "png_webp_rgba_exact": true,
+      "transparent_rgb_zero": true,
+      "sha256": "8515b40f236f6482308ef52296a80c7924ffa7d00455b6e128fabcc62d9c9f1e"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "reference1.jpg",
+    "url": "https://images.squarespace-cdn.com/content/v1/5a6a6f7d7131a5be62e9e3db/1589660401784-NT1504MI0QR5IF7RZDJI/acros1-acros2_2.jpg",
+    "sha256": "9952d969f18f7721a0e4a57276dcbaa036916f8b74633d55a59b8a68e48b52a0",
+    "bytes": 162211
+  },
+  {
+    "file": "reference2.jpg",
+    "url": "https://stat.ameba.jp/user_images/20211108/02/peco40361/46/04/j/o1080081015028122488.jpg",
+    "sha256": "b303ec0ca77df1cf2179ed5cebfa4a6ede12ae58142087ef689b159ca7968280",
+    "bytes": 51712
+  }
+]

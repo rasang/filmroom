@@ -3,12 +3,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.zip.Deflater
 import java.util.zip.DeflaterOutputStream
+import org.gradle.api.tasks.testing.TestDescriptor
+import org.gradle.api.tasks.testing.TestListener
+import org.gradle.api.tasks.testing.TestResult
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 42; versionName = "0.1.21-beta6"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 56; versionName = "0.1.22-beta4"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     // Optional distribution ABI filter; default source build retains both tested ABIs.
     providers.gradleProperty("filmroomAbi").orNull?.let { abi ->
         require(abi in setOf("arm64-v8a", "x86_64")) { "Unsupported filmroomAbi" }
@@ -27,6 +30,8 @@ android {
     testOptions { unitTests.isReturnDefaultValues = true; unitTests.isIncludeAndroidResources = true }
 }
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
@@ -78,4 +83,57 @@ tasks.withType<Test>().configureEach {
     dependsOn(preparePackedEngineAssets)
     systemProperty("filmroom.lut.original",file("src/main/assets/engine-data/luts/spectral_upsampling/irradiance_xy_tc.npy").absolutePath)
     systemProperty("filmroom.lut.packed",packedAssets.get().file("engine-data/luts/spectral_upsampling/irradiance_xy_tc.frlut").asFile.absolutePath)
+}
+
+// A dedicated host gate avoids relying on a manually selected release test list.
+// Reuse AGP's debug unit-test inputs/resources, never a previously packaged APK.
+val verifySavedPresetCompatibility by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Verify recursive preset field coverage, persistence, legacy QR import, and UI compatibility before release packaging."
+    val hostTests = tasks.named<Test>("testDebugUnitTest").get()
+    dependsOn(provider { hostTests.taskDependencies.getDependencies(hostTests) })
+    testClassesDirs = hostTests.testClassesDirs
+    classpath = hostTests.classpath
+    systemProperties(hostTests.systemProperties)
+    workingDir = hostTests.workingDir
+    maxParallelForks = 1
+    forkEvery = 1
+    maxHeapSize = "384m"
+    jvmArgs("-XX:ActiveProcessorCount=2", "-XX:MaxMetaspaceSize=256m", "-XX:+UseSerialGC")
+    val requiredClasses = setOf(
+        "dev.filmroom.presets.SavedPresetCoverageHostTest",
+        "dev.filmroom.presets.SavedPresetStoreHostTest",
+        "dev.filmroom.SavedPresetsUiHostTest",
+        "dev.filmroom.SavedPresetListPerformanceHostTest",
+        "dev.filmroom.SavedPresetIntegratedProfilesHostTest",
+        "dev.filmroom.presets.PresetQrCodecHostTest",
+        "dev.filmroom.presets.PresetQrUiHostTest",
+        "dev.filmroom.presets.PresetQrCompactHostTest",
+        "dev.filmroom.presets.PresetQrLogoHostTest",
+        "dev.filmroom.presets.RecipeShareDialogHostTest",
+    )
+    filter {
+        requiredClasses.forEach { includeTestsMatching(it) }
+        isFailOnNoMatchingTests = true
+    }
+    val executedClasses = mutableSetOf<String>()
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) = Unit
+        override fun beforeTest(test: TestDescriptor) = Unit
+        override fun afterTest(test: TestDescriptor, result: TestResult) {
+            check(result.resultType != TestResult.ResultType.SKIPPED) { "Preset gate skipped ${test.className}.${test.name}" }
+            test.className?.let { executedClasses.add(it) }
+        }
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) = Unit
+    })
+    doLast {
+        check(executedClasses.containsAll(requiredClasses)) { "Preset gate did not execute: ${requiredClasses - executedClasses}" }
+    }
+    // A release must execute the gate, not trust a stale UP-TO-DATE test receipt.
+    outputs.upToDateWhen { false }
+}
+tasks.configureEach {
+    if (name in setOf("check", "packageRelease", "packageReleaseBundle", "assembleRelease", "bundleRelease")) {
+        dependsOn(verifySavedPresetCompatibility)
+    }
 }

@@ -51,6 +51,33 @@ fn runtime()->RuntimeParams{let mut p=RuntimeParams::default();p.io.input_cctf_d
  assert_eq!(crate::early_negative_preview::active_reservation_bytes(),0);
  eprintln!("GPU_QUEUE_NEGATIVE_PASS true density-derived PNG and identical final RGB");
 }
+#[test]
+#[ignore="Actual software/device Vulkan validation; run serially with explicit GPU requirement"]
+fn queue_gpu_sharper_capture_preserves_tile_geometry_and_output(){
+ let dir=temp();let(w,h)=(512,512);let src=dir.0.join("input.rgb");
+ fs::write(&src,input(w,h).iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+ let mut p=RuntimeParams::default();p.camera.auto_exposure=false;p.io.input_cctf_decoding=false;p.io.output_cctf_encoding=false;
+ p.film_render.grain.active=false;p.film_render.halation.active=false;p.film_render.dir_couplers.active=false;
+ let baseline=dir.0.join("baseline.rgb");
+ let a=streamed::export_file_checkpointed(&data(),"kodak_portra_400","kodak_portra_endura",p.clone(),&src,&baseline,&dir.0.join("scratch-a"),None,w,h,384,0.,true,||false,|_|{}).unwrap();
+ if !a.gpu.active {assert!(!required(),"GPU required");return;}
+ let token="12345678-1234-1234-1234-123456789abc";fs::write(dir.0.join("scan-preview-attempt"),token).unwrap();
+ let output=dir.0.join("output.rgb");
+ let b=streamed::export_file_checkpointed(&data(),"kodak_portra_400","kodak_portra_endura",p,&src,&output,&dir.0.join("scratch-b"),Some(&dir.0.join("checkpoint")),w,h,384,0.,true,||false,|_|{}).unwrap();
+ assert!(b.gpu.active);assert_eq!(fs::read(&baseline).unwrap(),fs::read(&output).unwrap());
+ let (a,b)=(a.gpu_tiles.unwrap(),b.gpu_tiles.unwrap());
+ assert_eq!((a.core_width,a.core_height),(b.core_width,b.core_height));
+ let status=dir.0.join(format!("negative-preview-{token}.status"));
+ let deadline=std::time::Instant::now()+std::time::Duration::from_secs(30);
+ while fs::read_to_string(&status).ok().as_deref()!=Some("ready") && std::time::Instant::now()<deadline {std::thread::sleep(std::time::Duration::from_millis(10));}
+ assert_eq!(fs::read_to_string(&status).unwrap(),"ready");
+ let png=fs::read(dir.0.join(format!("negative-preview-{token}.png"))).unwrap();
+ assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()),384);
+ assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()),384);
+ while crate::early_negative_preview::active_reservation_bytes()!=0 && std::time::Instant::now()<deadline {std::thread::sleep(std::time::Duration::from_millis(10));}
+ assert_eq!(crate::early_negative_preview::active_reservation_bytes(),0);
+ eprintln!("GPU_SHARPER_NEGATIVE_PASS exact384x384 samples589824 output_bytes_identical tile_geometry_identical");
+}
 #[test]fn real_mobile_preview_uses_gpu_and_switch_off_is_cpu(){
  let id=mobile::create(data().to_str().unwrap()).unwrap();let engine=mobile::get(id).unwrap();let values=input(96,64);let mut p=MobileParams::default();p.diffusion_filter="glimmerglass".into();p.print_diffusion_filter="black_pro_mist".into();p.highlight_boost_ev=0.4;p.scan_glare_percent=0.8;p.auto_exposure=true;p.scan_sharpen_amount=0.4;
  let gpu=mobile::render(&engine,0,&values,96,64,&p).unwrap();assert_eq!(gpu.pixels.len(),96*64*3);assert!(gpu.pixels.iter().all(|v|v.is_finite()));
@@ -66,10 +93,11 @@ fn runtime()->RuntimeParams{let mut p=RuntimeParams::default();p.io.input_cctf_d
 }
 #[test]fn real_streamed_gpu_export_preserves_resolution_checkpoint_and_cancel(){
  let dir=temp();let(w,h)=(96,71);let values=input(w,h);let source=dir.0.join("input.rgb");fs::write(&source,values.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()).unwrap();let output=dir.0.join("out.rgb");let checkpoint=dir.0.join("checkpoint");let p=runtime();
+ let legacy=checkpoint.join("gpu-v41-approx-tiles-v2/manifest.json");fs::create_dir_all(legacy.parent().unwrap()).unwrap();fs::write(&legacy,b"foreign legacy GPU checkpoint").unwrap();
  let metrics=streamed::export_file_checkpointed(&data(),"kodak_portra_400","kodak_portra_endura",p.clone(),&source,&output,&dir.0.join("scratch"),Some(&checkpoint),w,h,128,0.2,true,||false,|_|{}).unwrap();
  assert_eq!(fs::metadata(&output).unwrap().len(),w as u64*h as u64*12);assert!(fs::read(&output).unwrap().chunks_exact(4).all(|b|f32::from_le_bytes(b.try_into().unwrap()).is_finite()));
  if !metrics.gpu.active {eprintln!("GPU_SMOKE_SKIPPED export reason={}",metrics.gpu.reason);assert!(!required(),"GPU adapter/chain required but not active");return;}
- assert_eq!(metrics.gpu.backend,"wgpu");assert!(checkpoint.join("gpu-v41-approx-tiles-v2/manifest.json").is_file());assert!(!checkpoint.join("manifest.json").exists());
+ assert_eq!(metrics.gpu.backend,"wgpu");assert!(checkpoint.join("gpu-v41-approx-filmlog-ae-v4/manifest.json").is_file());assert_eq!(fs::read(&legacy).unwrap(),b"foreign legacy GPU checkpoint");assert!(!checkpoint.join("manifest.json").exists());
  let restored=dir.0.join("restored.rgb");let resumed=streamed::export_file_checkpointed(&data(),"kodak_portra_400","kodak_portra_endura",p.clone(),&source,&restored,&dir.0.join("scratch2"),Some(&checkpoint),w,h,128,0.2,true,||false,|_|{}).unwrap();assert_eq!(resumed.gpu.reason,"gpu_checkpoint_restored");assert_eq!(fs::read(&output).unwrap(),fs::read(&restored).unwrap());
  let cancelled=dir.0.join("cancel.rgb");let e=streamed::export_file_checkpointed(&data(),"kodak_portra_400","kodak_portra_endura",p,&source,&cancelled,&dir.0.join("scratch3"),None,w,h,128,0.2,true,||true,|_|{}).unwrap_err();assert_eq!(e.code,"CANCELLED");assert!(!cancelled.exists());assert!(source.exists());
  eprintln!("GPU_SMOKE_PASS export real entry dimensions={w}x{h}, checkpoint byte-identical restore and cancellation");

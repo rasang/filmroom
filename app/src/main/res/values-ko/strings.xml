@@ -78,7 +78,7 @@
     <string name="text_76420433f22d" formatted="false">내보내기</string>
     <string name="text_926a50b98ece" formatted="false">실행 취소</string>
     <string name="text_03717b6f1070" formatted="false">다시 실행</string>
-    <string name="text_ae384296a4ac" formatted="false">프리셋 복원</string>
+    <string name="text_ae384296a4ac" formatted="false">기본 설정 복원</string>
     <string name="text_df3d58c7d84b" formatted="false">설정</string>
     <string name="text_1f14f4b50d0b" formatted="false">사진을 Filmroom으로 가져오세요</string>
     <string name="text_95c277eafaea" formatted="false">실제 필름과 인화지의 특성을 반영한 처리\n모든 계산은 기기에서 수행됩니다</string>
@@ -274,7 +274,7 @@
     <string name="text_c2a291b64f6b" formatted="false">스캔</string>
     <string name="text_ec00bc673f05" formatted="false">인화지 선택</string>
     <string name="text_3691a3aa4ece" formatted="false">인화지 / 인화 스타일</string>
-    <string name="text_b9afff7ca1b0" formatted="false"> · 영화용 프린트 필름</string>
+    <string name="text_b9afff7ca1b0" formatted="false"> · 컬러 영화용 프린트 필름</string>
     <string name="text_3b789c2037e2" formatted="false"> · 컬러 인화지</string>
     <string name="text_7b528c395978" formatted="false">135 구도</string>
     <string name="text_e76a25844aa5" formatted="false">구도 다시 잡기</string>
@@ -299,7 +299,7 @@
     <string name="text_4e3db4596715" formatted="true">%1$s 설명</string>
     <string name="text_de32e20193ad" formatted="false">확인</string>
     <string name="text_f94fbbaa8f93" formatted="true">%1$s 초기화</string>
-    <string name="text_f2961369ae98" formatted="false">현재 필름의 프리셋 설정을 복원할까요?</string>
+    <string name="text_f2961369ae98" formatted="false">현재 필름의 기본 설정 설정을 복원할까요?</string>
     <string name="text_c265e02073e5" formatted="false">노출, 광학 효과, 입자, 인화지 등의 색 조정 설정을 복원합니다. 구도와 워터마크 설정은 유지됩니다.</string>
     <string name="text_e0534b8a4e46" formatted="false">복원</string>
     <string name="text_d1c4835b23ed" formatted="false">\n투명 영역은 흰색 배경에 합성됩니다</string>
@@ -347,7 +347,7 @@
     <string name="text_d14f6e1f0a6f" formatted="false">새 사진 저장</string>
     <string name="text_e8e6e48f180e" formatted="false">편집 환경 설정</string>
     <string name="text_2413c386102e" formatted="false">새 사진을 가져올 때 설정 초기화</string>
-    <string name="text_712623100497" formatted="false">켜면 현재 필름의 프리셋으로 복원하고, 끄면 색 조정 설정을 유지합니다. 새 사진의 구도는 항상 다시 설정됩니다.</string>
+    <string name="text_712623100497" formatted="false">켜면 현재 필름의 기본 설정으로 복원하고, 끄면 색 조정 설정을 유지합니다. 새 사진의 구도는 항상 다시 설정됩니다.</string>
     <string name="text_7daa923cc7e5" formatted="false">시작 시 마지막 사진 복원</string>
     <string name="text_5f08fa1da11e" formatted="false">다음 앱 시작에만 적용됩니다. 현재 편집이나 백그라운드 내보내기는 지워지지 않습니다.</string>
     <string name="text_84a61a56ecc6" formatted="false">로그에 포함할 최근 시간 선택</string>
@@ -405,7 +405,7 @@
     <string name="text_71fcada1d005" formatted="false">FILMROOM_DIAGNOSTICS_TEXT_V1\n인코딩: UTF-8; 단일 텍스트 파일(ZIP 아님)\n\n=== 요약 ===\n</string>
     <string name="text_7af205e83135" formatted="false">\n\n=== 전체 비식별 이벤트 상세 정보 ===\n</string>
     <string name="text_4ebb1725896e" formatted="false">暗房_诊断_[0-9]{1,4}分钟_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\\.(?:txt|zip)</string>
-    <string name="text_60ef08049a72" formatted="true">앱: Filmroom; 버전 코드: %1$s; 엔진 빌드: 4; 인터페이스: 1\nAndroid API: %2$s; ABI: %3$s; 프로세서 수: %4$s; Java 힙 한도: %5$s바이트; 메모리 등급: %6$s MB</string>
+    <string name="text_60ef08049a72" formatted="true">앱: Filmroom; 버전 코드: %1$s; 엔진 빌드: %7$s; 인터페이스: %8$s\nAndroid API: %2$s; ABI: %3$s; 프로세서 수: %4$s; Java 힙 한도: %5$s바이트; 메모리 등급: %6$s MB</string>
     <string name="text_5c1712cb2d38" formatted="false">이번 실행</string>
     <string name="text_b1336f82fea4" formatted="false">편집 복원</string>
     <string name="text_5a9df9227ec6" formatted="false">미리보기 렌더링</string>
@@ -786,4 +786,8 @@
     <string name="gpu_progress_processing">GPU 이미지 처리</string>
     <string name="gpu_progress_tile">타일 %1$d/%2$d</string>
     <string name="gpu_progress_last_completed">최근 완료: %1$s (%2$d ms)</string>
+    <string name="print_medium_bw_paper" formatted="false"> · 흑백 인화지</string>
+    <string name="print_medium_bw_film" formatted="false"> · 흑백 영화용 프린트 필름</string>
+    <string name="print_medium_bw_help" formatted="false">선택한 인화 재료는 흑백용입니다. 컬러 필름도 흑백으로 인화됩니다.</string>
+    <string name="preview_histogram_description">현재 사진 미리보기의 밝기 히스토그램</string>
 </resources>

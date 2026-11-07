@@ -1,0 +1,92 @@
+{
+  "kodak_tri_x_400-reviewed-A-v1.webp": {
+    "sha256_webp": "5f60b2909c48706fb8ec5a05aee25bb865c1180ca0684eb8a46204f33bf036df",
+    "sha256_rgba": "9cba400839de701537466992d11dc52d2451d26c2855218802cb0189980ec9b0",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "kodak_tri_x_400-reviewed-direct-model-v1.webp": {
+    "sha256_webp": "58abe9312055daa0f5f7eae544cd0bb4ac2c876c5bd85874528cc71a7e2c157c",
+    "sha256_rgba": "b33b34ce73ee0184273ddf395dc6bb6a985342dbe17e8ac00bacc343cf3fce19",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "kodak_tmax_100-reviewed-A-v1.webp": {
+    "sha256_webp": "ecd9e3fa04929eca8bd8dcba1f9662ea66ac796d904f8b12c7ce1da2104547bb",
+    "sha256_rgba": "cbbdc952febbe1de4ad6dd4d0756cd54dbd8dc2f13dbe4d7a8403216b6e0f72b",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "kodak_tmax_100-reviewed-direct-model-v1.webp": {
+    "sha256_webp": "6f0fa50096ca17f955f4365ddcb32479b54efba6deef00e4e08fe03a80b068c4",
+    "sha256_rgba": "9b607eb975cd068442759efefe64faadbf9a51e60374675ee67866cbf4bbfa3c",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "ilford_hp5_plus_400-reviewed-A-v1.webp": {
+    "sha256_webp": "d56f257a7d7b9b9de83dd044617d3933dc31cff377246364d97ee9390f80b5a7",
+    "sha256_rgba": "2b6a03f161d6a3ad7072b04efbb490e4701c5e622ea2e75d1525e283b7220922",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "ilford_hp5_plus_400-reviewed-direct-model-v1.webp": {
+    "sha256_webp": "5f6dfc6b83f0592d859c3b01bdfe7aff4282ecad511ec6145ffff96e982b4137",
+    "sha256_rgba": "72471a7638d8474f8c6ce5627af392a8e60b5a50b4358ce3590e82daadab2836",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "fujifilm_neopan_acros_100_ii-reviewed-A-v1.webp": {
+    "sha256_webp": "6ab165da32b8d2b27b12e5c7f604f21e6a7bd54ecccdfe5ba595f1fefbf85c51",
+    "sha256_rgba": "6884b64ecea982d05f3a7e10cd82ddf24058ad48a271fd974ab37260dcf02c05",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "fujifilm_neopan_acros_100_ii-reviewed-direct-model-v1.webp": {
+    "sha256_webp": "1992f43727ac9890596fb52d67e9fa0b3d32eaf81e22d99e52337483c168b0fa",
+    "sha256_rgba": "7101d145dc115c992dd124529258f6fe4f2380c309ec8c1e268a9d9d011d407c",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "cinestill_800t-reviewed-A-v1.webp": {
+    "sha256_webp": "e40bcf1b510e2c2c943e6fec9a89a7b973b936522cf049a7efe9242b4cb51c8d",
+    "sha256_rgba": "2e1ac4939feae4587c32a0e82cffcba4aaff11d2c989485cf5212f8fb90300f7",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  },
+  "cinestill_800t-reviewed-direct-model-v1.webp": {
+    "sha256_webp": "ec855b3962e8bd634053e804634fbca9cdb6215757f630d88df1f8625efd886f",
+    "sha256_rgba": "26009eb4f899d399e984612c96b44218b4408a0a527630de4f7f4600bf6097f5",
+    "rgba_status": "Pinned from the installed, approved target after confirming its original reviewed WebP SHA-256; read-only baseline, never a generation input.",
+    "dimensions": [
+      1520,
+      1400
+    ]
+  }
+}

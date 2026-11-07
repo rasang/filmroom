@@ -225,6 +225,9 @@ class ExportQueueActivityHostTest {
     }
     @Test fun compactStateTransitionPreservesVisibleAnchorAndDetailsCanExpandPhoto() {
         Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use{c->
+            // This layout-only fixture has no preview files. Real image dwell/size is covered
+            // by ExportPreviewLoadingHostTest; do not expect its active sequence to shrink early.
+            c.get().previewSequenceEnabled=false
             val jobs=(0..9).map{job(ExportJobState.RUNNING)}
             render(c.get(),jobs)
             val root=c.get().findViewById<ViewGroup>(android.R.id.content)

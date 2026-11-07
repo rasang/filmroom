@@ -272,6 +272,13 @@ impl Profile {
     pub fn is_bw(&self) -> bool {
         self.info.channel_model == "bw"
     }
+    /// A variable-contrast silver paper has three real emulsions, not three
+    /// replicated colour lanes or a development-time family. Keep each one.
+    pub fn is_multilayer_bw_paper(&self) -> bool {
+        self.is_bw() && self.is_paper() && self.is_printing()
+            && self.data.development_time.is_empty()
+            && self.data.log_sensitivity.first().is_some_and(|row| row.len() == 3)
+    }
     pub fn is_filming(&self) -> bool {
         self.info.stage == "filming"
     }
@@ -352,11 +359,47 @@ impl Profile {
 
 /// Load a profile from a JSON file on disk.
 pub fn load_profile(path: &Path) -> Result<Profile, ProfileError> {
+    load_profile_inner(path, 0)
+}
+
+fn load_profile_inner(path: &Path, depth: usize) -> Result<Profile, ProfileError> {
+    if depth >= 8 {
+        return Err(ProfileError::Validation("profile alias cycle or excessive depth".into()));
+    }
     let file =
         std::fs::File::open(path).map_err(|e| ProfileError::Io(path.display().to_string(), e))?;
     let reader = std::io::BufReader::new(file);
-    let mut profile: Profile = serde_json::from_reader(reader)
+    let value: serde_json::Value = serde_json::from_reader(reader)
         .map_err(|e| ProfileError::Parse(path.display().to_string(), e))?;
+    let mut profile: Profile = if let Some(base) = value.get("derived_from") {
+        let base = base.as_str().filter(|id| valid_stock_id(id))
+            .ok_or_else(|| ProfileError::Validation("invalid profile alias target".into()))?;
+        let base_path = path.parent().unwrap_or_else(|| Path::new(".")).join(format!("{base}.json"));
+        let mut profile = load_profile_inner(&base_path, depth + 1)?;
+        let info = value.get("info").and_then(serde_json::Value::as_object)
+            .ok_or_else(|| ProfileError::Validation("profile alias requires info overrides".into()))?;
+        // An alias may change presentation and the physical backing, never
+        // smuggle alternate measured arrays or discard the base attribution.
+        for key in info.keys() {
+            if !matches!(key.as_str(), "name" | "use" | "antihalation") {
+                return Err(ProfileError::Validation("unsupported profile alias override".into()));
+            }
+        }
+        for (key, target) in [("use", &mut profile.info.usage), ("antihalation", &mut profile.info.antihalation)] {
+            if let Some(value) = info.get(key) {
+                *target = value.as_str().ok_or_else(|| ProfileError::Validation("invalid profile alias override".into()))?.into();
+            }
+        }
+        if let Some(name) = info.get("name") {
+            profile.info.name = Some(name.as_str().ok_or_else(|| ProfileError::Validation("invalid profile alias name".into()))?.into());
+        }
+        // The identity must remain distinct in caches, diagnostics and state.
+        profile.info.stock = path.file_stem().and_then(|s| s.to_str()).map(String::from);
+        profile
+    } else {
+        serde_json::from_value(value).map_err(|e| ProfileError::Parse(path.display().to_string(), e))?
+    };
+    normalize_replicated_bw_film(&mut profile)?;
     validate_profile(&profile)?;
     // Resolve the default base+fog column so the field is usable straight
     // after load. `resolve_for_render` re-selects it for B&W development-time
@@ -368,8 +411,46 @@ pub fn load_profile(path: &Path) -> Result<Profile, ProfileError> {
 
 /// Load a profile by stock name from a data directory.
 pub fn load_profile_by_name(data_dir: &Path, stock: &str) -> Result<Profile, ProfileError> {
+    if !valid_stock_id(stock) {
+        return Err(ProfileError::Validation("invalid profile stock ID".into()));
+    }
     let path = data_dir.join("profiles").join(format!("{stock}.json"));
     load_profile(&path)
+}
+
+fn valid_stock_id(id: &str) -> bool {
+    !id.is_empty() && id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
+}
+
+/// SpektraLab's still B&W profiles encode one emulsion in three equal lanes
+/// with one third of the silver density in each. Convert ONLY that verified
+/// representation to our existing single-channel model. Source JSON is intact.
+fn normalize_replicated_bw_film(profile: &mut Profile) -> Result<(), ProfileError> {
+    if !profile.is_bw() || !profile.is_film() || !profile.is_filming()
+        || !profile.data.development_time.is_empty()
+        || !profile.data.log_sensitivity.first().is_some_and(|row| row.len() == 3) {
+        return Ok(());
+    }
+    let equal = |row: &[f64]| row.len() == 3 && row[0] == row[1] && row[1] == row[2];
+    let d = &mut profile.data;
+    if !d.log_sensitivity.iter().all(|r| equal(r))
+        || !d.density_curves.iter().all(|r| equal(r))
+        || !d.channel_density.iter().all(|r| equal(r))
+        || !d.density_curves_layers.iter().flatten().all(|r| equal(r)) {
+        return Err(ProfileError::Validation("B&W film lanes must describe one replicated emulsion".into()));
+    }
+    if let Some(model) = &mut d.density_curves_model {
+        for matrix in [&mut model.centers, &mut model.amplitudes, &mut model.sigmas] {
+            if matrix.len() != 3 || matrix[0] != matrix[1] || matrix[1] != matrix[2] {
+                return Err(ProfileError::Validation("B&W film model lanes must be identical".into()));
+            }
+            matrix.truncate(1);
+        }
+    }
+    for row in &mut d.channel_density { *row = vec![row.iter().sum()]; }
+    for row in d.log_sensitivity.iter_mut().chain(d.density_curves.iter_mut()) { row.truncate(1); }
+    for row in d.density_curves_layers.iter_mut().flatten() { row.truncate(1); }
+    Ok(())
 }
 
 /// Index into a development-time family: nearest entry to `requested` by
@@ -418,6 +499,12 @@ fn base_density_column(rows: &[Vec<f64>], idx: usize) -> Vec<f64> {
 /// integration computes exactly the upstream single-channel
 /// `density · dye_spectrum` (the G/B lanes carry no spectral weight).
 pub fn resolve_for_render(mut profile: Profile, development_time: Option<f64>) -> Profile {
+    if profile.is_multilayer_bw_paper() {
+        // Keep the fitted source TABLE and its three emulsions. RGB morph
+        // controls describe dye channels and are not silver-paper controls.
+        profile.data.density_curves_model = None;
+        return profile;
+    }
     if !profile.is_bw() {
         return profile;
     }
@@ -497,7 +584,12 @@ fn validate_profile(profile: &Profile) -> Result<(), ProfileError> {
             "density_curves length must match log_exposure length".into(),
         ));
     }
-    if profile.is_bw() {
+    if profile.is_multilayer_bw_paper() {
+        if data.log_sensitivity.iter().chain(data.channel_density.iter()).chain(data.density_curves.iter()).any(|r| r.len() != 3)
+            || data.base_density_rows.iter().any(|r| r.len() != 1) {
+            return Err(ProfileError::Validation("silver paper requires three emulsion lanes and one base spectrum".into()));
+        }
+    } else if profile.is_bw() {
         // B&W: one sensitivity/dye channel; density-curve columns index the
         // development-time family (validated against its length when present).
         if data.log_sensitivity.iter().any(|r| r.len() != 1) {

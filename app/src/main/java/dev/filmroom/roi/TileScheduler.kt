@@ -1,6 +1,7 @@
 package dev.filmroom.roi
 
 import android.graphics.Bitmap
+import dev.filmroom.diagnostics.*
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.Executor
@@ -83,6 +84,7 @@ class TileScheduler(
         val k = key ?: return
         val id = demand.firstOrNull { cache[it] == null && it !in failed } ?: return
         val rect = id.rect(k); val sample = rect.sampleRect(k); val g = generation; val token = cancellation
+        val timing=provider.startTiming()?.also{it.mark(DetailTimingPoint.RENDER_QUEUED)}
         running = true
         try {
             worker.execute {
@@ -90,8 +92,9 @@ class TileScheduler(
                 var error: Throwable? = null
                 try {
                     check(Looper.myLooper() != Looper.getMainLooper()) { "Provider must not run on main" }
-                    result = provider.render(k, rect) { token.get() }
+                    result = provider.renderTimed(k, rect, { token.get() },timing)
                 } catch (t: Exception) { error = t } catch (t: LinkageError) { error = t } catch (t: OutOfMemoryError) { error = t }
+                if(error!=null)timing?.failed(error!!)
                 val completed = result; val failure = error
                 main.post {
                     running = false
@@ -111,13 +114,16 @@ class TileScheduler(
                             cache.remove(victim.key) // Never recycle published ownership.
                         }
                         if (cacheBytes + bytes <= byteBudget) {
+                            tile.diagnosticTiming?.mark(DetailTimingPoint.ADOPTED)
                             cache.put(id, tile)?.let { cacheBytes -= it.bitmap.allocationByteCount }
                             cacheBytes += bytes
                         } else {
                             // Offscreen completion may not evict priority-resident visible data.
+                            tile.diagnosticTiming?.finish(DetailTimingTerminal.STALE)
                             tile.bitmap.recycle() // Never published.
                         }
                     } else {
+                        completed?.diagnosticTiming?.finish(DetailTimingTerminal.STALE)
                         // This result has never been published, so exclusive ownership makes recycle safe.
                         completed?.bitmap?.let { if (!it.isRecycled) it.recycle() }
                         if (valid) { failed += id; lastFailure=failure;lastError = failure?.message ?: "Rejected tile contract/quality" }
@@ -129,8 +135,10 @@ class TileScheduler(
                 }
             }
         } catch (e: RuntimeException) {
+            timing?.failed(e)
             running = false; failed += id; lastFailure=e;lastError = e.message ?: "Worker unavailable"; onChanged()
         } catch (e: OutOfMemoryError) {
+            timing?.failed(e)
             running = false; failed += id; lastFailure=e;lastError = "Insufficient detail worker memory"; onChanged()
         }
     }

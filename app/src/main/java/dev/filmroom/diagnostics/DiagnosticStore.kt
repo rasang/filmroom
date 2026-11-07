@@ -1,7 +1,7 @@
 package dev.filmroom.diagnostics
 
 import java.io.File
-import java.io.FileOutputStream
+import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
@@ -110,6 +110,9 @@ internal data class DiagnosticSnapshot(
 /**
  * Two bounded append-only segments, typed CRC-protected lines, synchronized
  * snapshots. A torn line is ignored. Compaction uses fsync + atomic replacement.
+ * Progress-only lines sync in batches of 16 or after 1 second (subject to thread/OS
+ * scheduling); process/power loss can lose that unsynced tail. Lifecycle, error and
+ * native/ownership boundaries sync before returning, unless storage fails.
  * Live records <=1MiB, temporary compaction <=1MiB, total log directory <=2MiB.
  */
 internal class DiagnosticStore(
@@ -117,8 +120,20 @@ internal class DiagnosticStore(
     private val clock: DiagnosticClock,
     private val run: String = UUID.randomUUID().toString().replace("-", ""),
     private val maxRecordBytes: Int = 1024 * 1024,
-) {
-    companion object { const val RETENTION_MS = 24L * 60 * 60 * 1000 }
+    private val output: (File, Boolean) -> DiagnosticOutput = ::FileDiagnosticOutput,
+    private val scheduler: DiagnosticFlushScheduler = SharedDiagnosticFlushScheduler,
+) : Closeable {
+    companion object {
+        const val RETENTION_MS = 24L * 60 * 60 * 1000
+        const val MAX_UNSYNCED_EVENTS = 16
+        const val MAX_UNSYNCED_MS = 1000L
+
+        // Default durable: new stages must explicitly opt into batching.
+        internal fun requiresDurability(stage: Stage, error: ErrorCode?): Boolean = error != null || when (stage) {
+            Stage.DECODE_HEADER, Stage.DECODE_STRIPE, Stage.NATIVE_PROGRESS, Stage.ENCODE_PROGRESS -> false
+            else -> true
+        }
+    }
     private val lock = Any()
     private val records = ArrayList<DiagnosticEvent>()
     private var nextSequence = 1L
@@ -126,6 +141,10 @@ internal class DiagnosticStore(
     private val operations = LinkedHashMap<Long, Operation>()
     private val segmentBytes = maxRecordBytes / 2
     private var healthy = true
+    private var closed = false
+    private var dirtyEvents = 0
+    private var pendingFlush: Closeable? = null
+    private var flushGeneration = 0L
     private var expiredDiscarded = 0L
     private var capacityDiscarded = 0L
     private var malformedDiscarded = 0L
@@ -164,6 +183,7 @@ internal class DiagnosticStore(
     }
 
     fun begin(operation: Operation, info: SafeInfo): OperationId = synchronized(lock) {
+        if (closed) return@synchronized OperationId(0)
         val id = OperationId(nextOperation++)
         if (operations.size >= 256) operations.remove(operations.keys.first())
         operations[id.value] = operation
@@ -172,6 +192,7 @@ internal class DiagnosticStore(
     }
 
     fun event(id: OperationId, stage: Stage, info: SafeInfo, error: ErrorCode?) = synchronized(lock) {
+        if (closed) return@synchronized
         val operation = operations[id.value] ?: return@synchronized
         // START/END are owned by begin/end, preventing forged lifecycle records.
         if (stage == Stage.START || stage == Stage.END || stage == Stage.PREVIOUS_UNFINISHED) return@synchronized
@@ -179,6 +200,7 @@ internal class DiagnosticStore(
     }
 
     fun end(id: OperationId, outcome: Outcome, info: SafeInfo = SafeInfo()) = synchronized(lock) {
+        if (closed) return@synchronized
         val operation = operations.remove(id.value) ?: return@synchronized
         append(id, operation, Stage.END, info, outcome = outcome)
     }
@@ -186,6 +208,7 @@ internal class DiagnosticStore(
     fun snapshot(minutes: Int): DiagnosticSnapshot = synchronized(lock) {
         require(minutes in 1..1440) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0a9cd9640dfe) }
         pruneAndRewriteIfNeeded()
+        flushLocked()
         val wall = clock.wallMs(); val elapsed = clock.elapsedMs()
         val cutoff = wall - minutes * 60_000L
         val selected = records.mapNotNull { event ->
@@ -211,15 +234,84 @@ internal class DiagnosticStore(
             val current = File(directory, "events.0.log")
             val previous = File(directory, "events.1.log")
             if (current.length() + bytes.size > segmentBytes) {
+                // Sync the old inode before rename; a later sync of events.0 cannot cover it.
+                syncPending()
                 if (previous.exists()) check(previous.delete())
                 if (current.exists()) check(current.renameTo(previous))
                 val previousSize = records.size
                 records.clear(); records += readSegments()
                 capacityDiscarded += (previousSize - records.size).coerceAtLeast(0)
             }
-            FileOutputStream(current, true).use { stream -> stream.write(bytes); stream.flush(); stream.fd.sync() }
+            output(current, true).use { stream ->
+                // Keep line visibility/recovery unchanged. Only stable-storage sync is batched.
+                stream.write(bytes)
+                stream.flush()
+                dirtyEvents++
+                if (requiresDurability(stage, error) || dirtyEvents >= MAX_UNSYNCED_EVENTS) {
+                    stream.sync()
+                    markSynced()
+                }
+            }
             records += event
+            if (dirtyEvents > 0) scheduleFlush()
         }.onFailure { healthy = false }
+    }
+
+    /** Best-effort durability boundary; failures remain visible in storageHealthy. */
+    fun flush() = synchronized(lock) { flushLocked() }
+
+    override fun close() = synchronized(lock) {
+        if (!closed) {
+            flushLocked()
+            closed = true
+            cancelScheduledFlush()
+            operations.clear()
+        }
+    }
+
+    private fun flushLocked() {
+        runCatching { syncPending() }.onFailure { healthy = false }
+    }
+
+    private fun syncPending() {
+        if (dirtyEvents == 0) return
+        output(File(directory, "events.0.log"), true).use { stream ->
+            stream.flush()
+            stream.sync()
+        }
+        markSynced()
+    }
+
+    private fun cancelScheduledFlush() {
+        flushGeneration++
+        pendingFlush?.close()
+        pendingFlush = null
+    }
+
+    private fun markSynced() {
+        dirtyEvents = 0
+        cancelScheduledFlush()
+    }
+
+    private fun scheduleFlush() {
+        if (pendingFlush != null || closed) return
+        val generation = flushGeneration
+        try {
+            pendingFlush = scheduler.schedule(MAX_UNSYNCED_MS) {
+                synchronized(lock) {
+                    // A cancelled task can already be waiting for this monitor.
+                    if (generation == flushGeneration && !closed) {
+                        pendingFlush = null
+                        flushLocked()
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Scheduling unavailable: fall back to synchronous durability rather
+            // than leaving an idle tail waiting indefinitely for another event.
+            healthy = false
+            syncPending()
+        }
     }
 
     private fun pruneAndRewriteIfNeeded() { if (prune()) runCatching { rewrite() }.onFailure { healthy = false } }
@@ -292,6 +384,7 @@ internal class DiagnosticStore(
         writeSegment(1, previous); writeSegment(0, current)
         capacityDiscarded += (records.size - previous.size - current.size).coerceAtLeast(0)
         records.clear(); records += previous; records += current
+        markSynced()
     }
 
     private fun List<DiagnosticEvent>.takeLastWhileWithin(limit: Int): List<DiagnosticEvent> {
@@ -309,9 +402,9 @@ internal class DiagnosticStore(
         val target = File(directory, "events.$index.log")
         val temporary = File(directory, "events.$index.new")
         try {
-            FileOutputStream(temporary).use { stream ->
+            output(temporary, false).use { stream ->
                 events.forEach { stream.write(it.line().toByteArray(Charsets.UTF_8)) }
-                stream.flush(); stream.fd.sync()
+                stream.flush(); stream.sync()
             }
             try { Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE) }
             catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING) }

@@ -21,13 +21,24 @@ internal object VersionedEngineAssets {
     private data class Prepared(val key:String,val root:File,val files:List<Stamp>) {
         fun unchanged()=root.isDirectory && files.all { val file=File(root,it.path);file.isFile && file.length()==it.size && file.lastModified()==it.modified }
     }
+    /** Optional work never installs files, waits for the installer, or hashes
+     * the APK. The current process already verified this immutable snapshot. */
+    fun preparedForPrewarm():File? {
+        if(!mutex.tryLock())return null
+        return try {cached?.takeIf{it.root.isDirectory}?.root} finally {mutex.unlock()}
+    }
     suspend fun prepare(context:Context):File=mutex.withLock {
         val job=currentCoroutineContext()
         val app=context.applicationContext
         val info=app.packageManager.getPackageInfo(app.packageName,0)
         val apk=File(app.applicationInfo.sourceDir ?: "")
         val version="assets-v2:${info.longVersionCode}:${info.lastUpdateTime}:${apk.length()}:${apk.lastModified()}"
-        val root=File(app.filesDir,"engine-data")
+        // Android may supply a trusted /data/user/0 alias. Resolve that Context
+        // boundary once, not an asset descendant: later identity hashes and
+        // native handles require the same canonical private tree.
+        val filesRoot=app.filesDir.canonicalFile
+        val root=File(filesRoot,"engine-data")
+        require(root.canonicalFile==root.absoluteFile) { "Invalid engine asset scope" }
         val key="${root.absolutePath}:$version"
         cached?.takeIf{it.key==key && it.unchanged()}?.let{job.ensureActive();return@withLock it.root}
         job.ensureActive()
@@ -41,7 +52,7 @@ internal object VersionedEngineAssets {
                 val path=if(asset==PackedSpectralLut.ASSET)relative.substringBeforeLast('/')+"/"+PackedSpectralLut.ORIGINAL_NAME else relative
                 val destination=File(root,path)
                 check(destination.parentFile!!.isDirectory || destination.parentFile!!.mkdirs())
-                if(asset==PackedSpectralLut.ASSET)app.assets.open(asset).use { PackedSpectralLut.install(it,destination,app.filesDir,{job.ensureActive()}) }
+                if(asset==PackedSpectralLut.ASSET)app.assets.open(asset).use { PackedSpectralLut.install(it,destination,filesRoot,{job.ensureActive()}) }
                 else {
                     // Streaming comparison bounds scratch and also detects same-size corruption.
                     val digest=MessageDigest.getInstance("SHA-256")
