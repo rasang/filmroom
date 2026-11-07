@@ -170,15 +170,19 @@ class CompositionToolbarActivityHostTest {
             reset.performClick();assertEquals(second,state.value.parameters.composition);assertEquals(0f,state.value.parameters.brightness,0f)
             await{state.value.canExport}
             category("print");all(tools).single{it.tag=="paper"}.performClick();idle()
-            val paperButton=all(tools).filterIsInstance<Button>().last()
+            val previousPaper=state.value.parameters.paperStock
+            val targetPaper=listOf("kodak_2383","kodak_2393").first{it!=previousPaper}
+            // Keep the actual card/listener created BEFORE the next crop edit.
+            // The accepted paper carousel selects directly; there is no picker dialog.
+            val paperButton=all(tools).filterIsInstance<Button>().single{it.tag==targetPaper}
+            assertTrue(paperButton.isEnabled)
             action.performClick();await{state.value.compositionEditing};vm.composition(second.copy(centerY=.53),true);idle();confirm();val third=state.value.parameters.composition
             paperButton.performClick()
-            val dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog)
-            val list=dialog.listView;val selected=if(list.checkedItemPosition==0)1 else 0
-            list.performItemClick(list.adapter.getView(selected,null,list),selected,selected.toLong())
+            assertEquals(targetPaper,state.value.parameters.paperStock)
             assertEquals(third,state.value.parameters.composition);await{state.value.canExport}
             val paper=state.value.parameters.paperStock
             (field(a,"undo") as Button).performClick();assertEquals(third,state.value.parameters.composition);assertNotEquals(paper,state.value.parameters.paperStock)
+            assertEquals(previousPaper,state.value.parameters.paperStock)
             await{state.value.canExport}
             category("film")
             val stock=all(tools).filterIsInstance<Button>().first{it.tag is String && (it.tag as String).startsWith("kodak_") && it.tag!=state.value.parameters.filmStock}

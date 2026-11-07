@@ -254,6 +254,17 @@ where
 }
 
 impl Profile {
+    /// Marker only. This contains no physical stock calibration and must only
+    /// enter the explicit omitted-medium path, never normal spectral stages.
+    pub fn is_omitted(&self) -> bool { self.info.stock.as_deref() == Some("none") }
+    pub fn omitted() -> Self {
+        serde_json::from_value(serde_json::json!({
+            "metadata":{"version":"digital-media-bridge-v1"},
+            "info":{"stock":"none","name":"None","type":"negative","reference_illuminant":"D65","viewing_illuminant":"D65"},
+            "data":{}
+        })).expect("static omitted-medium marker")
+    }
+
     pub fn is_negative(&self) -> bool {
         self.info.film_type == "negative"
     }
@@ -411,6 +422,7 @@ fn load_profile_inner(path: &Path, depth: usize) -> Result<Profile, ProfileError
 
 /// Load a profile by stock name from a data directory.
 pub fn load_profile_by_name(data_dir: &Path, stock: &str) -> Result<Profile, ProfileError> {
+    if stock == "none" { return Ok(Profile::omitted()); }
     if !valid_stock_id(stock) {
         return Err(ProfileError::Validation("invalid profile stock ID".into()));
     }

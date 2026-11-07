@@ -29,9 +29,12 @@ data class ExportJob(
     val crop:CropSnapshot?=null,
     val messageUi:UiMessage?=null,
     val outputName:String?=null,
+    val archivedHistory:Boolean=false,
+    val archivedSourceState:String?=null,
 ) {
     /** Render app-owned messages in the current language; legacy prose is diagnostics only. */
     val localizedMessage:String? get() {
+        if(archivedHistory)return L10n.text(R.string.backup_history_no_photos)
         val primary=messageUi?.render() ?: message?.takeIf{it.isNotBlank()}?.let {
             L10n.text(when(state) {
                 ExportJobState.PENDING,ExportJobState.RETRY -> R.string.text_8fb3a3261b43
@@ -67,7 +70,7 @@ data class ExportJob(
         }
         require(!parameters.filmBorder || border!=null) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_02d5c30befc6) }
     }
-    val canRetry get()=inputReady && failure!=ExportJobFailure.RECOVERY_INVALID
+    val canRetry get()=!archivedHistory && inputReady && failure!=ExportJobFailure.RECOVERY_INVALID
     val terminal get()=state in setOf(ExportJobState.COMPLETED,ExportJobState.CANCELLED)
 }
 
@@ -75,6 +78,9 @@ data class ExportJob(
 class ExportJobStore(val root:File) {
     private val mutable=MutableStateFlow<List<ExportJob>>(emptyList())
     val jobs=mutable.asStateFlow()
+    private val archive=ArchivedExportHistory(File(root,".backup-history.json"))
+    private var archived=emptyList<ExportJob>()
+    private var archiveReadFailure:Exception?=null
     private val historyReservations=mutableMapOf<String,String>()
     private val historyJournal=ExportHistoryJournal(File(root,".history-operations"))
     private val historyStates=setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED)
@@ -99,7 +105,13 @@ class ExportJobStore(val root:File) {
     }
     @Synchronized fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean {
         if(historyReservations[snapshot.id]!=op.id || !historyMatches(snapshot))return false
-        if(op.deletePhotos && (op.status!="photo-deleted:${snapshot.id}" || historyJournal.read(op.id)?.status!=op.status))return false
+        if(op.deletePhotos && get(snapshot.id)?.archivedHistory!=true && (op.status!="photo-deleted:${snapshot.id}" || historyJournal.read(op.id)?.status!=op.status))return false
+        if(get(snapshot.id)?.archivedHistory==true) {
+            val remaining=archived.filterNot{it.id==snapshot.id}
+            archive.write(remaining);archived=remaining
+            mutable.value=mutable.value.filterNot{it.id==snapshot.id};historyReservations.remove(snapshot.id)
+            return true
+        }
         val from=directory(snapshot.id);val trash=File(root,".history-trash-${snapshot.id}-${op.id}")
         // Same-filesystem atomic rename hides the entire record. An interrupted purge cannot resurrect FAILED.
         java.nio.file.Files.move(from.toPath(),trash.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
@@ -116,15 +128,42 @@ class ExportJobStore(val root:File) {
         val loaded=root.listFiles()?.filter{it.isDirectory && validId(it.name)}?.mapNotNull { dir ->
             runCatching { decode(AtomicFile(File(dir,"manifest.json")).openRead().bufferedReader().use{it.readText()}).also{require(it.id==dir.name)} }.getOrElse { ExportJob(dir.name,dir.lastModified(),EditorState(),1,1,ExportFormat.PNG,95,ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_31d5184a31ac),messageUi=UiMessage.of(R.string.text_31d5184a31ac),inputReady=false) }
         } ?: error(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b4351becfe47))
-        mutable.value=loaded.sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
+        archived=try{archive.read().filter{row->loaded.none{it.id==row.id}}}catch(error:Exception){archiveReadFailure=error;emptyList()}
+        mutable.value=(loaded+archived).sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
         loaded.filter{!it.inputReady && !it.terminal || it.state in setOf(ExportJobState.RUNNING,ExportJobState.PENDING,ExportJobState.RETRY)}.forEach {
             val recovered=if(it.inputReady)it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9652b13c1fd3),messageUi=UiMessage.of(R.string.text_9652b13c1fd3))else it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e56de4bd4f96),messageUi=UiMessage.of(R.string.text_e56de4bd4f96))
             runCatching{update(recovered)}.onFailure{mutable.value=mutable.value.map{old->if(old.id==recovered.id)recovered else old}}
         }
     }
+    /** All list rows, including active rows, are backed up only as non-executable metadata. */
+    @Synchronized internal fun exportBackupHistory():org.json.JSONArray {
+        check(archiveReadFailure==null){"Stored backup history is unreadable; existing data was preserved"}
+        return ExportHistoryBackup.exportRows(mutable.value)
+    }
+    @Synchronized internal fun mergeBackupHistory(rows:org.json.JSONArray):Int {
+        check(archiveReadFailure==null){"Stored backup history is unreadable; existing data was preserved"}
+        val additions=ExportHistoryBackup.validateRows(rows).filter{row->get(row.id)==null}
+        if(additions.isEmpty())return 0
+        val merged=archived+additions
+        archive.write(merged);archived=merged
+        mutable.value=(mutable.value+additions).sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
+        return additions.size
+    }
+    @Synchronized internal fun archiveSnapshot():org.json.JSONArray {
+        check(archiveReadFailure==null){"Stored backup history is unreadable"}
+        return ExportHistoryBackup.exportRows(archived)
+    }
+    @Synchronized internal fun restoreArchiveSnapshot(rows:org.json.JSONArray) {
+        check(archiveReadFailure==null){"Stored backup history is unreadable"}
+        val restored=ExportHistoryBackup.validateRows(rows)
+        archive.write(restored);archived=restored
+        mutable.value=(mutable.value.filterNot{it.archivedHistory}+restored).distinctBy{it.id}
+            .sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
+    }
     fun directory(id:String):File {require(validId(id));return File(root,id)}
     @Synchronized fun get(id:String)=mutable.value.firstOrNull{it.id==id}
     @Synchronized fun update(incoming:ExportJob) {
+        require(!incoming.archivedHistory && get(incoming.id)?.archivedHistory!=true){"Archived history is not an executable export"}
         // UI acknowledgments and worker snapshots share this lock. A stale worker copy
         // must not clear a durable read, while a genuinely new completion is unread.
         val previous=get(incoming.id)

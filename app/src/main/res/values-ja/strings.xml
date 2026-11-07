@@ -790,4 +790,5 @@
     <string name="print_medium_bw_film" formatted="false"> · モノクロ映画用プリントフィルム</string>
     <string name="print_medium_bw_help" formatted="false">選択した印画紙・プリントフィルムはモノクロ用です。カラーネガからもモノクロのプリントになります。</string>
     <string name="preview_histogram_description">現在の写真プレビューの輝度ヒストグラム</string>
+    <string name="film_none">なし</string>
 </resources>

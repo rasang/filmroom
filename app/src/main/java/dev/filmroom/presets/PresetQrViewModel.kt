@@ -54,9 +54,7 @@ internal class PresetQrViewModel(app: Application) : AndroidViewModel(app) {
     fun home() { if (mutable.value.phase != "working") mutable.value = Screen() }
     private fun validateStocks(parameters: dev.filmroom.model.EditorState) {
         val rows = JSONObject(getApplication<Application>().assets.open("engine-data/profile_catalog.json").bufferedReader().use { it.readText() }).getJSONArray("profiles")
-        val profiles = (0 until rows.length()).map { rows.getJSONObject(it) }
-        if (profiles.none { it.getString("id") == parameters.filmStock && it.getString("kind") in setOf("negative", "reversal") } ||
-            profiles.none { it.getString("id") == parameters.paperStock && it.getString("kind") in setOf("paper", "cine_print") })
+        if (!dev.filmroom.model.StockSelectionValidation.isSupported(parameters, rows))
             throw PresetQrCodec.Failure(PresetQrCodec.Problem.INCOMPATIBLE)
     }
 }

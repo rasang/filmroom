@@ -46,6 +46,30 @@ internal class SavedPresetStore(private val file: File) {
         true
     }
 
+    /** Merge only: existing recipes are never replaced. One atomic write, retry-safe IDs. */
+    fun mergeBackup(items: List<Preset>): Int = synchronized(lock) {
+        val merged = read().toMutableList()
+        var added = 0
+        items.forEach { incoming ->
+            val parameters = PresetQrParameters.read(JSONObject(incoming.snapshot))
+            val normalized = snapshot(parameters)
+            val id = UUID.nameUUIDFromBytes(("backup:" + incoming.id + ":" + normalized).toByteArray(Charsets.UTF_8)).toString()
+            if (merged.any { it.id == id || (it.id == incoming.id && it.parameters() == parameters) }) return@forEach
+            val base = cleanName(incoming.name)
+            var name = base
+            var suffix = 2
+            while (merged.any { nameKey(it.name) == nameKey(name) }) {
+                val cut = base.offsetByCodePoints(0, minOf(48, base.codePointCount(0, base.length)))
+                name = base.substring(0, cut) + " (" + suffix++ + ")"
+            }
+            merged.add(Preset(id, name, incoming.createdAt, normalized))
+            added++
+        }
+        if (merged.size > MAX_PRESETS) throw Failure(Problem.FULL)
+        if (added > 0) write(merged)
+        added
+    }
+
     private fun read(): List<Preset> {
         val atomic = AtomicFile(file)
         if (!file.exists() && !File(file.path + ".bak").exists()) return emptyList()

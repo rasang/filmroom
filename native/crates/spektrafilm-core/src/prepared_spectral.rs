@@ -135,6 +135,9 @@ pub(crate) struct PreparedSpectral {
     prewarmed: AtomicBool,
 }
 impl PreparedSpectral {
+    pub(crate) fn omitted_rgb() -> Self {
+        Self { tc_lut:None, mallett_core:Some([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]), front_illuminant:"D65".into(), key:None, prewarmed:AtomicBool::new(false) }
+    }
     pub(crate) fn without_lut(front_illuminant: String) -> Self {
         Self { tc_lut: None, mallett_core: None, front_illuminant, key: None, prewarmed: AtomicBool::new(false) }
     }

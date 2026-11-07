@@ -49,6 +49,15 @@ class RecipeShareDialogHostTest {
                 presenter.show(SavedPresetStore.Preset("fixture-$index",name,0,SavedPresetStore.snapshot(parameters)))
                 val dialog=ShadowAlertDialog.getLatestAlertDialog()
                 await{dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled}
+                val share = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                assertEquals(dev.filmroom.ui.FilmroomPalette.onAccent, share.currentTextColor)
+                assertEquals(dev.filmroom.ui.FilmroomPalette.accent,
+                    (share.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                assertNotNull(share.compoundDrawablesRelative[0])
+                assertEquals("分享二维码", share.text.toString())
+                val status = all(dialog.window!!.decorView).filterIsInstance<android.widget.TextView>()
+                    .single { it.tag == "recipe-share-status" }
+                assertEquals("请让对方使用 Filmroom 配方页的扫码功能扫描。", status.text.toString())
                 shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(64))
                 val qr=all(dialog.window!!.decorView).filterIsInstance<ImageView>().single{it.tag=="recipe-share-qr"}
                 assertTrue(qr.width>0 && qr.height>0);assertEquals(qr.width,qr.height)

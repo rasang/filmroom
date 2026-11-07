@@ -31,7 +31,7 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
     /** Validated exposure and original capture facts; fallback stays presentation-only. */
     internal fun imprintAttributes():Map<String,String> = attributes.filterKeys { it in setOf(
         "DateTimeOriginal","ExposureTime","ShutterSpeedValue","FNumber","ApertureValue",
-        "MeteringMode","ExposureBiasValue","FocalLength","PhotographicSensitivity",
+        "MeteringMode","ExposureBiasValue","FocalLength","FocalLengthIn35mmFilm","PhotographicSensitivity",
         "SensitivityType","StandardOutputSensitivity","RecommendedExposureIndex","ISOSpeed") }
 
     fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).put("imprintFallback",imprintFallback).put("imprintFallbackKind",imprintFallbackKind).toString()

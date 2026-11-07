@@ -27,6 +27,7 @@ internal class SavedPresetDialogs(
     private val state: () -> EditorUiState,
     private val apply: (String, EditorState, EditorState) -> Boolean,
     private val showReadable: (AlertDialog) -> Unit,
+    private val scanRecipe: () -> Unit = {},
 ) {
     private val store = SavedPresetStore(activity)
     private var dialog: AlertDialog? = null
@@ -227,9 +228,8 @@ internal class SavedPresetDialogs(
         }
         qrMenu.setOnClickListener {
             if (working || !active(target) || shareDialog != null || confirmation != null) return@setOnClickListener
-            // The existing import page offers camera and album before requesting either.
-            activity.startActivity(android.content.Intent(activity, PresetQrActivity::class.java))
             target.dismiss()
+            scanRecipe()
         }
         reload = {
             listJob?.cancel()
@@ -324,9 +324,7 @@ internal class SavedPresetDialogs(
     private fun unchanged() = state().let { it.editable && !it.compositionEditing && it.photo?.cacheKey == source && it.parameters == baseline }
     private fun validateStocks(parameters: EditorState) {
         val rows = org.json.JSONObject(activity.assets.open("engine-data/profile_catalog.json").bufferedReader().use { it.readText() }).getJSONArray("profiles")
-        val profiles = (0 until rows.length()).map { rows.getJSONObject(it) }
-        if (profiles.none { it.getString("id") == parameters.filmStock && it.getString("kind") in listOf("negative", "reversal") } ||
-            profiles.none { it.getString("id") == parameters.paperStock && it.getString("kind") in listOf("paper", "cine_print") })
+        if (!dev.filmroom.model.StockSelectionValidation.isSupported(parameters, rows))
             throw SavedPresetStore.Failure(SavedPresetStore.Problem.INCOMPATIBLE)
     }
     private fun track(target: AlertDialog) {

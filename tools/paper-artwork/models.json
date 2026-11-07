@@ -1,0 +1,52 @@
+[
+  {
+    "id": "fujifilm_crystal_archive_typeii",
+    "shape": "carton",
+    "color": "#b49464"
+  },
+  {
+    "id": "kodak_ektacolor_edge",
+    "shape": "carton",
+    "color": "#b6956d"
+  },
+  {
+    "id": "kodak_endura_premier",
+    "shape": "carton",
+    "color": "#b6956d"
+  },
+  {
+    "id": "kodak_portra_endura",
+    "shape": "flat",
+    "color": "#edb909"
+  },
+  {
+    "id": "kodak_supra_endura",
+    "shape": "flat",
+    "color": "#edb909"
+  },
+  {
+    "id": "kodak_ultra_endura",
+    "shape": "long",
+    "color": "#b6956d"
+  },
+  {
+    "id": "ilford_multigrade_iv_rc",
+    "shape": "flat",
+    "color": "#ededeb"
+  },
+  {
+    "id": "kodak_2383",
+    "shape": "can",
+    "color": "#e0ac1c"
+  },
+  {
+    "id": "kodak_2393",
+    "shape": "can",
+    "color": "#e0ac1c"
+  },
+  {
+    "id": "kodak_2302",
+    "shape": "can",
+    "color": "#e0ac1c"
+  }
+]

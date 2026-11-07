@@ -137,4 +137,20 @@ class PreImagingInputHostTest {
         assertEquals(1.0,raster.holeCoverage(s,32.5,3.5),0.0)
         assertEquals(0.0,raster.holeCoverage(s,45.5,3.5),0.0)
     }
+    @Test fun refinedCompositeUsesSeparate1536ContractWithoutQuantizingLinearInput() {
+        val s=snapshot(900,600);val raster=Fixture();val values=data(900,600)
+        val linear=LinearPreview(900,600,buffer(values,true))
+        try{PreImagingInput.preview(null,linear,s,raster);fail("ordinary limit widened")}catch(_:IllegalArgumentException){}
+        val refined=PreImagingInput.refinedPreview(null,linear,s,raster)
+        assertEquals(s.outputWidth,refined.width);assertEquals(s.outputHeight,refined.height)
+        assertTrue(maxOf(refined.width,refined.height)>768)
+        assertTrue(maxOf(refined.width,refined.height)<=1536)
+        val center=((s.top+s.photoHeight/2)*s.outputWidth+s.left+s.photoWidth/2)*3
+        assertEquals(2.345678f,refined.buffer().asFloatBuffer().get(center),0f)
+        var checked=false
+        try {PreImagingInput.refinedPreview(null,linear,s,raster){checked=true;throw kotlinx.coroutines.CancellationException()};fail("ignored cancel")}
+        catch(_:kotlinx.coroutines.CancellationException){}
+        assertTrue(checked)
+    }
+
 }

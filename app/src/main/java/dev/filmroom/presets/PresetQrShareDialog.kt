@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.GradientDrawable
+import dev.filmroom.ui.FilmroomPalette
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -103,7 +105,24 @@ internal class PresetQrShareDialog(
             }
         }
         showReadable(target)
-        target.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false; minimumHeight = dp(48) }
+        target.getButton(AlertDialog.BUTTON_POSITIVE).apply {
+            isEnabled = false
+            minimumHeight = dp(48)
+            isAllCaps = false
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setTextColor(FilmroomPalette.onAccent)
+            backgroundTintList = null
+            background = GradientDrawable().apply {
+                setColor(FilmroomPalette.accent)
+                cornerRadius = dp(12).toFloat()
+            }
+            val shareIcon = activity.getDrawable(R.drawable.ic_share)!!.mutate().apply {
+                setTint(FilmroomPalette.onAccent)
+                setBounds(0, 0, dp(24), dp(24))
+            }
+            setCompoundDrawablesRelative(shareIcon, null, null, null)
+            compoundDrawablePadding = dp(6)
+        }
         target.getButton(AlertDialog.BUTTON_NEGATIVE).minimumHeight = dp(48)
         target.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val image = bitmap ?: return@setOnClickListener

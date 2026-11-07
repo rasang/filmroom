@@ -44,10 +44,10 @@ class SettingsSectionsLayoutHostTest {
                 val scroll=tagged("settings-scroll") as ScrollView
                 val content=tagged("settings-content") as ViewGroup
                 val cards=all(root).filter{(it.tag as? String)?.startsWith("settings-section:")==true}
-                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:history","settings-section:diagnostics"),cards.map{it.tag})
+                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:history","settings-section:backup","settings-section:diagnostics"),cards.map{it.tag})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualTitle})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualDescription})
-                for((previous,nextKey) in listOf(cards[0] to "photos",cards[1] to "history",cards[2] to "diagnostics")){
+                for((previous,nextKey) in listOf(cards[0] to "photos",cards[1] to "history",cards[2] to "backup",cards[3] to "diagnostics")){
                     val heading=tagged("settings-heading:$nextKey")
                     assertTrue("Groups retain visible breathing space",heading.top-previous.bottom>=24)
                 }

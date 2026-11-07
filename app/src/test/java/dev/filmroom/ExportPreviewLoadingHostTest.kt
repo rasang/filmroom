@@ -355,6 +355,35 @@ class ExportPreviewLoadingHostTest {
         }
     }
 
+    @Test fun enteringRunningStageFourAfterNegativeDwellShowsNegativeInsteadOfRejectingOriginal()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));val dirs=mutableListOf<File>()
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();a.previewClock={testScheduler.currentTime};a.previewWallClock={10_000L+testScheduler.currentTime}
+                until("queue initialized"){queue(a)!=null};runCurrent()
+                val running=job(stage=4)
+                val dir=fixture(queue(a)!!,running);dirs+=dir
+                dev.filmroom.export.ScanPreviewStore.begin(dir)
+                File(dir,"scan-preview-attempt").setLastModified(1000)
+                File(dir,"original-preview.jpg").setLastModified(1000)
+                // Starting a fresh attempt intentionally removes legacy negative pixels.
+                // Publish this attempt's fixture after begin, just like the real producer.
+                File(dir,"negative-preview.png").apply { writeText("current attempt negative"); setLastModified(2000) }
+                assertTrue(File(dir,"negative-preview.png").isFile)
+                a.thumbnailDecoder={file->solid(if(file.name=="negative-preview.png")Color.GREEN else Color.RED)}
+                render(a,listOf(running));layout(a)
+                val view=image(a,running.id)
+                until("mature negative loads even while durable progress is stage four"){current(view)?.getPixel(10,10)==Color.GREEN}
+                val sequence=field(a,running.id,"sequence") as dev.filmroom.ui.ExportPreviewSequence
+                assertEquals(2,sequence.phase);assertEquals(0L,sequence.remaining(testScheduler.currentTime))
+                assertEquals(View.GONE,(field(a,running.id,"previewPlaceholder") as View).visibility)
+                // A repeated load after scrolling/reentry must not select the older contour.
+                controller.pause();controller.resume();layout(a);advanceTimeBy(1000);runCurrent()
+                until("negative remains on resume"){current(view)?.getPixel(10,10)==Color.GREEN}
+            }
+        } finally {runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
+    }
+
     @Test fun completedEntryRestoresOnlyTheRemainderOfRealArtifactTimes()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler));val dirs=mutableListOf<File>()
         try {

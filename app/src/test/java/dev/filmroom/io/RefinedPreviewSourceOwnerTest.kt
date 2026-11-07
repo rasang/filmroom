@@ -24,7 +24,7 @@ class RefinedPreviewSourceOwnerTest {
             if(reject)throw NativeWorkUnavailable()
             reserved+=bytes;pressure+=callback
             AutoCloseable{reserved-=bytes}
-        },{loads++;RefinedPreviewInput(bitmap=Bitmap.createBitmap(64,48,Bitmap.Config.ARGB_8888))})
+        },{_,_->loads++;RefinedPreviewInput(bitmap=Bitmap.createBitmap(64,48,Bitmap.Config.ARGB_8888))})
     }
     @Test fun oneInputIsReusedAndSourceChangeRetiresOldPixels()=runBlocking {
         val h=Harness();val photo=photo()
@@ -65,7 +65,7 @@ class RefinedPreviewSourceOwnerTest {
             val photo=PhotoSource(file,"source","image/jpeg",32,24,1)
             lateinit var image:Bitmap
             var reservations=0
-            val owner=RefinedPreviewSourceOwner({_,_->reservations++;AutoCloseable{}},{
+            val owner=RefinedPreviewSourceOwner({_,_->reservations++;AutoCloseable{}},{_,_->
                 image=Bitmap.createBitmap(32,24,Bitmap.Config.ARGB_8888)
                 file.appendBytes(byteArrayOf(2));RefinedPreviewInput(bitmap=image)
             })
@@ -76,7 +76,7 @@ class RefinedPreviewSourceOwnerTest {
     @Test fun cancelledColdLoadCannotPublishOrLeakPixels()=runTest {
         lateinit var image:Bitmap
         var reservations=0
-        val owner=RefinedPreviewSourceOwner({_,_->reservations++;AutoCloseable{}},{
+        val owner=RefinedPreviewSourceOwner({_,_->reservations++;AutoCloseable{}},{_,_->
             image=Bitmap.createBitmap(32,24,Bitmap.Config.ARGB_8888)
             withContext(NonCancellable){delay(100)}
             RefinedPreviewInput(bitmap=image)
@@ -84,4 +84,18 @@ class RefinedPreviewSourceOwnerTest {
         val work=launch{owner.acquire(photo()).close()};runCurrent();work.cancel();advanceUntilIdle()
         assertTrue(image.isRecycled);assertEquals(0,reservations);owner.close()
     }
+    @Test fun completeFrameSourceSizeParticipatesInCacheIdentity()=runBlocking {
+        val edges=mutableListOf<Int>()
+        val owner=RefinedPreviewSourceOwner({_,_->AutoCloseable{}},{_,edge->
+            edges+=edge
+            RefinedPreviewInput(bitmap=Bitmap.createBitmap(32,24,Bitmap.Config.ARGB_8888))
+        })
+        val source=photo()
+        try {
+            owner.acquire(source,1400).close();owner.acquire(source,1400).close()
+            owner.acquire(source,1200).close();owner.acquire(source).close()
+            assertEquals(listOf(1400,1200,1536),edges)
+        }finally{owner.close()}
+    }
+
 }

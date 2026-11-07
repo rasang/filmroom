@@ -51,6 +51,8 @@ use crate::enlarger;
 use crate::params::RuntimeParams;
 use crate::profile::Profile;
 use crate::stages;
+#[path = "pipeline_omitted.rs"]
+mod omitted;
 
 fn apply_film_specific_params(film: &Profile, params: &mut RuntimeParams) {
     if film.is_positive() {
@@ -144,6 +146,7 @@ pub struct Pipeline {
     pub film: Profile,
     pub print: Profile,
     pub params: RuntimeParams,
+    omitted_calibration: Option<Arc<omitted::Calibration>>,
     /// Shared immutable front data; the rest of this pipeline is recalibrated.
     spectral: Arc<crate::prepared_spectral::PreparedSpectral>,
     /// Constructor-captured provenance survives with_params without pretending to rebuild front assets.
@@ -163,37 +166,60 @@ pub struct Pipeline {
 /// No per-chunk LUT/calibration construction and no frame-sized allocation.
 pub struct PreparedStreamedFinish {
     printing: Option<stages::printing::PreparedPrinting>,
-    scanning: stages::scanning::PreparedScanner,
+    scanning: Option<stages::scanning::PreparedScanner>,
+    omitted: Option<Pipeline>,
     pub filming_exposure_correction: f64,
 }
 impl PreparedStreamedFinish {
     pub fn process_density_chunk(&self,density:&ImageBuf,backend:&dyn ComputeBackend)->ImageBuf {
-        match &self.printing {Some(printing)=>self.scanning.process(&printing.process(density,backend)),None=>self.scanning.process(density)}
+        if self.omitted.is_none() {
+            let scan=self.scanning.as_ref().expect("physical scanner");
+            return match &self.printing {Some(printing)=>scan.process(&printing.process(density,backend)),None=>scan.process(density)};
+        }
+        let mut rgb=self.process_density_chunk_unclipped(density,backend);
+        for value in &mut rgb.data {*value=(*value).clamp(spektrafilm_math::precision::from_f64(0.),spektrafilm_math::precision::from_f64(1.));}
+        rgb
     }
     pub fn process_density_chunk_unclipped(&self,density:&ImageBuf,backend:&dyn ComputeBackend)->ImageBuf {
-        match &self.printing {Some(printing)=>self.scanning.process_unclipped(&printing.process(density,backend)),None=>self.scanning.process_unclipped(density)}
+        if let Some(pipe)=&self.omitted {
+            if pipe.film.is_omitted() && !pipe.print.is_omitted() {
+                let raw=pipe.expose_omitted_paper_raw(density);
+                let developed=pipe.develop_omitted_paper_raw(&raw,backend);
+                return self.scanning.as_ref().expect("paper scanner").process_unclipped(&developed);
+            }
+            if let Some(scan)=&self.scanning{return scan.process_unclipped(density);}
+            return pipe.omitted_density_to_rgb(density,backend,false);
+        }
+        let scan=self.scanning.as_ref().expect("physical scanner");
+        match &self.printing {Some(printing)=>scan.process_unclipped(&printing.process(density,backend)),None=>scan.process_unclipped(density)}
     }
     pub fn process_density_chunk_unclipped_with_glare(&self,density:&ImageBuf,field:&[spektrafilm_math::precision::Scalar],backend:&dyn ComputeBackend)->Result<ImageBuf,String> {
-        match &self.printing {Some(printing)=>self.scanning.process_unclipped_with_glare(&printing.process(density,backend),field),None=>self.scanning.process_unclipped_with_glare(density,field)}
+        if let Some(pipe)=&self.omitted {
+            if pipe.print.is_omitted(){return Err("Glare requires a physical scanning medium".into());}
+            let raw=pipe.expose_omitted_paper_raw(density);
+            return self.scanning.as_ref().ok_or("Missing paper scanner")?.process_unclipped_with_glare(&pipe.develop_omitted_paper_raw(&raw,backend),field);
+        }
+        let scan=self.scanning.as_ref().ok_or("Missing scanner")?;
+        match &self.printing {Some(printing)=>scan.process_unclipped_with_glare(&printing.process(density,backend),field),None=>scan.process_unclipped_with_glare(density,field)}
     }
-    /// Linear paper exposure; caller must perform enabled spatial printing passes globally.
     pub fn expose_print_raw_chunk(&self,density:&ImageBuf)->Result<ImageBuf,String> {
-        self.printing.as_ref().map(|p|p.expose_raw(density)).ok_or_else(||"Print raw is unavailable in direct-film scan mode".into())
+        if let Some(pipe)=&self.omitted {if !pipe.print.is_omitted(){return Ok(pipe.expose_omitted_paper_raw(density));}}
+        self.printing.as_ref().map(|p|p.expose_raw(density)).ok_or_else(||"Print raw is unavailable without paper".into())
     }
     pub fn develop_print_raw_chunk(&self,raw:&ImageBuf,backend:&dyn ComputeBackend)->Result<ImageBuf,String> {
-        self.printing.as_ref().map(|p|p.develop_raw(raw,backend)).ok_or_else(||"Print development is unavailable in direct-film scan mode".into())
+        if let Some(pipe)=&self.omitted {if !pipe.print.is_omitted(){return Ok(pipe.develop_omitted_paper_raw(raw,backend));}}
+        self.printing.as_ref().map(|p|p.develop_raw(raw,backend)).ok_or_else(||"Print development is unavailable without paper".into())
     }
-    /// Scan already-developed paper density, without re-exposing the paper.
     pub fn scan_print_density_chunk_unclipped(&self,density:&ImageBuf)->Result<ImageBuf,String> {
-        if self.printing.is_none(){return Err("Paper scanning is unavailable in direct-film scan mode".into());}
-        Ok(self.scanning.process_unclipped(density))
+        if self.printing.is_none() && !self.omitted.as_ref().is_some_and(|p|!p.print.is_omitted()){return Err("Paper scanning is unavailable without paper".into());}
+        Ok(self.scanning.as_ref().ok_or("Missing paper scanner")?.process_unclipped(density))
     }
     pub fn scan_print_density_chunk_unclipped_with_glare(&self,density:&ImageBuf,field:&[spektrafilm_math::precision::Scalar])->Result<ImageBuf,String> {
-        if self.printing.is_none(){return Err("Paper scanning is unavailable in direct-film scan mode".into());}
-        self.scanning.process_unclipped_with_glare(density,field)
+        if self.printing.is_none() && !self.omitted.as_ref().is_some_and(|p|!p.print.is_omitted()){return Err("Paper scanning is unavailable without paper".into());}
+        self.scanning.as_ref().ok_or("Missing paper scanner")?.process_unclipped_with_glare(density,field)
     }
     pub fn lut_storage_bytes(&self)->usize {
-        self.scanning.lut_storage_bytes()+self.printing.as_ref().map_or(0,|p|p.lut_storage_bytes())
+        self.scanning.as_ref().map_or(0,|p|p.lut_storage_bytes())+self.printing.as_ref().map_or(0,|p|p.lut_storage_bytes())
     }
 }
 
@@ -206,6 +232,15 @@ impl Pipeline {
         self.prepare_streamed_finish_impl(backend,true)
     }
     fn prepare_streamed_finish_impl(&self,backend:&dyn ComputeBackend,spatial:bool)->Result<PreparedStreamedFinish,String> {
+        if self.film.is_omitted() || self.print.is_omitted() {
+            let mut pipe=self.clone();pipe.params.scanner.lens_blur=0.;pipe.params.scanner.unsharp_mask=[0.,0.];
+            let profile=if !pipe.print.is_omitted(){Some(&pipe.print)}else if pipe.film.is_positive(){Some(&pipe.film)}else{None};
+            let scanning=if let Some(profile)=profile {
+                let mut p=pipe.params.clone();p.io.scan_film=pipe.print.is_omitted();
+                Some(stages::scanning::PreparedScanner::new_streamed(profile,&p,&crate::color_reference::ColorReference::identity(),&pipe.output_gamut)?)
+            }else{None};
+            return Ok(PreparedStreamedFinish{printing:None,scanning,omitted:Some(pipe),filming_exposure_correction:1.});
+        }
         let color_ref=crate::color_reference::ColorReference::compute(&self.film,&self.print,&self.params,&self.print_illuminant,self.print_exposure_factor);
         let printing=if self.params.io.scan_film {None}else{
             let prepare=if spatial {stages::printing::PreparedPrinting::new_streamed_spatial}else{stages::printing::PreparedPrinting::new};
@@ -215,7 +250,7 @@ impl Pipeline {
         // Sharpening is a global spatial pass owned by the disk exporter, before clipping.
         let mut scanner_params=self.params.clone();scanner_params.scanner.unsharp_mask=[0.,0.];scanner_params.scanner.lens_blur=0.;
         let scanning=stages::scanning::PreparedScanner::new_streamed(profile,&scanner_params,&color_ref,&self.output_gamut)?;
-        Ok(PreparedStreamedFinish {printing,scanning,filming_exposure_correction:color_ref.filming_exposure_correction})
+        Ok(PreparedStreamedFinish {printing,scanning:Some(scanning),omitted:None,filming_exposure_correction:color_ref.filming_exposure_correction})
     }
     /// Reference-illuminant input for the existing Hanatos raw projection.
     pub fn front_illuminant_spd(&self)->&'static [f32] {select_illuminant(&self.spectral.front_illuminant)}
@@ -290,6 +325,7 @@ impl Pipeline {
     pub fn with_params(mut self, params: RuntimeParams) -> Self {
         let mut params = params;
         apply_film_specific_params(&self.film, &mut params);
+        Self::disable_absent_medium_controls(&self.film, &self.print, &mut params);
         self.output_gamut = crate::gamut_compression::OutputGamutCompress::build(
             &params.io.output_gamut_compress,
             &params.io.output_color_space,
@@ -505,6 +541,7 @@ impl Pipeline {
             film,
             print,
             params,
+            omitted_calibration: None,
             spectral: Arc::new(crate::prepared_spectral::PreparedSpectral::without_lut(front_illuminant)),
             film_log_front_identity: None,
             print_exposure_factor: 1.0,
@@ -551,6 +588,9 @@ impl Pipeline {
         checkpoint: &mut dyn FnMut() -> bool,
     ) -> Result<Self, String> {
         if !checkpoint() { return Err("Pipeline preparation cancelled".into()); }
+        if film.is_omitted() || print.is_omitted() {
+            return Self::new_omitted(film, print, params, data_dir);
+        }
         // B&W profiles: collapse the development-time family to the selected
         // time and broadcast the single channel onto the 3-channel engine
         // layout. Must happen before anything reads the profile data.
@@ -769,6 +809,7 @@ impl Pipeline {
             film,
             print,
             params,
+            omitted_calibration: None,
             spectral,
             film_log_front_identity,
             print_exposure_factor: calibration.print_exposure_factor,
@@ -779,6 +820,9 @@ impl Pipeline {
     }
 
     pub fn process(&self, image: ImageBuf, backend: &dyn ComputeBackend) -> ImageBuf {
+        if self.film.is_omitted() || self.print.is_omitted() {
+            return self.process_omitted(image, backend);
+        }
         let stage_timings = stage_timings_enabled();
         // Working-resolution rescale (io.upscale_factor) — mirrors Python's
         // ResizingService.crop_and_rescale. Done first so the whole pipeline
@@ -2275,11 +2319,11 @@ impl Pipeline {
         };
 
         // Film density curves: normalized (filming.develop subtracts nanmin).
-        let film_log_exp = self.film.log_exposure_f64();
+        let film_log_exp = if self.film.is_omitted(){vec![-10.,10.]}else{self.film.log_exposure_f64()};
         let film_curves = self.film.density_curves_f64();
-        let film_curves_norm =
-            spektrafilm_model::density_curves::normalize_density_curves_f64(&film_curves);
-        let film_channel_density: Vec<[f64; 3]> = self
+        let film_curves_norm = if self.film.is_omitted(){vec![[-10.;3],[10.;3]]}else{
+            spektrafilm_model::density_curves::normalize_density_curves_f64(&film_curves)};
+        let mut film_channel_density: Vec<[f64; 3]> = self
             .film
             .data
             .channel_density
@@ -2292,10 +2336,11 @@ impl Pipeline {
                 ]
             })
             .collect();
-        let film_base_density = self.film.data.base_density.clone();
+        let mut film_base_density = self.film.data.base_density.clone();
+        if self.film.is_omitted(){film_channel_density=vec![[0.;3];81];film_base_density=vec![0.;81];}
 
         // Print sensitivity (10**log_sensitivity, NaN→0).
-        let print_sens: Vec<[f64; 3]> = self
+        let mut print_sens: Vec<[f64; 3]> = self
             .print
             .log_sensitivity_f64()
             .iter()
@@ -2308,7 +2353,8 @@ impl Pipeline {
                 o
             })
             .collect();
-        let print_log_exp = self.print.log_exposure_f64();
+        let print_log_exp = if self.print.is_omitted(){vec![-10.,10.]}else{self.print.log_exposure_f64()};
+        if self.print.is_omitted(){print_sens=vec![[0.;3];81];}
         // Print density curves: model-evaluated at gamma 1 whenever the
         // profile carries a fitted `density_curves_model` (identity when the
         // morph is inactive, morphed when active — matching the CPU
@@ -2316,7 +2362,7 @@ impl Pipeline {
         // gamma only for model-less profiles. Computed once on CPU here so
         // the resident print density pass needs no shader change.
         let morph = &self.params.print_render.density_curves_morph;
-        let (print_curves, print_gamma_eff) = match self.print.data.density_curves_model.as_ref() {
+        let (mut print_curves, print_gamma_eff) = match self.print.data.density_curves_model.as_ref() {
             Some(model) => match crate::print_morph::morph_density_curves(
                 &print_log_exp,
                 model,
@@ -2337,7 +2383,8 @@ impl Pipeline {
                 self.params.print_render.density_curve_gamma as f64,
             ),
         };
-        let print_channel_density: Vec<[f64; 3]> = self
+        if self.print.is_omitted(){print_curves=vec![[-10.;3],[10.;3]];}
+        let mut print_channel_density: Vec<[f64; 3]> = self
             .print
             .data
             .channel_density
@@ -2350,7 +2397,8 @@ impl Pipeline {
                 ]
             })
             .collect();
-        let print_base_density = self.print.data.base_density.clone();
+        let mut print_base_density = self.print.data.base_density.clone();
+        if self.print.is_omitted(){print_channel_density=vec![[0.;3];81];print_base_density=vec![0.;81];}
 
         // Scanning: viewing illuminant + normalization + combined XYZ→RGB
         // matrix. For scan_film we scan the developed film directly, so the
@@ -2362,12 +2410,9 @@ impl Pipeline {
         } else {
             &self.print
         };
-        let viewing_illu_f32 = match scan_profile.info.viewing_illuminant.as_str() {
-            "D50" => &spektrafilm_math::spectral::ILLUMINANT_D50[..],
-            "D55" => &spektrafilm_math::spectral::ILLUMINANT_D55[..],
-            "D65" => &spektrafilm_math::spectral::ILLUMINANT_D65[..],
-            _ => &spektrafilm_math::spectral::ILLUMINANT_D50[..],
-        };
+        // Use the same viewing spectrum as CPU scan, including projector
+        // K75P used by 2383/2393. Falling back to D50 changes their colors.
+        let viewing_illu_f32 = select_illuminant(&scan_profile.info.viewing_illuminant);
         let viewing_illu: Vec<f64> = viewing_illu_f32.iter().map(|&v| v as f64).collect();
         let n_wl = if self.params.io.scan_film {
             film_channel_density.len()
@@ -2401,6 +2446,30 @@ impl Pipeline {
                     + base_xyz_to_rgb[i][1] * adapt[1][j]
                     + base_xyz_to_rgb[i][2] * adapt[2][j];
             }
+        }
+
+        // Digital readout produces linear sRGB, not XYZ. Keep the output
+        // matrix explicit so wide-gamut exports are not merely relabelled.
+        let neutral_media=self.omitted_calibration.as_ref().map(|c| {
+            let bridge=c.negative;
+            spektrafilm_gpu::NeutralMediaGpuParams {
+                film_omitted:self.film.is_omitted(),paper_omitted:self.print.is_omitted(),
+                negative_readout:bridge.is_some(),paper_gain:c.paper_gain,paper_gray_log:c.paper_gray.unwrap_or(0.),
+                paper_log_min:c.paper_log_bounds[0],paper_log_max:c.paper_log_bounds[1],
+                negative_min:bridge.map_or([0.;3],|b|b.minimum),
+                negative_range:bridge.map_or([1.;3],|b|std::array::from_fn(|i|b.maximum[i]-b.minimum[i])),
+                negative_gamma:bridge.map_or([1.;3],|b|b.gamma),
+            }
+        });
+        if neutral_media.as_ref().is_some_and(|m|m.paper_omitted && (m.film_omitted || m.negative_readout)) {
+            let target=match self.params.io.output_color_space.as_str(){
+                "Display P3"=>crate::output_color::XYZ_TO_P3,
+                "Adobe RGB (1998)"=>crate::output_color::XYZ_TO_ADOBE,
+                _=>spektrafilm_math::colorspace::XYZ_TO_SRGB_F64,
+            };
+            scan_xyz_to_rgb=if self.params.io.output_color_space=="sRGB" {[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]}else{
+                std::array::from_fn(|i|std::array::from_fn(|j|(0..3).map(|k|target[i][k]*spektrafilm_math::colorspace::SRGB_TO_XYZ_F64[k][j]).sum()))
+            };
         }
 
         // Honor the export chunking override (full-image physical pitch)
@@ -2805,6 +2874,7 @@ impl Pipeline {
             };
 
         let mut params = spektrafilm_gpu::FilmChainParams {
+            neutral_media,
             start_at: chain_start,
             // Bounded preview tiles retain GPU gamut but need the same phase-local
             // scratch retirement as export. Ordinary whole preview stays unchanged.

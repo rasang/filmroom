@@ -32,8 +32,30 @@ class ImprintSourceSnapshotHostTest {
         val source = PhotoMetadata.fromAttributes(mapOf("PhotographicSensitivity" to "65535", "SensitivityType" to "3",
             "ISOSpeed" to "102400", "FocalLength" to "800/1", "FocalLengthIn35mmFilm" to "1200"))
         val content = ImprintContent.from(source, ImprintSettings(exposure = true))
-        assertEquals(listOf("ISO102400", "800mm"), content.fields.map { it.text })
+        assertEquals(listOf("ISO102400", "1200mm"), content.fields.map { it.text })
         assertEquals(content, ImprintContent.from(PhotoMetadata.fromJson(source.toJson()), ImprintSettings(exposure = true)))
+    }
+
+    @Test fun equivalentSelectionSurvivesLegacyQueueSnapshotForDifferentCaptureSources() {
+        // Maker labels exercise the shared metadata contract, not device-specific decoding.
+        for (maker in listOf("Apple", "samsung", "SONY", "FUJIFILM", "Canon", "NIKON CORPORATION")) {
+            for ((equivalent, expected) in listOf("43" to "43mm", "0" to "9mm",
+                "-1" to "9mm", "65536" to "9mm", "bad" to "9mm", "" to "9mm")) {
+                val source = PhotoMetadata.fromAttributes(mapOf("Make" to maker,
+                    "FocalLength" to "9/1", "FocalLengthIn35mmFilm" to equivalent))
+                // Version-1 snapshots are what existing queues already persist.
+                val oldQueue = PhotoMetadata.fromJson(source.toJson())
+                val settings = ImprintSettings(exposure = true)
+                assertEquals("$maker/$equivalent", listOf(expected),
+                    ImprintContent.from(source, settings).fields.map { it.text })
+                assertEquals(ImprintContent.from(source, settings), ImprintContent.from(oldQueue, settings))
+                // Re-encoding metadata must preserve actual and equivalent as distinct facts.
+                assertEquals("9/1", JSONObject(oldQueue.toJson()).getJSONObject("attributes").getString("FocalLength"))
+            }
+        }
+        val absent = PhotoMetadata.fromAttributes(emptyMap())
+        assertTrue(ImprintContent.from(PhotoMetadata.fromJson(absent.toJson()),
+            ImprintSettings(exposure = true)).fields.isEmpty())
     }
 
     @Test fun actualJpegReaderKeepsCaptureDateHighIsoAndLongFocalAcrossSnapshotRoundtrip() {
@@ -66,7 +88,7 @@ class ImprintSourceSnapshotHostTest {
                 val settings = ImprintSettings(dateStyle = "contax_t2", exposure = true)
                 val imprint = ImprintContent.from(read, settings)
                 assertEquals("'24 02 29", imprint.date)
-                assertEquals(listOf("ISO204800", expectedShutter, "F8", "2000mm"), imprint.fields.map { it.text })
+                assertEquals(listOf("ISO204800", expectedShutter, "F8", "3000mm"), imprint.fields.map { it.text })
                 assertEquals(imprint, ImprintContent.from(PhotoMetadata.fromJson(read.toJson()), settings))
             }
         } finally { file.delete() }

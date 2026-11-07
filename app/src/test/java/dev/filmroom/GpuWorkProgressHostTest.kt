@@ -42,4 +42,18 @@ class GpuWorkProgressHostTest {
         assertFalse(work.toJson().toString().contains("private"))
         assertNull(GpuWorkProgress.fromJson(JSONObject().put("gpuPhase","grain").put("gpuBatchIndex",0).put("gpuBatchElapsedMs",10.0)))
     }
+    @Test fun failureDetailsRoundTripAndRejectUntrustedValues() {
+        val p=packet().put("gpuFailedPhase","scan").put("gpuFailedElapsedMs",29650.0)
+            .put("gpuFailureKind","map_timeout").put("gpuSubmitMs",12.0).put("gpuPollMs",29500.0).put("gpuMapWaitMs",29600.0)
+        val work=checkNotNull(GpuWorkProgress.fromJson(p))
+        assertEquals(GpuFailureKind.MAP_TIMEOUT,work.failureKind)
+        assertEquals(work,GpuWorkProgress.fromJson(work.toJson()))
+        val info=checkNotNull(GpuRuntimeInfo.workFromProgress(p,1L))
+        assertEquals(info,SafeInfo.parse(info.fields()))
+        assertEquals("map_timeout",info.fields()["gpuFailureKind"])
+        val bad=checkNotNull(GpuWorkProgress.fromJson(p.put("gpuFailureKind","private driver error").put("gpuSubmitMs",-1)))
+        assertNull(bad.failureKind);assertNull(bad.submitMs)
+        assertFalse(bad.toJson().toString().contains("private"))
+    }
+
 }

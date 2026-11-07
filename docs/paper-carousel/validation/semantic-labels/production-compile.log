@@ -1,0 +1,63 @@
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ExportQueueActivity.kt:143:114: warning: 'static field TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java.
+    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)ExportContourCache.clear()}
+                                                                                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ExportQueueActivity.kt:174:82: warning: 'val systemWindowInsetLeft: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(dp(16)+insets.systemWindowInsetLeft,dp(8)+insets.systemWindowInsetTop,dp(16)+insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
+                                                                                 ^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ExportQueueActivity.kt:174:117: warning: 'val systemWindowInsetTop: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(dp(16)+insets.systemWindowInsetLeft,dp(8)+insets.systemWindowInsetTop,dp(16)+insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
+                                                                                                                    ^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ExportQueueActivity.kt:174:152: warning: 'val systemWindowInsetRight: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(dp(16)+insets.systemWindowInsetLeft,dp(8)+insets.systemWindowInsetTop,dp(16)+insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
+                                                                                                                                                       ^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ExportQueueActivity.kt:174:182: warning: 'val systemWindowInsetBottom: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,insets->v.setPadding(dp(16)+insets.systemWindowInsetLeft,dp(8)+insets.systemWindowInsetTop,dp(16)+insets.systemWindowInsetRight,insets.systemWindowInsetBottom);insets}
+                                                                                                                                                                                     ^^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/MainActivity.kt:159:114: warning: 'static field TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java.
+    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
+                                                                                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/MainActivity.kt:1050:92: warning: 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+        val textPaint=android.text.TextPaint().apply{textSize=12f*resources.displayMetrics.scaledDensity}
+                                                                                           ^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/SettingsActivity.kt:52:65: warning: 'val systemWindowInsetLeft: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,i->v.setPadding(i.systemWindowInsetLeft,i.systemWindowInsetTop,i.systemWindowInsetRight,i.systemWindowInsetBottom);i}
+                                                                ^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/SettingsActivity.kt:52:89: warning: 'val systemWindowInsetTop: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,i->v.setPadding(i.systemWindowInsetLeft,i.systemWindowInsetTop,i.systemWindowInsetRight,i.systemWindowInsetBottom);i}
+                                                                                        ^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/SettingsActivity.kt:52:112: warning: 'val systemWindowInsetRight: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,i->v.setPadding(i.systemWindowInsetLeft,i.systemWindowInsetTop,i.systemWindowInsetRight,i.systemWindowInsetBottom);i}
+                                                                                                               ^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/SettingsActivity.kt:52:137: warning: 'val systemWindowInsetBottom: Int' is deprecated. Deprecated in Java.
+        root.setOnApplyWindowInsetsListener{v,i->v.setPadding(i.systemWindowInsetLeft,i.systemWindowInsetTop,i.systemWindowInsetRight,i.systemWindowInsetBottom);i}
+                                                                                                                                        ^^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/crop/CropSnapshot.kt:8:25: warning: non-public primary constructor is exposed via the generated 'copy()' method of the 'data' class.
+
+The generated 'copy()' will change its visibility in future releases.
+
+To suppress the warning do one of the following:
+- Annotate the data class with the '@ConsistentCopyVisibility' annotation.
+- Use the '-Xconsistent-data-class-copy-visibility' compiler flag.
+- Annotate the data class with the '@ExposedCopyVisibility' annotation 
+  (Discouraged, but can be used to keep binary compatibility).
+
+To learn more, see the documentation of the '@ConsistentCopyVisibility' and '@ExposedCopyVisibility' annotations.
+
+This will become an error in Kotlin 2.1.
+data class CropSnapshot private constructor(
+                        ^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/engine/IdlePreviewPrewarmer.kt:32:76: warning: 'static field TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java.
+        override fun onTrimMemory(level:Int){if(level>=ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)stop()}
+                                                                           ^^^^^^^^^^^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ui/SettledChoiceSelector.kt:106:83: warning: 'static fun obtain(p0: Int, p1: Float, p2: Float, p3: Float): AccessibilityNodeInfo.RangeInfo!' is deprecated. Deprecated in Java.
+        if (labels.isNotEmpty()) info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(
+                                                                                  ^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ui/StraightenDialView.kt:27:161: warning: 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+    init{isFocusable=true;isClickable=true;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES;minimumHeight=maxOf(68*density,13*resources.displayMetrics.scaledDensity+55*density).toInt();angle=0.0}
+                                                                                                                                                                ^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ui/StraightenDialView.kt:39:52: warning: 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+        paint.textSize=13*resources.displayMetrics.scaledDensity
+                                                   ^^^^^^^^^^^^^
+/workspace/shared/filmroom-paper-carousel/app/src/main/java/dev/filmroom/ui/StraightenDialView.kt:69:56: warning: 'static fun obtain(p0: Int, p1: Float, p2: Float, p3: Float): AccessibilityNodeInfo.RangeInfo!' is deprecated. Deprecated in Java.
+        info.rangeInfo=AccessibilityNodeInfo.RangeInfo.obtain(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT,-15f,15f,angle.toFloat())
+                                                       ^^^^^^

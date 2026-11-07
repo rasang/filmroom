@@ -69,11 +69,19 @@ fn write_output_rgb(output:&mut File,rgb:&ImageBuf,exposure:f64)->Result<()> {
 }
 
 fn expose(input:&Path,pipe:&Pipeline,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<([PathBuf;3],Option<f32>)> {
- let paths=std::array::from_fn(|_|s.path("film-raw"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut f=File::open(input).map_err(io)?;let rows=rows_per_chunk(w);let lut=pipe.tc_lut().ok_or_else(||error("UNSUPPORTED_EXPORT_OPTIONS","Streamed exposure requires Hanatos spectral upsampling"))?;
+ let paths=std::array::from_fn(|_|s.path("film-raw"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut f=File::open(input).map_err(io)?;let rows=rows_per_chunk(w);let lut=pipe.tc_lut();if !pipe.film.is_omitted() && lut.is_none(){return Err(error("UNSUPPORTED_EXPORT_OPTIONS","Streamed exposure requires Hanatos spectral upsampling"));}
  let exposure=from_f32(2.0f32.powf(pipe.params.camera.exposure_compensation_ev));
  let metered_ev=if !pipe.params.camera.auto_exposure {None}else if let Some(ev)=pipe.params.camera.preview_metered_ev {Some(ev)}else {p.begin_work("auto_exposure");p.pass("auto_exposure",0,1);let matrix=spektrafilm_core::stages::filming::input_colorspace_to_xyz(&pipe.params.io.input_color_space);let ev=crate::streamed_global::auto_exposure_ev(input,w,h,&pipe.params.camera.auto_exposure_method,&matrix,&mut *c).map_err(io)?;p.pass("auto_exposure",1,1);p.end_work();Some(ev)};
  let ae=metered_ev.map(|ev|from_f32(2.0f32.powf(ev))).unwrap_or(from_f64(1.));
- p.begin_work("film_exposure");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut bytes=vec![0u8;w as usize*hh as usize*12];f.read_exact(&mut bytes).map_err(io)?;let mut v=Vec::with_capacity(bytes.len()/4);for b in bytes.chunks_exact(4){let x=f32::from_le_bytes(b.try_into().unwrap());if !x.is_finite(){return Err(error("INVALID_PIXELS","Nonfinite input spool"));}v.push((from_f64(x as f64)*ae)*exposure);}let rgb=ImageBuf::from_data(w,hh,v);let raw=CpuBackend.hanatos2025_rgb_to_raw(&rgb,lut,&pipe.params.io.input_color_space,pipe.front_illuminant_spd(),pipe.params.settings.use_cat16);write_image_planes(&mut out,&raw)?;p.pass("film_exposure",(y+hh) as u64,h as u64);}
+ p.begin_work("film_exposure");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut bytes=vec![0u8;w as usize*hh as usize*12];f.read_exact(&mut bytes).map_err(io)?;let mut v=Vec::with_capacity(bytes.len()/4);for b in bytes.chunks_exact(4){let x=f32::from_le_bytes(b.try_into().unwrap());if !x.is_finite(){return Err(error("INVALID_PIXELS","Nonfinite input spool"));}v.push((from_f64(x as f64)*ae)*exposure);}let rgb=ImageBuf::from_data(w,hh,v);let raw=if pipe.film.is_omitted(){
+ let matrix=spektrafilm_core::mallett::film_matrix(&[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],&pipe.params.io.input_color_space);
+ let mut converted=rgb;
+ for pixel in converted.data.chunks_exact_mut(3) {
+  let value=spektrafilm_core::mallett::apply(&matrix,[pixel[0] as f64,pixel[1] as f64,pixel[2] as f64]);
+  for channel in 0..3 {pixel[channel]=from_f64(value[channel]);}
+ }
+ converted
+}else{CpuBackend.hanatos2025_rgb_to_raw(&rgb,lut.expect("validated spectral LUT"),&pipe.params.io.input_color_space,pipe.front_illuminant_spd(),pipe.params.settings.use_cat16)};write_image_planes(&mut out,&raw)?;p.pass("film_exposure",(y+hh) as u64,h as u64);}
  drop(out);s.observe()?;p.end_work();Ok((paths,metered_ev))
 }
 fn halation(paths:&mut [PathBuf;3],params:&RuntimeParams,pitch:f32,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<()> {
@@ -98,8 +106,8 @@ fn halation(paths:&mut [PathBuf;3],params:&RuntimeParams,pitch:f32,w:u32,h:u32,s
  } Ok(())
 }
 fn density_initial(logs:&[PathBuf;3],pipe:&Pipeline,backend:&dyn ComputeBackend,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<[PathBuf;3]> {
- let paths=std::array::from_fn(|_|s.path("film-density"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut ins=logs.iter().map(|p|File::open(p).map_err(io)).collect::<Result<Vec<_>>>()?;let axis=pipe.film.log_exposure_f64();let curves=spektrafilm_model::density_curves::normalize_density_curves_f64(&pipe.film.density_curves_f64());let rows=rows_per_chunk(w);
- p.begin_work("film_density");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut v=Vec::new();for f in &mut ins{v.push(read64(f,w as usize*hh as usize)?);}let img=image_from_planes(&v,w,hh);let z=backend.density_curve_interp(&img,&axis,&curves,pipe.params.film_render.density_curve_gamma as f64);write_image_planes(&mut out,&z)?;p.pass("film_density",(y+hh)as u64,h as u64);}
+ let paths=std::array::from_fn(|_|s.path("film-density"));let mut out=paths.iter().map(|p|new_file(p)).collect::<Result<Vec<_>>>()?;let mut ins=logs.iter().map(|p|File::open(p).map_err(io)).collect::<Result<Vec<_>>>()?;let axis=pipe.film.log_exposure_f64();let curves=if pipe.film.is_omitted(){Vec::new()}else{spektrafilm_model::density_curves::normalize_density_curves_f64(&pipe.film.density_curves_f64())};let rows=rows_per_chunk(w);
+ p.begin_work("film_density");for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);let mut v=Vec::new();for f in &mut ins{v.push(read64(f,w as usize*hh as usize)?);}let img=image_from_planes(&v,w,hh);let z=if pipe.film.is_omitted(){img}else{backend.density_curve_interp(&img,&axis,&curves,pipe.params.film_render.density_curve_gamma as f64)};write_image_planes(&mut out,&z)?;p.pass("film_density",(y+hh)as u64,h as u64);}
  drop(out);s.observe()?;p.end_work();Ok(paths)
 }
 fn dir_density(logs:[PathBuf;3],density:[PathBuf;3],pipe:&Pipeline,backend:&dyn ComputeBackend,pitch:f32,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<[PathBuf;3]> {
@@ -230,8 +238,17 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let pitch=params.camera.pixel_size_um_override.unwrap_or(params.camera.film_format_mm*1000./width.max(height)as f32);if !pitch.is_finite()||pitch<=0.{return Err(error("INVALID_PARAMETERS","Invalid full-image physical pitch"));}
 
  params.camera.pixel_size_um_override=Some(pitch);params.film_render.grain.coordinate_origin=Some([0,0]);params.settings.use_enlarger_lut=true;params.settings.use_scanner_lut=true;params.settings.lut_resolution=33;
- cancel(&mut cancelled)?;progress.pass("setup",0,1);let film=load_profile_by_name(data_dir,film_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;let paper=load_profile_by_name(data_dir,paper_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?;
- if (!film.is_negative()&&!film.is_positive())||film.is_positive()&&!params.io.scan_film{return Err(error("UNSUPPORTED_PROFILE","Unsupported film or reversal print route"));}
+ cancel(&mut cancelled)?;progress.pass("setup",0,1);let film=if film_stock=="none"{spektrafilm_core::profile::Profile::omitted()}else{load_profile_by_name(data_dir,film_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?};let paper=if paper_stock=="none"{spektrafilm_core::profile::Profile::omitted()}else{load_profile_by_name(data_dir,paper_stock).map_err(|e|error("PROFILE_ERROR",e.to_string()))?};
+ if film.is_omitted() {
+  if let Some(job_dir)=checkpoint_dir.and_then(Path::parent) {
+   let _=crate::negative_preview::mark_current_status(job_dir,"not_applicable",true);
+   let _=crate::negative_preview::mark_current_status(job_dir,"not_applicable",false);
+  }
+ }
+ // An explicit omitted paper is a positive digital readout, not the historical
+ // direct-negative scan route. A selected paper remains active without film.
+ Pipeline::disable_absent_medium_controls(&film,&paper,&mut params);
+ if (!film.is_omitted()&&!film.is_negative()&&!film.is_positive())||film.is_positive()&&!params.io.scan_film{return Err(error("UNSUPPORTED_PROFILE","Unsupported film or reversal print route"));}
  // An existing exact CPU checkpoint wins over a new approximate attempt.
  #[allow(unused_mut)] let mut resident_fallback:Option<&'static str>=None;
  #[cfg(feature="adreno-gpu")]
@@ -240,10 +257,9 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  if use_gpu {
    if checkpoint_dir.is_some_and(|root|root.join("manifest.json").exists()) {resident_fallback=Some("cpu_checkpoint_resume");}
    else {
-     let gpu_submits_before=crate::mobile::full_chain_gpu().map_or(0,|g|g.thread_submits());
-     let attempt=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||crate::gpu_export::export(&params,film_stock,paper_stock,&film,&paper,data_dir,input_path,output_path,checkpoint_dir,width,height,memory_budget_mib,brightness_ev,&mut cancelled,&mut progress,&mut early_preview)));
+     let (attempt,failure)=spektrafilm_gpu::wgpu_backend::observe_resident_attempt(||crate::gpu_export::export(&params,film_stock,paper_stock,&film,&paper,data_dir,input_path,output_path,checkpoint_dir,width,height,memory_budget_mib,brightness_ev,&mut cancelled,&mut progress,&mut early_preview));
      if !matches!(&attempt,Ok(Ok(_))) {if let Some(ref preview)=early_preview {preview.cancel.store(true,std::sync::atomic::Ordering::Release);}}
-     if let Some(failure)=crate::mobile::full_chain_gpu().filter(|g|g.thread_submits()>gpu_submits_before).and_then(|g|g.thread_resident_failure()) {progress.gpu_failure(failure.stage.as_str(),failure.elapsed_ms);}
+     if let Some(failure)=failure {progress.gpu_failure(failure.stage.as_str(),failure.elapsed_ms);progress.gpu_failure_detail(failure.detail.kind.as_str(),failure.detail.submit_ms,failure.detail.poll_ms,failure.detail.map_wait_ms);}
      crate::mobile::gpu_completion_guard()?;
      match attempt {
        Ok(Ok(metrics))=>return Ok(metrics),
@@ -321,7 +337,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  // Stage visualisation from the actual developed film-density planes, never
  // a cosmetic inversion of the original. Preview failure must not invalidate
  // an otherwise durable scientific export; cancellation still propagates.
- if let Some(job_dir)=checkpoint_dir.and_then(|p|p.parent()) {
+ if let Some(job_dir)=checkpoint_dir.filter(|_|!pipe.film.is_omitted()).and_then(|p|p.parent()) {
    if let Err(e)=crate::negative_preview::write_negative_preview(&density,&pipe.film,width,height,job_dir,&mut cancelled) {if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}
  }
  let density=if resume_stage<5 {
@@ -344,7 +360,11 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
      let exposed=prepared.expose_print_raw_chunk(&image_from_planes(&planes,width,hh)).map_err(|e|error("PIPELINE_ERROR",e))?;write_image_planes(&mut out,&exposed)?;progress.pass("printing_scanning",(y+hh)as u64,height as u64);
    }
    drop(out);drop(inputs);scratch.observe()?;progress.end_work();for p in &density{scratch.remove(p)?;}
-   let mut raw=raw;let d=&pipe.params.enlarger.diffusion_filter;let print_pitch=pipe.params.camera.film_format_mm*1000./width.max(height)as f32;
+   let mut raw=raw;let d=&pipe.params.enlarger.diffusion_filter;let print_pitch=if pipe.film.is_omitted(){
+     // The digital paper bridge uses the same physical photo-window pitch as
+     // its full-frame counterpart, including pre-imaging border overrides.
+     pipe.params.camera.pixel_size_um_override.unwrap_or(pipe.params.camera.film_format_mm*1000./width.max(height)as f32)
+   }else{pipe.params.camera.film_format_mm*1000./width.max(height)as f32};
    progress.begin_work("print_diffusion");if let Some(kernel)=spektrafilm_model::diffusion::ExactDiffusionKernel::new_cancellable(&d.to_model(),print_pitch as f64,width as usize,height as usize,&mut cancelled).map_err(|_|error("CANCELLED","Print diffusion cancelled"))? {
      for ch in 0..3 {cancel(&mut cancelled)?;let transformed=scratch.path("print-diffusion");let work=scratch.path("print-diffusion-work");let before=scratch.live()?;
        let m=crate::disk_diffusion::apply_plane_budgeted(&raw[ch],&transformed,&work,width,height,&kernel,ch,fft_memory_cap,&mut cancelled,|done,total|progress.pass("print_diffusion",ch as u64*n+done,total*3)).map_err(io)?;
@@ -404,3 +424,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  scratch.observe()?;let mut gpu=backend.diagnostics();if let Some(reason)=resident_fallback {gpu.requested=use_gpu;gpu.reason=reason.into();gpu.cpu_fallbacks+=1;}let metrics=StreamedMetrics{export_execution:None,metered_ev,gpu,width,height,pixel_count:n,memory_budget_mi_b:memory_budget_mib,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms,estimated_scratch_bytes:estimated_scratch_with_diffusion(width,height,pipe.params.camera.diffusion_filter.active||print_diffusion)?,peak_logical_scratch_bytes:scratch.peak,spatial_peak_explicit_buffer_bytes:scratch.spatial_buffer,spatial_bytes_read:scratch.read,spatial_bytes_written:scratch.written,spatial_pass_count:scratch.passes,pointwise_chunk_rows:rows,gpu_tiles:None,lut_storage_bytes:prepared.lut_storage_bytes(),stages,algorithm:"Full-image FIR/IIR and optional exact disk FFT overlap-save; spatial IO counters cover FIR/IIR only",grain_mode:"Absolute-coordinate Poisson-binomial with global dye-cloud/final blur",memory_policy:"Bounded row chunks plus16MiB spatial buffers; budget is admission estimate, not OS guarantee"};
  fs::remove_dir_all(&scratch.dir).map_err(io)?;drop(scratch);output_guard.keep=true;progress.pass("complete",n,n);progress.finish_stage();Ok(metrics)
 }
+
+#[cfg(all(test,feature="precision-f64"))]
+#[path="../tests/omitted_media_stream.rs"]
+mod omitted_medium_tests;

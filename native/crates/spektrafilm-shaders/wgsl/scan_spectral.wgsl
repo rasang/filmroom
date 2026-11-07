@@ -20,6 +20,11 @@ struct Params {
     // required when output gamut compression follows (it needs the
     // out-of-gamut values; the CPU scan path never clamps here either).
     bw: vec4<f32>,
+    // 0=spectral, 1=logRGB passthrough, 2=fixed-calibration negative readout.
+    media: vec4<f32>,
+    negative_min: vec4<f32>,
+    negative_range: vec4<f32>,
+    negative_gamma: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -47,6 +52,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     var xyz = vec3<f32>(0.0, 0.0, 0.0);
 
+    if params.media.x == 1.0 {
+        xyz=max(pow(vec3<f32>(10.0),vec3<f32>(cmy_r,cmy_g,cmy_b))-vec3<f32>(1e-10),vec3<f32>(0.0));
+    } else if params.media.x == 2.0 {
+        let density=vec3<f32>(cmy_r,cmy_g,cmy_b);
+        xyz=pow(clamp((density-params.negative_min.xyz)/params.negative_range.xyz,vec3<f32>(0.0),vec3<f32>(1.0)),params.negative_gamma.xyz);
+    } else {
     for (var wl = 0u; wl < params.n_wavelengths; wl++) {
         let cd_base = wl * 3u;
         // Same NaN handling as print_spectral — guard inputs before pow/multiply.
@@ -65,16 +76,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     xyz /= params.normalization;
+    }
 
     // B&W/slide luminance remap on the pre-matrix XYZ (the combined
     // CAT × xyz_to_rgb matrix is linear, so scaling here == scaling the
     // pre-CAT XYZ as the CPU LUT path does).
-    if params.bw.z != 0.0 {
+    if params.media.x == 0.0 && params.bw.z != 0.0 {
         let y = xyz.y;
         let scale = clamp(params.bw.x * y + params.bw.y, 0.0, 1.0) / (y + 1e-10);
         xyz = xyz * scale;
     }
 
+    // Core supplies XYZ→output RGB for spectral mode, and linear-sRGB→output
+    // RGB for the two explicit digital modes. No channel relabeling occurs.
     // XYZ → RGB via matrix multiply
     let rgb = params.xyz_to_rgb * xyz;
 

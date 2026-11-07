@@ -15,7 +15,8 @@ internal class NegativePreviewTerminalGate {
             if(cancelled)return NegativePreviewOutcome.CANCELLED
             if(!jobTerminal)return null // exact producer may not exist until final density harvest
             val observed=statuses.filterNotNull()
-            if(observed.isEmpty() || observed.any{it=="pending" || it !in setOf("ready","skipped_budget","failed","cancelled")})return null
+            if(observed.isEmpty() || observed.any{it=="pending" || it !in setOf("ready","skipped_budget","failed","cancelled","not_applicable")})return null
+            if(observed.all{it=="not_applicable"})return NegativePreviewOutcome.NOT_APPLICABLE
             if(observed.any{it=="failed" || it=="ready"})return NegativePreviewOutcome.FAILURE // ready without valid image
             if(observed.any{it=="skipped_budget"})return NegativePreviewOutcome.BUDGET_SKIP
             return NegativePreviewOutcome.CANCELLED

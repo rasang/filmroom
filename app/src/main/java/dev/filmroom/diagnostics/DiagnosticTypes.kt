@@ -3,7 +3,7 @@ package dev.filmroom.diagnostics
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
 enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP }
 enum class Stage { START, IMPORT_INPUT, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
-enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED }
+enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED, NOT_APPLICABLE }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
 enum class ErrorCode { GPU_COMPLETION_UNCERTAIN, ENGINE_UNAVAILABLE, INVALID_ARGUMENT, UNSUPPORTED_FORMAT, DECODE_FAILED, MEMORY_LIMIT, DISK_SPACE, RENDER_FAILED, ENCODE_FAILED, PERMISSION_LOST, CLEANUP_UNCERTAIN, CANCELLED, PREVIOUS_TERMINATION_UNCERTAIN, UNKNOWN }
 enum class FilmProfile(val id: String) {
@@ -203,6 +203,7 @@ data class SafeInfo(
     val gpuReason: GpuReason? = null,
     val gpuSelfTest: Boolean? = null,
     val gpuNumericGuard: Boolean? = null,
+    val gpuFailureKind:GpuFailureKind?=null, val gpuSubmitMs:Double?=null, val gpuPollMs:Double?=null, val gpuMapWaitMs:Double?=null,
     val gpuWorkPhase:GpuWorkPhase?=null, val gpuFailedPhase:GpuWorkPhase?=null,
     val gpuTileIndex:Long?=null, val gpuTileTotal:Long?=null, val gpuBatchIndex:Long?=null, val gpuCompletedSubmits:Long?=null,
     val gpuBatchElapsedMs:Double?=null, val gpuChainWaitMs:Double?=null, val gpuFailedElapsedMs:Double?=null,
@@ -397,6 +398,10 @@ data class SafeInfo(
         gpuSelfTest?.let{put("gpuSelfTest",it)}
         gpuNumericGuard?.let{put("gpuNumericGuard",it)}
         gpuWorkPhase?.let{put("gpuWorkPhase",it.id)}
+        gpuFailureKind?.let{put("gpuFailureKind",it.id)}
+        decimal("gpuSubmitMs",gpuSubmitMs,0.0,604_800_000.0)
+        decimal("gpuPollMs",gpuPollMs,0.0,604_800_000.0)
+        decimal("gpuMapWaitMs",gpuMapWaitMs,0.0,604_800_000.0)
         gpuFailedPhase?.let{put("gpuFailedPhase",it.id)}
         integer("gpuTileIndex",gpuTileIndex,1_800_000_000)
         integer("gpuTileTotal",gpuTileTotal,1_800_000_000)
@@ -587,6 +592,7 @@ data class SafeInfo(
             gpuSelfTest=fields["gpuSelfTest"]?.toBooleanStrictOrNull(),
             gpuNumericGuard=fields["gpuNumericGuard"]?.toBooleanStrictOrNull(),
             gpuWorkPhase=GpuWorkPhase.fromId(fields["gpuWorkPhase"]),
+            gpuFailureKind=GpuFailureKind.fromId(fields["gpuFailureKind"]),gpuSubmitMs=fields["gpuSubmitMs"]?.toDoubleOrNull(),gpuPollMs=fields["gpuPollMs"]?.toDoubleOrNull(),gpuMapWaitMs=fields["gpuMapWaitMs"]?.toDoubleOrNull(),
             gpuFailedPhase=GpuWorkPhase.fromId(fields["gpuFailedPhase"]),
             gpuTileIndex=fields["gpuTileIndex"]?.toLongOrNull(),
             gpuTileTotal=fields["gpuTileTotal"]?.toLongOrNull(),

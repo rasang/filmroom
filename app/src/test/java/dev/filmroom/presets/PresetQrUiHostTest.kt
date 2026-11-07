@@ -137,8 +137,10 @@ class PresetQrUiHostTest {
             val activity=host.get(); val before=activity.requestedOrientation
             button(activity,R.string.preset_qr_scan).performClick()
             val scan=shadowOf(activity).nextStartedActivityForResult.intent
-            assertEquals("com.journeyapps.barcodescanner.CaptureActivity",scan.component?.className)
-            assertTrue(scan.getBooleanExtra("SCAN_ORIENTATION_LOCKED",false))
+            assertEquals(RecipeScannerActivity::class.java.name,scan.component?.className)
+            val info=activity.packageManager.getActivityInfo(checkNotNull(scan.component),0)
+            assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,info.screenOrientation)
+            assertFalse(info.exported)
             shadowOf(activity).receiveResult(scan,android.app.Activity.RESULT_CANCELED,null)
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(before,activity.requestedOrientation)
@@ -154,14 +156,38 @@ class PresetQrUiHostTest {
             assertNull(shadowOf(activity).nextStartedActivity)
             assertNull(shadowOf(activity).lastRequestedPermission)
             button(activity,R.string.preset_qr_scan).performClick()
-            val permissionIntent=shadowOf(activity).nextStartedActivityForResult
-            assertEquals("android.content.pm.action.REQUEST_PERMISSIONS",permissionIntent.intent.action)
-            assertEquals("android.content.pm.action.REQUEST_PERMISSIONS",shadowOf(activity).nextStartedActivity.action)
-            val permission=shadowOf(activity).lastRequestedPermission
-            assertArrayEquals(arrayOf(Manifest.permission.CAMERA),permission.requestedPermissions)
-            activity.onRequestPermissionsResult(permission.requestCode,permission.requestedPermissions,intArrayOf(android.content.pm.PackageManager.PERMISSION_DENIED))
+            val scannerLaunch=shadowOf(activity).nextStartedActivityForResult
+            assertEquals(RecipeScannerActivity::class.java.name,scannerLaunch.intent.component?.className)
+            assertNull(shadowOf(activity).lastRequestedPermission)
+            // The dedicated scanner, not the import page, owns the camera permission.
+            Robolectric.buildActivity(RecipeScannerActivity::class.java,scannerLaunch.intent).setup().use { scannerHost ->
+                val scanner=scannerHost.get()
+                val request=shadowOf(scanner).nextStartedActivityForResult
+                assertEquals("android.content.pm.action.REQUEST_PERMISSIONS",request.intent.action)
+                // ActivityResultRegistry translated the contract into a framework permission
+                // request; the shadow records its actual arguments, not contract input extras.
+                val permissionRequest=shadowOf(scanner).lastRequestedPermission
+                assertNotNull(permissionRequest)
+                assertEquals(request.requestCode,permissionRequest.requestCode)
+                val permissions=permissionRequest.requestedPermissions
+                assertArrayEquals(arrayOf(Manifest.permission.CAMERA),permissions)
+                scanner.activityResultRegistry.dispatchResult(request.requestCode,android.app.Activity.RESULT_OK,Intent()
+                    .putExtra("androidx.activity.result.contract.extra.PERMISSIONS",permissions)
+                    .putExtra("androidx.activity.result.contract.extra.PERMISSION_GRANT_RESULTS",
+                        intArrayOf(android.content.pm.PackageManager.PERMISSION_DENIED)))
+                shadowOf(Looper.getMainLooper()).idle()
+                val album=all(scanner.findViewById(android.R.id.content)).single { it.tag=="recipe-camera-album" } as Button
+                assertEquals(View.VISIBLE,album.visibility);assertTrue(album.isEnabled)
+                album.performClick()
+                val scannerPicker=shadowOf(scanner).nextStartedActivityForResult
+                assertNotNull(scannerPicker);assertEquals("image/*",scannerPicker.intent.type)
+                assertEquals(android.content.pm.PackageManager.PERMISSION_DENIED,scanner.checkSelfPermission(Manifest.permission.CAMERA))
+                scanner.activityResultRegistry.dispatchResult(scannerPicker.requestCode,android.app.Activity.RESULT_CANCELED,null)
+                shadowOf(Looper.getMainLooper()).idle();assertTrue(album.isEnabled)
+                assertNull(shadowOf(scanner).nextStartedActivityForResult)
+            }
+            activity.activityResultRegistry.dispatchResult(scannerLaunch.requestCode,android.app.Activity.RESULT_CANCELED,null)
             shadowOf(Looper.getMainLooper()).idle()
-            assertNull(shadowOf(activity).nextStartedActivity)
             assertEquals(View.VISIBLE,button(activity,R.string.preset_qr_album).visibility)
             button(activity,R.string.preset_qr_album).performClick()
             val picker=shadowOf(activity).nextStartedActivityForResult

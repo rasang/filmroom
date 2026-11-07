@@ -1,0 +1,15 @@
+<resources>
+    <string name="backup_title">应用备份</string>
+    <string name="backup_description">备份设置、配方和导出记录，不包含原图、导出图、缓存或日志。</string>
+    <string name="backup_export">导出备份</string>
+    <string name="backup_import">导入备份</string>
+    <string name="backup_working">正在处理备份…</string>
+    <string name="backup_confirm">包含 %1$d 项设置、%2$d 个配方、%3$d 条导出记录。\n\n将覆盖对应设置（包括删除记录时是否删除照片的选项）。配方和记录仅合并，不删除现有数据；同名配方会另存。\n\n照片不包含在备份中，恢复的导出记录不能查看照片或重新导出。确定导入？</string>
+    <string name="backup_restore">确认导入</string>
+    <string name="backup_done">备份完成</string>
+    <string name="backup_exported">备份文件已保存。可保存在卸载后仍可访问的位置；文件未加密，请妥善保管。</string>
+    <string name="backup_restored">设置已恢复，新增 %1$d 个配方、%2$d 条记录。照片未包含，重复条目已跳过。</string>
+    <string name="backup_failed">备份未完成</string>
+    <string name="backup_invalid">无法处理备份。请检查文件、可用空间和访问权限；如果来自较新版本，请先升级应用。导出失败时请勿使用未完成的文件。</string>
+    <string name="backup_partial">导入未全部完成。已写入的数据保留，未删除原有配方或记录。请检查可用空间后重试；重复条目会跳过。</string>
+</resources>

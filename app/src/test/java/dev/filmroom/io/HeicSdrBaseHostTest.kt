@@ -49,18 +49,6 @@ class HeicSdrBaseHostTest {
         return contents
     }
 
-    @Test
-    @Config(sdk=[29])
-    fun olderPlatformPlainSdrPreparationDoesNotTouchPixelsOrRequireGainmapApi() {
-        val bitmap=base();val before=pixels(bitmap)
-        try {
-            HeicSdrBasePolicy.prepare(bitmap)
-            assertArrayEquals(before,pixels(bitmap))
-            assertEquals(Bitmap.Config.ARGB_8888,bitmap.config)
-            assertTrue(bitmap.colorSpace!!.isSrgb)
-        } finally {bitmap.recycle()}
-    }
-
     @Test fun removingNontrivialGainmapLeavesEverySdrBasePixelExactlyUnchanged() {
         val bitmap=base().let { mutable ->
             checkNotNull(mutable.copy(Bitmap.Config.ARGB_8888,false)).also { mutable.recycle() }

@@ -10,7 +10,8 @@ data class GpuWorkProgress(
     val phase:GpuWorkPhase?=null, val tileIndex:Long?=null, val tileTotal:Long?=null,
     val batchIndex:Long?=null, val batchElapsedMs:Double?=null, val chainWaitMs:Double?=null,
     val completedSubmits:Long?=null, val failedPhase:GpuWorkPhase?=null, val failedElapsedMs:Double?=null,
-    val prepass:Boolean=false
+    val prepass:Boolean=false,
+    val failureKind:dev.filmroom.diagnostics.GpuFailureKind?=null, val submitMs:Double?=null, val pollMs:Double?=null, val mapWaitMs:Double?=null
 ) {
     val compactText:String get()=buildString {
         append(L10n.text(if(prepass)R.string.gpu_phase_prepass else R.string.gpu_progress_processing))
@@ -21,6 +22,7 @@ data class GpuWorkProgress(
         put("gpuPhase",phase?.id);put("gpuTileIndex",tileIndex);put("gpuTileTotal",tileTotal)
         put("gpuBatchIndex",batchIndex);put("gpuBatchElapsedMs",batchElapsedMs);put("gpuChainWaitMs",chainWaitMs)
         put("gpuCompletedSubmits",completedSubmits);put("gpuFailedPhase",failedPhase?.id);put("gpuFailedElapsedMs",failedElapsedMs)
+        put("gpuFailureKind",failureKind?.id);put("gpuSubmitMs",submitMs);put("gpuPollMs",pollMs);put("gpuMapWaitMs",mapWaitMs)
         put("prepass",prepass);put("gpuScience",true)
     }
     companion object {
@@ -36,7 +38,7 @@ data class GpuWorkProgress(
             val failed=GpuWorkPhase.fromId(data.opt("gpuFailedPhase") as? String)?.takeIf{failedElapsed!=null}
             val submits=count("gpuCompletedSubmits")
             if(phase==null&&index==null&&failed==null&&data.opt("gpuScience")!=true&&data.opt("prepass")!=true)return null
-            return GpuWorkProgress(phase,index,total.takeIf{index!=null},batch,elapsed,time("gpuChainWaitMs"),submits,failed,failedElapsed,data.opt("prepass")==true)
+            return GpuWorkProgress(phase,index,total.takeIf{index!=null},batch,elapsed,time("gpuChainWaitMs"),submits,failed,failedElapsed,data.opt("prepass")==true, dev.filmroom.diagnostics.GpuFailureKind.fromId(data.opt("gpuFailureKind") as? String),time("gpuSubmitMs"),time("gpuPollMs"),time("gpuMapWaitMs"))
         }
     }
 }

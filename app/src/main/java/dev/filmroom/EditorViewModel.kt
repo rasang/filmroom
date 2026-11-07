@@ -294,10 +294,15 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     fun applySavedPreset(expectedPhotoKey:String,expectedParameters:EditorState,next:EditorState):Boolean {
         val current=mutable.value
         if(!current.editable || current.compositionEditing || current.photo?.cacheKey!=expectedPhotoKey || current.parameters!=expectedParameters)return false
+        // Preserve stored recipes verbatim, but reject impossible presentation before
+        // parameters() can update undo history or persist the active session.
+        if (!next.hasFilm && next.filmBorder)
+            throw dev.filmroom.presets.SavedPresetStore.Failure(dev.filmroom.presets.SavedPresetStore.Problem.INCOMPATIBLE)
         parameters(next,true)
         return true
     }
     private fun processingPreset(parameters:EditorState):EditorState {
+        if(!parameters.hasFilm) return parameters.processingDefaults(parameters.paperStock,parameters.outputRoute)
         val profiles=org.json.JSONObject(getApplication<Application>().assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         val profile=(0 until profiles.length()).map{profiles.getJSONObject(it)}.firstOrNull{it.getString("id")==parameters.filmStock}
             ?: return parameters.processingDefaults(EditorState().paperStock,EditorState().outputRoute)
@@ -383,8 +388,8 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         val scienceKey=previewScience(params)
         val cachedPresentation=processedBitmap?.isRecycled==false && processedPhoto===s.photo && processedScience==scienceKey
         if(pendingRefinement?.let{it.photo!==s.photo || it.science!=scienceKey}==true)pendingRefinement=null
-        if(params.filmBorder && params.filmBorderStage==1)pendingRefinement=null
-        else if(settled && (requestRefinement || !cachedPresentation))pendingRefinement=RefinementTarget(s.photo,scienceKey)
+        // Whole-frame refinement preserves the pre-imaging canvas; only legacy ROI remains disabled.
+        if(settled && (requestRefinement || !cachedPresentation))pendingRefinement=RefinementTarget(s.photo,scienceKey)
         // Do not restart the initial deadline or cancel useful native work on every slider
         // event. Invalidate publication immediately, retaining only the latest request.
         // The running coroutine drains this slot after its current stage has released ownership.

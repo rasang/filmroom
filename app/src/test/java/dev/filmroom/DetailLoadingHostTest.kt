@@ -144,4 +144,25 @@ class DetailLoadingHostTest {
         }finally{dispose(controller);scale.invoke(null,1f)}
     }
 
+    @Suppress("UNCHECKED_CAST")
+    @Test fun preImagingWholeFrameShowsOnlyActualForegroundRefinement() {
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            val activity=controller.get();val vm=install(activity)
+            val state=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(vm) as MutableStateFlow<EditorUiState>
+            val params=state.value.parameters.copy(filmBorder=true,filmBorderStage=1)
+            state.value=state.value.copy(parameters=params,renderedParameters=params,previewRefining=true)
+            val spinner=field(activity,"detailLoading") as ProgressBar
+            update(activity,DetailStatus(DetailPhase.WaitingForPreview))
+            assertEquals(View.VISIBLE,spinner.visibility)
+            state.value=state.value.copy(previewRefining=false)
+            update(activity,DetailStatus(DetailPhase.WaitingForPreview));assertEquals(View.INVISIBLE,spinner.visibility)
+            state.value=state.value.copy(previewRefining=true,compare=true)
+            update(activity,DetailStatus(DetailPhase.WaitingForPreview));assertEquals(View.INVISIBLE,spinner.visibility)
+            state.value=state.value.copy(compare=false)
+            MainActivity::class.java.getDeclaredField("detailForeground").apply{isAccessible=true}.set(activity,false)
+            update(activity,DetailStatus(DetailPhase.WaitingForPreview));assertEquals(View.INVISIBLE,spinner.visibility)
+        }finally{dispose(controller)}
+    }
+
 }

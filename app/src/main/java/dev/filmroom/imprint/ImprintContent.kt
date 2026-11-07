@@ -146,8 +146,11 @@ data class ImprintContent(val date: String?, val fields: List<ImprintField>) {
             number(f["ExposureBiasValue"], signed = true)?.takeIf { it in -99.0..99.0 }?.let {
                 add(ImprintField(ImprintFieldKind.EXPOSURE_BIAS, exposureBias(it)))
             }
-            // FocalLengthIn35mmFilm is a different measurement and cannot fill this field.
-            number(f["FocalLength"])?.takeIf { it > 0.0 && it <= UINT_MAX }?.let {
+            // Prefer recorded 35mm-equivalent focal length, never infer a sensor crop factor.
+            // EXIF defines the equivalent tag as SHORT; zero means unknown.
+            val focal = number(f["FocalLengthIn35mmFilm"])?.takeIf { it >= 0.5 && it <= 65535.0 }
+                ?: number(f["FocalLength"])?.takeIf { it > 0.0 && it <= UINT_MAX }
+            focal?.let {
                 val rounded = BigDecimal.valueOf(it).setScale(0, RoundingMode.HALF_UP)
                 // Do not invent a zero-millimetre lens when a positive sub-mm value rounds to zero.
                 if (rounded.signum() > 0) add(ImprintField(ImprintFieldKind.FOCAL_LENGTH, rounded.toPlainString() + "mm"))

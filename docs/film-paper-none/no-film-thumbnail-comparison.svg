@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="370" viewBox="0 0 640 370">
+<rect width="640" height="370" fill="#1b1b1b"/>
+<defs><g id="art"><path fill="none" stroke="#a6a8a4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14 10" d="M137 50 C137 36 196 36 196 50 L196 187 C196 201 157 203 137 195 L107 199 C98 209 49 209 49 195 L49 105 C49 99 58 95 70 94 L70 90 C70 86 85 86 85 90 L85 94 C94 94 101 96 107 99 L137 90 Z"/></g></defs>
+<g fill="#ddd" font-family="sans-serif" font-size="15"><text x="45" y="37">72 × 72 · actual thumbnail</text><text x="310" y="37">240 × 240 · enlarged</text></g>
+<rect x="55" y="93" width="112" height="130" rx="12" fill="#292929" stroke="#555"/>
+<use href="#art" transform="translate(75 101) scale(.3)"/>
+<text x="102" y="204" fill="#ddd" font-family="sans-serif" font-size="12">无</text>
+<use href="#art" transform="translate(310 58)"/>
+<text x="45" y="335" fill="#aaa" font-family="sans-serif" font-size="13">Stroke 5 · dash 14 · gap 10 (240-unit drawing)</text>
+</svg>

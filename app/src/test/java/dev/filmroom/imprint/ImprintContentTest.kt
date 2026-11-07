@@ -88,12 +88,17 @@ class ImprintContentTest {
         assertEquals("256", field(ImprintFieldKind.SHUTTER, "ExposureTime" to "0", "ShutterSpeedValue" to "8"))
     }
 
-    @Test fun focalIsRealNotEquivalentAndNumbersAreBoundedWithoutStrippingIntegerZeros() {
-        assertNull(field(ImprintFieldKind.FOCAL_LENGTH, "FocalLengthIn35mmFilm" to "800"))
+    @Test fun focalPrefersEquivalentAndNumbersAreBoundedWithoutStrippingIntegerZeros() {
+        assertEquals("800mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLengthIn35mmFilm" to "800"))
         for ((raw, text) in listOf("400" to "400mm", "800" to "800mm", "1200" to "1200mm", "2000" to "2000mm", "4294967295" to "4294967295mm",
             "123456789/1000000" to "123mm", "49.5" to "50mm", "1999.5" to "2000mm"))
             assertEquals(raw, text, field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to raw))
-        assertEquals("50mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to "50", "FocalLengthIn35mmFilm" to "75"))
+        assertEquals("75mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to "50", "FocalLengthIn35mmFilm" to "75"))
+        assertEquals("43mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to "9", "FocalLengthIn35mmFilm" to "42.5"))
+        for (invalid in listOf("0", "-1", "NaN", "Infinity", "bad", "1/0", "65536", "0.1")) {
+            assertEquals(invalid, "9mm", field(ImprintFieldKind.FOCAL_LENGTH, "FocalLength" to "9", "FocalLengthIn35mmFilm" to invalid))
+            assertNull(invalid, field(ImprintFieldKind.FOCAL_LENGTH, "FocalLengthIn35mmFilm" to invalid))
+        }
         assertEquals("±0.0", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "-0.0"))
         assertEquals("+10.0", field(ImprintFieldKind.EXPOSURE_BIAS, "ExposureBiasValue" to "10"))
     }

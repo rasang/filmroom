@@ -1,0 +1,15 @@
+<resources>
+    <string name="backup_title">App backup</string>
+    <string name="backup_description">Back up settings, recipes and export records, without photos, caches or logs.</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_import">Import backup</string>
+    <string name="backup_working">Processing backup…</string>
+    <string name="backup_confirm">Contains %1$d settings, %2$d recipes and %3$d export records.\n\nMatching settings will be replaced, including photo-deletion preferences. Recipes and records are merged without deleting existing data; conflicting recipe names are renamed.\n\nPhotos are not included. Restored records cannot open photos or restart exports. Import?</string>
+    <string name="backup_restore">Confirm import</string>
+    <string name="backup_done">Backup complete</string>
+    <string name="backup_exported">Backup saved. Keep it somewhere accessible after uninstalling. The file is not encrypted; store it securely.</string>
+    <string name="backup_restored">Settings restored; %1$d recipes and %2$d records added. Photos are not included. Duplicates were skipped.</string>
+    <string name="backup_failed">Backup incomplete</string>
+    <string name="backup_invalid">Could not process the backup. Check the file, space and access permissions. Upgrade the app for newer backup versions. Do not use a partially exported file.</string>
+    <string name="backup_partial">Import did not fully complete. Saved changes remain; existing recipes and records were not deleted. Check free space and retry; duplicates will be skipped.</string>
+</resources>

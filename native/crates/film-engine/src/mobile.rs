@@ -222,7 +222,7 @@ impl MobileParams {
         p.settings.use_enlarger_lut=true;p.settings.use_scanner_lut=true;p.settings.lut_resolution=33;
         p.camera.auto_exposure=self.auto_exposure;p.camera.auto_exposure_method=self.metering.clone();p.camera.film_format_mm=self.film_format_mm as f32;p.camera.lens_blur_um=self.lens_blur_um as f32;p.scanner.lens_blur=self.scan_blur as f32;
         p.camera.exposure_compensation_ev=self.film_exposure_ev as f32;
-        p.io.scan_film=self.output_route=="direct";p.io.input_color_space="sRGB".into(); p.io.output_color_space=self.output_color_space.clone();
+        p.io.scan_film=if self.paper_stock=="none" {true}else if self.film_stock=="none" {false}else{self.output_route=="direct"};p.io.input_color_space="sRGB".into(); p.io.output_color_space=self.output_color_space.clone();
         p.io.output_gamut_compress.algorithm=if self.output_gamut{"cam16ucs"}else{"off"}.into();
         p.io.input_cctf_decoding=false; p.io.output_cctf_encoding=false;
         p.scanner.unsharp_mask=if self.scan_sharpen_amount>0. {[self.scan_sharpen_radius as f32,self.scan_sharpen_amount as f32]}else{[0.,0.]};
@@ -282,6 +282,19 @@ impl MobileParams {
             p.print_render.density_curves_morph.active=false;
             p.print_render.density_curve_gamma=(self.paper_gamma*self.contrast) as f32;
             p.enlarger.y_filter_shift=self.print_yellow as f32;
+        }
+        if self.film_stock=="none" {
+            p.film_render.grain.active=false;p.film_render.dir_couplers.active=false;
+            p.film_render.halation.active=false;p.film_render.halation.boost_ev=0.;
+            p.settings.neutral_print_filters_from_database=false;
+            p.enlarger.c_filter_neutral=0.;p.enlarger.m_filter_neutral=0.;p.enlarger.y_filter_neutral=0.;
+            p.enlarger.print_exposure_compensation=false;
+        }
+        if self.paper_stock=="none" {
+            p.enlarger.diffusion_filter.active=false;p.print_render.glare.active=false;p.film_render.glare.active=false;
+        }
+        if self.film_stock=="none" || self.paper_stock=="none" {
+            p.scanner.white_correction=false;p.scanner.black_correction=false;
         }
         p
     }
@@ -344,6 +357,7 @@ pub fn progress_json(engine:&Engine)->Result<String> {
     Ok(serde_json::json!({"ok":true,"schemaVersion":1,"preparedSpectral":engine.prepared_spectral_cache.stats(),"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running","gpuFallbackReason":p.gpu_fallback_reason,
         "gpuPhase":p.gpu_work.and_then(|g|g.phase),"gpuTileIndex":p.gpu_work.map(|g|g.tile_index),"gpuTileTotal":p.gpu_work.map(|g|g.tile_total),
         "gpuBatchIndex":p.gpu_work.map(|g|g.batch_index),"gpuBatchElapsedMs":p.gpu_work.map(|g|g.batch_elapsed_ms),"gpuChainWaitMs":p.gpu_work.map(|g|g.chain_wait_ms),"gpuCompletedSubmits":p.gpu_work.map(|g|g.completed_submits),
+        "gpuFailureKind":p.gpu_work.and_then(|g|g.failure_kind),"gpuSubmitMs":p.gpu_work.and_then(|g|g.submit_ms),"gpuPollMs":p.gpu_work.and_then(|g|g.poll_ms),"gpuMapWaitMs":p.gpu_work.and_then(|g|g.map_wait_ms),
         "gpuFailedPhase":p.gpu_work.and_then(|g|g.failed_phase),"gpuFailedElapsedMs":p.gpu_work.and_then(|g|g.failed_elapsed_ms)}).to_string())
 }
 #[derive(Debug,Serialize)]
@@ -440,6 +454,9 @@ pub fn prewarm_front(engine:&Engine,token:u64,params:&MobileParams)->Result<Stri
     if !current() {return Err(EngineError::new("CANCELLED","Stale prewarm token"));}
     if !engine.prepared_spectral_cache.stats().enabled {
         return Ok(serde_json::json!({"ok":true,"operation":"prewarmFront","outcome":"disabled","preparedSpectral":engine.prepared_spectral_cache.stats()}).to_string());
+    }
+    if params.film_stock == "none" {
+        return Ok(serde_json::json!({"ok":true,"operation":"prewarmFront","outcome":"no_film","preparedSpectral":engine.prepared_spectral_cache.stats()}).to_string());
     }
     // The selected installed profile is bounded before parsing. It is local to
     // this active reservation, not a new persistent profile cache entry.
@@ -587,8 +604,16 @@ pub(crate) fn resident_diagnostics(gpu:&spektrafilm_gpu::wgpu_backend::WgpuBacke
 /// Metadata revisions are cheap to verify and prevent reusing cached scientific
 /// assets after an installer has replaced the data snapshot on this handle.
 fn refresh_cache_revision(engine:&Engine,params:&MobileParams)->Result<()> {
-    let files=[format!("profiles/{}.json",params.film_stock),format!("profiles/{}.json",params.paper_stock),"luts/spectral_upsampling/irradiance_xy_tc.npy".into(),"filters/neutral_print_filters.json".into()];
-    let mut revision=String::new();
+    // `none` is a synthetic omitted medium, not an installed profile file.
+    // Keep role/selection identity so toggling either medium invalidates caches,
+    // while still requiring all real profiles and shared scientific assets.
+    let mut files=Vec::new();
+    let mut revision=format!("film:{};paper:{};",params.film_stock,params.paper_stock);
+    for stock in [&params.film_stock,&params.paper_stock] {
+        if stock != "none" {files.push(format!("profiles/{stock}.json"));}
+    }
+    files.push("luts/spectral_upsampling/irradiance_xy_tc.npy".into());
+    files.push("filters/neutral_print_filters.json".into());
     for name in files {
         let meta=std::fs::metadata(engine.data_dir.join(&name)).map_err(|_|EngineError::new("MISSING_DATA","Bundled data revision is unavailable"))?;
         let changed=meta.modified().ok().and_then(|v|v.duration_since(std::time::UNIX_EPOCH).ok()).map(|v|v.as_nanos());
@@ -1276,6 +1301,24 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         reporter.gpu_failure("print",5000.);drop(reporter);let _=progress_finish(&e,job,Some("GPU_COMPLETION_UNCERTAIN"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["gpuFailedPhase"],"print");assert_eq!(json["gpuFailedElapsedMs"],5000.);assert_eq!(json["gpuCompletedSubmits"],10);
         progress_begin(&e,"preview");let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(json["gpuPhase"].is_null());assert!(json["gpuFailedPhase"].is_null());
     }
+    #[test] fn first_submit_failure_details_reset_before_cpu_or_unsupported_adapter_job() {
+        let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),prewarm_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None),pipeline_epoch:AtomicU64::new(0),preview_stage_cache:Mutex::new(StageCache::default()),prepared_spectral_cache:spektrafilm_core::prepared_spectral::PreparedSpectralCache::disabled()};
+        let job=progress_begin(&e,"exportFile");
+        let mut reporter=crate::streamed_progress::Reporter::new(|v|progress_update_export(&e,v));
+        reporter.gpu_failure("front",1.);
+        reporter.gpu_failure_detail("submit_unwind",1.,0.,0.);
+        drop(reporter);let _=progress_finish(&e,job,Some("GPU_COMPLETION_UNCERTAIN"));
+        let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+        assert_eq!(json["gpuFailureKind"],"submit_unwind");assert_eq!(json["gpuSubmitMs"],1.);
+        assert_eq!(json["gpuCompletedSubmits"],0);assert_eq!(json["gpuFailedPhase"],"front");
+        for unsupported in [false,true] {
+            progress_begin(&e,"exportFile");
+            if unsupported {progress_update_export(&e,crate::streamed_progress::ExportProgress{gpu:None,pass_updated:false,phase:"unsupported_adapter",done:0,total:0,display_stage:1,stage_done:0,stage_total:0});}
+            let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();
+            for key in ["gpuFailureKind","gpuSubmitMs","gpuPollMs","gpuMapWaitMs","gpuFailedPhase"] {assert!(json[key].is_null(),"stale {key}");}
+            if unsupported {assert_eq!(json["gpuFallbackReason"],"unsupported_adapter");}
+        }
+    }
     #[test] fn fallback_reason_survives_cpu_progress_cancel_and_resets_next_job() {
         let e=Engine{data_dir:PathBuf::new(),cancel_generation:AtomicU64::new(0),prewarm_generation:AtomicU64::new(0),destroyed:AtomicBool::new(false),render_lock:Mutex::new(()),progress:Mutex::new(ProgressState::default()),profile_cache:Mutex::new(HashMap::new()),cache_revision:Mutex::new(None),pipeline_cache:Mutex::new(None),pipeline_epoch:AtomicU64::new(0),preview_stage_cache:Mutex::new(StageCache::default()),prepared_spectral_cache:spektrafilm_core::prepared_spectral::PreparedSpectralCache::disabled()};
         let job=progress_begin(&e,"exportFile");
@@ -1601,6 +1644,21 @@ mod encoded_reuse_probe_tests {
     impl Drop for Owner {fn drop(&mut self){destroy(self.0);}}
     fn input(w:u32,h:u32)->Vec<f32>{(0..w*h*3).map(|i|0.005+((i*31+7)%257)as f32/800.).collect()}
     fn assert_pixels(a:&[f32],b:&[f32]){assert_eq!(a.iter().map(|v|v.to_bits()).collect::<Vec<_>>(),b.iter().map(|v|v.to_bits()).collect::<Vec<_>>());assert_eq!(linear_srgb_to_rgba8(a),linear_srgb_to_rgba8(b));}
+    #[test] fn omitted_profiles_survive_mobile_cache_revision_and_render() {
+        let owner=Owner::new();let e=get(owner.0).unwrap();
+        assert!(!e.data_dir.join("profiles/none.json").exists());
+        let input=input(8,8);
+        for use_gpu in [false,true] { for film in ["none","kodak_portra_400"] { for paper in ["none","kodak_portra_endura"] {
+            let mut p=params();p.use_gpu=use_gpu;p.film_stock=film.into();p.paper_stock=paper.into();p.grain_amount=0.;
+            p.validate().unwrap();
+            refresh_cache_revision(&e,&p).unwrap();
+            let first=render(&e,0,&input,8,8,&p).unwrap();
+            assert_eq!(first.pixels.len(),input.len());assert!(first.pixels.iter().all(|v|v.is_finite()));
+            let repeated=render(&e,0,&input,8,8,&p).unwrap();assert_pixels(&first.pixels,&repeated.pixels);
+        }}}
+        let mut invalid=params();invalid.film_stock="missing_real_profile".into();
+        assert!(refresh_cache_revision(&e,&invalid).is_err(),"real missing profiles must still fail");
+    }
     #[test] fn key_excludes_only_brightness_and_covers_every_upstream_field() {
         let owner=Owner::new();let e=get(owner.0).unwrap();let p=params();let key=preview_stage_key(&e,&p,32,24,"cpu").unwrap();
         let mut q=p.clone();q.brightness_ev=2.;assert_eq!(key,preview_stage_key(&e,&q,32,24,"cpu").unwrap());
@@ -1738,6 +1796,13 @@ mod prepared_asset_admission_tests {
 mod idle_prewarm_owner_tests {
     use super::*;
     fn owner()->(i64,Arc<Engine>){let root=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");let id=create(root.to_str().unwrap()).unwrap();(id,get(id).unwrap())}
+    #[test] fn omitted_film_prewarm_skips_without_reading_a_virtual_profile(){
+        let(id,engine)=owner();set_prepared_spectral_cache_budget(&engine,PREPARED_ASSET_BUDGET_BYTES).unwrap();
+        let mut p=MobileParams::default();p.film_stock="none".into();
+        let packet:serde_json::Value=serde_json::from_str(&prewarm_front(&engine,0,&p).unwrap()).unwrap();
+        assert_eq!(packet["outcome"],"no_film");assert_eq!(engine.prepared_spectral_cache.stats().publications,0);
+        assert!(engine.profile_cache.lock().unwrap().is_empty());assert!(engine.pipeline_cache.lock().unwrap().is_none());destroy(id);
+    }
     #[test] fn prewarm_generation_does_not_cancel_interactive_generation(){
         let(id,engine)=owner();let foreground=engine.cancel_generation.load(Ordering::Acquire);
         invalidate_prewarm(id,5);assert_eq!(engine.cancel_generation.load(Ordering::Acquire),foreground);

@@ -58,7 +58,7 @@ class OwnedDetailProvider internal constructor(
         val dataRevision=digest.digest().joinToString(""){"%02x".format(it)}
         timing.mark(DetailTimingPoint.DATA_HASH_END)
         timing.mark(DetailTimingPoint.METERING_START)
-        val metering=if(parameters.autoExposure)PreviewMetering.resolve(photo,root,parameters.metering,memory)else null
+        val metering=if(parameters.autoExposure)PreviewMetering.resolve(photo,suppliedRoot,parameters.metering,memory)else null
         timing.mark(DetailTimingPoint.METERING_END)
         timing.mark(DetailTimingPoint.SOURCE_START)
         val source=sources.prepare(photo,maxEdge,timing)

@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
@@ -287,6 +288,59 @@ class SavedPresetsUiHostTest {
             }
         }
     }
+    @Test(timeout=60000) fun scanEntryOpensCameraDirectly() {
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+            val activity=host.get();setup(activity,EditorState())
+            button(activity,"recipeButton").performClick()
+            val recipes=latest()
+            all(recipes.window!!.decorView).single{it.tag=="recipe-qr-scan"}.performClick()
+            val intent=shadowOf(activity).nextStartedActivity
+            assertEquals(dev.filmroom.presets.RecipeScannerActivity::class.java.name,intent.component!!.className)
+            assertFalse(recipes.isShowing)
+            assertNull(shadowOf(activity).nextStartedActivity)
+        }
+    }
+    @Test(timeout=60000) fun scanReturnsToEditorNameDialogAndSaveReopensListWithoutApplying() {
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+            val activity=host.get();val original=EditorState(brightness=.2f);val(_,flow)=setup(activity,original)
+            button(activity,"recipeButton").performClick()
+            val recipes=latest()
+            all(recipes.window!!.decorView).single{it.tag=="recipe-qr-scan"}.performClick()
+            val launch=shadowOf(activity).nextStartedActivityForResult
+            assertEquals(dev.filmroom.presets.RecipeScannerActivity::class.java.name,launch.intent.component!!.className)
+            // Robolectric tracks for-result and ordinary launch queues separately.
+            // Consume the already asserted scanner launch before checking no later screen opens.
+            assertEquals(launch.intent.component,shadowOf(activity).nextStartedActivity.component)
+            val payload=PresetQrCodec.encode("Scanned",EditorState(brightness=.8f))
+            activity.activityResultRegistry.dispatchResult(launch.requestCode,android.app.Activity.RESULT_OK,
+                Intent().putExtra(dev.filmroom.presets.RecipeScannerActivity.EXTRA_QR_TEXT,payload))
+            await{latest()!==recipes && latest().isShowing}
+            val naming=latest();assertEquals("recipe-import-name",input(naming).tag)
+            assertEquals("Scanned",input(naming).text.toString())
+            assertTrue(SavedPresetStore(activity).list().isEmpty())
+            input(naming).setText("Imported")
+            naming.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            naming.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            await{SavedPresetStore(activity).list().size==1 && latest()!==naming && latest().isShowing}
+            assertTrue(all(latest().window!!.decorView).any{it.tag=="saved-preset-list"})
+            assertEquals(.8f,SavedPresetStore(activity).list().single().parameters().brightness)
+            assertEquals(original,flow.value.parameters)
+            assertNull(shadowOf(activity).nextStartedActivity)
+        }
+    }
+    @Test(timeout=60000) fun scannedNamingCancelDoesNotSaveOrApply() {
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+            val activity=host.get();val original=EditorState(brightness=.2f);val(_,flow)=setup(activity,original)
+            button(activity,"recipeButton").performClick();val recipes=latest()
+            all(recipes.window!!.decorView).single{it.tag=="recipe-qr-scan"}.performClick()
+            val launch=shadowOf(activity).nextStartedActivityForResult
+            activity.activityResultRegistry.dispatchResult(launch.requestCode,android.app.Activity.RESULT_OK,
+                Intent().putExtra(dev.filmroom.presets.RecipeScannerActivity.EXTRA_QR_TEXT,PresetQrCodec.encode("Cancel",EditorState())))
+            await{latest()!==recipes && latest().isShowing}
+            latest().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+            assertTrue(SavedPresetStore(activity).list().isEmpty());assertEquals(original,flow.value.parameters)
+        }
+    }
     @Test(timeout=60000) fun longPressSharesInModalAndOnlyShareImageOpensChooser() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
             val activity=host.get();val parameters=EditorState(brightness=.7f);val(_,flow)=setup(activity,parameters)
@@ -322,7 +376,7 @@ class SavedPresetsUiHostTest {
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(32))
             scan.performClick()
             val intent=shadowOf(activity).nextStartedActivity
-            assertEquals(PresetQrActivity::class.java.name,intent.component!!.className)
+            assertEquals(dev.filmroom.presets.RecipeScannerActivity::class.java.name,intent.component!!.className)
             assertFalse(intent.hasExtra(PresetQrActivity.EXTRA_PRESET_ID));assertFalse(recipes.isShowing)
         }
     }
@@ -346,4 +400,70 @@ class SavedPresetsUiHostTest {
         }
     }
 
+    @Test(timeout=30000) fun noFilmFramedRecipeRoundTripsButCannotPolluteEditorOrSession() {
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+            val activity=host.get();val before=EditorState(brightness=.5f)
+            val(vm,flow)=setup(activity,before)
+            val session=activity.getSharedPreferences("local-session",0)
+            session.edit().putString("parameters",before.json()).commit()
+            val sessionBefore=session.all.toMap()
+            val history=EditorViewModel::class.java.getDeclaredField("history").apply{isAccessible=true}
+            val historyBefore=history.get(vm)
+            val uiBefore=flow.value
+            val store=SavedPresetStore(activity)
+            var previousDialog: AlertDialog? = null
+            for(stage in 0..1) {
+                val bad=before.copy(filmStock="none",paperStock="none",filmBorder=true,filmBorderStage=stage,
+                    composition=dev.filmroom.model.CompositionTransform(.55,.45,1.3))
+                assertEquals(bad,EditorState.fromJson(bad.json()))
+                assertEquals(bad,dev.filmroom.presets.PresetQrCodec.decode(
+                    dev.filmroom.presets.PresetQrCodec.encode("No film",bad)).parameters)
+                val saved=store.save("No film $stage",bad)
+                val document=dev.filmroom.backup.AppBackupCodec.Document(org.json.JSONObject(),listOf(saved),org.json.JSONArray())
+                val restored=dev.filmroom.backup.AppBackupCodec.read(
+                    dev.filmroom.backup.AppBackupCodec.encode(document).inputStream())
+                assertEquals(bad,restored.recipes.single().parameters())
+                try {
+                    vm.applySavedPreset(flow.value.photo!!.cacheKey,before,bad)
+                    fail("Expected incompatible recipe")
+                } catch(error:SavedPresetStore.Failure) {
+                    assertEquals(SavedPresetStore.Problem.INCOMPATIBLE,error.problem)
+                }
+                assertEquals(uiBefore,flow.value);assertSame(historyBefore,history.get(vm))
+                assertEquals(sessionBefore,session.all)
+                button(activity,"recipeButton").performClick();val dialog=latest()
+                assertTrue("Each stage must open a live recipe dialog",dialog.isShowing)
+                previousDialog?.let { assertNotSame("Do not reuse the dismissed stage dialog",it,dialog) }
+                choose(dialog)
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                await { all(dialog.window!!.decorView).filterIsInstance<TextView>().any {
+                    it.text.toString()==dev.filmroom.i18n.L10n.text(R.string.saved_preset_incompatible) } }
+                assertTrue(dialog.isShowing);assertEquals(uiBefore,flow.value)
+                assertSame(historyBefore,history.get(vm));assertEquals(sessionBefore,session.all)
+                dialog.cancel()
+                // AlertDialog posts OnDismiss; let track() clear its reference before reopening.
+                shadowOf(Looper.getMainLooper()).idle()
+                assertFalse(dialog.isShowing)
+                previousDialog=dialog
+                store.delete(saved.id)
+            }
+            vm.cancel()
+        }
+    }
+
+    @Test(timeout=30000) fun validNoneAndFramedStagesApplyWithoutNormalization() {
+        for(next in listOf(EditorState(filmStock="none",filmBorder=false),
+            EditorState(filmBorder=true,filmBorderStage=0),EditorState(filmBorder=true,filmBorderStage=1))) {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+                val before=EditorState(brightness=.5f)
+                val(vm,flow)=setup(host.get(),before)
+                assertTrue(vm.applySavedPreset(flow.value.photo!!.cacheKey,before,next))
+                assertEquals(next,flow.value.parameters);assertTrue(flow.value.canUndo)
+                assertEquals(next,EditorState.fromJson(host.get().getSharedPreferences("local-session",0)
+                    .getString("parameters",null)!!))
+                // This test exercises adoption, not the JNI render; stop before scheduled work.
+                vm.cancel()
+            }
+        }
+    }
 }

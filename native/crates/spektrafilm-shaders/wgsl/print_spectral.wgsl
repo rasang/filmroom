@@ -16,6 +16,9 @@ struct Params {
     // Zero unless the enlarger preflash is active. vec3 is 16-byte aligned,
     // so it lands at offset 16 right after the four leading scalars.
     preflash: vec3<f32>,
+    // Explicit digital RGB-to-paper transport; zero preserves spectral path.
+    media: vec4<f32>,
+    paper_gain: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -41,6 +44,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     var raw = vec3<f32>(0.0, 0.0, 0.0);
 
+    if params.media.x != 0.0 {
+        let log_rgb=vec3<f32>(cmy_r,cmy_g,cmy_b);
+        // Clamp to the real paper sensitometry axis before diffusion: black
+        // input must not turn into an unbounded reciprocal-light impulse.
+        let log_raw=clamp(vec3<f32>(params.media.y+log(0.18)/log(10.0))-log_rgb,vec3<f32>(params.media.z),vec3<f32>(params.media.w));
+        raw=pow(vec3<f32>(10.0),log_raw)*params.paper_gain.xyz;
+    } else {
     for (var wl = 0u; wl < params.n_wavelengths; wl++) {
         let cd_base = wl * 3u;
         // CPU side guarantees no NaN values are uploaded — see wgpu_backend.rs
@@ -56,6 +66,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         raw.x += light * sensitivity[cd_base];
         raw.y += light * sensitivity[cd_base + 1u];
         raw.z += light * sensitivity[cd_base + 2u];
+    }
+
     }
 
     raw = raw * params.normalization_factor + params.preflash;

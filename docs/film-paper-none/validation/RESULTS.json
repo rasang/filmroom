@@ -1,0 +1,17 @@
+{
+  "source_commit": "f00252f23cf19285c06e8932196805c631877a04",
+  "production_kotlin": "PASS, complete main sources, single CPU 640 MiB JVM; borrowed unchanged paper R.jar/resources for host",
+  "host_tests": 19,
+  "core_gpu_tests": 3,
+  "shader_gpu_tests": 2,
+  "streamed_test": "PASS: 4 media combinations x 2 input color spaces x CPU/GPU requests = 16 cases; GPU active and batch assertions",
+  "gpu_environment": "Chromium SwiftShader Vulkan, not physical Adreno",
+  "apk_built": false,
+  "device_validation": false,
+  "native_host_manifest": "For final film-engine host test only: autobins=false and crate-type=rlib, restored original manifest after completion",
+  "notes": [
+    "Initial non-sRGB streaming mismatch fixed by input colorspace conversion",
+    "2383/2393 K75P viewing illuminant preserved in GPU, replacing incorrect D50 fallback",
+    "Initial resource-limited/aborted attempts are not counted as passes"
+  ]
+}

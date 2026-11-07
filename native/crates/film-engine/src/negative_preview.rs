@@ -312,7 +312,7 @@ pub(crate) fn same_attempt(dir:&Path, attempt:&str) -> bool {
     fs::read_to_string(dir.join("scan-preview-attempt")).ok().as_deref()==Some(attempt)
 }
 fn write_status(dir:&Path,attempt:&str,status:&str,early:bool) -> io::Result<()> {
-    if !valid_attempt(attempt) || !["pending","ready","skipped_budget","failed","cancelled"].contains(&status) || !same_attempt(dir,attempt) {
+    if !valid_attempt(attempt) || !["pending","ready","skipped_budget","failed","cancelled","not_applicable"].contains(&status) || !same_attempt(dir,attempt) {
         return Err(invalid("Expired preview attempt"));
     }
     let prefix=if early {"negative-preview-early-"}else{"negative-preview-"};

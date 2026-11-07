@@ -1,0 +1,40 @@
+     Running tests/gpu_omitted_media.rs (/workspace/shared/dev-push-validation/target-host/debug/deps/gpu_omitted_media-d06755052a9a3ad1)
+
+running 3 tests
+test every_paper_calibrates_without_film_and_reversal_keeps_positive_scan ... fujifilm_crystal_archive_typeii: max=0.000006708824822898585, rms=0.000002104387805503658
+kodak_2383: max=0.000003910351068281415, rms=0.0000011919020958945748
+kodak_2393: max=0.000004491155174202177, rms=0.0000013368688131545311
+kodak_ektacolor_edge: max=0.0000076131076029994915, rms=0.0000024415075233883334
+kodak_endura_premier: max=0.00000671755927816875, rms=0.000002130266192617917
+kodak_portra_endura: max=0.000006335999870987763, rms=0.000002000146492879733
+kodak_supra_endura: max=0.000007136310019473235, rms=0.0000022329289653530905
+kodak_ultra_endura: max=0.00000541520157026909, rms=0.0000016973195466864266
+kodak_2302: max=0.000006273393692968199, rms=0.0000025699310686697924
+ilford_multigrade_iv_rc: max=0.0000069947550978000095, rms=0.0000022592781723067235
+positive-film/no-paper: max=0.000005046624988125359, rms=0.0000017257196603764596
+ok
+test four_media_combinations_keep_global_camera_and_paper_diffusion_across_bands ... optics film_none=false/paper_none=false/shared-fields-band-whole: max=0, rms=0
+optics film_none=false/paper_none=false/independent-whole-global-prepass: max=0.0000010132789611816406, rms=0.00000007558021200264741
+optics film_none=false/paper_none=true/shared-fields-band-whole: max=0, rms=0
+optics film_none=false/paper_none=true/independent-whole-global-prepass: max=0.00000017881393432617188, rms=0.000000014417201812736202
+optics film_none=true/paper_none=false/shared-fields-band-whole: max=0, rms=0
+optics film_none=true/paper_none=false/independent-whole-global-prepass: max=0.0000010728836059570313, rms=0.00000007206708965038895
+optics film_none=true/paper_none=true/shared-fields-band-whole: max=0, rms=0
+optics film_none=true/paper_none=true/independent-whole-global-prepass: max=0.00000017881393432617188, rms=0.00000002171060800912297
+ok
+test four_media_combinations_use_resident_whole_and_bands_and_match_cpu ... film_none=false/paper_none=false/band-whole: max=0, rms=0
+film_none=false/paper_none=false/whole-cpu: max=0.0000058866798988144176, rms=0.0000023225739180017437
+film_none=false/paper_none=false/band-cpu: max=0.0000058866798988144176, rms=0.0000023225739180017437
+film_none=false/paper_none=true/band-whole: max=0, rms=0
+film_none=false/paper_none=true/whole-cpu: max=0.0000001515652619521468, rms=0.000000050180587002811403
+film_none=false/paper_none=true/band-cpu: max=0.0000001515652619521468, rms=0.000000050180587002811403
+film_none=true/paper_none=false/band-whole: max=0, rms=0
+film_none=true/paper_none=false/whole-cpu: max=0.0000071426272607588714, rms=0.000002737338325002131
+film_none=true/paper_none=false/band-cpu: max=0.0000071426272607588714, rms=0.000002737338325002131
+film_none=true/paper_none=true/band-whole: max=0, rms=0
+film_none=true/paper_none=true/whole-cpu: max=0.0000001869035083368331, rms=0.0000000573951131392212
+film_none=true/paper_none=true/band-cpu: max=0.0000001869035083368331, rms=0.0000000573951131392212
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.40s
+

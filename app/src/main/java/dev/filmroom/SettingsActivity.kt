@@ -26,6 +26,7 @@ import kotlinx.coroutines.*
 /** Settings has no editor ViewModel: opening or leaving cannot replace editor state or cancel exports. */
 class SettingsActivity : ComponentActivity() {
     private var renderedLanguage="zh"
+    private lateinit var backupUi: dev.filmroom.backup.BackupSettingsUi
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
     private val ink=FilmroomPalette.ink
@@ -46,6 +47,7 @@ class SettingsActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        backupUi=dev.filmroom.backup.BackupSettingsUi(this)
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         logNotesExpanded=savedInstanceState?.getBoolean("logNotesExpanded") ?: false
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(FilmroomPalette.background)}
@@ -163,6 +165,7 @@ class SettingsActivity : ComponentActivity() {
             };historySection.addView(row)
         }
         historySection.addView(label(HistoryText.SETTING_NOTE.text(this),12f,muted))
+        backupUi.addTo(section(R.string.backup_title,"backup"))
         val diagnosticSection=section(R.string.settings_group_diagnostics,"diagnostics")
         diagnosticSection.addView(label(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84a61a56ecc6),16f).apply{setTypeface(null,Typeface.BOLD)})
         radios=RadioGroup(this)
@@ -231,5 +234,5 @@ class SettingsActivity : ComponentActivity() {
             finally{dialog.dismiss();if(pending===dialog)pending=null;share.isEnabled=true}
         }
     }
-    override fun onDestroy(){pending?.dismiss();pending=null;super.onDestroy()}
+    override fun onDestroy(){if(::backupUi.isInitialized)backupUi.close();pending?.dismiss();pending=null;super.onDestroy()}
 }

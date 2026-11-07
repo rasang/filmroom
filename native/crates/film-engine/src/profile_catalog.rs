@@ -71,8 +71,8 @@ pub fn is_reversal(id: &str) -> bool {
     )
 }
 pub fn valid_route(film: &str, paper: &str, route: &str) -> bool {
-    FILMS.contains(&film)
-        && PAPERS.contains(&paper)
+    (film == "none" || FILMS.contains(&film))
+        && (paper == "none" || PAPERS.contains(&paper))
         && matches!(route, "print" | "direct")
         && (!is_reversal(film) || route == "direct")
 }

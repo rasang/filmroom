@@ -23,11 +23,11 @@ internal class RefinedPreviewInput(val bitmap:Bitmap?=null,val linear:LinearPrev
  * cache ownership: an in-flight native reader pins the pixels until its borrow ends. */
 internal class RefinedPreviewSourceOwner(
     private val reserve:(Long,()->Unit)->AutoCloseable,
-    private val load:suspend (PhotoSource)->RefinedPreviewInput = ::loadRefinedPreviewSource,
+    private val load:suspend (PhotoSource,Int)->RefinedPreviewInput = ::loadRefinedPreviewSource,
 ):AutoCloseable {
     private val mutex=Mutex()
     private val lock=Any()
-    private class Entry(val photo:PhotoSource,val revision:String,val input:RefinedPreviewInput,val token:Long) {
+    private class Entry(val photo:PhotoSource,val revision:String,val maxEdge:Int,val input:RefinedPreviewInput,val token:Long) {
         var readers=1
         var retired=false
         var lease:AutoCloseable?=null
@@ -49,24 +49,26 @@ internal class RefinedPreviewSourceOwner(
     private fun borrow(entry:Entry)=Borrow(entry.input){synchronized(lock){entry.readers--;check(entry.readers>=0);disposeIfUnused(entry)}}
     private fun retireLocked(){current?.let {current=null;it.retired=true;disposeIfUnused(it)}}
     private fun retire(token:Long){synchronized(lock){if(current?.token==token)retireLocked()}}
-    suspend fun acquire(photo:PhotoSource):Borrow=mutex.withLock {
+    suspend fun acquire(photo:PhotoSource,maxEdge:Int=NativeMemoryPolicy.REFINED_PREVIEW_EDGE):Borrow=mutex.withLock {
+        require(maxEdge in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE)
         currentCoroutineContext().ensureActive()
         val revision=photo.previewSourceRevision()
         synchronized(lock){
             check(!closed){"Refined preview source owner closed"}
-            current?.takeIf{it.photo===photo && it.revision==revision}?.let{it.readers++;return@withLock borrow(it)}
+            current?.takeIf{it.photo===photo && it.revision==revision && it.maxEdge==maxEdge}?.let{it.readers++;return@withLock borrow(it)}
             retireLocked()
         }
         var input:RefinedPreviewInput?=null
         var handedOff=false
         try {
-            val decoded=load(photo)
+            val decoded=load(photo,maxEdge)
             input=decoded
+            check(maxOf(decoded.width,decoded.height)<=maxEdge){"Refined input exceeds requested edge"}
             currentCoroutineContext().ensureActive()
             check(photo.previewSourceRevision()==revision){"Source changed during refinement preparation"}
             synchronized(lock){
                 check(!closed){"Refined preview source owner closed"}
-                val entry=Entry(photo,revision,decoded,++serial)
+                val entry=Entry(photo,revision,maxEdge,decoded,++serial)
                 val bytes=Math.addExact(decoded.bytes,64L*1024)
                 // Optional cache admission must never force a smaller frame or
                 // erase the already-held active working-memory reservation.
@@ -83,7 +85,7 @@ internal class RefinedPreviewSourceOwner(
 }
 
 /** Capture a decoded source across the cancellable IO-to-render dispatcher handoff. */
-private suspend fun loadRefinedPreviewSource(photo:PhotoSource):RefinedPreviewInput {
+private suspend fun loadRefinedPreviewSource(photo:PhotoSource,maxEdge:Int):RefinedPreviewInput {
     var produced:RefinedPreviewInput?=null
     var handedOff=false
     try {
@@ -92,8 +94,8 @@ private suspend fun loadRefinedPreviewSource(photo:PhotoSource):RefinedPreviewIn
             val source=photo.retainDetailSource()
             try {
                 job.ensureActive()
-                (photo.linearFile?.let {RefinedPreviewInput(linear=LinearSpool.refinedPreview(it,photo.originalWidth,photo.originalHeight,job))}
-                    ?: RefinedPreviewInput(bitmap=decodeFile(photo.localFile,NativeMemoryPolicy.REFINED_PREVIEW_EDGE,job))).also{produced=it}
+                (photo.linearFile?.let {RefinedPreviewInput(linear=LinearSpool.refinedPreview(it,photo.originalWidth,photo.originalHeight,job,maxEdge))}
+                    ?: RefinedPreviewInput(bitmap=decodeFile(photo.localFile,maxEdge,job))).also{produced=it}
             } finally {source.close()}
         }
         handedOff=true

@@ -94,7 +94,7 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
         while(true){
             val op=operation ?: return;val snapshot=op.remaining.firstOrNull() ?: break
             if(!q.store.historyMatches(snapshot)){failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed");continue}
-            if(!op.deletePhotos){
+            if(!op.deletePhotos || q.store.get(snapshot.id)?.archivedHistory==true){
                 if(q.removeHistoryRecord(op,snapshot))outcome(snapshot,"record-removed")else{failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed")}
                 continue
             }

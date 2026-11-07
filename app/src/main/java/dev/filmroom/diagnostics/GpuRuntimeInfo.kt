@@ -94,7 +94,7 @@ object GpuRuntimeInfo {
         val work=dev.filmroom.engine.GpuWorkProgress.fromJson(data)?:return null
         return SafeInfo(gpuWorkPhase=work.phase,gpuFailedPhase=work.failedPhase,gpuTileIndex=work.tileIndex,
             gpuTileTotal=work.tileTotal,gpuBatchIndex=work.batchIndex,gpuCompletedSubmits=work.completedSubmits,
-            gpuBatchElapsedMs=work.batchElapsedMs,gpuChainWaitMs=work.chainWaitMs,gpuFailedElapsedMs=work.failedElapsedMs)
+            gpuBatchElapsedMs=work.batchElapsedMs,gpuChainWaitMs=work.chainWaitMs,gpuFailedElapsedMs=work.failedElapsedMs,gpuFailureKind=work.failureKind,gpuSubmitMs=work.submitMs,gpuPollMs=work.pollMs,gpuMapWaitMs=work.mapWaitMs)
     }
 
     fun withPreviewCache(result:JSONObject,info:SafeInfo):SafeInfo {

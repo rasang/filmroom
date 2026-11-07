@@ -98,9 +98,11 @@ data class EditorState(
 ) {
     init { require(filmBorderStage in 0..1) }
     val preImagingBorder get()=filmBorder && filmBorderStage==1
+    val hasFilm get()=filmStock!="none"
+    val hasPaper get()=paperStock!="none"
     val isMonochromeFilm get()=filmStock in FilmProfileCapabilities.monochromeFilms
     val isMonochromePrint get()=paperStock in FilmProfileCapabilities.monochromePrints
-    val neutralDatabaseSupported get()=(!isMonochromeFilm && !isMonochromePrint) || BwNeutralFilterEntries.contains(filmStock,paperStock,printIlluminant)
+    val neutralDatabaseSupported get()=hasFilm && hasPaper && ((!isMonochromeFilm && !isMonochromePrint) || BwNeutralFilterEntries.contains(filmStock,paperStock,printIlluminant))
     val effectiveNeutralFiltersFromDatabase get()=neutralFiltersFromDatabase && neutralDatabaseSupported
     val frameStock get()=dev.filmroom.border.BorderCatalog.frameStock(filmStock,paperStock,outputRoute)
     internal val frameFormats get()=FrameFormatCapabilities(
@@ -117,7 +119,16 @@ data class EditorState(
     val effectiveMediumFormat get()=mediumFormat?.takeIf{dev.filmroom.border.MediumFormatStocks.available(frameStock)}
     val effectiveMediumPortrait get()=effectiveMediumFormat!=null && mediumPortrait
     val negativeWhiteHolesSupported get()=frameFormats.has135 && effectiveMediumFormat==null && (outputRoute=="print" || outputRoute=="direct") && dev.filmroom.border.FrameProfileCatalog.kinds[frameStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.NEGATIVE
-    fun controlSupported(id:String):Boolean=when(id){
+    fun controlSupported(id:String):Boolean {
+        if(!hasFilm || !hasPaper) {
+            if(id in setOf("outputRoute","scanWhiteCorrection","scanBlackCorrection","scanWhiteLevel","scanBlackLevel")) return false
+        }
+        if(!hasFilm && id in setOf("neutralCyan","neutralMagenta","neutralYellow","printCompensation")) return false
+        // Omitted-media controls retain their saved values, but cannot influence
+        // a medium which is absent. Camera exposure and optics remain available.
+        if(!hasFilm && id in setOf("grain","halation","saturation","filmGamma","filmDevelopmentTime","grainAmount","grainSize","grainSublayers","grainLayers","grainBlur","grainDyeCloud","grainUniformity","grainRedScale","grainGreenScale","grainBlueScale","grainClumpSizeUm","grainClumpStrengthNm","halationAmount","halationSize","halationColor","halationBounces","halationDecay","halationNormalize","scatterAmount","scatterSize","dirAmount","dirDiffusionUm","dirSameLayer","dirInterLayer")) return false
+        if(!hasPaper && id in setOf("scanGlarePercent","scanGlareRoughness","scanGlareBlur","contrast","warmth","paperGamma","paperGammaFast","paperGammaSlow","paperGammaRed","paperGammaGreen","paperGammaBlue","paperDeveloperExhaustion","paperDevelopmentTime","printExposureEv","printIlluminant","printCompensation","normalizePrintExposure","printYellow","printMagenta","preflash","preflashYellow","preflashMagenta","printDiffusionFilter","printDiffusionStrength","printDiffusionSize","neutralCyan","neutralMagenta","neutralYellow","neutralFiltersFromDatabase")) return false
+        return when(id){
         "neutralFiltersFromDatabase"->neutralDatabaseSupported
         "filmDevelopmentTime"->filmStock=="kodak_doublex"
         "halationBounces","halationDecay"->filmStock!="cinestill_800t"
@@ -125,11 +136,16 @@ data class EditorState(
         "saturation","dirInterLayer","grainRedScale","grainGreenScale","grainBlueScale","halationColor"->!isMonochromeFilm
         "warmth","paperGammaFast","paperGammaSlow","paperGammaRed","paperGammaGreen","paperGammaBlue","paperDeveloperExhaustion"->!isMonochromePrint
         else->true
+        }
     }
     val isReversalFilm get()=dev.filmroom.border.FrameProfileCatalog.kinds[filmStock]==dev.filmroom.border.FrameAppearanceContext.FilmKind.REVERSAL
-    val scannerCorrectionSupported get()=outputRoute!="direct" || isReversalFilm
+    val scannerCorrectionSupported get()=hasFilm && hasPaper && (outputRoute!="direct" || isReversalFilm)
     val effectiveScanWhiteCorrection get()=scanWhiteCorrection && scannerCorrectionSupported
     val effectiveScanBlackCorrection get()=scanBlackCorrection && scannerCorrectionSupported
+    fun selectPaper(id:String):EditorState = copy(
+        paperStock=id,
+        outputRoute=if(paperStock=="none" && id!="none" && !isReversalFilm) "print" else outputRoute
+    )
     fun selectOutputRoute(route:String):EditorState {
         require(route=="print" || route=="direct")
         return copy(outputRoute=if(isReversalFilm)"direct" else route,preferredOutputRoute=route)
@@ -140,7 +156,7 @@ data class EditorState(
         val reversal=dev.filmroom.border.FrameProfileCatalog.kinds[id]==dev.filmroom.border.FrameAppearanceContext.FilmKind.REVERSAL
         val selectedMedium=mediumFormat?.takeIf{dev.filmroom.border.MediumFormatStocks.available(id)}
         val selected=copy(filmStock=id,mediumFormat=selectedMedium,
-            mediumPortrait=mediumPortrait && dev.filmroom.border.MediumFormatStocks.available(id),filmFormatMm=if(filmFormatMm==(if(filmStock=="kodak_trix")8f else 35f)) {if(id=="kodak_trix")8f else 35f}else filmFormatMm,paperStock=if(paperStock==previousDefaultPaper)defaultPaper else paperStock,
+            mediumPortrait=mediumPortrait && dev.filmroom.border.MediumFormatStocks.available(id),filmFormatMm=if(filmFormatMm==(if(filmStock=="kodak_trix")8f else 35f)) {if(id=="kodak_trix")8f else 35f}else filmFormatMm,paperStock=if(id!="none" && paperStock!="none" && paperStock==previousDefaultPaper)defaultPaper else paperStock,
             outputRoute=if(reversal)"direct" else preference ?: defaultRoute,preferredOutputRoute=preference)
         return if(filmBorder)selected.selectFilmBorder(true)else selected
     }
@@ -151,7 +167,13 @@ data class EditorState(
         useGpu=useGpu,outputColorSpace=outputColorSpace,outputGamut=outputGamut,
     )
     /** Only the active editor session is upgraded. Saved recipes and frozen queues use fromJson unchanged. */
-    fun forLiveSessionRestore():EditorState = if(filmBorder && filmBorderStage==0)copy(filmBorderStage=1)else this
+    fun forLiveSessionRestore():EditorState = when {
+        // None has no physical frame. Repair only the live session, preserving all
+        // other settings and leaving serialized recipes/frozen queues unchanged.
+        !hasFilm && filmBorder -> copy(filmBorder=false)
+        filmBorder && filmBorderStage==0 -> copy(filmBorderStage=1)
+        else -> this
+    }
 
     /** Switching the output frame does not silently alter grain/optical filmFormatMm. */
     fun selectMediumFormat(format:dev.filmroom.border.MediumFormat?,portrait:Boolean):EditorState {

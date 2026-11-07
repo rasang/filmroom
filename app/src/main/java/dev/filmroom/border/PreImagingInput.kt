@@ -73,11 +73,16 @@ object PreImagingInput {
         }
     }
     /** No 8-bit intermediate: the RAW linear input can retain values above one. */
-    fun preview(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}):LinearPreview {
+    fun preview(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}):LinearPreview =
+        previewBounded(bitmap,linear,s,raster,imprint,dev.filmroom.engine.NativeMemoryPolicy.DETAIL_PREVIEW_EDGE,checkActive)
+    /** Only the separately admitted GPU whole-frame refinement may use this limit. */
+    fun refinedPreview(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}):LinearPreview =
+        previewBounded(bitmap,linear,s,raster,imprint,dev.filmroom.engine.NativeMemoryPolicy.REFINED_PREVIEW_EDGE,checkActive)
+    private fun previewBounded(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?,maxEdge:Int,checkActive:()->Unit):LinearPreview {
         checkActive();raster.validate(s);require((bitmap==null)!=(linear==null))
         val w=bitmap?.width ?: checkNotNull(linear).width;val h=bitmap?.height ?: checkNotNull(linear).height
         require(w==s.sourceWidth && h==s.sourceHeight)
-        require(s.outputWidth.toLong()*s.outputHeight<=dev.filmroom.engine.NativeMemoryPolicy.DETAIL_PREVIEW_EDGE.toLong()*dev.filmroom.engine.NativeMemoryPolicy.DETAIL_PREVIEW_EDGE)
+        require(s.outputWidth in 1..maxEdge && s.outputHeight in 1..maxEdge)
         val effective=imprint?.frameRaster(s,raster) ?: raster
         val map=BorderSampling(s)
         val output=ByteBuffer.allocateDirect(Math.toIntExact(s.outputBytes)).order(ByteOrder.nativeOrder())

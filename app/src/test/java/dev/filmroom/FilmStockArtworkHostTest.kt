@@ -48,7 +48,7 @@ class FilmStockArtworkHostTest {
         }
     }
     @Suppress("UNCHECKED_CAST")
-    @Test fun print2302UsesPlainPaperButtonAndKeepsProfileAcrossSessionRoundTrip() {
+    @Test fun print2302UsesPrintMediumArtworkAndKeepsProfileAcrossSessionRoundTrip() {
         try { for((w,h) in listOf(360 to 780,740 to 320)) {
             RuntimeEnvironment.setQualifiers("w${w}dp-h${h}dp-mdpi")
             Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
@@ -64,8 +64,8 @@ class FilmStockArtworkHostTest {
                 MainActivity::class.java.getDeclaredField("selected").apply{isAccessible=true}.set(a,"paper")
                 MainActivity::class.java.getDeclaredMethod("buildTools").apply{isAccessible=true}.invoke(a)
                 val paper=all(a.window.decorView).filterIsInstance<Button>().single{it.text.contains("2302")}
-                assertTrue(paper.compoundDrawables.all{it==null})
-                assertTrue(paper.compoundDrawablesRelative.all{it==null})
+                assertNotNull(paper.compoundDrawables[1])
+                assertTrue(paper.contentDescription.toString().contains("2302"))
             }
         }} finally { RuntimeEnvironment.setQualifiers("w360dp-h780dp-440dpi") }
     }
@@ -119,7 +119,7 @@ class FilmStockArtworkHostTest {
                 strip().isSmoothScrollingEnabled=false
                 strip().scrollTo(strip().getChildAt(0).width,0)
                 val cards=strip().getChildAt(0) as ViewGroup
-                assertEquals(27,cards.childCount)
+                assertEquals(28,cards.childCount)
                 val last=cards.getChildAt(cards.childCount-1) as Button
                 val x=strip().scrollX;val initialWidth=strip().width;val initialContent=cards.width;assertTrue(x>0);last.performClick();shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(400));layout(content,content.width,content.height)
                 // Expanded dialog can relayout its scroll gutters after text reflow. Normal

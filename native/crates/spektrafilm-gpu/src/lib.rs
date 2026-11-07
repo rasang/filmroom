@@ -257,11 +257,40 @@ impl<'a> ChainImage<'a> {
     }
 }
 
+/// Explicit digital transport when film or paper is omitted. Not a stock profile.
+#[derive(Clone, Copy, Debug)]
+pub struct NeutralMediaGpuParams {
+    pub film_omitted: bool,
+    pub paper_omitted: bool,
+    /// False for positive-film direct scanning, which keeps spectral scanning.
+    pub negative_readout: bool,
+    pub paper_gain: [f64; 3],
+    pub paper_gray_log: f64,
+    pub paper_log_min: f64,
+    pub paper_log_max: f64,
+    pub negative_min: [f64; 3],
+    pub negative_range: [f64; 3],
+    pub negative_gamma: [f64; 3],
+}
+impl NeutralMediaGpuParams {
+    pub fn valid(&self) -> bool {
+        let gpu_finite=|v:f64|v.is_finite() && (v as f32).is_finite();
+        if !self.film_omitted && !self.paper_omitted {return false;}
+        if self.negative_readout && (self.film_omitted || !self.paper_omitted) {return false;}
+        if self.film_omitted && !self.paper_omitted &&
+            (!gpu_finite(self.paper_gray_log) || !gpu_finite(self.paper_log_min) || !gpu_finite(self.paper_log_max) || (self.paper_log_min as f32) >= (self.paper_log_max as f32) || self.paper_gain.iter().any(|v|!gpu_finite(*v)||*v<0.)) {return false;}
+        if self.negative_readout && (self.negative_min.iter().any(|v|!gpu_finite(*v)) ||
+            self.negative_range.iter().chain(self.negative_gamma.iter()).any(|v|!gpu_finite(*v)||(*v as f32)<=0.)) {return false;}
+        true
+    }
+}
+
 /// All inputs to the GPU-resident film chain. Bundled into a struct so the
 /// trait method stays object-safe and adding more optional stages (halation,
 /// DIR couplers, …) doesn't churn every callsite.
 #[derive(Clone)]
 pub struct FilmChainParams<'a> {
+    pub neutral_media: Option<NeutralMediaGpuParams>,
     pub start_at: ChainStart,
     /// Large export and bounded preview tiles: fence spatial batches, preserving GPU intermediates.
     pub stage_batched: bool,
@@ -781,5 +810,22 @@ mod density_capture_tests {
         assert!(!c.valid_for(2, 4));
         assert!(!c.valid_for(u32::MAX, 2));
         c.samples.clear(); assert!(!c.valid_for(3, 4));
+    }
+}
+
+#[cfg(test)]
+mod neutral_media_contract_tests {
+    use super::NeutralMediaGpuParams;
+    fn neutral()->NeutralMediaGpuParams {NeutralMediaGpuParams{film_omitted:true,paper_omitted:true,negative_readout:false,paper_gain:[1.;3],paper_gray_log:0.,paper_log_min:-4.,paper_log_max:2.,negative_min:[0.;3],negative_range:[1.;3],negative_gamma:[1.;3]}}
+    #[test]
+    fn digital_bridge_modes_are_explicit_and_validated() {
+        let mut m=neutral();assert!(m.valid());
+        m.paper_omitted=false;assert!(m.valid());
+        m.negative_readout=true;assert!(!m.valid());
+        m.film_omitted=false;m.paper_omitted=true;assert!(m.valid());
+        m.negative_range[0]=0.;assert!(!m.valid());
+        m.negative_range[0]=1.;m.negative_gamma[0]=f64::NAN;assert!(!m.valid());
+        m.negative_gamma[0]=1.;m.negative_readout=false;assert!(m.valid()); // positive spectral scan
+        m.paper_omitted=false;assert!(!m.valid()); // ordinary chain must use None
     }
 }

@@ -195,12 +195,12 @@ class FilmEngine(private val context: Context) {
         trace.previewStage(PreviewFailureStage.SOURCE_PREPARATION)
         val budget=memoryBudgetMiB()
         val preImaging=parameters.filmBorder && parameters.filmBorderStage==1
-        if(!preImaging && mode=="preview" && settled && parameters.useGpu && photo!=null &&
+        if(mode=="preview" && settled && parameters.useGpu && photo!=null &&
             maxOf(photo.originalWidth,photo.originalHeight)>NativeMemoryPolicy.DETAIL_PREVIEW_EDGE &&
             budget>=NativeMemoryPolicy.REFINED_MIN_BUDGET_MIB) {
             trace.previewStage(PreviewFailureStage.CAPABILITIES)
             val capabilities=try{JSONObject(NativeFilmBridge.nativeCapabilities())}catch(_:UnsatisfiedLinkError){JSONObject()}
-            if(PreviewNativeContract.supportsRefinedBitmap(capabilities)) {
+            if(PreviewNativeContract.supportsRefinedBitmap(capabilities) && (!preImaging || capabilities.optInt("preImagingAbi")==1)) {
                 return@renderWork renderRefined(photo,parameters,budget,trace,timing,capture)
             }
         }
@@ -365,7 +365,17 @@ class FilmEngine(private val context: Context) {
         val metering=if(parameters.autoExposure)PreviewMetering.resolve(photo,context.applicationContext.dataDir,parameters.metering){NativeWorkReservations.snapshot(context)}else null
         trace.previewStage(PreviewFailureStage.CREATE_HANDLE)
         val created=ensureHandle(data)
-        val params=JSONObject(nativeParameters(parameters,"preview",budget)).apply{metering?.let{put("previewMetering",it.json())}}.toString()
+        // Plan the COMPLETE frame before decoding. The original photo still owns AE;
+        // the aperture owns physical pitch, and zoom never changes either.
+        val preImaging=parameters.preImagingBorder
+        var sourceEdge=NativeMemoryPolicy.REFINED_PREVIEW_EDGE
+        if(preImaging)repeat(8) {
+            val size=dev.filmroom.io.PhotoLimits.fit(photo.originalWidth,photo.originalHeight,sourceEdge)
+            val probe=dev.filmroom.border.PreImagingInput.snapshot(parameters,size.width,size.height,photo.originalWidth,photo.originalHeight)
+            val edge=maxOf(probe.outputWidth,probe.outputHeight)
+            if(edge>NativeMemoryPolicy.REFINED_PREVIEW_EDGE)
+                sourceEdge=(sourceEdge.toLong()*NativeMemoryPolicy.REFINED_PREVIEW_EDGE/edge).toInt().coerceAtLeast(1)
+        }
         var rendered:Bitmap?=null
         var delivered=false
         try {
@@ -374,11 +384,29 @@ class FilmEngine(private val context: Context) {
             return withNativeReservation(budget.toLong()*NativeMemoryPolicy.MIB) {
                 val preparationStart=System.nanoTime()
                 trace.previewStage(PreviewFailureStage.SOURCE_PREPARATION)
-                refinedSources.acquire(photo).use { borrowed ->
+                refinedSources.acquire(photo,sourceEdge).use { borrowed ->
                     job.ensureActive()
                     check(photo.previewSourceRevision()==sourceRevision){"Source changed during refinement preparation"}
                     val input=borrowed.input
-                    val width=input.width;val height=input.height
+                    val border=if(preImaging)dev.filmroom.border.PreImagingInput.snapshot(parameters,input.width,input.height,photo.originalWidth,photo.originalHeight)else null
+                    val raster=border?.let{dev.filmroom.border.BorderCatalog.resolve(it){job.ensureActive()}}
+                    val width=border?.outputWidth ?: input.width;val height=border?.outputHeight ?: input.height
+                    check(width in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE && height in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE)
+                    val compositeBytes=if(border!=null)dev.filmroom.border.PreImagingInput.previewWorkingBytes(border,checkNotNull(raster),parameters.imprint.enabled)else 0L
+                    val compositeLease=if(border!=null) {
+                        val heap=Runtime.getRuntime().let{it.maxMemory()-it.totalMemory()+it.freeMemory()}
+                        if(heap<compositeBytes+dev.filmroom.border.BorderMemoryAdmission.HEAP_MARGIN_BYTES)throw EngineException(EngineFailure.BUDGET)
+                        NativeWorkReservations.retain(compositeBytes,{NativeWorkReservations.snapshot(context)})
+                    }else null
+                    try {
+                    val composite=if(border!=null) {
+                        val imprint=dev.filmroom.imprint.ImprintPlan.create(parameters.imprint,photo.photoMetadata,width,height,border)
+                        dev.filmroom.border.PreImagingInput.refinedPreview(input.bitmap,input.linear,border,checkNotNull(raster),imprint){job.ensureActive()}
+                    }else null
+                    val params=JSONObject(nativeParameters(parameters,"preview",budget)).apply {
+                        metering?.let{put("previewMetering",it.json())}
+                        border?.let{put("preImaging",dev.filmroom.border.PreImagingInput.nativeJson(it))}
+                    }.toString()
                     val preparationMs=(System.nanoTime()-preparationStart)/1_000_000
                     trace.previewStage(PreviewFailureStage.BITMAP_ALLOCATION)
                     val allocationStart=System.nanoTime()
@@ -392,7 +420,8 @@ class FilmEngine(private val context: Context) {
                     val started=System.nanoTime()
                     var jniMs:Long
                     val native=try {
-                        input.bitmap?.let{NativeFilmBridge.nativeRenderRefinedBitmap(created,it,destination,width,height,params)}
+                        if(composite!=null)NativeFilmBridge.nativeRenderRefinedLinearBitmap(created,composite.buffer(),destination,width,height,params)
+                        else input.bitmap?.let{NativeFilmBridge.nativeRenderRefinedBitmap(created,it,destination,width,height,params)}
                             ?: NativeFilmBridge.nativeRenderRefinedLinearBitmap(created,checkNotNull(input.linear).buffer(),destination,width,height,params)
                     } catch(_:LinkageError) {throw EngineException(EngineFailure.UNAVAILABLE)}
                     finally {jniMs=(System.nanoTime()-started)/1_000_000;timing?.mark(PreviewTimingPoint.JNI_EXIT)}
@@ -404,9 +433,14 @@ class FilmEngine(private val context: Context) {
                     trace.previewStage(PreviewFailureStage.SOURCE_VALIDATION)
                     check(photo.previewSourceRevision()==sourceRevision){"Source changed during refinement"}
                     trace.previewStage(PreviewFailureStage.OUTPUT_VALIDATION)
-                    val externalBytes=(input.bitmap?.let{it.rowBytes.toLong()*it.height} ?: checkNotNull(input.linear).buffer().capacity().toLong())+destination.rowBytes.toLong()*height
+                    val externalBytes=(composite?.buffer()?.capacity()?.toLong() ?: input.bitmap?.let{it.rowBytes.toLong()*it.height} ?: checkNotNull(input.linear).buffer().capacity().toLong())+destination.rowBytes.toLong()*height
                     check(PreviewNativeContract.refinedOutputMatches(result,width,height,budget,externalBytes)){"Invalid native refined-preview result/plan"}
+                    if(border!=null) {
+                        dev.filmroom.border.PreImagingInput.restoreHoles(destination,border,checkNotNull(raster)){job.ensureActive()}
+                        job[PreviewPresentationContext]?.border=border
+                    }
                     capture(destination);delivered=true;destination
+                    } finally {compositeLease?.close()}
                 }
             }
         } catch(t:Throwable) {

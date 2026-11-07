@@ -790,4 +790,5 @@
     <string name="print_medium_bw_film" formatted="false"> · 흑백 영화용 프린트 필름</string>
     <string name="print_medium_bw_help" formatted="false">선택한 인화 재료는 흑백용입니다. 컬러 필름도 흑백으로 인화됩니다.</string>
     <string name="preview_histogram_description">현재 사진 미리보기의 밝기 히스토그램</string>
+    <string name="film_none">없음</string>
 </resources>

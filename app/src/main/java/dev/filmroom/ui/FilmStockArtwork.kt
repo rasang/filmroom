@@ -43,6 +43,7 @@ object FilmStockArtwork {
     fun assetPath(profileId: String): String? = physicalStockByProfile[profileId]?.let { "film-rolls/$it.webp" }
 
     fun drawable(context: Context, profileId: String): Drawable {
+        if (profileId == "none") return NoFilmArtwork()
         val path = assetPath(profileId)
         val bitmap = path?.let {
             synchronized(bitmaps) {

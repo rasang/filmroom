@@ -1,0 +1,11 @@
+{
+  "native/crates/spektrafilm-core/src/pipeline.rs": "aa102d029ad79d5d39e1eec12f79425c868428ec3a2ac712112aabd2b1005c94",
+  "native/crates/spektrafilm-core/src/pipeline_omitted.rs": "ae3da4943beca8ce87f4554121dc29260b04235260d1907d00e1f6b10b1c848d",
+  "native/crates/film-engine/src/streamed.rs": "a11cbadf19ca55740290581c951dd572bda2e898f0bd1aba105d9c7af1f07aed",
+  "native/crates/film-engine/src/gpu_export.rs": "8b502350577654a2077f5b22bd3819334674f375f082287c65a7c81c245249a1",
+  "native/crates/spektrafilm-core/tests/gpu_omitted_media.rs": "979ad9607671dfa41419d55796967d209e663d517d1bcd912236f0faca54b01b",
+  "native/crates/film-engine/tests/omitted_media_stream.rs": "ce2ab13f9be71afce8335d191ccc3af4c80520f65d7a1e0f286a6c2999ee5946",
+  "app/src/main/java/dev/filmroom/MainActivity.kt": "99df39dc89ef3545ee3f75bb230e95e2e265f3c18205a8b0421355683c3ef5ee",
+  "app/src/main/java/dev/filmroom/model/EditorState.kt": "b0f88e0192b47c41c949fa23dbf25fcab4aff95502a34096d443d9a34624020b",
+  "app/src/main/java/dev/filmroom/model/StockSelectionValidation.kt": "91e98e43a4b9f7b2ff0e318d7a50e01411d62fdc66b691dac9cc233c701f1e5c"
+}

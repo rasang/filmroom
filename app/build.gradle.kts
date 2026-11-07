@@ -11,7 +11,7 @@ android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 56; versionName = "0.1.22-beta4"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 58; versionName = "0.1.22-beta6"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     // Optional distribution ABI filter; default source build retains both tested ABIs.
     providers.gradleProperty("filmroomAbi").orNull?.let { abi ->
         require(abi in setOf("arm64-v8a", "x86_64")) { "Unsupported filmroomAbi" }
@@ -111,6 +111,12 @@ val verifySavedPresetCompatibility by tasks.registering(Test::class) {
         "dev.filmroom.presets.PresetQrCompactHostTest",
         "dev.filmroom.presets.PresetQrLogoHostTest",
         "dev.filmroom.presets.RecipeShareDialogHostTest",
+        "dev.filmroom.presets.IndependentMediaSelectionHostTest",
+        "dev.filmroom.presets.RecipeScannerHostTest",
+        "dev.filmroom.backup.AppBackupCodecHostTest",
+        "dev.filmroom.backup.BackupSettingsUiHostTest",
+        "dev.filmroom.export.ExportHistoryBackupHostTest",
+        "dev.filmroom.backup.BackupMediaCompositionCrossHostTest",
     )
     filter {
         requiredClasses.forEach { includeTestsMatching(it) }

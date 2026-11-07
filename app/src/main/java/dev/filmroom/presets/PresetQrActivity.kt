@@ -17,8 +17,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import dev.filmroom.R
 import dev.filmroom.i18n.L10n
 import kotlinx.coroutines.CancellationException
@@ -43,13 +41,17 @@ class PresetQrActivity : ComponentActivity() {
     private var sharing = false
     private var shownDraft: PresetQrCodec.Draft? = null
     private var restoredName: String? = null
-    private val scanner = registerForActivityResult(ScanContract()) { result ->
+    private val scanner = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         model.externalPending = false
         render(model.state.value)
-        result.contents?.let { model.read(it) }
-    }
-    private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startScanner() else { model.externalPending = false; render(model.state.value); status.text = text(R.string.preset_qr_camera_denied) }
+        val data = result.data
+        when {
+            result.resultCode != RESULT_OK -> finish()
+            data?.data != null -> model.read(data.data!!)
+            data?.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT) != null ->
+                model.read(data.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT)!!)
+            else -> finish()
+        }
     }
     private val picker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> model.externalPending = false; render(model.state.value); uri?.let { model.read(it) } }
     private fun text(id: Int, vararg args: Any?) = L10n.text(id, *args)
@@ -83,8 +85,7 @@ class PresetQrActivity : ComponentActivity() {
         scan = button(R.string.preset_qr_scan) {
             if (model.externalPending) return@button
             model.externalPending = true; render(model.state.value)
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startScanner()
-            else permission.launch(Manifest.permission.CAMERA)
+            startScanner()
         }
         album = button(R.string.preset_qr_album) {
             if (model.externalPending) return@button
@@ -112,14 +113,19 @@ class PresetQrActivity : ComponentActivity() {
             model.initialized = true
             val draft = savedInstanceState?.getString("qrDraft")
             val id = intent.getStringExtra(EXTRA_PRESET_ID)
-            when { draft != null -> model.read(draft); id != null -> model.share(id) }
+            when {
+                draft != null -> model.read(draft)
+                id != null -> model.share(id)
+                savedInstanceState == null -> when (intent.getStringExtra(EXTRA_IMPORT_SOURCE)) {
+                    SOURCE_CAMERA -> scan.performClick()
+                    SOURCE_ALBUM -> album.performClick()
+                }
+            }
         }
     }
     private fun startScanner() {
         try {
-            scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                .setPrompt(text(R.string.preset_qr_scan_prompt)).setBeepEnabled(false)
-                .setBarcodeImageEnabled(false).setOrientationLocked(true))
+            scanner.launch(Intent(this, RecipeScannerActivity::class.java))
         } catch (_: Exception) { model.externalPending = false; render(model.state.value); status.text = text(R.string.preset_qr_camera_denied) }
     }
     private fun render(value: PresetQrViewModel.Screen) {
@@ -197,7 +203,12 @@ class PresetQrActivity : ComponentActivity() {
         }
         else -> R.string.preset_qr_invalid
     })
-    companion object { const val EXTRA_PRESET_ID = "presetId" }
+    companion object {
+        const val EXTRA_PRESET_ID = "presetId"
+        const val EXTRA_IMPORT_SOURCE = "importSource"
+        const val SOURCE_CAMERA = "camera"
+        const val SOURCE_ALBUM = "album"
+    }
 }
 
 class PresetQrFileProvider : FileProvider()

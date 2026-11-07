@@ -22,8 +22,10 @@ object LinearSpool {
         return boundedLinearPreview(file,width,height,maxEdge,job)
     }
     /** Separate1536 source; ordinary RAW preview cache and its768 limit stay unchanged. */
-    internal fun refinedPreview(file:File,width:Int,height:Int,job:CoroutineContext):LinearPreview =
-        boundedLinearPreview(file,width,height,dev.filmroom.engine.NativeMemoryPolicy.REFINED_PREVIEW_EDGE,job)
+    internal fun refinedPreview(file:File,width:Int,height:Int,job:CoroutineContext,maxEdge:Int=dev.filmroom.engine.NativeMemoryPolicy.REFINED_PREVIEW_EDGE):LinearPreview {
+        require(maxEdge in 1..dev.filmroom.engine.NativeMemoryPolicy.REFINED_PREVIEW_EDGE)
+        return boundedLinearPreview(file,width,height,maxEdge,job)
+    }
     private fun boundedLinearPreview(file:File,width:Int,height:Int,maxEdge:Int,job:CoroutineContext):LinearPreview {
         job.ensureActive()
         val size=PhotoLimits.fit(width,height,maxEdge)

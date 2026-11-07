@@ -3,6 +3,11 @@ import dev.filmroom.diagnostics.*
 import org.junit.Assert.*
 import org.junit.Test
 class NegativePreviewDiagnosticsHostTest {
+    @Test fun omittedFilmIsAnExplicitNonFailureTerminal() {
+        assertNull(NegativePreviewTerminalGate.resolve(false,listOf("not_applicable","not_applicable"),false))
+        assertEquals(NegativePreviewOutcome.NOT_APPLICABLE,NegativePreviewTerminalGate.resolve(false,listOf("not_applicable","not_applicable"),true))
+        assertEquals(NegativePreviewOutcome.FAILURE,NegativePreviewTerminalGate.resolve(false,listOf("not_applicable","failed"),true))
+    }
     @Test fun earlyFailureCannotPreemptExactSuccess() {
         assertNull(NegativePreviewTerminalGate.resolve(false,listOf("failed",null),false))
         assertEquals(NegativePreviewOutcome.SUCCESS,NegativePreviewTerminalGate.resolve(true,listOf("failed","ready"),false))

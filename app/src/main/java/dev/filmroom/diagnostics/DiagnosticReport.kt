@@ -6,7 +6,7 @@ data class DiagnosticShare(val file: File, val summary: String, val eventCount: 
 
 /** Metadata is numeric/enum-like only, not Build.MODEL/DEVICE/FINGERPRINT strings. */
 internal enum class DiagnosticAbi(val id: String) { ARM64("arm64-v8a"), ARMV7("armeabi-v7a"), X86("x86"), X86_64("x86_64"), UNKNOWN("unknown") }
-internal object DiagnosticEngineVersion { const val BUILD=13; const val INTERFACE=2 }
+internal object DiagnosticEngineVersion { const val BUILD=14; const val INTERFACE=2 }
 internal data class DiagnosticMetadata(
     val appVersionCode: Long = 0, val androidApi: Int = 0, val abi: DiagnosticAbi = DiagnosticAbi.UNKNOWN,
     val processorCount: Int = 0, val heapMaxBytes: Long = 0, val memoryClassMb: Int = 0,

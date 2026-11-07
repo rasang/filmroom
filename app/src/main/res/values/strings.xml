@@ -791,4 +791,5 @@
     <string name="print_medium_bw_film" formatted="false"> · 黑白电影拷贝片</string>
     <string name="print_medium_bw_help" formatted="false">所选印相材料是黑白材料，彩色胶片印到它上也会变为黑白。</string>
     <string name="preview_histogram_description">亮度直方图，当前照片预览</string>
+    <string name="film_none">无</string>
 </resources>

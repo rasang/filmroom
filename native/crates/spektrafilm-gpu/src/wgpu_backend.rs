@@ -151,7 +151,9 @@ pub struct ResidentBatchProgress {
     pub chain_gpu_wait_ms: f64,
 }
 #[derive(Debug, Clone, Copy)]
-pub struct ResidentBatchFailure { pub stage: ResidentStage, pub elapsed_ms: f64 }
+pub struct ResidentBatchFailure { pub stage: ResidentStage, pub elapsed_ms: f64, pub detail: failure_trace::Snapshot }
+#[path = "failure_trace.rs"]
+pub mod failure_trace;
 #[cfg(feature = "wgpu-backend")]
 struct ResidentBatchAttempt { stage: ResidentStage, start: std::time::Instant, completed: bool }
 #[cfg(feature = "wgpu-backend")]
@@ -159,9 +161,24 @@ impl Drop for ResidentBatchAttempt {
     fn drop(&mut self) {
         if !self.completed {
             THREAD_RESIDENT_FAILURE.with(|v| v.set(Some(ResidentBatchFailure {
-                stage: self.stage, elapsed_ms: self.start.elapsed().as_secs_f64() * 1000.0 })));
+                stage: self.stage, detail: failure_trace::snapshot(), elapsed_ms: self.start.elapsed().as_secs_f64() * 1000.0 })));
         }
     }
+}
+
+/// Return failure telemetry owned by this export attempt, even if the first
+/// submit unwinds before its success counter advances. Consuming the snapshot
+/// prevents a later CPU-only or rejected-adapter attempt from inheriting it.
+/// This does not acknowledge any submission or change device quarantine.
+#[cfg(feature = "wgpu-backend")]
+pub fn observe_resident_attempt<T>(attempt: impl FnOnce() -> T)
+    -> (std::thread::Result<T>, Option<ResidentBatchFailure>)
+{
+    THREAD_RESIDENT_FAILURE.with(|v| v.set(None));
+    failure_trace::reset();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(attempt));
+    let failure = THREAD_RESIDENT_FAILURE.with(|v| v.replace(None));
+    (result, failure)
 }
 
 /// Must match the 1D point-kernel WGSL declarations. Spatial kernels stay
@@ -484,7 +501,8 @@ impl WgpuBackend {
             #[cfg(feature = "resource-audit")]
             pending_writes: Some(&self.audit_pending_writes),
         };
-        self.queue.submit(Some(command));
+        { let _span = failure_trace::Span::new(failure_trace::Step::Submit);
+        self.queue.submit(Some(command)); }
         self.record_submit();
         submission
     }
@@ -519,22 +537,26 @@ impl WgpuBackend {
     }
 
     fn await_maps(&self, rx: &std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>, count: usize) {
+        let _wait = failure_trace::Span::new(failure_trace::Step::Wait);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let mut completed = 0;
         while completed < count {
             if !self.is_healthy() { panic!("GPU_DEVICE_RETIRED"); }
-            self.device.poll(wgpu::Maintain::Poll);
+            { let _span = failure_trace::Span::new(failure_trace::Step::Poll);
+            self.device.poll(wgpu::Maintain::Poll); }
             match rx.try_recv() {
                 Ok(Ok(())) => { completed += 1; }
                 Ok(Err(_)) | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.completion_uncertain.store(true, std::sync::atomic::Ordering::Release);
                     self.healthy.store(false, std::sync::atomic::Ordering::Release);
+                    failure_trace::fail(failure_trace::Kind::MapFailed);
                     panic!("GPU_MAP_FAILED");
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
                     if std::time::Instant::now() >= deadline {
                         self.completion_uncertain.store(true, std::sync::atomic::Ordering::Release);
                         self.healthy.store(false, std::sync::atomic::Ordering::Release);
+                        failure_trace::fail(failure_trace::Kind::MapTimeout);
                         panic!("GPU_MAP_TIMEOUT");
                     }
                     std::thread::sleep(std::time::Duration::from_millis(2));
@@ -1228,6 +1250,11 @@ impl WgpuBackend {
         mut capture: Option<&mut crate::FilmDensityCapture>,
         checkpoint: &mut dyn FnMut() -> bool) -> Option<ImageBuf> {
         if let Some(capture) = capture.as_deref_mut() { capture.result = None; }
+        if let Some(media)=&p.neutral_media {
+            if !media.valid() || p.scan_film!=media.paper_omitted {return None;}
+            if media.film_omitted && (p.grain.is_some() || p.dir_couplers.is_some() || p.halation.is_some()) {return None;}
+        }
+        let omitted_film=p.neutral_media.as_ref().is_some_and(|m|m.film_omitted);
         // RESOURCE_AUDIT_BEGIN
         #[cfg(feature = "resource-audit")]
         {
@@ -1594,6 +1621,8 @@ impl WgpuBackend {
             normalization_factor: f32,
             preflash: [f32; 3],
             _pad: f32,
+            media: [f32; 4], // x=omitted film, y=fixed paper gray log exposure
+            paper_gain: [f32; 4],
         }
         // The enlarger sequence (log→linear, diffusion mix, linear→log) runs
         // when an enlarger diffusion is planned (whole-frame chain), when a
@@ -1602,8 +1631,11 @@ impl WgpuBackend {
         let has_enlarger_diffusion = runs_finish && (p.enlarger_diffusion.is_some()
             || p.enlarger_scattered.is_some()
             || stop == crate::ChainStop::PrintLinear);
-        let print_exposure_scale = p.print_exposure_scale as f32;
-        let print_norm_for_shader = if has_enlarger_diffusion && print_exposure_scale != 0.0 {
+        // The digital bridge has already applied print exposure before adding
+        // preflash. Do not multiply that preflash again in the diffusion bridge.
+        let print_exposure_scale = if omitted_film {1.0}else{p.print_exposure_scale as f32};
+        let print_norm_for_shader = if omitted_film {p.print_exposure_scale as f32}
+        else if has_enlarger_diffusion && print_exposure_scale != 0.0 {
             (print_normalization_factor / p.print_exposure_scale) as f32
         } else {
             print_normalization_factor as f32
@@ -1615,6 +1647,8 @@ impl WgpuBackend {
             normalization_factor: print_norm_for_shader,
             preflash: [preflash[0] as f32, preflash[1] as f32, preflash[2] as f32],
             _pad: 0.0,
+            media: p.neutral_media.as_ref().filter(|m|m.film_omitted).map_or([0.;4],|m|[1.,m.paper_gray_log as f32,m.paper_log_min as f32,m.paper_log_max as f32]),
+            paper_gain: p.neutral_media.as_ref().map_or([1.,1.,1.,0.],|m|[m.paper_gain[0] as f32,m.paper_gain[1] as f32,m.paper_gain[2] as f32,0.]),
         };
         let print_params_buf = mk_uniform("print_params", bytemuck::bytes_of(&print_params));
 
@@ -1642,6 +1676,10 @@ impl WgpuBackend {
             col1: [f32; 4],
             col2: [f32; 4],
             bw: [f32; 4],
+            media: [f32; 4], // x: 0 spectral, 1 logRGB, 2 negative density
+            negative_min: [f32; 4],
+            negative_range: [f32; 4],
+            negative_gamma: [f32; 4],
         }
         let s = scan_xyz_to_rgb;
         // B&W/slide luminance remap (m, q); z=1 enables it in the shader.
@@ -1664,6 +1702,10 @@ impl WgpuBackend {
             col1: [s[0][1] as f32, s[1][1] as f32, s[2][1] as f32, 0.0],
             col2: [s[0][2] as f32, s[1][2] as f32, s[2][2] as f32, 0.0],
             bw,
+            media: p.neutral_media.as_ref().map_or([0.;4],|m|[if m.film_omitted&&m.paper_omitted {1.}else if m.negative_readout {2.}else{0.},0.,0.,0.]),
+            negative_min: p.neutral_media.as_ref().map_or([0.;4],|m|[m.negative_min[0] as f32,m.negative_min[1] as f32,m.negative_min[2] as f32,0.]),
+            negative_range: p.neutral_media.as_ref().map_or([1.;4],|m|[m.negative_range[0] as f32,m.negative_range[1] as f32,m.negative_range[2] as f32,1.]),
+            negative_gamma: p.neutral_media.as_ref().map_or([1.;4],|m|[m.negative_gamma[0] as f32,m.negative_gamma[1] as f32,m.negative_gamma[2] as f32,1.]),
         };
         let scan_params_buf = mk_uniform("scan_params", bytemuck::bytes_of(&scan_params));
 
@@ -2236,6 +2278,7 @@ impl WgpuBackend {
                 let submitted_encoder = std::mem::replace(encoder,
                     self.device.audit_create_command_encoder(&Default::default()));
                 let batch_start = std::time::Instant::now();
+                failure_trace::reset();
                 let mut attempt = ResidentBatchAttempt { stage, start: batch_start, completed: false };
                 let mut submission = self.submit_tracked(submitted_encoder.finish());
                 let slice = fence.slice(..);
@@ -2335,12 +2378,17 @@ impl WgpuBackend {
         }
         if runs_density {
         // 3. Density curve (film, normalized): buf_b (log_raw) → buf_a (density_cmy)
+        if omitted_film {
+            // No sensitometry, no interpolation and no implicit log-RGB clamp.
+            encoder.copy_buffer_to_buffer(&buf_b,0,&buf_a,0,img_bytes as u64);
+        } else {
         dispatch(
             &mut encoder,
             &density_pipe.pipeline,
             &bg_density_film,
             n_pixels,
         );
+        }
         if !finish_batch(&mut encoder, ResidentStage::FilmDensity) { return None; }
         // This completed fence covers halation's final add/renormalize and
         // log10 too. FilmLog prefixes skip it and retain halation to readback.
@@ -2494,6 +2542,7 @@ impl WgpuBackend {
         let final_stage = match p.stop_after { crate::ChainStop::CorrectedDensity=>ResidentStage::Dir, crate::ChainStop::Front=>ResidentStage::Front,
             crate::ChainStop::FilmLog=>ResidentStage::FilmLog,
             crate::ChainStop::PrintLinear=>ResidentStage::Print, crate::ChainStop::Full=>ResidentStage::Output };
+        failure_trace::reset();
         let mut attempt = ResidentBatchAttempt { stage: final_stage, start: std::time::Instant::now(), completed: false };
         let mut submission = self.submit_tracked(encoder.finish());
 
@@ -2894,6 +2943,10 @@ impl ComputeBackend for WgpuBackend {
             col1: [f32; 4],
             col2: [f32; 4],
             bw: [f32; 4],
+            media: [f32; 4], // x: 0 spectral, 1 logRGB, 2 negative density
+            negative_min: [f32; 4],
+            negative_range: [f32; 4],
+            negative_gamma: [f32; 4],
         }
 
         let params = Params {
@@ -2926,6 +2979,10 @@ impl ComputeBackend for WgpuBackend {
             // unclamped scan RGB, exactly like `scan_spectral_cpu` returns;
             // the final encode+clip happens at the end of the scanning stage.
             bw: [1.0, 0.0, 0.0, 1.0],
+            media: [0.;4],
+            negative_min: [0.;4],
+            negative_range: [1.;4],
+            negative_gamma: [1.;4],
         };
 
         // GPU shaders are f32-only — narrow f64 inputs at the shader boundary.
@@ -2985,6 +3042,8 @@ impl ComputeBackend for WgpuBackend {
             normalization_factor: f32,
             preflash: [f32; 3],
             _pad: f32,
+            media: [f32; 4], // x=omitted film, y=fixed paper gray log exposure
+            paper_gain: [f32; 4],
         }
 
         let params = Params {
@@ -2994,6 +3053,8 @@ impl ComputeBackend for WgpuBackend {
             normalization_factor: normalization_factor as f32,
             preflash: [preflash[0] as f32, preflash[1] as f32, preflash[2] as f32],
             _pad: 0.0,
+            media: [0.;4],
+            paper_gain: [1.,1.,1.,0.],
         };
 
         // GPU shaders are f32-only — narrow f64 inputs at the shader boundary.
@@ -6697,6 +6758,7 @@ mod resident_dispatch_tests {
         const BASE:[f64;81]=[0.;81];const LIGHT:[f64;81]=[1.;81];
         const MATRIX:[[f64;3];3]=[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]];
         crate::FilmChainParams {
+            neutral_media:None,
             start_at:crate::ChainStart::Rgb,stage_batched:true,image:crate::ChainImage::F32(data,w,h),
             front:crate::FrontPass::Mallett2019{matrix:MATRIX},
             film_log_exposure:&AXIS,film_density_curves_normalized:&CURVES,film_gamma:1.,
@@ -6969,6 +7031,115 @@ mod observed_owner_gpu_tests {
         assert_eq!(s.logical_live_owner_peak, None); assert_eq!(s.physical_driver_peak, None);
     }
 
+}
+
+#[cfg(all(test,feature="wgpu-backend"))]
+mod neutral_media_shader_tests {
+    use super::*;
+    fn f32s(bytes:&mut Vec<u8>,values:&[f32]) {bytes.extend_from_slice(bytemuck::cast_slice(values));}
+    fn leading(n:u32)->Vec<u8> {let mut b=Vec::new();for x in [n,1,0]{b.extend_from_slice(&x.to_le_bytes());}b}
+    #[test]
+    #[ignore="requires serialized real Vulkan execution window"]
+    fn neutral_print_shader_uses_fixed_gray_gain_and_additive_preflash() {
+        let gpu=WgpuBackend::new().expect("real GPU required, no silent skip");
+        let placeholder=[0f32;3];
+        for rgb in [[0.1f32,0.18,0.5],[1e-10f32,1e-8,10000.]] {
+        let log=rgb.map(|v|v.log10());
+        for exposure in [1f32,4.] {
+            let mut uniform=leading(1);f32s(&mut uniform,&[exposure]);
+            f32s(&mut uniform,&[0.01,0.02,0.03,0.]);
+            f32s(&mut uniform,&[1.,-1.,-4.,2.]);f32s(&mut uniform,&[0.8,1.,1.2,0.]);
+            let out=gpu.dispatch_compute(include_str!("../../spektrafilm-shaders/wgsl/print_spectral.wgsl"),&[
+                GpuBuffer::uniform(&uniform),GpuBuffer::storage_ro(bytemuck::cast_slice(&log)),
+                GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),
+                GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),
+                GpuBuffer::storage_rw(&[0u8;12])],1,6);
+            for c in 0..3 {
+                let raw_log=(0.1f64*0.18/(rgb[c] as f64)).log10().clamp(-4.,2.);
+                let expected=(10f64.powf(raw_log)*exposure as f64*[0.8,1.,1.2][c]+[0.01,0.02,0.03][c]+1e-10).log10();
+                assert!((out[c] as f64-expected).abs()<2e-6,"channel {c}: {} != {expected}",out[c]);
+            }
+        }
+        }
+    }
+    #[test]
+    #[ignore="requires serialized real Vulkan execution window"]
+    fn neutral_scan_shader_log_rgb_and_negative_density_are_distinct() {
+        let gpu=WgpuBackend::new().expect("real GPU required, no silent skip");
+        let placeholder=[0f32;3];
+        for mode in [1f32,2.] {
+            let source=if mode==1. {[-10f32,-2.,-0.3,0.,0.5,1.]}else{[0.1f32,0.4,0.9,1.1,1.2,3.3]};
+            let mut uniform=leading(2);f32s(&mut uniform,&[1.]);
+            for column in [[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.]]{f32s(&mut uniform,&column);}
+            f32s(&mut uniform,&[1.,0.,0.,1.]);f32s(&mut uniform,&[mode,0.,0.,0.]);
+            f32s(&mut uniform,&[0.1,0.2,0.3,0.]);f32s(&mut uniform,&[1.,2.,3.,1.]);f32s(&mut uniform,&[1.,2.,0.5,1.]);
+            let out=gpu.dispatch_compute(include_str!("../../spektrafilm-shaders/wgsl/scan_spectral.wgsl"),&[
+                GpuBuffer::uniform(&uniform),GpuBuffer::storage_ro(bytemuck::cast_slice(&source)),
+                GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),
+                GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),
+                GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),GpuBuffer::storage_ro(bytemuck::cast_slice(&placeholder)),
+                GpuBuffer::storage_rw(&[0u8;24])],2,8);
+            for i in 0..6 {
+                let c=i%3;let expected=if mode==1. {(10f64.powf(source[i] as f64)-1e-10).max(0.)}
+                else {((source[i] as f64-[0.1,0.2,0.3][c])/[1.,2.,3.][c]).clamp(0.,1.).powf([1.,2.,0.5][c])};
+                assert!((out[i] as f64-expected).abs()<5e-6,"mode {mode} channel {i}: {} != {expected}",out[i]);
+            }
+        }
+    }
+}
+
+#[cfg(all(test, feature="wgpu-backend"))]
+mod resident_attempt_telemetry_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn first_submit_unwind_is_reported_without_weakening_quarantine() {
+        let healthy=AtomicBool::new(true);
+        let uncertain=AtomicBool::new(false);
+        let before=THREAD_SUBMITS.with(|v|v.get());
+        let (result,failure)=observe_resident_attempt(|| {
+            let _batch=ResidentBatchAttempt {stage:ResidentStage::Front,start:std::time::Instant::now(),completed:false};
+            let _submission=SubmittedWork {healthy:&healthy,completion_uncertain:&uncertain,completed:false,
+                #[cfg(feature="resource-audit")] owner:None,
+                #[cfg(feature="resource-audit")] pending_writes:None};
+            let _submit=failure_trace::Span::new(failure_trace::Step::Submit);
+            // A driver panic before record_submit() must not need a fabricated count.
+            panic!("synthetic first-submit unwind");
+        });
+        assert!(result.is_err());
+        assert_eq!(THREAD_SUBMITS.with(|v|v.get()),before);
+        let failure=failure.expect("first submit failure belongs to this attempt");
+        assert_eq!(failure.stage,ResidentStage::Front);
+        assert_eq!(failure.detail.kind,failure_trace::Kind::SubmitUnwind);
+        assert!(failure.detail.submit_ms.is_finite() && failure.detail.submit_ms>=0.);
+        assert!(uncertain.load(Ordering::Acquire));
+        assert!(!healthy.load(Ordering::Acquire));
+        assert!(THREAD_RESIDENT_FAILURE.with(|v|v.get()).is_none());
+    }
+
+    #[test]
+    fn empty_and_rejected_attempts_cannot_inherit_old_failure() {
+        let (_,old)=observe_resident_attempt(|| {
+            let _batch=ResidentBatchAttempt {stage:ResidentStage::Scan,start:std::time::Instant::now(),completed:false};
+            failure_trace::fail(failure_trace::Kind::MapTimeout);
+            panic!("synthetic map timeout");
+        });
+        let old=old.unwrap();
+        // Include stale data left by a different caller of the resident backend.
+        THREAD_RESIDENT_FAILURE.with(|v|v.set(Some(old)));
+        let (cpu,failure)=observe_resident_attempt(|| 7);
+        assert_eq!(cpu.unwrap(),7);assert!(failure.is_none());
+        THREAD_RESIDENT_FAILURE.with(|v|v.set(Some(old)));
+        let calls=std::cell::Cell::new(0);
+        let (rejected,failure)=observe_resident_attempt(|| only_when_adapter_allowed(false,|| {
+            calls.set(calls.get()+1);Some(7)
+        }));
+        assert_eq!(rejected.unwrap(),None);assert_eq!(calls.get(),0);
+        assert!(failure.is_none());
+        assert!(THREAD_RESIDENT_FAILURE.with(|v|v.get()).is_none());
+        assert_eq!(failure_trace::snapshot().kind,failure_trace::Kind::UnknownUnwind);
+    }
 }
 
 #[cfg(all(test, feature="wgpu-backend"))]

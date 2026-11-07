@@ -67,7 +67,7 @@ class MainActivity:ComponentActivity() {
     private var lastEngineNotice:String?=null
     private var recoveryDialog:AlertDialog?=null
     private var presetDialog:AlertDialog?=null
-    private val savedPresetDialogs by lazy { dev.filmroom.presets.SavedPresetDialogs(this,{model.state.value},model::applySavedPreset,{it.showReadable()}) }
+    private val savedPresetDialogs: dev.filmroom.presets.SavedPresetDialogs by lazy { dev.filmroom.presets.SavedPresetDialogs(this,{model.state.value},model::applySavedPreset,{it.showReadable()},{recipeScanner.launch(Intent(this,dev.filmroom.presets.RecipeScannerActivity::class.java))}) }
     private var pendingSavedPreset:Bundle?=null
     private lateinit var recipeButton:Button
     private var languageDialog:AlertDialog?=null
@@ -80,7 +80,7 @@ class MainActivity:ComponentActivity() {
         val rows=org.json.JSONObject(assets.open("engine-data/profile_catalog.json").bufferedReader().use{it.readText()}).getJSONArray("profiles")
         (0 until rows.length()).map{index->rows.getJSONObject(index).let{Stock(it.getString("id"),it.getString("name"),it.getString("defaultPaper"),it.getString("kind"),it.getString("defaultRoute"))}}
     }
-    private val films get()=catalog.filter{it.kind=="negative"||it.kind=="reversal"}
+    private val films get()=listOf(Stock("none",getString(R.string.film_none),"none","none","print"))+catalog.filter{it.kind=="negative"||it.kind=="reversal"}
     private val papers get()=catalog.filter{it.kind=="paper"||it.kind=="cine_print"}.map{it.id to it.name}
     private var group="film";private var selected="brightness";private var dragging=false
     private val landscapeEditor get()=dev.filmroom.ui.EditorLayoutPolicy.usesTwoPanes(resources.configuration.screenWidthDp,resources.configuration.screenHeightDp,isInMultiWindowMode)
@@ -113,11 +113,14 @@ class MainActivity:ComponentActivity() {
     private var straightenDial:dev.filmroom.ui.StraightenDialView?=null
     private var straightenReset:Button?=null
     private var builtCompositionEditing=false;private var builtCompositionAspect:Double?=null;private var boundCompositionEditing:Boolean?=null;private var boundCompare:Boolean?=null;private var builtParameters:EditorState?=null;private var shownSource:String?=null;private var lastBitmap:android.graphics.Bitmap?=null
+    private val recipeImport: dev.filmroom.presets.RecipeImportDialog by lazy { dev.filmroom.presets.RecipeImportDialog(this,{it.showReadable()},{savedPresetDialogs.open()}) }
+    private val recipeScanner: androidx.activity.result.ActivityResultLauncher<Intent> =registerForActivityResult(ActivityResultContracts.StartActivityForResult()){result->recipeImport.accept(result.resultCode,result.data)}
     private val picker=registerForActivityResult(ActivityResultContracts.PickVisualMedia()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.PHOTO_PICKER)}
     private val filePicker=registerForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.FILES_PICKER)}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).roundToInt()
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        recipeImport // Register restoration before STARTED; scanner results return to this editor.
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         compositionReturnTool=savedInstanceState?.getString("compositionReturnTool");compositionReturnGroup=savedInstanceState?.getString("compositionReturnGroup")
         group=savedInstanceState?.getString("group") ?: "film";selected=savedInstanceState?.getString("selected") ?: "brightness"
@@ -369,7 +372,8 @@ class MainActivity:ComponentActivity() {
         val presentationChanged=state.renderedParameters?.let{it.filmBorder!=state.parameters.filmBorder || it.negativeWhiteHoles!=state.parameters.negativeWhiteHoles || it.composition!=state.parameters.composition || it.crop!=state.parameters.crop || it.mediumFormat!=state.parameters.mediumFormat || it.mediumPortrait!=state.parameters.mediumPortrait}==true
         val compositionOnly=state.compositionSource!=null && scienceReady && (state.compositionEditing || presentationChanged)
         val eligible=!(state.parameters.filmBorder && state.parameters.filmBorderStage==1) && model.localDetailEnabled && state.startupReady && state.busy==null && !state.exporting && ((!state.updating && !state.previewRefining) || compositionOnly) && !state.compare && state.rendered!=null && scienceReady
-        detailLoading.visibility=if(detailFeedback.showLoading(status,key,eligible,detailForeground))View.VISIBLE else View.INVISIBLE
+        val wholeFrameRefining=state.parameters.preImagingBorder && state.previewRefining && state.startupReady && state.busy==null && !state.exporting && !state.compare && state.rendered!=null
+        detailLoading.visibility=if(detailForeground && (wholeFrameRefining || detailFeedback.showLoading(status,key,eligible,detailForeground)))View.VISIBLE else View.INVISIBLE
         detailFeedback.takeFailureToast(status,key,eligible,detailForeground)?.let{
             Toast.makeText(this,it,Toast.LENGTH_SHORT).show()
         }
@@ -778,14 +782,7 @@ class MainActivity:ComponentActivity() {
         when(control.id){
             "filmStock"->stockChoices(p,s,target)
             "paper"->{
-                controlHeading(control,null,target)
-                val selectedPaper=catalog.firstOrNull{it.id==p.paperStock && (it.kind=="paper" || it.kind=="cine_print")}
-                target.addView(button(selectedPaper?.let{dev.filmroom.ui.PrintMediumLabels.label(it.id,it.name,it.kind)} ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ec00bc673f05)){
-                    AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3691a3aa4ece)).setSingleChoiceItems(choiceAdapter(papers.map{paper->dev.filmroom.ui.PrintMediumLabels.label(paper.first,paper.second,catalog.first{it.id==paper.first}.kind)},true),papers.indexOfFirst{it.first==model.state.value.parameters.paperStock}){dialog,which->finishCompositionForParameterEdit();model.parameters(model.state.value.parameters.copy(paperStock=papers[which].first));dialog.dismiss()}.setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
-                }.apply{
-                    tag="paper-stock"
-                    enabled(this,s.editable&&p.outputRoute=="print")
-                },LinearLayout.LayoutParams(-1,-2))
+                paperChoices(p,s,target)
                 if(p.outputRoute=="print" && p.isMonochromePrint)
                     target.addView(text(getString(R.string.print_medium_bw_help),12f,muted))
             }
@@ -1010,7 +1007,7 @@ class MainActivity:ComponentActivity() {
                     maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
                     background=shape(if(chosen)raised else Color.TRANSPARENT,if(chosen)accent else null)
                 }
-                stock.contentDescription="${film.name}，${if(film.kind=="reversal")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ed42cfc64f18)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d60c820b2be8)}"+if(chosen)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_657a8c2de63c)else ""
+                stock.contentDescription="${film.name}，${if(film.kind=="none")"" else if(film.kind=="reversal")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ed42cfc64f18)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d60c820b2be8)}"+if(chosen)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_657a8c2de63c)else ""
                 enabled(stock,s.editable);cards.addView(stock,LinearLayout.LayoutParams(cardWidth,-2).apply{if(film!==films.last())marginEnd=dp(4)})
             }
             retainStrip(carousel,cards,"films",p.filmStock)
@@ -1051,6 +1048,48 @@ class MainActivity:ComponentActivity() {
                 enabled(this,s.editable)
             },LinearLayout.LayoutParams(-2,-2).apply{marginStart=dp(8)})
             target.addView(infoScroll,LinearLayout.LayoutParams(-1,-2))
+    }
+    private fun paperChoices(p:EditorState,s:EditorUiState,target:LinearLayout){
+        val textPaint=android.text.TextPaint().apply{textSize=12f*resources.displayMetrics.scaledDensity}
+        val longestLine=catalog.filter{it.kind=="paper"||it.kind=="cine_print"}
+            .flatMap{dev.filmroom.ui.PrintMediumLabels.cardLabel(it.id,it.name,it.kind).lines()}
+            .maxOfOrNull{textPaint.measureText(it)} ?: 0f
+        val cardWidth=maxOf(dp(136),kotlin.math.ceil(longestLine+dp(20)).toInt())
+        val carousel=dev.filmroom.ui.FilmStockScrollView(this,cardWidth).apply{
+            isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false
+            contentDescription=getString(R.string.text_3691a3aa4ece)
+        }
+        val cards=row();carousel.addView(cards)
+        val choices=listOf("none" to getString(R.string.paper_none))+papers
+        for((id,name) in choices){
+            val chosen=p.paperStock==id
+            val medium=catalog.firstOrNull{it.id==id}
+            val label=if(medium==null)name else dev.filmroom.ui.PrintMediumLabels.label(id,name,medium.kind)
+            val cardLabel=if(medium==null)name else dev.filmroom.ui.PrintMediumLabels.cardLabel(id,name,medium.kind)
+            val stock=button(cardLabel){
+                val current=model.state.value
+                if(current.editable && (current.parameters.outputRoute=="print" || !current.parameters.hasFilm || !current.parameters.hasPaper) && current.parameters.paperStock!=id){
+                    finishCompositionForParameterEdit()
+                    model.parameters(model.state.value.parameters.selectPaper(id))
+                }
+            }.apply{
+                tag=id;isSelected=chosen;textSize=12f;minimumWidth=dp(48);minimumHeight=dp(48)
+                setPadding(dp(8),dp(6),dp(8),dp(8))
+                breakStrategy=android.text.Layout.BREAK_STRATEGY_SIMPLE
+                hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                val art=dev.filmroom.ui.PrintMediumArtwork.drawable(this@MainActivity,id)
+                val edge=dp(72);art.setBounds(0,0,edge,edge)
+                setCompoundDrawables(null,art,null,null);compoundDrawablePadding=dp(2)
+                setTextColor(if(chosen)accent else ink)
+                maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
+                contentDescription=label+if(chosen)getString(R.string.text_657a8c2de63c)else ""
+                background=shape(if(chosen)raised else Color.TRANSPARENT,if(chosen)accent else null)
+                enabled(this,s.editable && (p.outputRoute=="print" || !p.hasFilm || !p.hasPaper))
+            }
+            cards.addView(stock,LinearLayout.LayoutParams(cardWidth,-2).apply{marginEnd=dp(4)})
+        }
+        retainStrip(carousel,cards,"papers",p.paperStock)
+        target.addView(carousel,LinearLayout.LayoutParams(-1,-2))
     }
     private val imprintPreviewSession=dev.filmroom.imprint.ImprintPreviewSession()
     private var imprintDraftPreview:dev.filmroom.imprint.ImprintSettings?=null

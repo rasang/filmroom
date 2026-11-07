@@ -7,11 +7,11 @@
     <string name="preset_qr_scan_prompt">Filmroom レシピの QR コード全体を画面に入れてください</string>
     <string name="preset_qr_camera_denied">カメラを使用できません。QR コード画像から読み取ることもできます。</string>
     <string name="preset_qr_save_new">新しいレシピとして保存</string>
-    <string name="preset_qr_share_image">QR 画像を共有</string>
+    <string name="preset_qr_share_image">QR コードを共有</string>
     <string name="preset_qr_image_description">Filmroom レシピの QR コード</string>
     <string name="preset_qr_home">Filmroom レシピの QR コードをスキャンするか、画像を選んでください。読み取りはオフラインで行われます。保存前に確認でき、写真には自動適用されません。</string>
     <string name="preset_qr_import_scope">新しいレシピとして保存します。既存のレシピや現在の写真は変更されません。フィルム、編集設定、枠、構図、印字、指定日時が含まれます。古いコードにない新しい設定には初期値を使用します。後から一覧で手動適用できます。</string>
-    <string name="preset_qr_share_scope">このコードには全編集設定、構図、指定日時が含まれますが、写真や元画像のメタデータは含まれません。受け取った人は誰でも読み込めます。圧縮や白い余白の切り取りをせず、元のサイズで共有してください。</string>
+    <string name="preset_qr_share_scope">相手に Filmroom のレシピ画面のスキャン機能で読み取ってもらってください。</string>
     <string name="preset_qr_saved">新しいレシピとして保存しました。写真は変更されていません。一覧に戻って手動適用できます。</string>
     <string name="preset_qr_done">完了</string>
     <string name="preset_qr_working">端末内で処理中…</string>

@@ -81,7 +81,7 @@ class ImprintContractHostTest {
         assertEquals(listOf("ISO400","250","F5.6","+0.5","50mm"),c.fields.map{it.text})
         assertTrue(c.fields.none { it.kind==ImprintFieldKind.METERING })
         val ignored=PhotoMetadata.fromAttributes(mapOf("ExposureProgram" to "3","ExposureMode" to "2","FocalLengthIn35mmFilm" to "50"))
-        assertTrue(ImprintContent.from(ignored,setting).fields.isEmpty())
+        assertEquals(listOf("50mm"), ImprintContent.from(ignored,setting).fields.map { it.text })
         val partial=PhotoMetadata.fromAttributes(mapOf("FNumber" to "2/1","ExposureProgram" to "99","ExposureBiasValue" to "0/1"))
         assertEquals(listOf("F2","±0.0"),ImprintContent.from(partial,setting).fields.map{it.text})
     }

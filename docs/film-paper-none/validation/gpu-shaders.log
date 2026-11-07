@@ -1,0 +1,8 @@
+     Running unittests src/lib.rs (/workspace/shared/dev-push-validation/target-host/debug/deps/spektrafilm_gpu-8bb9f2cf4047952a)
+
+running 2 tests
+test wgpu_backend::neutral_media_shader_tests::neutral_print_shader_uses_fixed_gray_gain_and_additive_preflash ... ok
+test wgpu_backend::neutral_media_shader_tests::neutral_scan_shader_log_rgb_and_negative_density_are_distinct ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.13s
+

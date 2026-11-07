@@ -68,6 +68,29 @@ class PreviewMeteringSourceHostTest {
     private suspend fun resolve(root:Root,source:PhotoSource,meter:Meter,method:String="average")=
         PreviewMetering.resolveWithNative(source,root.dir,method,memory,meter)
 
+    @Test fun trustedRootAliasMustSurviveIntoMeteringSourceValidation()=runBlocking {
+        Root().use { root ->
+            val file=bitmapFile(root,"alias.png",4,2,Bitmap.CompressFormat.PNG){_,_->Color.GRAY}
+            val alias=File(root.dir.parentFile,root.dir.name+"-trusted-alias")
+            Files.createSymbolicLink(alias.toPath(),root.dir.toPath())
+            try {
+                val aliasedFile=File(alias,"cache/photo-sources/alias.png")
+                val source=photo(aliasedFile,4,2)
+                // This reproduces the old caller bug: canonicalizing the trusted root
+                // first loses the only alias that the strict scope guard may accept.
+                try {
+                    PreviewMetering.resolveWithNative(source,alias.canonicalFile,"average",memory,Meter())
+                    fail("Canonical root must not silently authorize a different lexical alias")
+                } catch (_:IllegalArgumentException) {}
+                val meter=Meter()
+                val result=PreviewMetering.resolveWithNative(source,alias,"average",memory,meter)
+                assertEquals(0.75,result.ev,0.0)
+                assertEquals(1,meter.frames.size)
+                assertEquals(file.canonicalFile,aliasedFile.canonicalFile)
+            } finally { Files.deleteIfExists(alias.toPath()) }
+        }
+    }
+
     @Test fun actualExifRotatedJpegMetersWholeOrientedFrame()=runBlocking {
         Root().use { root ->
             val file=bitmapFile(root,"rotated.jpg",80,48,Bitmap.CompressFormat.JPEG){x,y->

@@ -1,0 +1,47 @@
+JUnit version 4.13.2
+.HOST_FACTORY before=none current=android.app.Application@6fd6511a data=/tmp/robolectric-PrintMediumActivityHostTest_allLocalesKeepCarouselHintAndSelectedIdsConsistent10024923695298959225/dev.filmroom-dataDir stale=false
+PAPER UI PASS language=zh paper=fujifilm_crystal_archive_typeii film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_2383 film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_2393 film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_ektacolor_edge film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_endura_premier film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_portra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_supra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_ultra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=zh paper=kodak_2302 film=kodak_portra_400 hint=true
+PAPER UI PASS language=zh paper=ilford_multigrade_iv_rc film=kodak_portra_400 hint=true
+PAPER UI PASS language=en paper=fujifilm_crystal_archive_typeii film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_2383 film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_2393 film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_ektacolor_edge film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_endura_premier film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_portra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_supra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_ultra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=en paper=kodak_2302 film=kodak_portra_400 hint=true
+PAPER UI PASS language=en paper=ilford_multigrade_iv_rc film=kodak_portra_400 hint=true
+PAPER UI PASS language=ja paper=fujifilm_crystal_archive_typeii film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_2383 film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_2393 film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_ektacolor_edge film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_endura_premier film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_portra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_supra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_ultra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ja paper=kodak_2302 film=kodak_portra_400 hint=true
+PAPER UI PASS language=ja paper=ilford_multigrade_iv_rc film=kodak_portra_400 hint=true
+PAPER UI PASS language=ko paper=fujifilm_crystal_archive_typeii film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_2383 film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_2393 film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_ektacolor_edge film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_endura_premier film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_portra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_supra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_ultra_endura film=kodak_portra_400 hint=false
+PAPER UI PASS language=ko paper=kodak_2302 film=kodak_portra_400 hint=true
+PAPER UI PASS language=ko paper=ilford_multigrade_iv_rc film=kodak_portra_400 hint=true
+
+Time: 13.08
+
+OK (1 test)
+

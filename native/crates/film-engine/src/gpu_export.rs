@@ -323,18 +323,18 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     let halo=pipe.banded_halo_pixels(pitch);
     let fields_bytes=pipe.gpu_diffusion_working_bytes(width,height).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let kernels=pipe.gpu_halation_working_bytes(width,height).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
-    let preview_bytes=crate::early_negative_preview::required_workspace_bytes(&pipe).unwrap_or(u64::MAX);
+    let preview_bytes=if film.is_omitted(){0}else{crate::early_negative_preview::required_workspace_bytes(&pipe).unwrap_or(u64::MAX)};
     let preview_mib=preview_bytes.checked_add(1024*1024-1).map(|v|v/(1024*1024));
     // Admit the background worker only when both GPU prepass and a possible
     // CPU fallback can retain its full allowance without waiting for it.
     let candidate_fields=fields_bytes.checked_add(preview_bytes);
-    let early_admitted=preview_mib.is_some_and(|m|m<=u64::from(budget.saturating_sub(128))) && checkpoint_dir.and_then(Path::parent).is_some() && candidate_fields.is_some_and(|f|tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),f).is_ok());
+    let early_admitted=!film.is_omitted() && preview_mib.is_some_and(|m|m<=u64::from(budget.saturating_sub(128))) && checkpoint_dir.and_then(Path::parent).is_some() && candidate_fields.is_some_and(|f|tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),f).is_ok());
     if early_admitted {
         if let Some(dir)=checkpoint_dir.and_then(Path::parent) {
             *early_preview=crate::early_negative_preview::spawn(input,dir,std::sync::Arc::clone(&pipe),width,height,preview_bytes).ok().flatten();
         }
     }else if let Some(dir)=checkpoint_dir.and_then(Path::parent) {
-        let _=crate::negative_preview::mark_current_status(dir,"skipped_budget",true);
+        let _=crate::negative_preview::mark_current_status(dir,if film.is_omitted(){"not_applicable"}else{"skipped_budget"},true);
     }
     let prepass_fields=fields_bytes.checked_add(if early_preview.is_some(){preview_bytes}else{0}).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let prepass_plan=tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),prepass_fields)?;
@@ -385,10 +385,10 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         .ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let mut plan=if fields.is_some() {tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),main_fields)?}else{prepass_plan};
     if fields.is_some(){plan.whole=false;}
-    let mut negative=if pipe.film.info.film_type=="negative" && checkpoint_dir.and_then(Path::parent).is_some() {
+    let mut negative=if !pipe.film.is_omitted() && pipe.film.info.film_type=="negative" && checkpoint_dir.and_then(Path::parent).is_some() {
         crate::negative_preview::GpuDensityAssembly::new(width,height)
     }else{None};
-    let mut exact_unavailable=if pipe.film.info.film_type=="negative" {"skipped_budget"}else{"failed"};
+    let mut exact_unavailable=if pipe.film.is_omitted(){"not_applicable"}else if pipe.film.info.film_type=="negative" {"skipped_budget"}else{"failed"};
     if let Some(assembly)=negative.as_ref().filter(|_|!split) {
         let mut reserve=assembly.peak_reservation(plan.width,plan.rows).unwrap_or(u64::MAX);
         let mut chosen=None;
