@@ -1,11 +1,12 @@
-# LivePhoto SDK 测试下载
+# LivePhoto SDK alpha02 测试下载
 
-独立 debug 测试 App，不覆盖 Filmroom；此目录不是正式 Release。
+独立 debug App，不覆盖 Filmroom、不发正式 Release。
 
-- [测试 APK](LivePhoto-SDK-demo-0.1.0-alpha01.apk?raw=true)
-- [SDK 源码和编译库](LivePhoto-SDK-source-0.1.0-alpha01.zip?raw=true)
-- [九组封装样例](LivePhoto-SDK-samples-0.1.0-alpha01.zip?raw=true)
+- [测试 APK](LivePhoto-SDK-demo-0.1.0-alpha02.apk?raw=true)
+- [SDK 源码和编译库](LivePhoto-SDK-source-0.1.0-alpha02.zip?raw=true)
+- [九组封装样例](LivePhoto-SDK-samples-0.1.0-alpha02.zip?raw=true)
 
-APK 经过构建、签名检查和静态检查；未执行真机相册验收。请先用普通 SDR 视频测试。
+新增自动选择、三态、相册验收记忆。请用 SDR 视频测试，保存成功不等于相册支持。
+新 debug 签名可能不同；无法覆盖旧验收 App 时先卸载旧版。
 
-源码提交、检查结果及下载摘要见 [build-info.json](build-info.json) 与 [SHA256SUMS](SHA256SUMS)。
+构建与摘要见 [build-info.json](build-info.json)、[SHA256SUMS](SHA256SUMS)。

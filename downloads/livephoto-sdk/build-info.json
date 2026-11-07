@@ -1,7 +1,7 @@
 {
-  "source_commit": "93cfb2df370f80bd9cf6983abd7d4839b5c1b0e1",
-  "workflow_run": "42348777671",
-  "version": "0.1.0-alpha01",
+  "source_commit": "01cc8e9aa1faff089dc4d5890431764694a1fc14",
+  "workflow_run": "42352638651",
+  "version": "0.1.0-alpha02",
   "application_id": "dev.filmroom.livephoto.demo",
   "signing": "debug; not Filmroom production signing",
   "android_build_executed": true,
@@ -12,30 +12,34 @@
     "passed": 88,
     "total": 88
   },
+  "compatibility_tests": {
+    "passed": 45,
+    "total": 45
+  },
   "media_checks": {
     "passed": 29,
     "total": 29
   },
   "files": {
-    "LivePhoto-SDK-demo-0.1.0-alpha01.apk": {
-      "bytes": 11627958,
-      "sha256": "c469c15bb81ba487ac729c0c12d359f9aa7ebd707e0194e3ebe65040828a41d8"
+    "LivePhoto-SDK-demo-0.1.0-alpha02.apk": {
+      "bytes": 11701790,
+      "sha256": "f8cb2ab00126908b17e8b1dfc393038853b916edb19b31af6335f0ab5ef31e84"
     },
-    "LivePhoto-SDK-samples-0.1.0-alpha01.zip": {
-      "bytes": 393739,
-      "sha256": "1f11b88988f3f5ad91209fc3b0e7e24b5cc51289006bda8b99c2346260339a16"
+    "LivePhoto-SDK-samples-0.1.0-alpha02.zip": {
+      "bytes": 393720,
+      "sha256": "3dbdd63e96de6d35855ba6ebb105dcdca9080067408073af57fa5a63354e2c29"
     },
-    "LivePhoto-SDK-source-0.1.0-alpha01.zip": {
-      "bytes": 315073,
-      "sha256": "5148dbe1e708057c8811a26402cf0299bbd0101c609492b8ead302bba9164cc3"
+    "LivePhoto-SDK-source-0.1.0-alpha02.zip": {
+      "bytes": 387667,
+      "sha256": "f307b225fd0689fe96f07b7ac22cce32cc53b558cdacc2bafcc169aa39e03742"
     },
-    "livephoto-android-0.1.0-alpha01.aar": {
-      "bytes": 67493,
-      "sha256": "c462ceb267ad07e456e4f2f46e33f1abeea321fbc5b5b01cde5e24bb0142593d"
+    "livephoto-android-0.1.0-alpha02.aar": {
+      "bytes": 91648,
+      "sha256": "cd2e026bde1f22ee823aaff67eb5be17d7072c4f5b628a50503880379ade732e"
     },
-    "livephoto-core-0.1.0-alpha01.jar": {
-      "bytes": 113312,
-      "sha256": "0b9b8075afb620d8b25a8a03367ea4a3a5517cf10f5b34c57b3908ecb23d6542"
+    "livephoto-core-0.1.0-alpha02.jar": {
+      "bytes": 146015,
+      "sha256": "69ad4ed40b0901d4fdfe71524e8ec49f24316650ab7e1c82b5f03b8a5c678532"
     }
   }
 }
