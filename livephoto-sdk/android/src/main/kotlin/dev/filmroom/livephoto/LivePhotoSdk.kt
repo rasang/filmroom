@@ -10,16 +10,30 @@ import java.io.File
 import java.util.UUID
 
 /** Native Android, local-only, no vendor secrets, root, server or FFmpeg dependency. Android 10+. */
-class LivePhotoSdk(context:Context) {
+class LivePhotoSdk(context:Context, deviceProbes:Map<TargetBrand,DeviceSupportProbe> = emptyMap()) {
     private val app=context.applicationContext
+    val compatibility = LivePhotoCompatibility(app, deviceProbes.toMap())
     private val assetRoot=File(app.noBackupFilesDir,"livephoto-sdk/assets")
     private val publisher=PublicationCoordinator(File(app.noBackupFilesDir,"livephoto-sdk/publications"),AndroidMediaSink(app))
     private val normalizer=Media3Normalizer(app)
     companion object { private val hardwareSlot=Semaphore(1) }
 
     /** Progress callbacks can arrive from any dispatcher. UI callers must dispatch to the main thread. */
-    suspend fun create(request:VideoToLiveRequest,onProgress:(ConversionProgress)->Unit={}):PackagedAsset = hardwareSlot.withPermit {
-        if(request.profile!=LivePhotoProfile.GOOGLE && !request.allowExperimentalProfiles)
+    suspend fun resolveProfile(request:VideoToLiveRequest):ProfileSelection = compatibility.resolve(request)
+
+    private fun selectedRequest(request:VideoToLiveRequest, selection:ProfileSelection):VideoToLiveRequest {
+        val profile=selection.selectedProfile ?: throw LivePhotoException(ErrorCode.UNSUPPORTED_PROFILE,
+            "当前候选均有失败记录；请手动重试其他格式或清除兼容记录。")
+        if(request.requireConfirmedSupport && selection.status!=SupportStatus.SUPPORTED)
+            throw LivePhotoException(ErrorCode.UNSUPPORTED_PROFILE,"此环境尚无成功的相册验收记录。")
+        return request.copy(profile=profile)
+    }
+    suspend fun create(request:VideoToLiveRequest,onProgress:(ConversionProgress)->Unit={}):PackagedAsset =
+        createSelected(selectedRequest(request,resolveProfile(request)),onProgress)
+
+    private suspend fun createSelected(request:VideoToLiveRequest,onProgress:(ConversionProgress)->Unit):PackagedAsset = hardwareSlot.withPermit {
+        val profile=requireNotNull(request.profile)
+        if(profile!=LivePhotoProfile.GOOGLE && !request.allowExperimentalProfiles)
             throw LivePhotoException(ErrorCode.UNSUPPORTED_PROFILE,"请明确选择并允许实验性厂商格式；不会按手机型号自动承诺兼容。")
         val context=currentCoroutineContext()
         fun check() { context.ensureActive() }
@@ -48,7 +62,7 @@ class LivePhotoSdk(context:Context) {
                 val jpeg=File(temp,"cover.jpg")
                 MediaProbe.writeCover(video,cover,jpeg,request.jpegQuality,request.maxLongEdge,::check)
                 emit(ConversionStage.PACKAGING)
-                LivePhotoPackager.packageTo(PackageRequest(jpeg,video,request.profile,cover,request.allowExperimentalProfiles),target,::check)
+                LivePhotoPackager.packageTo(PackageRequest(jpeg,video,profile,cover,request.allowExperimentalProfiles),target,::check)
             }
             emit(ConversionStage.VERIFYING)
             withContext(Dispatchers.IO) { LivePhotoVerifier.verify(asset,::check) }
@@ -66,7 +80,8 @@ class LivePhotoSdk(context:Context) {
         publisher.publish(asset,relativePath) { context.ensureActive() }.ids.map(Uri::parse)
     }
     suspend fun convert(request:VideoToLiveRequest,onProgress:(ConversionProgress)->Unit={}):ConversionResult {
-        val asset=create(request,onProgress)
+        val selection=resolveProfile(request)
+        val asset=createSelected(selectedRequest(request,selection),onProgress)
         val uris=if(request.saveToGallery) {
             try { onProgress(ConversionProgress(ConversionStage.PUBLISHING)) } catch(_:RuntimeException) { }
             // create()/publish() lets a host retain and retry an artifact. This convenience method
@@ -77,7 +92,7 @@ class LivePhotoSdk(context:Context) {
             }
         } else emptyList()
         try { onProgress(ConversionProgress(ConversionStage.COMPLETE,100)) } catch(_:RuntimeException) { }
-        return ConversionResult(asset,uris)
+        return ConversionResult(asset,uris,selection=selection)
     }
     suspend fun recoverInterruptedPublications():RecoveryReport = withContext(Dispatchers.IO) { publisher.recoverInterrupted() }
     /** Deletes SDK-owned private files only, never the input video or published MediaStore rows. */

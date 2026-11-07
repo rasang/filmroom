@@ -81,6 +81,7 @@ jobs:
             livephoto-sdk/apk-badging.txt
             livephoto-sdk/core/build/selftest/*.json
             livephoto-sdk/core/build/selftest/junit.xml
+            livephoto-sdk/core/build/compatibility-selftest/*.json
             livephoto-sdk/android/build/reports/lint-results-*.html
             livephoto-sdk/demo/build/reports/lint-results-*.html
             livephoto-sdk/demo/build/outputs/apk/debug/*.apk

@@ -8,5 +8,12 @@ tasks.register<JavaExec>("selfTest") {
     args(layout.buildDirectory.dir("selftest").get().asFile.absolutePath, layout.projectDirectory.dir("src/test/resources/fixtures").asFile.absolutePath)
     doFirst { delete(layout.buildDirectory.dir("selftest")) }
 }
-tasks.check { dependsOn("selfTest") }
+tasks.register<JavaExec>("compatibilitySelfTest") {
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.filmroom.livephoto.core.CompatibilitySelfTestKt")
+    args(layout.buildDirectory.dir("compatibility-selftest").get().asFile.absolutePath)
+    doFirst { delete(layout.buildDirectory.dir("compatibility-selftest")) }
+}
+tasks.check { dependsOn("selfTest", "compatibilitySelfTest") }
 publishing { publications { create<MavenPublication>("release") { from(components["java"]); artifactId = "livephoto-core" } } }

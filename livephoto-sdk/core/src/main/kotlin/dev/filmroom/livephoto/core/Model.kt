@@ -75,6 +75,6 @@ object SdkLimits {
     const val MAX_VIDEO_BYTES: Long = 256L * 1024 * 1024
     const val MAX_METADATA_BYTES: Int = 65533
     const val BUFFER_BYTES: Int = 64 * 1024
-    const val WRITER_REVISION = "0.1.0-alpha01"
+    const val WRITER_REVISION = "0.1.0-alpha02"
 }
 internal fun randomBindingId(): String = ByteArray(14).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
