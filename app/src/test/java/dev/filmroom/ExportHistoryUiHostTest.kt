@@ -32,12 +32,29 @@ class ExportHistoryUiHostTest {
   val box=all.filterIsInstance<CheckBox>().single();val hint=all.single{it.tag=="history-remember-hint"};assertFalse(box.isChecked);assertEquals(View.GONE,hint.visibility);box.isChecked=true;assertEquals(View.VISIBLE,hint.visibility);box.isChecked=false;assertEquals(View.GONE,hint.visibility)
   d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();assertFalse(called)
  }}
- @Test fun rememberedScopeOnlyPreselectsAndStillNeedsPositiveButton(){language();Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
-  var result:ExportHistoryMode?=null
-  val d=showHistoryChoice(c.get(),ExportHistoryAction.SINGLE,false,1,ExportHistoryMode.RECORDS_AND_PHOTOS){mode,_->result=mode}
-  assertTrue(all(d.window!!.decorView).filterIsInstance<RadioButton>()[1].isChecked);assertNull(result)
-  d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(ExportHistoryMode.RECORDS_AND_PHOTOS,result)
- }}
+ @Test fun rememberedScopeGetsSimpleConfirmationForBothActionsAndAllLanguages(){for(lang in listOf("zh","en","ja","ko"))for(action in ExportHistoryAction.entries)for(mode in listOf(ExportHistoryMode.RECORDS_ONLY,ExportHistoryMode.RECORDS_AND_PHOTOS)){language(lang);Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
+  var result:Pair<ExportHistoryMode,Boolean>?=null
+  val d=showHistoryPrompt(c.get(),action,false,2,mode){m,r->result=m to r}
+  val views=all(d.window!!.decorView)
+  assertTrue(views.filterIsInstance<RadioButton>().isEmpty());assertTrue(views.filterIsInstance<CheckBox>().isEmpty());assertNull(result)
+  val key=if(mode==ExportHistoryMode.RECORDS_AND_PHOTOS)HistoryText.CONFIRM_PHOTOS else HistoryText.CONFIRM_RECORDS
+  assertTrue(views.filterIsInstance<TextView>().any{it.text.contains(key.text(c.get(),2))})
+  d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(mode to false,result)
+ }}}
+ @Test fun rememberedCancelAndDismissNeverConfirm(){language();for(action in ExportHistoryAction.entries){Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
+  var calls=0
+  val d=showHistoryPrompt(c.get(),action,true,1,ExportHistoryMode.RECORDS_AND_PHOTOS){_,_->calls++}
+  d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(0,calls)
+  val dismissed=showHistoryPrompt(c.get(),action,true,1,ExportHistoryMode.RECORDS_ONLY){_,_->calls++};dismissed.cancel();assertEquals(0,calls)
+ }}}
+ @Test fun askUsesScopeChooserAndConfirmsOnceWithoutSecondDialog(){language();for(action in ExportHistoryAction.entries){Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
+  var calls=0;var result:Pair<ExportHistoryMode,Boolean>?=null
+  val d=showHistoryPrompt(c.get(),action,false,1,ExportHistoryMode.ASK){m,r->calls++;result=m to r}
+  val views=all(d.window!!.decorView);assertEquals(2,views.filterIsInstance<RadioButton>().size)
+  views.filterIsInstance<RadioButton>()[1].performClick();views.filterIsInstance<CheckBox>().single().isChecked=true
+  d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(android.os.Looper.getMainLooper()).idle()
+  assertEquals(1,calls);assertEquals(ExportHistoryMode.RECORDS_AND_PHOTOS to true,result);assertSame(d,org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog())
+ }}}
  @Test fun clearAndSingleUseDistinctTitlesCopyAndConfirmationInAllLanguages(){for(lang in listOf("zh","en","ja","ko")){language(lang);Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
   val single=showHistoryChoice(c.get(),ExportHistoryAction.SINGLE,false){_,_->};val singleTitle=shadowOf(single).title.toString();val singleConfirm=single.getButton(AlertDialog.BUTTON_POSITIVE).text.toString();single.dismiss()
   val clear=showHistoryChoice(c.get(),ExportHistoryAction.CLEAR,false,3){_,_->};assertNotEquals(singleTitle,shadowOf(clear).title.toString());assertNotEquals(singleConfirm,clear.getButton(AlertDialog.BUTTON_POSITIVE).text.toString());assertTrue(all(clear.window!!.decorView).filterIsInstance<TextView>().any{it.text.toString()==HistoryText.PHOTO_MANY.text(c.get())});clear.dismiss()

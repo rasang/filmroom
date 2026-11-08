@@ -18,14 +18,14 @@ class OfficialReleaseIdentityHostTest {
     @Test fun applicationAndGeneratedMetadataUseOfficialUpgradeIdentity() {
         assertEquals("dev.filmroom",app.packageName)
         assertEquals("dev.filmroom",BuildConfig.APPLICATION_ID)
-        assertEquals(58,BuildConfig.VERSION_CODE)
-        assertEquals("0.1.22-beta6",BuildConfig.VERSION_NAME)
+        assertEquals(73,BuildConfig.VERSION_CODE)
+        assertEquals("0.1.22-beta21",BuildConfig.VERSION_NAME)
     }
 
     @Test fun manifestVersionAndApplicationLabelMatchOfficialRelease() {
         val info=app.packageManager.getPackageInfo(app.packageName,0)
-        assertEquals(58L,info.longVersionCode)
-        assertEquals("0.1.22-beta6",info.versionName)
+        assertEquals(73L,info.longVersionCode)
+        assertEquals("0.1.22-beta21",info.versionName)
         assertEquals("Filmroom",app.getString(R.string.app_name))
         assertEquals("Filmroom",app.applicationInfo.loadLabel(app.packageManager).toString())
     }
@@ -46,7 +46,7 @@ class OfficialReleaseIdentityHostTest {
         assertFalse(pm.getServiceInfo(ComponentName(app,dev.filmroom.export.ExportService::class.java),0).exported)
         val requested=pm.getPackageInfo(app.packageName,PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty().toSet()
         assertTrue("android.permission.FOREGROUND_SERVICE" in requested)
-        assertFalse("android.permission.INTERNET" in requested)
+        assertTrue("android.permission.INTERNET" in requested)
         assertFalse("android.permission.MANAGE_EXTERNAL_STORAGE" in requested)
     }
 }

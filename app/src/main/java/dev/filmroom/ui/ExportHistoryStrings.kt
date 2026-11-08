@@ -5,6 +5,8 @@ import dev.filmroom.i18n.L10n
 
 /** App-owned four-language copy, keyed independently of enum ordinals or preference wire values. */
 internal enum class HistoryText(val zh:String,val en:String,val ja:String,val ko:String) {
+ CONFIRM_RECORDS("将仅删除 %1\$d 条记录，保留导出的照片。","Delete %1\$d records only. Exported photos will be kept.","履歴 %1\$d 件のみ削除します。書き出した写真は残ります。","기록 %1\$d개만 삭제하고 내보낸 사진은 유지합니다。"),
+ CONFIRM_PHOTOS("将删除 %1\$d 条记录及对应的导出照片，不会删除原图。","Delete %1\$d records and their exported photos. Originals will not be deleted.","履歴 %1\$d 件と対応する書き出し写真を削除します。元画像は削除しません。","기록 %1\$d개와 해당 내보낸 사진을 삭제합니다. 원본은 삭제하지 않습니다。"),
  SINGLE_TITLE("删除这条记录？","Delete this record?","この履歴を削除しますか？","이 기록을 삭제할까요?"),
  CLEAR_TITLE("清空已结束的记录？","Clear finished records?","終了した履歴を消去しますか？","종료된 기록을 비울까요?"),
  CLEAR_ONE_TITLE("清空这条已结束记录？","Clear this finished record?","この終了した履歴を消去しますか？","종료된 이 기록을 비울까요?"),

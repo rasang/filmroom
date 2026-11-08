@@ -68,8 +68,8 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
         if(snapshots.isEmpty()){toast(HistoryText.PROTECTED);return}
         val saved=preferences.get(action)
         // A remembered mode is only a default, never consent for this deletion.
-        chooser=showHistoryChoice(activity,action,snapshots.any{it.state==ExportJobState.FAILED},snapshots.size,saved){mode,remember->
-            if(remember){try{preferences.set(action,mode)}catch(_:Exception){toast(HistoryText.SAVE_FAILED);return@showHistoryChoice}}
+        chooser=showHistoryPrompt(activity,action,snapshots.any{it.state==ExportJobState.FAILED},snapshots.size,saved){mode,remember->
+            if(remember){try{preferences.set(action,mode)}catch(_:Exception){toast(HistoryText.SAVE_FAILED);return@showHistoryPrompt}}
             start(action,snapshots,mode==ExportHistoryMode.RECORDS_AND_PHOTOS)
         }.also{dialog->dialog.setOnDismissListener{if(chooser===dialog)chooser=null}}
     }
@@ -162,6 +162,19 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
         }
         operation=null;restoredId=null;launcher?.unregister();launcher=null;launcherId=null;busy=false;changed()
     }
+}
+
+/** A saved scope needs only confirmation; ASK keeps the original scope chooser. */
+internal fun showHistoryPrompt(activity:ComponentActivity,action:ExportHistoryAction,hasFailures:Boolean,count:Int,mode:ExportHistoryMode,onConfirm:(ExportHistoryMode,Boolean)->Unit):AlertDialog {
+    if(mode==ExportHistoryMode.ASK)return showHistoryChoice(activity,action,hasFailures,count,onConfirm=onConfirm)
+    val title=if(action==ExportHistoryAction.SINGLE)HistoryText.SINGLE_TITLE else if(count==1)HistoryText.CLEAR_ONE_TITLE else HistoryText.CLEAR_TITLE
+    val scope=if(mode==ExportHistoryMode.RECORDS_AND_PHOTOS)HistoryText.CONFIRM_PHOTOS else HistoryText.CONFIRM_RECORDS
+    val note=if(action==ExportHistoryAction.CLEAR)HistoryText.CLEAR_NOTE else HistoryText.SINGLE_NOTE
+    val message=listOfNotNull(scope.text(activity,count),note.text(activity),if(hasFailures)HistoryText.RETRY_WARNING.text(activity)else null).joinToString("\n\n")
+    return AlertDialog.Builder(activity).setTitle(title.text(activity)).setMessage(message)
+        .setNegativeButton(HistoryText.CANCEL.text(activity),null)
+        .setPositiveButton((if(action==ExportHistoryAction.CLEAR)HistoryText.CLEAR else HistoryText.DELETE).text(activity)){_,_->onConfirm(mode,false)}
+        .show().also{it.window?.setBackgroundDrawableResource(dev.filmroom.R.drawable.filmroom_dialog_background)}
 }
 
 internal fun showHistoryChoice(activity:ComponentActivity,action:ExportHistoryAction,hasFailures:Boolean,count:Int=1,initialMode:ExportHistoryMode=ExportHistoryMode.ASK,onConfirm:(ExportHistoryMode,Boolean)->Unit):AlertDialog {

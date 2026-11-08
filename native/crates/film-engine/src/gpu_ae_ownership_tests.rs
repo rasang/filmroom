@@ -14,11 +14,11 @@ fn read(path:&Path)->Vec<f32>{fs::read(path).unwrap().chunks_exact(4).map(|b|f32
 #[test]
 fn gpu_export_ae_is_separate_from_manual_print_compensation(){
  // Exact identity composition: AE ownership, the resident approximation,
- // then the optical-model revision which invalidates pre-CineStill payloads.
+ // then optical-model and donor-grain revisions which invalidate older payloads.
  let resident_and_optics=crate::gpu_export::ALGORITHM.strip_prefix("export-ae-owned-v2-")
   .expect("GPU export must retain the AE-owned v2 identity");
- let resident=resident_and_optics.strip_suffix("-cinestill4g-v1")
-  .expect("GPU export must invalidate pre-CineStill optical-model payloads");
+ let resident=resident_and_optics.strip_suffix("-cinestill4g-v1-donor-portra-v1")
+  .expect("GPU export must invalidate pre-CineStill and pre-donor-grain payloads");
  assert_eq!(resident,spektrafilm_gpu::RESIDENT_APPROXIMATION_VERSION,
   "The complete resident approximation identity must remain unchanged");
  let dir=temp();let(w,h)=(64,48);let id=mobile::create(data().to_str().unwrap()).unwrap();let engine=mobile::get(id).unwrap();

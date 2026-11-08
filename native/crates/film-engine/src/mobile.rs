@@ -1619,7 +1619,7 @@ mod encoded_reuse_probe_tests {
     fn cinestill_optical_revision_invalidates_encoded_payload_reuse() {
         assert_eq!(super::encoded_reuse_probe(false).unwrap()["algorithm"],"streamed-cpu-v1-cinestill4g-v1");
         #[cfg(feature="adreno-gpu")]
-        assert!(crate::gpu_export::ALGORITHM.ends_with("cinestill4g-v1"));
+        assert!(crate::gpu_export::ALGORITHM.ends_with("-cinestill4g-v1-donor-portra-v1"));
     }
     #[test]
     fn cpu_probe_is_versioned_and_never_claims_gpu() {
