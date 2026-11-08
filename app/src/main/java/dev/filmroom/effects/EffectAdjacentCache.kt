@@ -5,7 +5,11 @@ internal class EffectAdjacentCache<T:Any>(private val release:(T)->Unit) {
     private val entries=linkedMapOf<String,T>()
     val size get()=entries.size
     fun contains(id:String)=entries.containsKey(id)
-    fun take(id:String):T?=entries.remove(id)
+    fun take(id:String,accept:(T)->Boolean={true}):T? {
+        val value=entries.remove(id) ?: return null
+        if(accept(value))return value
+        release(value);return null
+    }
     fun put(id:String,value:T){
         entries.remove(id)?.let{if(it!==value)release(it)}
         entries[id]=value

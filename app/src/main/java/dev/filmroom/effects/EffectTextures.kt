@@ -38,15 +38,20 @@ internal object EffectTextures {
         val p=Paint(Paint.ANTI_ALIAS_FLAG)
         val textH=min(9f,stripW*.03f);val top=(22f-textH)/2f
         reading.shutter?.let { value ->
-            val cell=textH*.57f;val total=max(value.length*cell+5f,textH*4.5f)
+            val lcd=EffectShutterLayout.create(value.length,textH,stripW*.24f)
+            val total=lcd.windowWidth
             val left=stripW*.32f-total/2f
             p.shader=LinearGradient(0f,top,0f,top+textH+2f,intArrayOf(Color.rgb(118,123,105),Color.rgb(151,155,130)),null,Shader.TileMode.CLAMP)
             c.drawRect(left,top-1f,left+total,top+textH+1f,p);p.shader=null
             p.color=Color.rgb(18,24,20)
             value.forEachIndexed { i,ch ->
-                val x=left+total-value.length*cell-2.5f+i*cell
-                if(ch in '0'..'9') sevenSegment(c,p,ch,x,top,cell*.82f,textH)
-                else {p.textSize=textH;p.typeface=Typeface.MONOSPACE;c.drawText(ch.toString(),x,top+textH*.85f,p)}
+                val x=left+lcd.glyphX(i)
+                if(ch in '0'..'9') sevenSegment(c,p,ch,x,top,lcd.glyphWidth,textH,lcd.strokeWidth)
+                else {
+                    p.textSize=textH;p.typeface=Typeface.MONOSPACE;p.textScaleX=1f
+                    p.textScaleX=lcd.glyphWidth/p.measureText(ch.toString()).coerceAtLeast(.01f)
+                    c.drawText(ch.toString(),x,top+textH*.85f,p);p.textScaleX=1f
+                }
             }
         }
         reading.aperture?.let { value ->
@@ -56,9 +61,9 @@ internal object EffectTextures {
         }
         return b
     }
-    private fun sevenSegment(c:Canvas,p:Paint,ch:Char,x:Float,y:Float,w:Float,h:Float) {
+    private fun sevenSegment(c:Canvas,p:Paint,ch:Char,x:Float,y:Float,w:Float,h:Float,stroke:Float=h*.09f) {
         val active=arrayOf("abcdef","bc","abdeg","abcdg","bcfg","acdfg","acdefg","abc","abcdefg","abcdfg")[ch-'0']
-        val t=h*.09f;val gap=t*.7f
+        val t=stroke;val gap=t*.7f
         p.style=Paint.Style.STROKE;p.strokeWidth=t;p.strokeCap=Paint.Cap.BUTT
         fun line(key:Char,x1:Float,y1:Float,x2:Float,y2:Float){if(key in active)c.drawLine(x+x1,y+y1,x+x2,y+y2,p)}
         line('a',gap,0f,w-gap,0f);line('g',gap,h/2,w-gap,h/2);line('d',gap,h,w-gap,h)
@@ -125,3 +130,4 @@ internal object EffectTextures {
         b.setPixels(out,0,w,0,0,w,h);return b
     }
 }
+

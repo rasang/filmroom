@@ -11,6 +11,27 @@ import java.io.File
 @Config(sdk=[35],manifest=Config.NONE,application=android.app.Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class EffectF3TexturesHostTest {
+ @Test fun oneHundredSegmentsHaveClearBackgroundBetweenDigits() {
+  val a=1.5f;val layout=EffectGeometry.opticalLayout(a)
+  val b=EffectTextures.readout((layout.outerW*3).toInt(),(layout.outerH*3).toInt(),a,EffectCameraReadout("100","1.8"))
+  val stripW=layout.outerW;val textH=minOf(9f,stripW*.03f)
+  val lcd=EffectShutterLayout.create(3,textH,stripW*.24f)
+  val left=stripW*.32f-lcd.windowWidth/2f;val top=(22f-textH)/2f
+  val sx=b.width/layout.outerW;val sy=b.height/layout.outerH
+  for(i in 0..1) {
+   val gapX=left+lcd.glyphX(i)+lcd.glyphWidth+lcd.gap/2f
+   for(y in 1..9) {
+    val pixel=b.getPixel((gapX*sx).toInt(),((top+textH*y/10f)*sy).toInt())
+    assertTrue("Digit gap must show LCD background",android.graphics.Color.red(pixel)>80)
+   }
+  }
+  System.getProperty("filmroom.f3.capture")?.let { dir ->
+   File(dir).mkdirs();File(dir,"readout-100-spacing.png").outputStream().use{b.compress(Bitmap.CompressFormat.PNG,100,it)}
+   val portrait=EffectTextures.readout((layout.outerH*3).toInt(),(layout.outerW*3).toInt(),2f/3f,EffectCameraReadout("100","1.8"))
+   File(dir,"portrait-100-spacing.png").outputStream().use{portrait.compress(Bitmap.CompressFormat.PNG,100,it)};portrait.recycle()
+  }
+  b.recycle()
+ }
  @Test fun blurTextureIsBoundedAndDoesNotMutateSource() {
   val source=Bitmap.createBitmap(600,400,Bitmap.Config.ARGB_8888);source.eraseColor(android.graphics.Color.RED)
   val blurred=EffectTextures.defocused(source);assertEquals(256,blurred.width);assertEquals(171,blurred.height)

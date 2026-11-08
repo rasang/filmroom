@@ -15,6 +15,8 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
+import android.view.ViewConfiguration
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -52,6 +54,11 @@ class PhotoEffectActivity : ComponentActivity() {
     private val adjacentPhotos=EffectAdjacentCache<EffectPagePhoto>{it.close()}
     private var gestureNeighbours=emptyMap<Int,dev.filmroom.export.ExportJob>()
     private var adjacentEpoch=0
+    // Main-thread ownership: a bitmap belongs to current, incoming, retired GL work, or idle cache.
+    private var retentionEpoch=0
+    private var currentRecord:dev.filmroom.export.ExportJob?=null
+    private val pendingRetirements=mutableSetOf<()->Unit>()
+    private var pageCommitPending=false
     private val pageWorkers=mutableSetOf<Job>()
     private var pageEpoch=0
     private var incomingPhoto:EffectPagePhoto?=null
@@ -64,7 +71,7 @@ class PhotoEffectActivity : ComponentActivity() {
     private var draggingPage=false
     private var pageRequested=false
     private var pageAnimator:ValueAnimator?=null
-    private val pageBusy get()=draggingPage||pageRequested||pageAnimator!=null
+    private val pageBusy get()=draggingPage||pageRequested||pageAnimator!=null||pageCommitPending
     private data class EffectPagePhoto(val record:dev.filmroom.export.ExportJob,val input:Bitmap,val output:Bitmap,
         val composition:EffectSourceComposition?,val readout:EffectCameraReadout) {
         fun close(){if(!input.isRecycled)input.recycle();if(output!==input&&!output.isRecycled)output.recycle()}
@@ -160,17 +167,31 @@ class PhotoEffectActivity : ComponentActivity() {
         root.addView(header)
         stage=object:FrameLayout(this@PhotoEffectActivity){
             private var downX=0f;private var downY=0f;private var tracking=false;private var horizontal=false
+            private var velocity:VelocityTracker?=null
+            private val maxFlingVelocity=ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat()
+            private fun clearVelocity(){velocity?.recycle();velocity=null}
+            override fun onDetachedFromWindow(){clearVelocity();super.onDetachedFromWindow()}
             override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);if(w!=oldw&&oldw>0)cancelPageTransition();fitPreview();incomingPhoto?.let{incomingPreview?.layoutParams=pageLayout(it.input)}}
             override fun dispatchTouchEvent(event:MotionEvent):Boolean {
+                if(event.actionMasked==MotionEvent.ACTION_DOWN){clearVelocity();velocity=VelocityTracker.obtain()}
+                velocity?.addMovement(event)
                 when(event.actionMasked){
                     MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;tracking=canDragPage();horizontal=false}
-                    MotionEvent.ACTION_POINTER_DOWN,MotionEvent.ACTION_CANCEL->{tracking=false;if(horizontal)releasePage(false);horizontal=false}
+                    MotionEvent.ACTION_POINTER_DOWN,MotionEvent.ACTION_CANCEL->{tracking=false;if(horizontal)releasePage(false);horizontal=false;clearVelocity()}
                     MotionEvent.ACTION_MOVE->if(tracking){
                         val dx=event.x-downX;val dy=event.y-downY
-                        if(!horizontal && kotlin.math.abs(dy)>dp(12) && kotlin.math.abs(dy)>kotlin.math.abs(dx))tracking=false
+                        if(!horizontal && kotlin.math.abs(dy)>dp(12) && kotlin.math.abs(dy)>kotlin.math.abs(dx)){tracking=false;clearVelocity()}
                         else if(horizontal || EffectPhotoNavigation.swipeDirection(dx,dy,dp(10).toFloat())!=0){horizontal=true;dragPage(dx)}
                     }
-                    MotionEvent.ACTION_UP->{if(tracking&&horizontal)releasePage(true);tracking=false;horizontal=false}
+                    MotionEvent.ACTION_UP->{
+                        if(tracking&&horizontal){
+                            // Include the final position and release velocity, not total gesture time.
+                            dragPage(event.x-downX)
+                            velocity?.computeCurrentVelocity(1000,maxFlingVelocity)
+                            releasePage(true,velocity?.xVelocity ?: 0f,velocity?.yVelocity ?: 0f)
+                        }
+                        tracking=false;horizontal=false;clearVelocity()
+                    }
                 }
                 super.dispatchTouchEvent(event);return true
             }
@@ -242,8 +263,20 @@ class PhotoEffectActivity : ComponentActivity() {
     }
     /** Decode both neighbours while idle; cached ownership transfers to a page, never to two renderers. */
     private fun clearAdjacentPhotos(){
+        retentionEpoch++
         adjacentEpoch++;prefetchWorkers.toList().forEach{it.cancel()};prefetchJob=null
         adjacentPhotos.clear()
+    }
+    /** Return a displayed page, not a newly decoded copy. Stale/temporary links never enter the cache. */
+    private fun retainPhoto(photo:EffectPagePhoto,epoch:Int){
+        val jobs=dev.filmroom.export.ExportQueue.get(this).store.jobs.value
+        val neighbours=listOfNotNull(EffectPhotoNavigation.neighbor(jobs,jobId,1),EffectPhotoNavigation.neighbor(jobs,jobId,-1))
+        val available=Runtime.getRuntime().maxMemory()-Runtime.getRuntime().totalMemory()+Runtime.getRuntime().freeMemory()
+        if(epoch==retentionEpoch && !isDestroyed && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            && available>=24L*1024*1024 && neighbours.any{it==photo.record}){
+            adjacentPhotos.retain(neighbours.map{it.id}.toSet())
+            adjacentPhotos.put(photo.record.id,photo)
+        }else photo.close()
     }
     private fun preloadAdjacentPhotos(){
         val current=jobId ?: return
@@ -266,7 +299,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 try {
                     photo=decodePage(record,edge)
                     ensureActive()
-                    if(epoch==adjacentEpoch && jobId==current && record.id!=incomingId){adjacentPhotos.put(record.id,photo);photo=null}
+                    if(epoch==adjacentEpoch && jobId==current && record.id!=incomingId && !adjacentPhotos.contains(record.id)){adjacentPhotos.put(record.id,photo);photo=null}
                 }catch(e:CancellationException){throw e}
                 catch(_:Exception){}catch(_:OutOfMemoryError){break}
                 finally{photo?.close()}
@@ -290,7 +323,7 @@ class PhotoEffectActivity : ComponentActivity() {
             return EffectPagePhoto(record,requireNotNull(input),requireNotNull(output),composition,readout).also{input=null;output=null}
         }finally{input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}
     }
-    private fun canDragPage()=preview?.isFrameReady()==true && !working && !liveChecking && pageAnimator==null && !pageRequested && loadJob?.isActive!=true && selectionJob?.isActive!=true
+    private fun canDragPage()=preview?.isFrameReady()==true && !pageCommitPending && !working && !liveChecking && pageAnimator==null && !pageRequested && loadJob?.isActive!=true && selectionJob?.isActive!=true
     private fun setPageControls(enabled:Boolean){
         replayButton.isEnabled=enabled&&source!=null&&result!=null&&preview?.hasFailed()!=true
         livePhotoButton.isEnabled=replayButton.isEnabled;exportButton.isEnabled=replayButton.isEnabled
@@ -333,7 +366,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 predecessors.joinAll()
                 ensureActive()
                 // Stop speculative work before an urgent page load. Await cancellation to bound live bitmaps.
-                val cached=adjacentPhotos.take(record.id)
+                val cached=adjacentPhotos.take(record.id){it.record==record}
                 val speculative=prefetchWorkers.toList();speculative.forEach{it.cancel()};prefetchJob=null
                 val photo=if(cached!=null)cached else {
                     speculative.joinAll();ensureActive()
@@ -378,10 +411,10 @@ class PhotoEffectActivity : ComponentActivity() {
         Toast.makeText(this,t("无法读取这张照片，请在导出记录中重新选择照片。","Cannot load this photo. Select it again from its export record."),Toast.LENGTH_SHORT).show()
         settlePage(false)
     }
-    private fun releasePage(allowCommit:Boolean){
+    private fun releasePage(allowCommit:Boolean,velocityX:Float=0f,velocityY:Float=0f){
         if(!draggingPage)return
         draggingPage=false
-        val commit=allowCommit && incomingId!=null && EffectPageMotion.shouldCommit(pageDrag,pageWidth(),dp(64).toFloat())
+        val commit=allowCommit && incomingId!=null && EffectPageMotion.shouldCommit(pageDrag,pageWidth(),dp(64).toFloat(),velocityX,velocityY,dp(600).toFloat(),dp(16).toFloat())
         pageRequested=commit
         if(commit && !incomingReady){
             // Keep the finger position; do not rebound and then start a second animation.
@@ -421,23 +454,50 @@ class PhotoEffectActivity : ComponentActivity() {
         stopPreviewAudio()
         if(!lightTable)preview?.let{it.onPause();stage.removeView(it)}
         val oldSource=source;val oldResult=result
+        val oldRecord=currentRecord?.takeIf{!sourceTemporary&&!resultTemporary&&it.originalUri==sourceUri&&it.mediaUri==resultUri}
+        val departed=if(oldRecord!=null&&oldSource!=null&&oldResult!=null)
+            EffectPagePhoto(oldRecord,oldSource,oldResult,sourceComposition,cameraReadout) else null
+        val retainEpoch=retentionEpoch
+        val commitEpoch=pageEpoch
+        currentRecord=photo.record
         source=photo.input;result=photo.output;sourceComposition=photo.composition;cameraReadout=photo.readout
         jobId=photo.record.id;sourceUri=photo.record.originalUri;resultUri=photo.record.mediaUri
         recordSourceUri=sourceUri;recordResultUri=resultUri;sourceTemporary=false;resultTemporary=false
         preview=nextPreview;preview?.translationX=0f
         incomingPhoto=null;incomingPreview=null;incomingId=null;incomingReady=false;pageRequested=false;pageDrag=0f
-        val releaseOld={oldSource?.takeUnless{it.isRecycled}?.recycle();if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle();Unit}
+        val disposeOld={oldSource?.takeUnless{it.isRecycled}?.recycle();if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle();Unit}
+        pendingRetirements.add(disposeOld)
+        val releaseOld={runOnUiThread{
+            if(pendingRetirements.remove(disposeOld)){
+                if(departed!=null)retainPhoto(departed,retainEpoch)else disposeOld()
+            }
+            if(preview===nextPreview && !isDestroyed){
+                pageCommitPending=false
+                if(commitEpoch==pageEpoch && loadJob?.isActive!=true){
+                    setPageControls(true)
+                    if(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preloadAdjacentPhotos()
+                }
+            }
+        };Unit}
         displayedPageOffset=0f
+        // Do not admit a second gesture before the shared renderer has relinquished the old inputs.
+        pageCommitPending=lightTable
+        status.text="";status.visibility=android.view.View.GONE;setPageControls(!lightTable)
         if(lightTable)nextPreview.replaceFilm(photo.input,photo.output,photo.readout,releaseOld)else releaseOld()
-        status.text="";status.visibility=android.view.View.GONE;setPageControls(true);preloadAdjacentPhotos()
     }
     private fun discardIncoming(){
         pageEpoch++;pageLoad?.cancel();pageLoad=null
         incomingPreview?.let{it.onPause();stage.removeView(it)};incomingPreview=null
         val unused=incomingPhoto
+        val retainEpoch=retentionEpoch
         incomingPhoto=null;incomingReady=false;incomingId=null
-        if(kind==EffectKind.LIGHT_TABLE){preview?.clearFilmPage(unused?.let{ {it.close()} }) ?: unused?.close()}
-        else unused?.close()
+        if(unused!=null){
+            val dispose={unused.close()}
+            pendingRetirements.add(dispose)
+            val returned={runOnUiThread{if(pendingRetirements.remove(dispose))retainPhoto(unused,retainEpoch)};Unit}
+            if(kind==EffectKind.LIGHT_TABLE){preview?.clearFilmPage(returned) ?: returned()}
+            else returned()
+        }else if(kind==EffectKind.LIGHT_TABLE)preview?.clearFilmPage()
     }
     private fun cancelPageTransition(){
         val animator=pageAnimator;pageAnimator=null;animator?.cancel()
@@ -449,6 +509,9 @@ class PhotoEffectActivity : ComponentActivity() {
         clearAdjacentPhotos()
         stopPreviewAudio()
         preview?.onPause();stage.removeAllViews();preview=null
+        // The GL views have now stopped and detached; no upload can still access retired inputs.
+        pendingRetirements.toList().also{pendingRetirements.clear()}.forEach{it()}
+        pageCommitPending=false;currentRecord=null
         val oldSource=source;val oldResult=result;source=null;result=null
         oldSource?.takeUnless{it.isRecycled}?.recycle()
         if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle()
@@ -477,7 +540,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 ensureActive()
                 val input=ownedInput
                 if(input==null){missing(true);return@launch}
-                clearPreview();result=output;source=input;ownedOutput=null;ownedInput=null
+                clearPreview();currentRecord=record;result=output;source=input;ownedOutput=null;ownedInput=null
                 preview=EffectPreview(input,output,cameraReadout,autoPlay).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
                 replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;preloadAdjacentPhotos()
             } finally {
@@ -580,8 +643,8 @@ class PhotoEffectActivity : ComponentActivity() {
     override fun onSaveInstanceState(out:Bundle){out.putString("record_source_uri",recordSourceUri);out.putString("record_result_uri",recordResultUri);out.putBoolean("source_temporary",sourceTemporary);out.putBoolean("result_temporary",resultTemporary);out.putString(JOB_ID,jobId);out.putBoolean("effect_slow",selectedSlow);out.putString("effect_quality",selectedQuality.name);out.putString(RESULT_URI,resultUri);out.putString(SOURCE_URI,sourceUri);super.onSaveInstanceState(out)}
     override fun onResume(){super.onResume();preview?.onResume();if(source!=null)preloadAdjacentPhotos()}
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)clearAdjacentPhotos()}
-    override fun onPause(){clearAdjacentPhotos();cancelPageTransition();stopPreviewAudio();preview?.reset();preview?.onPause();super.onPause()}
-    override fun onDestroy(){cancelPageTransition();stopPreviewAudio();cancelled.set(true);super.onDestroy()}
+    override fun onPause(){cancelPageTransition();clearAdjacentPhotos();stopPreviewAudio();preview?.reset();preview?.onPause();super.onPause()}
+    override fun onDestroy(){clearPreview();stopPreviewAudio();cancelled.set(true);super.onDestroy()}
     private inner class EffectPreview(private var a:Bitmap,private var b:Bitmap,private var readout:EffectCameraReadout,autoPlay:Boolean,private val firstFrame:((EffectPreview)->Unit)?=null):GLSurfaceView(this@PhotoEffectActivity),GLSurfaceView.Renderer{
         private var renderer=EffectGlRenderer(kind,a,b,readout)
         private var start=0L;private var widthPx=1;private var heightPx=1;@Volatile private var failed=false;private val playback=EffectPreviewPlayback(autoPlay);private var playingSlow=selectedSlow;private var phase="";private var audioRequested=false;private var reportedFrame=false;private var filmSlide=0f;private var filmDirection=0;private var hadSurface=false

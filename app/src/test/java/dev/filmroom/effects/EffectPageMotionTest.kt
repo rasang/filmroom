@@ -13,4 +13,42 @@ class EffectPageMotionTest {
     @Test fun commitThresholdAdaptsToWidthAndDensity(){assertFalse(EffectPageMotion.shouldCommit(80f,400f,64f));assertTrue(EffectPageMotion.shouldCommit(90f,400f,64f));assertFalse(EffectPageMotion.shouldCommit(90f,200f,128f))}
     @Test fun lowMemoryLimitsAdjacentDecode(){assertEquals(640,EffectPageMotion.decodeEdge(8L*1024*1024));assertEquals(960,EffectPageMotion.decodeEdge(48L*1024*1024));assertEquals(1200,EffectPageMotion.decodeEdge(100L*1024*1024))}
     @Test fun noOriginalResolutionPreloadEvenWithLargeHeap(){assertEquals(1200,EffectPageMotion.decodeEdge(Long.MAX_VALUE));assertEquals(640,EffectPageMotion.decodeEdge(-1))}
+    @Test fun shortFastFlickCommitsBothDirections(){
+        assertTrue(EffectPageMotion.shouldCommit(-30f,400f,64f,-900f,40f))
+        assertTrue(EffectPageMotion.shouldCommit(30f,400f,64f,900f,-40f))
+    }
+    @Test fun slowShortDragStillReturns(){
+        assertFalse(EffectPageMotion.shouldCommit(-30f,400f,64f,-250f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(30f,400f,64f,250f,0f))
+    }
+    @Test fun slowLongDragStillCommits(){
+        assertTrue(EffectPageMotion.shouldCommit(-100f,400f,64f,-30f,0f))
+        assertTrue(EffectPageMotion.shouldCommit(100f,400f,64f,0f,0f))
+    }
+    @Test fun oppositeVelocityDoesNotCommitShortDrag(){
+        assertFalse(EffectPageMotion.shouldCommit(-30f,400f,64f,900f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(30f,400f,64f,-900f,0f))
+    }
+    @Test fun tinyJitterAndVerticalFlickDoNotCommit(){
+        assertFalse(EffectPageMotion.shouldCommit(10f,400f,64f,2000f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(30f,400f,64f,900f,1000f))
+        assertFalse(EffectPageMotion.shouldCommit(0f,400f,64f,2000f,0f))
+    }
+    @Test fun flingThresholdBoundariesAreExplicit(){
+        assertTrue(EffectPageMotion.shouldCommit(16f,400f,64f,600f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(15.99f,400f,64f,600f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(16f,400f,64f,599.99f,0f))
+        assertFalse(EffectPageMotion.shouldCommit(16f,400f,64f,600f,400f))
+        assertTrue(EffectPageMotion.shouldCommit(88f,400f,64f))
+        assertFalse(EffectPageMotion.shouldCommit(87.99f,400f,64f))
+    }
+    @Test fun flingThresholdsScaleWithDensity(){
+        assertTrue(EffectPageMotion.shouldCommit(48f,1200f,192f,1800f,0f,1800f,48f))
+        assertFalse(EffectPageMotion.shouldCommit(47f,1200f,192f,1800f,0f,1800f,48f))
+        assertFalse(EffectPageMotion.shouldCommit(48f,1200f,192f,1799f,0f,1800f,48f))
+    }
+    @Test fun invalidMotionCannotCommit(){
+        assertFalse(EffectPageMotion.shouldCommit(Float.NaN,400f,64f))
+        assertFalse(EffectPageMotion.shouldCommit(30f,400f,64f,Float.POSITIVE_INFINITY,0f))
+    }
 }
