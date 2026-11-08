@@ -24,9 +24,10 @@ class ExportHistoryBackupHostTest {
         outputName="private-filename.jpg",metadataWarning="secret",photoMetadata=null)
     private fun temp(block:(File)->Unit){val dir=Files.createTempDirectory("backup-history").toFile();try{block(dir)}finally{dir.deleteRecursively()}}
     private fun invalid(block:()->Unit){try{block();fail("Expected rejection")}catch(_:IllegalArgumentException){}catch(_:org.json.JSONException){}}
-    @Test fun exportAllowlistExcludesAllLocatorsDiagnosticsAndImages(){
+    @Test fun exportAllowlistKeepsOnlyRequestedImageLinksAndExcludesDiagnostics(){
         val text=ExportHistoryBackup.exportRows(listOf(job())).toString()
-        listOf("content://","/data/","private-filename","secret","mediaUri","parameters","photoMetadata","message").forEach{assertFalse(it,text.contains(it))}
+        assertEquals(job().mediaUri,JSONArray(text).getJSONObject(0).getString("mediaUri"));assertTrue(text.contains("private-filename"))
+        listOf("/data/","secret","parameters","photoMetadata","message").forEach{assertFalse(it,text.contains(it))}
     }
     @Test fun restoredRunningRowsNeverQueueOrRetryAndAreNotShownAsSaved()=temp{dir->
         val store=ExportJobStore(dir);val row=job(ExportJobState.RUNNING)
@@ -55,7 +56,7 @@ class ExportHistoryBackupHostTest {
     }
     @Test fun archiveDeletesOnlyItsRecordEvenUnderDeletePhotosPreference()=temp{dir->
         val store=ExportJobStore(dir);val original=job();store.mergeBackupHistory(ExportHistoryBackup.exportRows(listOf(original)))
-        val snapshot=store.historySnapshot(setOf(original.id)).single();assertNull(snapshot.mediaUri)
+        val snapshot=store.historySnapshot(setOf(original.id)).single();assertEquals(original.mediaUri,snapshot.mediaUri)
         val op=store.beginHistory(listOf(snapshot),true)
         assertTrue(store.removeHistoryRecord(op,snapshot));assertTrue(store.jobs.value.isEmpty())
         assertTrue(ExportJobStore(dir).jobs.value.isEmpty())

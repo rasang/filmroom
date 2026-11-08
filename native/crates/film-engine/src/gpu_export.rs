@@ -6,9 +6,10 @@ use crate::{mobile::{EngineError,Result},streamed::{StreamedMetrics,StageMetrics
 
 // Export ownership semantics are independent of the preview/detail protocol.
 // Every export checkpoint, global-field/FilmLog reuse key, and reuse probe uses this ID.
-pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1";
+pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1-donor-portra-v1";
 const FIXED_BYTES:u64=96*1024*1024;
-const BAND_BYTES_PER_PIXEL:u64=256;
+// Includes 12 B/pixel saved log RGB for no-film donor grain, rounded up.
+const BAND_BYTES_PER_PIXEL:u64=272;
 #[derive(Clone,Copy,Debug)]
 pub(crate) struct BandPlan {pub rows:u32,pub expanded_rows:u32,pub estimated_bytes:u64,pub whole:bool}
 fn err(code:&'static str)->EngineError {EngineError::new(code,"GPU export could not complete within its validated contract")}
@@ -121,7 +122,7 @@ fn write_core(out:&mut File,rendered:&spektrafilm_math::image::ImageBuf,full_wid
     Ok(written)
 }
 fn metric(width:u32,height:u32,budget:u32,start:Instant,setup:f64,ev:Option<f32>,gpu:crate::adreno::GpuDiagnostics,plan:TilePlan,read:u64,written:u64,stages:Vec<StageMetrics>)->StreamedMetrics {
-    StreamedMetrics{export_execution:None,metered_ev:ev,gpu,width,height,pixel_count:width as u64*height as u64,memory_budget_mi_b:budget,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms:setup,estimated_scratch_bytes:0,peak_logical_scratch_bytes:0,spatial_peak_explicit_buffer_bytes:plan.estimated_bytes,spatial_bytes_read:read,spatial_bytes_written:written,spatial_pass_count:0,pointwise_chunk_rows:plan.rows,gpu_tiles:Some(crate::streamed::GpuTileMetrics{core_width:plan.width,core_height:plan.rows,expanded_width:plan.expanded_width,expanded_height:plan.expanded_rows}),lut_storage_bytes:0,stages,algorithm:ALGORITHM,grain_mode:"v41-approximate-global-coordinate-grain",memory_policy:"Conservative joint host/device/staging/driver estimate; 256B/expanded pixel + 96MiB + retained global diffusion fields; budget determines actual rectangular tile geometry"}
+    StreamedMetrics{export_execution:None,metered_ev:ev,gpu,width,height,pixel_count:width as u64*height as u64,memory_budget_mi_b:budget,elapsed_ms:start.elapsed().as_secs_f64()*1000.,setup_ms:setup,estimated_scratch_bytes:0,peak_logical_scratch_bytes:0,spatial_peak_explicit_buffer_bytes:plan.estimated_bytes,spatial_bytes_read:read,spatial_bytes_written:written,spatial_pass_count:0,pointwise_chunk_rows:plan.rows,gpu_tiles:Some(crate::streamed::GpuTileMetrics{core_width:plan.width,core_height:plan.rows,expanded_width:plan.expanded_width,expanded_height:plan.expanded_rows}),lut_storage_bytes:0,stages,algorithm:ALGORITHM,grain_mode:"v41-approximate-global-coordinate-grain",memory_policy:"Conservative joint host/device/staging/driver estimate; 272B/expanded pixel + 96MiB + retained global diffusion fields; budget determines actual rectangular tile geometry"}
 }
 #[allow(clippy::too_many_arguments)]
 fn global_fields_configuration(params:&RuntimeParams,film:&str,paper:&str,ev:Option<f32>,pitch:f32,
@@ -573,7 +574,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     let mut metrics=metric(width,height,budget,start,setup_ms,ev,diagnostics,reported_plan,bytes_read,written,stages);
     let proof_written=film_log_cache.as_ref().map_or(0,|cache|cache.disk_io().1);
     metrics.estimated_scratch_bytes=scratch_peak.saturating_add(cache_written).saturating_add(proof_written);metrics.peak_logical_scratch_bytes=metrics.estimated_scratch_bytes;
-    if film_log_cache.is_some(){metrics.memory_policy="Conservative 256B/expanded pixel + 96MiB + retained global fields; FilmLog proof/read workspace and rollback camera fields are additionally prepaid in prefix/suffix/capture tile plans";}
+    if film_log_cache.is_some(){metrics.memory_policy="Conservative 272B/expanded pixel + 96MiB + retained global fields; FilmLog proof/read workspace and rollback camera fields are additionally prepaid in prefix/suffix/capture tile plans";}
     output_guard.keep=true;
     Ok(metrics)
 }
@@ -966,7 +967,7 @@ mod capacity_boundary_tests {
     use super::*;
     #[test]
     fn conservative_budget_coefficients_remain_unchanged() {
-        assert_eq!(FIXED_BYTES,96*1024*1024);assert_eq!(BAND_BYTES_PER_PIXEL,256);
+        assert_eq!(FIXED_BYTES,96*1024*1024);assert_eq!(BAND_BYTES_PER_PIXEL,272);
     }
     #[test]
     fn retained_fields_exact_pixel_boundary_is_inclusive() {

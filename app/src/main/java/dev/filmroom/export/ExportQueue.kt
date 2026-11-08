@@ -91,7 +91,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
             val dir=store.directory(id);check(dir.mkdirs())
             val snapshot=File(dir,when(kind){"LINEAR"->"input.rgb";"LINEAR_SOURCE"->"source.rgb";else->"source.image"})
             var durable=false;var accepted=false
-            val draft=ExportJob(id,maxOf(System.currentTimeMillis(),(jobs.value.maxOfOrNull{it.createdAt} ?: 0L)+1),parameters.copy(),size.width,size.height,format,quality,state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_544c342feaf0),messageUi=UiMessage.of(R.string.text_544c342feaf0),inputReady=false,inputKind=kind,sourceWidth=source.originalWidth,sourceHeight=source.originalHeight,maxEdge=maxEdge,requestGeneration=generation,photoMetadata=source.photoMetadata.toJson(),metadataWarning=source.photoMetadata.warning,border=border,crop=crop)
+            val draft=ExportJob(id,maxOf(System.currentTimeMillis(),(jobs.value.maxOfOrNull{it.createdAt} ?: 0L)+1),parameters.copy(),size.width,size.height,format,quality,state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_544c342feaf0),messageUi=UiMessage.of(R.string.text_544c342feaf0),inputReady=false,inputKind=kind,sourceWidth=source.originalWidth,sourceHeight=source.originalHeight,maxEdge=maxEdge,requestGeneration=generation,photoMetadata=source.photoMetadata.toJson(),metadataWarning=source.photoMetadata.warning,border=border,crop=crop,originalUri=source.originalUri)
             try {
                 store.update(draft);accepted=true;runCatching{onAccepted(draft)};beforeCapture(draft)
                 val bytes=opened.channel.size()

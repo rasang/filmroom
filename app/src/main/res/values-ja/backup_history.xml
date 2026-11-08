@@ -1,4 +1,4 @@
 <resources>
     <string name="backup_history_archived">バックアップの履歴</string>
-    <string name="backup_history_no_photos">バックアップから復元した履歴です。写真を含まないため、写真表示や再書き出しはできません。</string>
+    <string name="backup_history_no_photos">画像リンクがない、無効、またはアクセス権限がありません。再書き出しはできません。</string>
 </resources>

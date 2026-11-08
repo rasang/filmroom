@@ -3,6 +3,8 @@ package dev.filmroom.diagnostics
 import dev.filmroom.io.formats.PhotoFormat
 
 /** Fixed categories only. Never stores source URI, authority, filename, MIME text or exception text. */
+enum class OriginalPhotoGrant { NOT_REQUESTED, NOT_APPLICABLE, ALREADY_PERSISTED, PERSISTED, TEMPORARY_ONLY, REQUEST_FAILED, VERIFY_FAILED }
+
 enum class ImportOrigin { UNKNOWN, PHOTO_PICKER, FILES_PICKER }
 enum class ImportPhase { PREPARE, SOURCE_OPEN, PRIVATE_OPEN, SOURCE_READ, COPY_ADMISSION, PRIVATE_WRITE,
     PRIVATE_CLOSE, SOURCE_CLOSE, INPUT_PROBE, INPUT_PROCESS, COMPLETE }
@@ -42,6 +44,7 @@ data class ImportDiagnosticInfo(
     val memoryStage:ImportMemoryStage?=null,
     val memory:ImportMemoryInfo?=null,
     val decodedRawFormat:dev.filmroom.codec.RawFormat?=null,
+    val originalPhotoGrant:OriginalPhotoGrant?=null,
 ) {
     internal fun fields(): Map<String, Any> = buildMap {
         if(origin!=null || phase!=null){
@@ -50,6 +53,7 @@ data class ImportDiagnosticInfo(
             put("importFormatKnown",format!=null && format!=PhotoFormat.UNKNOWN)
         }
         origin?.let { put("importOrigin", it.name) }
+        originalPhotoGrant?.let { put("importOriginalPhotoGrant", it.name) }
         phase?.let { put("importPhase", it.name) }
         copiedBytes?.takeIf { it in 0..MAX_BYTES }?.let { put("importCopiedBytes", it) }
         format?.let { put("importFormat", it.name);put("importFormatBasis","HEADER_SIGNATURE") }
@@ -82,6 +86,7 @@ data class ImportDiagnosticInfo(
                 n("importWidth",1_000_000,1)?.toInt(),n("importHeight",1_000_000,1)?.toInt(),
                 ImportMemoryStage.entries.firstOrNull{it.name==fields["importMemoryStage"]},ImportMemoryInfo.fromFields(fields),
                 dev.filmroom.codec.RawFormat.entries.firstOrNull{it.name==fields["importDecodedRawFormat"]},
+                OriginalPhotoGrant.entries.firstOrNull{it.name==fields["importOriginalPhotoGrant"]},
             )
             return value.takeIf { it.fields().isNotEmpty() }
         }

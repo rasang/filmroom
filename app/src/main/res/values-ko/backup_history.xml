@@ -1,4 +1,4 @@
 <resources>
     <string name="backup_history_archived">백업 기록</string>
-    <string name="backup_history_no_photos">백업에서 복원한 기록입니다. 사진이 없어 사진 보기나 다시 내보내기를 할 수 없습니다.</string>
+    <string name="backup_history_no_photos">이미지 링크가 없거나 만료되었거나 접근 권한이 없습니다. 다시 내보낼 수 없습니다.</string>
 </resources>

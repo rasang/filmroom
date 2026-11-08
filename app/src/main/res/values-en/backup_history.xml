@@ -1,4 +1,4 @@
 <resources>
     <string name="backup_history_archived">Restored record</string>
-    <string name="backup_history_no_photos">Restored from backup without photos. Viewing and re-exporting are unavailable.</string>
+    <string name="backup_history_no_photos">Image link missing, unavailable or not permitted. This record cannot restart an export.</string>
 </resources>

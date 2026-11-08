@@ -1,7 +1,7 @@
 package dev.filmroom.ui
 
 import android.content.Context
-import android.graphics.Bitmap
+import android.graphics.*
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -39,7 +39,8 @@ object FilmStockArtwork {
         "ilford_hp5_plus_400" to "ilford_hp5_plus_400",
         "cinestill_800t" to "cinestill_800t",
     )
-    private val bitmaps = mutableMapOf<String, Bitmap>()
+    private data class Artwork(val bitmap: Bitmap, val visible: Rect)
+    private val bitmaps = mutableMapOf<String, Artwork>()
     fun assetPath(profileId: String): String? = physicalStockByProfile[profileId]?.let { "film-rolls/$it.webp" }
 
     fun drawable(context: Context, profileId: String): Drawable {
@@ -49,12 +50,33 @@ object FilmStockArtwork {
             synchronized(bitmaps) {
                 bitmaps[it] ?: runCatching {
                     context.assets.open(it).use { input -> BitmapFactory.decodeStream(input) }
-                }.getOrNull()?.also { decoded -> bitmaps[it] = decoded }
+                }.getOrNull()?.let { decoded -> Artwork(decoded, visibleBounds(decoded)) }?.also { decoded -> bitmaps[it] = decoded }
             }
         }
         // An unknown or damaged asset must never silently show a different film stock.
-        return if (bitmap != null) BitmapDrawable(context.resources, bitmap)
+        return if (bitmap != null) CenteredFilmDrawable(bitmap)
         else context.getDrawable(R.drawable.ic_film)!!.mutate()
+    }
+
+    private fun visibleBounds(bitmap: Bitmap): Rect {
+        var left=bitmap.width;var top=bitmap.height;var right=-1;var bottom=-1
+        for(y in 0 until bitmap.height) for(x in 0 until bitmap.width) if(Color.alpha(bitmap.getPixel(x,y))>8) {
+            left=minOf(left,x);top=minOf(top,y);right=maxOf(right,x);bottom=maxOf(bottom,y)
+        }
+        return if(right>=left) Rect(left,top,right+1,bottom+1) else Rect(0,0,bitmap.width,bitmap.height)
+    }
+    private class CenteredFilmDrawable(private val artwork: Artwork): Drawable() {
+        private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        override fun draw(canvas: Canvas) {
+            val edge=minOf(bounds.width(),bounds.height())*.75f
+            val scale=edge/maxOf(artwork.visible.width(),artwork.visible.height())
+            val width=artwork.visible.width()*scale;val height=artwork.visible.height()*scale
+            val cx=bounds.exactCenterX();val cy=bounds.exactCenterY()
+            canvas.drawBitmap(artwork.bitmap,artwork.visible,RectF(cx-width/2,cy-height/2,cx+width/2,cy+height/2),paint)
+        }
+        override fun setAlpha(alpha:Int){paint.alpha=alpha;invalidateSelf()}
+        override fun setColorFilter(filter:ColorFilter?){paint.colorFilter=filter;invalidateSelf()}
+        @Deprecated("Deprecated in Java") override fun getOpacity()=PixelFormat.TRANSLUCENT
     }
 
     fun cardLabel(profileId: String, displayName: String): String = when (profileId) {

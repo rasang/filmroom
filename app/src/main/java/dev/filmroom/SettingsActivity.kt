@@ -26,6 +26,7 @@ import kotlinx.coroutines.*
 /** Settings has no editor ViewModel: opening or leaving cannot replace editor state or cancel exports. */
 class SettingsActivity : ComponentActivity() {
     private var renderedLanguage="zh"
+    private lateinit var updateUi: dev.filmroom.update.UpdateSettingsUi
     private lateinit var backupUi: dev.filmroom.backup.BackupSettingsUi
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
@@ -48,6 +49,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         backupUi=dev.filmroom.backup.BackupSettingsUi(this)
+        updateUi=dev.filmroom.update.UpdateSettingsUi(this)
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         logNotesExpanded=savedInstanceState?.getBoolean("logNotesExpanded") ?: false
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setBackgroundColor(FilmroomPalette.background)}
@@ -214,6 +216,7 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         diagnosticSection.addView(share,LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(8);bottomMargin=dp(8)})
+        updateUi.addTo(content)
         root.addView(ScrollView(this).apply{isFillViewport=true;tag="settings-scroll";addView(content)},LinearLayout.LayoutParams(-1,0,1f))
         setContentView(root)
     }
@@ -234,5 +237,5 @@ class SettingsActivity : ComponentActivity() {
             finally{dialog.dismiss();if(pending===dialog)pending=null;share.isEnabled=true}
         }
     }
-    override fun onDestroy(){if(::backupUi.isInitialized)backupUi.close();pending?.dismiss();pending=null;super.onDestroy()}
+    override fun onDestroy(){if(::updateUi.isInitialized)updateUi.close();if(::backupUi.isInitialized)backupUi.close();pending?.dismiss();pending=null;super.onDestroy()}
 }

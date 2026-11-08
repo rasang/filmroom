@@ -124,7 +124,19 @@ fn dir_density(logs:[PathBuf;3],density:[PathBuf;3],pipe:&Pipeline,backend:&dyn 
 }
 
 fn grain_density(execution:Option<&crate::export_execution::ExportPermit>,mut density:[PathBuf;3],pipe:&Pipeline,pitch:f32,w:u32,h:u32,s:&mut Scratch,c:&mut impl FnMut()->bool,p:&mut impl ProgressSink)->Result<[PathBuf;3]> {
- let g=&pipe.params.film_render.grain;if !g.active||g.amount==0.{return Ok(density);}let n=w as u64*h as u64;let rows=rows_per_chunk(w);let pixel_area=(pitch as f64).powi(2);let norm=spektrafilm_model::density_curves::normalize_density_curves_f64(&pipe.film.density_curves_f64());
+ let g=&pipe.params.film_render.grain;if !g.active||g.amount==0.{return Ok(density);}
+ if pipe.film.is_omitted() {
+  let donor=pipe.donor_grain.as_ref().ok_or_else(||error("PROFILE_ERROR","Missing Portra grain donor"))?;
+  let mut reference_pipe=pipe.clone();reference_pipe.film=donor.profile.clone();reference_pipe.params.film_render.grain.amount=1.;
+  let reference:[PathBuf;3]=std::array::from_fn(|_|s.path("donor-density"));
+  let n=w as u64*h as u64;let rows=rows_per_chunk(w);
+  for ch in 0..3 {let mut f=new_file(&reference[ch])?;for y in (0..h).step_by(rows as usize){cancel(c)?;let hh=rows.min(h-y);write64(&mut f,&vec![donor.density[ch];w as usize*hh as usize])?;}}
+  s.observe()?;
+  let noise=grain_density(execution,reference,&reference_pipe,pitch,w,h,s,c,p)?;let baseline=donor.baseline(g);
+  for ch in 0..3 {inplace_with(&density[ch],&[&noise[ch]],n,c,|original,values|spektrafilm_core::donor_grain::restore(original,values[0],baseline[ch],g.amount))?;s.remove(&noise[ch])?;}
+  return Ok(density);
+ }
+let n=w as u64*h as u64;let rows=rows_per_chunk(w);let pixel_area=(pitch as f64).powi(2);let norm=spektrafilm_model::density_curves::normalize_density_curves_f64(&pipe.film.density_curves_f64());
  if norm.len()<2 {return Err(error("PROFILE_ERROR","Missing sensitometry curves"));}
  let mut max_layers=[[0f64;3];3];let layers=&pipe.film.data.density_curves_layers;
  if g.sublayers_active {if layers.len()!=norm.len()||layers.iter().any(|r|r.len()<3||r.iter().take(3).any(|v|v.len()<3)){return Err(error("PROFILE_ERROR","Invalid grain sublayer curves"));}for row in layers {for sl in 0..3 {for ch in 0..3 {max_layers[sl][ch]=max_layers[sl][ch].max(row[sl][ch]);}}}}
@@ -189,7 +201,7 @@ fn light_work_count(params:&RuntimeParams,pitch:f32)->u64 {
 /// Native-owned scratch budget, additional to input/output spools. Kept
 /// conservative until measured across all supported controls; logical file sizes.
 pub fn estimated_scratch_bytes(width:u32,height:u32)->Result<u64> {
- (width as u64).checked_mul(height as u64).and_then(|n|n.checked_mul(128)).and_then(|n|n.checked_add(64*1024*1024)).ok_or_else(||error("INVALID_DIMENSIONS","Scratch plan overflow"))
+ (width as u64).checked_mul(height as u64).and_then(|n|n.checked_mul(152)).and_then(|n|n.checked_add(64*1024*1024)).ok_or_else(||error("INVALID_DIMENSIONS","Scratch plan overflow"))
 }
 /// Conservative active-diffusion reservation uses the full permitted kernel cap,
 /// avoiding expensive PSF construction during UI preflight. Includes 3 source planes.

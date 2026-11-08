@@ -15,6 +15,9 @@ import dev.filmroom.roi.*
 /** Underlay, comparison and local cells share one source-oriented fit/zoom/pan transform. */
 class PhotoView(context: Context): View(context), AutoCloseable {
     val viewport = Viewport()
+    /** Complete pre-imaged scientific frame only; coordinates are the entire frame, not aperture. */
+    var zoomFrame:Bitmap?=null;set(value){field=value;invalidate()}
+    var onZoomViewportChanged:((Double,Boolean)->Unit)?=null
     var bitmap: Bitmap?=null; set(value) {
         val previous=transform();field=value
         if(logicalAspect==null && value!=null)viewport.sourceAspect(value.width.toDouble()/value.height)
@@ -277,7 +280,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         }
         changed()
     }
-    private fun changed(){detail?.demand(moving);invalidate();onDetailStatusChanged?.invoke(detailStatus)}
+    private fun changed(){onZoomViewportChanged?.invoke(viewport.zoom,moving);detail?.demand(moving);invalidate();onDetailStatusChanged?.invoke(detailStatus)}
     override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){
         val previous=transform();viewport.size(w,h)
         if(detail==null)viewport.restore(previous[0].toDouble(),previous[1].toDouble(),previous[2].toDouble())
@@ -288,6 +291,8 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         super.onDraw(canvas);val b=bitmap?.takeUnless{it.isRecycled} ?: return
         target.set(viewport.left.toFloat(),viewport.top.toFloat(),(viewport.left+viewport.imageWidth).toFloat(),(viewport.top+viewport.imageHeight).toFloat())
         canvas.drawBitmap(b,null,target,paint)
+        if(!compositionEditing && !isLiveComposition && !imprintDraftPreview && preImagingCompositionPreview)
+            zoomFrame?.takeUnless{it.isRecycled}?.let{canvas.drawBitmap(it,null,target,paint)}
         onNextPreviewDraw?.also{onNextPreviewDraw=null}?.invoke(b)
         if(isLiveComposition || freeEdit || (imprintDraftPreview && usableInteractiveFrame() && compositionGeometryReady)){
             if(preImagingCompositionPreview){
@@ -452,7 +457,7 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         editComposition(CropSettings.fromRect(CompositionTransform.Rect(l,top,rw,rh),canonicalWidth,canonicalHeight,straightenDegrees=composition.straightenDegrees).transform)
     }
     override fun onTouchEvent(e:MotionEvent):Boolean {
-        if(e.actionMasked==MotionEvent.ACTION_DOWN){moving=true;detail?.demand(true)}
+        if(e.actionMasked==MotionEvent.ACTION_DOWN){moving=true;onZoomViewportChanged?.invoke(viewport.zoom,true);detail?.demand(true)}
         scale.onTouchEvent(e);taps.onTouchEvent(e)
         when(e.actionMasked) {
             MotionEvent.ACTION_DOWN->{handle=hitCropHandle(e.x,e.y);lastX=e.x;lastY=e.y;parent?.requestDisallowInterceptTouchEvent(true)}
@@ -464,6 +469,6 @@ class PhotoView(context: Context): View(context), AutoCloseable {
     }
     override fun onDetachedFromWindow(){onNextPreviewDraw=null;finishCompositionGesture();detail?.foreground(false);super.onDetachedFromWindow()}
     override fun onAttachedToWindow(){super.onAttachedToWindow();if(!disposed)detail?.foreground(foreground)}
-    override fun close(){if(disposed)return;finishCompositionGesture();disposed=true;bindImprint(null);compositionChanged=null;compositionSource=null;interactiveFrame=null;liveComposition=false;detail?.close();detail=null;bitmap=null}
+    override fun close(){if(disposed)return;finishCompositionGesture();disposed=true;zoomFrame=null;onZoomViewportChanged=null;bindImprint(null);compositionChanged=null;compositionSource=null;interactiveFrame=null;liveComposition=false;detail?.close();detail=null;bitmap=null}
     override fun performClick():Boolean {super.performClick();return true}
 }

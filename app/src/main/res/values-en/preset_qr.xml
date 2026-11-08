@@ -11,7 +11,7 @@
     <string name="preset_qr_image_description">Filmroom recipe QR code</string>
     <string name="preset_qr_home">Scan or choose a Filmroom recipe QR image. Everything is decoded offline. Review it before saving; your photo will not change.</string>
     <string name="preset_qr_import_scope">Save a new recipe without overwriting existing recipes or changing your photo. Includes film, all editing settings, borders, composition, imprints, and custom dates. New settings missing from older codes use defaults. Apply it later from the recipe list.</string>
-    <string name="preset_qr_share_scope">Ask the other person to scan using Scan on Filmroom’s Recipes page.</string>
+    <string name="preset_qr_share_scope">Scan using Scan on Filmroom’s Recipes page.</string>
     <string name="preset_qr_saved">Saved as a new recipe. Your photo is unchanged. Return to the recipe list to apply it.</string>
     <string name="preset_qr_done">Done</string>
     <string name="preset_qr_working">Processing on this device…</string>

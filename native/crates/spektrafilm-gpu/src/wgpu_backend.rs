@@ -1252,7 +1252,7 @@ impl WgpuBackend {
         if let Some(capture) = capture.as_deref_mut() { capture.result = None; }
         if let Some(media)=&p.neutral_media {
             if !media.valid() || p.scan_film!=media.paper_omitted {return None;}
-            if media.film_omitted && (p.grain.is_some() || p.dir_couplers.is_some() || p.halation.is_some()) {return None;}
+            if media.film_omitted && ((p.grain.is_some() && media.grain_reference.is_none()) || p.dir_couplers.is_some() || p.halation.is_some()) {return None;}
         }
         let omitted_film=p.neutral_media.as_ref().is_some_and(|m|m.film_omitted);
         // RESOURCE_AUDIT_BEGIN
@@ -1406,6 +1406,8 @@ impl WgpuBackend {
             && p.start_at != crate::ChainStart::CorrectedDensity;
         let runs_finish = past_front && !matches!(stop, crate::ChainStop::FilmLog | crate::ChainStop::CorrectedDensity);
         let past_print = stop == crate::ChainStop::Full;
+        let neutral_grain_reference = p.neutral_media.as_ref().and_then(|m| m.grain_reference);
+        if runs_finish && neutral_grain_reference.is_some() && p.grain.is_none() { return None; }
 
         // Ping-pong image buffers (each holds H*W*3 f32 values).
         let make_img_buf = |label: &str| {
@@ -2179,6 +2181,13 @@ impl WgpuBackend {
             None
         };
         let mut grain_state = if p.stage_batched { None } else { make_phase_grain_state() };
+        let make_phase_neutral_grain_state = || if runs_finish {
+            neutral_grain_reference.as_ref().map(|reference| build_neutral_grain_state(
+                &self.device, reference, image.width, image.height, &buf_a, self))
+        } else { None };
+        // Extra 12 B/pixel, included by caller admission; retire at the grain
+        // fence together with all bind groups retaining the original copy.
+        let mut neutral_grain_state = if p.stage_batched { None } else { make_phase_neutral_grain_state() };
 
         // ── DIR couplers state ────────────────────────────────────────────
         // Constructed at the DIR boundary in controlled chains. Reads buf_a
@@ -2416,14 +2425,19 @@ impl WgpuBackend {
         // Corrected-density input already resides in buf_a. No density or DIR
         // operation is repeated, and grain keeps the original f32 boundary.
         if runs_finish {
-        if p.stage_batched { grain_state = make_phase_grain_state(); }
+        if p.stage_batched {
+            grain_state = make_phase_grain_state();
+            neutral_grain_state = make_phase_neutral_grain_state();
+        }
+        if let Some(ng) = neutral_grain_state.as_ref() { ng.encode(&mut encoder, false, n_pixels); }
         // 3c. Grain (in-place on buf_a, optional post-blur via buf_b mid).
         if let Some(gs) = grain_state.as_ref() {
             let wg_xy = (image.width.div_ceil(16), image.height.div_ceil(16));
             gs.encode_passes(&mut encoder, n_pixels, workgroup_size, wg_xy);
         }
+        if let Some(ng) = neutral_grain_state.as_ref() { ng.encode(&mut encoder, true, n_pixels); }
         if !finish_batch(&mut encoder, ResidentStage::Grain) { return None; }
-        if p.stage_batched { drop(grain_state.take()); }
+        if p.stage_batched { drop(grain_state.take()); drop(neutral_grain_state.take()); }
         // 4 + 5. Printing: print_spectral (buf_a → buf_b) then the print
         //     density curve (buf_b → buf_a). Skipped for scan_film — the
         //     scan pass consumes the film density already in buf_a.
@@ -2600,6 +2614,7 @@ impl WgpuBackend {
         drop(glare_state);
         drop(scanner_lens_blur_state);
         drop(grain_state);
+        drop(neutral_grain_state);
         drop(dir_state);
         drop(post_scan_state);
 
@@ -6306,6 +6321,72 @@ impl GamutState {
         pass.set_pipeline(&self.dispatch.pipeline.pipeline);
         pass.set_bind_group(0, &self.dispatch.bg, &[]);
         pass.dispatch_workgroups(n_pixels.div_ceil(workgroup_size), 1, 1);
+    }
+}
+
+/// Owns the original log-RGB copy for donor grain, including every binding
+/// retaining it. One extra interleaved f32 RGB image (12 B/pixel), phase-local.
+#[cfg(feature = "wgpu-backend")]
+struct NeutralGrainState {
+    _original: AuditBuffer,
+    fill: DispatchJob,
+    restore: DispatchJob,
+}
+#[cfg(feature = "wgpu-backend")]
+fn build_neutral_grain_state(
+    device: &wgpu::Device, reference: &crate::NeutralGrainReference,
+    width: u32, height: u32, image: &AuditBuffer, backend: &WgpuBackend,
+) -> NeutralGrainState {
+    let original=device.census_create_buffer(&wgpu::BufferDescriptor {
+        label:Some("neutral_grain_original_log_rgb"),
+        size:crate::NeutralGrainReference::workspace_bytes(width,height).expect("validated GPU shape"),
+        usage:wgpu::BufferUsages::STORAGE, mapped_at_creation:false,
+    });
+    #[repr(C)]
+    #[derive(Copy,Clone,bytemuck::Pod,bytemuck::Zeroable)]
+    struct Params {
+        n_pixels:u32, restore:u32, _pad:[u32;2],
+        density:[f32;4], baseline:[f32;4], amount:f32, _pad2:[f32;3],
+    }
+    let make=|restore:u32| {
+        let pipeline=backend.cached_pipeline(
+            include_str!("../../spektrafilm-shaders/wgsl/neutral_grain_residual.wgsl"),
+            &[wgpu::BufferBindingType::Uniform,
+              wgpu::BufferBindingType::Storage{read_only:false},
+              wgpu::BufferBindingType::Storage{read_only:false}],
+        );
+        let params=device.census_create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label:Some("neutral_grain_params"),
+            contents:bytemuck::bytes_of(&Params {
+                n_pixels:width*height,restore,_pad:[0;2],
+                density:[reference.density[0],reference.density[1],reference.density[2],0.],
+                baseline:[reference.baseline[0],reference.baseline[1],reference.baseline[2],0.],
+                amount:reference.amount,_pad2:[0.;3],
+            }), usage:wgpu::BufferUsages::UNIFORM,
+        });
+        let bg=device.audit_create_bind_group(&AuditBindGroupDescriptor {
+            label:Some("neutral_grain_bg"),layout:&pipeline.layout,
+            entries:&[
+                AuditBindGroupEntry{binding:0,resource:params.as_entire_binding()},
+                AuditBindGroupEntry{binding:1,resource:original.as_entire_binding()},
+                AuditBindGroupEntry{binding:2,resource:image.as_entire_binding()},
+            ],
+        });
+        DispatchJob{_params_buf:params,pipeline,bg}
+    };
+    let fill=make(0);let restore=make(1);
+    NeutralGrainState{_original:original,fill,restore}
+}
+#[cfg(feature = "wgpu-backend")]
+impl NeutralGrainState {
+    fn encode(&self,encoder:&mut AuditCommandEncoder,restore:bool,n_pixels:u32) {
+        let job=if restore {&self.restore} else {&self.fill};
+        let mut pass=encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label:Some(if restore {"neutral_grain_restore"} else {"neutral_grain_fill"}),
+            timestamp_writes:None,
+        });
+        pass.set_pipeline(&job.pipeline.pipeline);pass.set_bind_group(0,&job.bg,&[]);
+        pass.dispatch_workgroups(n_pixels.div_ceil(POINT_WORKGROUP_SIZE),1,1);
     }
 }
 

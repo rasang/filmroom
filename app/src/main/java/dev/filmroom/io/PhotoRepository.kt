@@ -69,6 +69,10 @@ class PhotoSource internal constructor(
     val photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(),
     private val developmentMessages:List<dev.filmroom.i18n.UiMessage>? = null,
 ) {
+    /** Original provider locator for future use only; not a persistent access grant. */
+    var originalUri: String? = null
+        private set
+    internal fun rememberOriginalUri(value: String?) { originalUri = OriginalPhotoUri.sanitize(value) }
     private val legacyDevelopmentWarning=developmentWarning
     /** Source facts are retained; visible wording follows the current app language without re-decoding. */
     val developmentWarning:String? get()=developmentMessages?.mapNotNull{it.render()}?.takeIf{it.isNotEmpty()}?.joinToString("\n") ?: legacyDevelopmentWarning
@@ -337,6 +341,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                             phase = if (selectedRoute == null) ImportPhase.INPUT_PROBE else ImportPhase.INPUT_PROCESS
                             emitStage()
                         }) { rawSpool = it }
+                    loaded.source.rememberOriginalUri(uri.toString())
                     preview = loaded.preview
                     observation.dimensions(loaded.source.originalWidth,loaded.source.originalHeight)
                     observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.COMPLETE
@@ -411,6 +416,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         name: String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7b50017ae47e),
         previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
         rawCacheKey: String? = null,
+        originalUri: String? = null,
     ): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
@@ -428,7 +434,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b769fd8412bb))
                 }
                 val rawFile = rawCacheKey?.takeIf { it.matches(Regex("(?:raw|heic)-source-[0-9a-fA-F-]{36}\\.rgb")) }?.let { File(sourceDirectory,it) }
-                loadPrivate(file, PhotoLimits.safeDisplayName(name), previewMaxEdge, job, rawFile, allowDecode=false).also { produced = it }
+                loadPrivate(file, PhotoLimits.safeDisplayName(name), previewMaxEdge, job, rawFile, allowDecode=false).also { it.source.rememberOriginalUri(originalUri); produced = it }
 
             }
             handedOff = true

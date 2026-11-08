@@ -78,6 +78,11 @@ object PreImagingInput {
     /** Only the separately admitted GPU whole-frame refinement may use this limit. */
     fun refinedPreview(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}):LinearPreview =
         previewBounded(bitmap,linear,s,raster,imprint,dev.filmroom.engine.NativeMemoryPolicy.REFINED_PREVIEW_EDGE,checkActive)
+    /** Explicitly admitted zoom tier; ordinary preview bounds remain unchanged. */
+    fun zoomPreview(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?,edge:Int,checkActive:()->Unit={}):LinearPreview {
+        require(edge==2048 || edge==3072)
+        return previewBounded(bitmap,linear,s,raster,imprint,edge,checkActive)
+    }
     private fun previewBounded(bitmap:Bitmap?,linear:LinearPreview?,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?,maxEdge:Int,checkActive:()->Unit):LinearPreview {
         checkActive();raster.validate(s);require((bitmap==null)!=(linear==null))
         val w=bitmap?.width ?: checkNotNull(linear).width;val h=bitmap?.height ?: checkNotNull(linear).height

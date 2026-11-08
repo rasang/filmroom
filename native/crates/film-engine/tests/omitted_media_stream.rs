@@ -45,3 +45,22 @@ use std::{fs,path::{Path,PathBuf}};
   }}}}
  }
 
+ #[test]
+ fn portra_donor_grain_matches_full_cpu_and_reaches_real_gpu() {
+  let root=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");let (w,h)=(48,32);
+  let pixels:Vec<f32>=(0..w*h*3).map(|i|0.08+((i*17)%113) as f32/300.).collect();
+  for sublayers in [false,true] {for paper_id in ["none","kodak_portra_endura"] {for request_gpu in [false,true] {
+   let temp=Temp::new();let input=temp.0.join("input.rgb");let output=temp.0.join("output.rgb");
+   fs::write(&input,pixels.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+   let mut p=parameters();p.io.input_color_space="sRGB".into();p.film_render.grain.active=true;p.film_render.grain.amount=0.5;p.film_render.grain.sublayers_active=sublayers;p.film_render.grain.coordinate_origin=Some([0,0]);p.camera.pixel_size_um_override=Some(5.);p.io.scan_film=paper_id=="none";
+   let paper=if paper_id=="none"{spektrafilm_core::profile::Profile::omitted()}else{load_profile_by_name(&root,paper_id).unwrap()};
+   let pipe=Pipeline::new_with_spectral(spektrafilm_core::profile::Profile::omitted(),paper,p.clone(),&root).unwrap();
+   let expected=pipe.process(ImageBuf::from_data(w,h,pixels.iter().map(|v|from_f64(*v as f64)).collect()),&CpuBackend);
+   let metrics=export_file_checkpointed(&root,"none",paper_id,p,&input,&output,&temp.0.join("scratch"),None,w,h,384,0.,request_gpu,||false,|_|{}).unwrap();
+   if request_gpu && std::env::var("FILMROOM_REQUIRE_GPU_SMOKE").as_deref()==Ok("1"){assert!(metrics.gpu.active,"actual GPU required: {:?}",metrics.gpu);assert!(metrics.gpu.gpu_batches>0);}
+   let bytes=fs::read(output).unwrap();let values:Vec<f32>=bytes.chunks_exact(4).map(|b|f32::from_le_bytes(b.try_into().unwrap())).collect();
+   assert!(values.iter().all(|v|v.is_finite()));
+   if !request_gpu {for (actual,want) in values.iter().zip(&expected.data){assert!((*actual as f64-*want as f64).abs()<3e-5,"CPU full/stream mismatch {actual} {want}");}}
+   else {let err=values.iter().zip(&expected.data).map(|(a,b)|(*a as f64-*b as f64).abs()).sum::<f64>()/values.len()as f64;assert!(err<0.1,"GPU/CPU grain statistical disagreement {err}");}
+  }}}
+ }

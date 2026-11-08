@@ -11,7 +11,7 @@
     <string name="preset_qr_image_description">Filmroom 配方二维码</string>
     <string name="preset_qr_home">扫描或选择一张 Filmroom 配方二维码图片，全程离线。识别后先确认，不会自动应用到照片。</string>
     <string name="preset_qr_import_scope">将存为新配方，不会覆盖已有配方或更改当前照片。包含胶卷、全部编辑参数、边框、构图、印字及自定义日期；旧二维码缺少的新参数使用默认值。之后可在配方列表中手动应用。</string>
-    <string name="preset_qr_share_scope">请让对方使用 Filmroom 配方页的扫码功能扫描。</string>
+    <string name="preset_qr_share_scope">请使用 Filmroom 配方页的扫码功能扫描。</string>
     <string name="preset_qr_saved">已存为新配方。当前照片未改变，可返回配方列表后手动应用。</string>
     <string name="preset_qr_done">完成</string>
     <string name="preset_qr_working">正在本机处理…</string>

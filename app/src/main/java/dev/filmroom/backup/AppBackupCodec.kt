@@ -9,18 +9,35 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
 
-/** Metadata-only, offline document; never a zip of app-private storage. */
+/** Bounded metadata ZIP. Media bytes and private app paths are never archived. */
 internal object AppBackupCodec {
     const val MAX_BYTES = 8 * 1024 * 1024
     data class Document(val settings: JSONObject, val recipes: List<SavedPresetStore.Preset>, val history: JSONArray)
     fun read(input: InputStream): Document {
+        val buffered = java.io.PushbackInputStream(input, 4)
+        val prefix = ByteArray(4); var count = 0
+        while(count < prefix.size) { val n=buffered.read(prefix,count,prefix.size-count); if(n < 0)break; if(n == 0)continue; count+=n }
+        if (count > 0) buffered.unread(prefix, 0, count)
+        if (count == 4 && prefix.contentEquals(byteArrayOf(80,75,3,4))) {
+            return java.util.zip.ZipInputStream(buffered).use { zip ->
+                val entry = zip.nextEntry ?: error("EMPTY_ARCHIVE")
+                require(entry.name == "backup.json" && !entry.isDirectory) { "INVALID_ARCHIVE_ENTRY" }
+                val document = readJson(zip)
+                zip.closeEntry()
+                require(zip.nextEntry == null) { "UNEXPECTED_ARCHIVE_ENTRY" }
+                document
+            }
+        }
+        return readJson(buffered)
+    }
+    private fun readJson(input: InputStream): Document {
         val bytes = input.readBytesBounded(MAX_BYTES)
         val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .decode(ByteBuffer.wrap(bytes)).toString()
         return decode(strictJson(text))
     }
     fun decode(root: JSONObject): Document {
-        require(root.opt("type") == "filmroom-app-backup" && root.opt("version") == 1) { "INCOMPATIBLE" }
+        require(root.opt("type") == "filmroom-app-backup" && root.opt("version") in setOf(1,2)) { "INCOMPATIBLE" }
         require(root.keys().asSequence().toSet() == setOf("type","version","settings","recipes","history")) { "INCOMPATIBLE" }
         val settings = root.getJSONObject("settings").also(BackupSettings::validate)
         val rows = root.getJSONArray("recipes")
@@ -53,11 +70,17 @@ internal object AppBackupCodec {
             recipes.put(JSONObject().put("id",item.id).put("name",item.name).put("createdAt",item.createdAt)
                 .put("parameters",JSONObject(SavedPresetStore.snapshot(state))))
         }
-        val bytes = JSONObject().put("type","filmroom-app-backup").put("version",1)
+        val bytes = JSONObject().put("type","filmroom-app-backup").put("version",2)
             .put("settings",document.settings).put("recipes",recipes).put("history",document.history)
             .toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_BYTES)
         return bytes
+    }
+    fun writeZip(document: Document, output: java.io.OutputStream) {
+        java.util.zip.ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("backup.json"))
+            zip.write(encode(document)); zip.closeEntry(); zip.finish()
+        }
     }
     private fun strictJson(text: String): JSONObject {
         val reader = android.util.JsonReader(java.io.StringReader(text)).apply { isLenient = false }

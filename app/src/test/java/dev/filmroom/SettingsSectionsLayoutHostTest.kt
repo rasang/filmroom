@@ -44,7 +44,7 @@ class SettingsSectionsLayoutHostTest {
                 val scroll=tagged("settings-scroll") as ScrollView
                 val content=tagged("settings-content") as ViewGroup
                 val cards=all(root).filter{(it.tag as? String)?.startsWith("settings-section:")==true}
-                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:history","settings-section:backup","settings-section:diagnostics"),cards.map{it.tag})
+                assertEquals(listOf("settings-section:language","settings-section:photos","settings-section:history","settings-section:backup","settings-section:diagnostics","settings-section:update"),cards.map{it.tag})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualTitle})
                 assertTrue(all(tagged("language-setting")).filterIsInstance<TextView>().any{it.text.toString()==L10n.multilingualDescription})
                 for((previous,nextKey) in listOf(cards[0] to "photos",cards[1] to "history",cards[2] to "backup",cards[3] to "diagnostics")){
@@ -96,10 +96,16 @@ class SettingsSectionsLayoutHostTest {
                 readable();assertEquals(View.GONE,tagged("settings-log-notes").visibility)
                 assertEquals(View.VISIBLE,tagged("settings-log-summary").visibility)
                 assertTrue("Content remains scrollable rather than shrinking",content.height>scroll.height)
-                scroll.scrollTo(0,(content.height-scroll.height).coerceAtLeast(0))
                 val share=SettingsActivity::class.java.getDeclaredField("share").apply{isAccessible=true}.get(a) as Button
+                val shareRect=android.graphics.Rect(0,0,share.width,share.height)
+                content.offsetDescendantRectToMyCoords(share,shareRect)
+                scroll.scrollTo(0,(shareRect.bottom-scroll.height).coerceAtLeast(0))
                 val actionXY=IntArray(2);share.getLocationInWindow(actionXY);val scrollXY=IntArray(2);scroll.getLocationInWindow(scrollXY)
                 assertTrue("TXT action fully reachable",actionXY[1]>=scrollXY[1]&&actionXY[1]+share.height<=scrollXY[1]+scroll.height)
+                scroll.scrollTo(0,(content.height-scroll.height).coerceAtLeast(0))
+                val updateButton=tagged("check-updates") as Button
+                val updateXY=IntArray(2);updateButton.getLocationInWindow(updateXY)
+                assertTrue("Update action fully reachable",updateXY[1]>=scrollXY[1]&&updateXY[1]+updateButton.height<=scrollXY[1]+scroll.height)
                 capture(root,w,h,"$prefix-bottom")
                 tagged("settings-log-notes-toggle").performClick();layout(root,w,h);layout(root,w,h)
                 assertEquals(View.VISIBLE,tagged("settings-log-notes").visibility);readable()

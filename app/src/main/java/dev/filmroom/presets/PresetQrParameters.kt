@@ -132,6 +132,11 @@ internal object PresetQrParameters {
         val result = JSONObject(defaults.toString())
         for (key in input.keys()) {
             val value = input.get(key)
+            // beta7 briefly wrote this obsolete UI flag. Accept it but never let
+            // it override the ordinary grain amount or persist in new recipes.
+            if (path == "parameters" && key == "noFilmGrainEnabled") {
+                require(value is Boolean); continue
+            }
             val special = when {
                 path == "parameters" && key == "preferredOutputRoute" -> "nullableString"
                 path == "parameters.imprint" && key == "manualDateTime" -> "nullableString"

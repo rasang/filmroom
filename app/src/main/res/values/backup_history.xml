@@ -1,4 +1,4 @@
 <resources>
     <string name="backup_history_archived">备份记录</string>
-    <string name="backup_history_no_photos">从备份恢复的记录，不包含照片，无法查看或重新导出。</string>
+    <string name="backup_history_no_photos">图片链接缺失、已失效或无访问权限，无法查看；此记录不能重新导出。</string>
 </resources>

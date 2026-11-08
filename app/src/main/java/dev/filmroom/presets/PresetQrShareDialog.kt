@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import dev.filmroom.ui.FilmroomPalette
 import android.view.Gravity
 import android.view.View
@@ -107,23 +108,52 @@ internal class PresetQrShareDialog(
         showReadable(target)
         target.getButton(AlertDialog.BUTTON_POSITIVE).apply {
             isEnabled = false
+            minHeight = dp(48)
             minimumHeight = dp(48)
+            textSize = 14f
+            includeFontPadding = false
             isAllCaps = false
-            setPadding(dp(12), dp(10), dp(12), dp(10))
             setTextColor(FilmroomPalette.onAccent)
             backgroundTintList = null
-            background = GradientDrawable().apply {
+            background = InsetDrawable(GradientDrawable().apply {
                 setColor(FilmroomPalette.accent)
-                cornerRadius = dp(12).toFloat()
-            }
+                cornerRadius = dp(10).toFloat()
+            }, 0, dp(4), 0, dp(4))
+            // A background replacement resets View padding. Apply the content
+            // inset afterwards so the icon and label never touch the orange edge.
+            setPadding(dp(12), dp(8), dp(12), dp(8))
             val shareIcon = activity.getDrawable(R.drawable.ic_share)!!.mutate().apply {
                 setTint(FilmroomPalette.onAccent)
-                setBounds(0, 0, dp(24), dp(24))
+                setBounds(0, 0, dp(20), dp(20))
             }
             setCompoundDrawablesRelative(shareIcon, null, null, null)
             compoundDrawablePadding = dp(6)
         }
-        target.getButton(AlertDialog.BUTTON_NEGATIVE).minimumHeight = dp(48)
+        target.getButton(AlertDialog.BUTTON_NEGATIVE).apply {
+            minHeight = dp(48); minimumHeight = dp(48); textSize = 14f
+        }
+        // Keep the full 48dp touch target, but inset the colored surface and leave
+        // breathing room above the dialog edge on both stock and OEM alert themes.
+        val positive = target.getButton(AlertDialog.BUTTON_POSITIVE)
+        val negative = target.getButton(AlertDialog.BUTTON_NEGATIVE)
+        (positive.parent as? LinearLayout)?.let { bar ->
+            bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight, maxOf(bar.paddingBottom, dp(12)))
+            bar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val available = bar.width - bar.paddingLeft - bar.paddingRight
+                val required = listOf(negative, positive).sumOf { button ->
+                    val margins = button.layoutParams as? android.view.ViewGroup.MarginLayoutParams
+                    kotlin.math.ceil(button.paint.measureText(button.text.toString())).toInt() +
+                        button.compoundPaddingLeft + button.compoundPaddingRight +
+                        (margins?.leftMargin ?: 0) + (margins?.rightMargin ?: 0)
+                }
+                if (available > 0 && required > available && bar.orientation != LinearLayout.VERTICAL) {
+                    bar.orientation = LinearLayout.VERTICAL
+                    listOf(negative, positive).forEach { button ->
+                        button.layoutParams = LinearLayout.LayoutParams(-1, -2)
+                    }
+                }
+            }
+        }
         target.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val image = bitmap ?: return@setOnClickListener
             if (!active(target) || sharing) return@setOnClickListener
@@ -135,7 +165,11 @@ internal class PresetQrShareDialog(
                         val folder = File(activity.cacheDir, "preset-qr-shares").apply { mkdirs() }
                         folder.listFiles()?.filter { it.isFile && it.name.startsWith("preset-") && it.extension == "png" && System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
                         val file = File(folder, "preset-${UUID.randomUUID()}.png")
-                        file.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+                        val poster = PresetQrPoster.render(activity, image, item.name, item.parameters())
+                        try {
+                            check(PresetQrImage.decode(poster) == PresetQrCodec.encode(item.name, item.parameters()))
+                            file.outputStream().use { check(poster.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+                        } finally { poster.recycle() }
                         FileProvider.getUriForFile(activity, "${activity.packageName}.presetqr", file)
                     }
                     if (!active(target)) return@launch

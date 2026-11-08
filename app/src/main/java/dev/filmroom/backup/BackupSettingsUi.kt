@@ -26,7 +26,7 @@ internal class BackupSettingsUi(private val activity: ComponentActivity) {
             android.os.Bundle().apply { putBoolean("pending", pickerPending) }
         }
     }
-    private val create = activity.registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { finishPicker(it, model::export) }
+    private val create = activity.registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { finishPicker(it, model::export) }
     private val open = activity.registerForActivityResult(object: ActivityResultContracts.OpenDocument() {
         override fun createIntent(context: android.content.Context, input: Array<String>): android.content.Intent =
             super.createIntent(context,input).addCategory(android.content.Intent.CATEGORY_OPENABLE)
@@ -36,9 +36,9 @@ internal class BackupSettingsUi(private val activity: ComponentActivity) {
         val note = TextView(activity).apply { setText(R.string.backup_description); textSize=13f; setTextColor(dev.filmroom.ui.FilmroomPalette.muted) }
         parent.addView(title); parent.addView(note)
         val export = Button(activity).apply { setText(R.string.backup_export); isAllCaps=false; tag="backup-export"
-            setOnClickListener { launchPicker { create.launch("Filmroom-backup-${java.time.LocalDate.now()}.json") } } }
+            setOnClickListener { launchPicker { create.launch("Filmroom-backup-${java.time.LocalDate.now()}.zip") } } }
         val import = Button(activity).apply { setText(R.string.backup_import); isAllCaps=false; tag="backup-import"
-            setOnClickListener { launchPicker { open.launch(arrayOf("application/json","application/octet-stream","text/plain")) } } }
+            setOnClickListener { launchPicker { open.launch(arrayOf("application/zip","application/x-zip-compressed","application/json","application/octet-stream","text/plain")) } } }
         buttons=listOf(export,import); buttons.forEach(parent::addView)
         updateButtons()
         activity.lifecycleScope.launch {

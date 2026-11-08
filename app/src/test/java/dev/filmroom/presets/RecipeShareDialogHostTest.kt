@@ -52,12 +52,12 @@ class RecipeShareDialogHostTest {
                 val share = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 assertEquals(dev.filmroom.ui.FilmroomPalette.onAccent, share.currentTextColor)
                 assertEquals(dev.filmroom.ui.FilmroomPalette.accent,
-                    (share.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                    ((share.background as android.graphics.drawable.InsetDrawable).drawable as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
                 assertNotNull(share.compoundDrawablesRelative[0])
                 assertEquals("分享二维码", share.text.toString())
                 val status = all(dialog.window!!.decorView).filterIsInstance<android.widget.TextView>()
                     .single { it.tag == "recipe-share-status" }
-                assertEquals("请让对方使用 Filmroom 配方页的扫码功能扫描。", status.text.toString())
+                assertEquals("请使用 Filmroom 配方页的扫码功能扫描。", status.text.toString())
                 shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(64))
                 val qr=all(dialog.window!!.decorView).filterIsInstance<ImageView>().single{it.tag=="recipe-share-qr"}
                 assertTrue(qr.width>0 && qr.height>0);assertEquals(qr.width,qr.height)

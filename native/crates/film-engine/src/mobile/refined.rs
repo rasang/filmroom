@@ -2,6 +2,7 @@
 //! stage-cache candidates. JNI-owned full-frame buffers are charged explicitly.
 use super::*;
 pub const MAX_EDGE:u32=1536;
+pub const ZOOM_MAX_EDGE:u32=3072;
 const FULL_FRAME_BYTES_PER_PIXEL:u64=60;
 #[derive(Clone,Copy,Debug,Serialize)]
 #[serde(rename_all="camelCase")]
@@ -13,8 +14,15 @@ pub struct PlanMetrics {
 }
 fn error(code:&'static str)->EngineError {EngineError::new(code,"Refined preview unavailable within the bounded GPU contract; retain the lower-resolution preview")}
 pub fn required_bytes(width:i32,height:i32)->Result<usize> {
-    if width<=0 || height<=0 || width as u32>MAX_EDGE || height as u32>MAX_EDGE {return Err(error("INVALID_DIMENSIONS"));}
+    required_bytes_at_edge(width,height,MAX_EDGE)
+}
+fn required_bytes_at_edge(width:i32,height:i32,edge:u32)->Result<usize> {
+    if width<=0 || height<=0 || width as u32>edge || height as u32>edge {return Err(error("INVALID_DIMENSIONS"));}
     Ok(width as usize*height as usize*12)
+}
+pub fn required_bytes_for_params(width:i32,height:i32,params:&MobileParams)->Result<usize> {
+    params.validate()?;
+    required_bytes_at_edge(width,height,params.zoom_refinement_edge.unwrap_or(MAX_EDGE))
 }
 /// 24 B/pixel native linear input + output, plus 36 B/pixel conservative
 /// GPU-preview-only scanner/unsharp scratch and conversion/lifecycle allowance
@@ -22,12 +30,12 @@ pub fn required_bytes(width:i32,height:i32)->Result<usize> {
 /// destination allocations are charged additionally, including stride/capacity.
 /// No full-frame f64 ImageBuf or cache candidate is created in this path.
 fn outside_bytes(width:u32,height:u32,external:u64)->Result<u64> {
-    required_bytes(width as i32,height as i32)?;
+    required_bytes_at_edge(width as i32,height as i32,ZOOM_MAX_EDGE)?;
     (width as u64*height as u64).checked_mul(FULL_FRAME_BYTES_PER_PIXEL)
         .and_then(|n|n.checked_add(external)).ok_or_else(||error("MEMORY_BUDGET_TOO_SMALL"))
 }
 pub fn preflight(width:i32,height:i32,params:&MobileParams,external:u64)->Result<()> {
-    required_bytes(width,height)?;params.validate()?;
+    required_bytes_for_params(width,height,params)?;
     if let Some(p)=&params.pre_imaging {p.check_frame(width as u32,height as u32)?;}
     if params.mode!="preview" || !params.use_gpu {return Err(error("GPU_UNAVAILABLE"));}
     if params.auto_exposure && params.preview_metering.is_none() {return Err(error("INVALID_PARAMS"));}
@@ -46,7 +54,7 @@ pub fn render(_engine:&Engine,_generation:u64,_input:&[f32],_width:u32,_height:u
 pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,params:&MobileParams,external:u64)->Result<RenderOutput> {
     use spektrafilm_core::pipeline::{DiffusionScatteredFields,TileContext};
     preflight(width as i32,height as i32,params,external)?;
-    if input.len()!=required_bytes(width as i32,height as i32)?/4 || input.iter().any(|v|!v.is_finite()) {return Err(error("INVALID_PIXELS"));}
+    if input.len()!=required_bytes_for_params(width as i32,height as i32,params)?/4 || input.iter().any(|v|!v.is_finite()) {return Err(error("INVALID_PIXELS"));}
     check_cancellation(engine,generation)?;
     let _interactive=crate::export_execution::interactive_work();
     // The separately charged quick-frame cache is not borrowed or republished.
@@ -117,6 +125,26 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
 }
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn explicit_zoom_keeps_legacy_cap_and_validates_mode() {
+        let mut p=MobileParams::default();
+        assert!(required_bytes_for_params(2048,1536,&p).is_err());
+        p.zoom_refinement_edge=Some(2048);
+        assert_eq!(required_bytes_for_params(2048,1536,&p).unwrap(),2048*1536*12);
+        assert!(required_bytes_for_params(2049,1,&p).is_err());
+        p.zoom_refinement_edge=Some(3072);
+        assert_eq!(required_bytes_for_params(3072,1024,&p).unwrap(),3072*1024*12);
+        assert!(required_bytes(2048,1).is_err());
+        for edge in [0,1536,2049,4096] {p.zoom_refinement_edge=Some(edge);assert!(p.validate().is_err());}
+        p.zoom_refinement_edge=Some(2048);p.mode="export".into();assert!(p.validate().is_err());
+        p.mode="preview".into();p.use_gpu=false;assert!(p.validate().is_err());
+    }
+    #[test] fn zoom_full_frame_memory_is_not_exempt_from_budget() {
+        let mut p=MobileParams::default();p.zoom_refinement_edge=Some(3072);p.memory_budget_mi_b=512;
+        // Even before halo/global fields, square 3072 cannot fit the unchanged budget.
+        assert_eq!(preflight(3072,3072,&p,3072*3072*16).unwrap_err().code,"MEMORY_BUDGET_TOO_SMALL");
+        assert_eq!(outside_bytes(2048,1536,2048*1536*16).unwrap(),2048*1536*76);
+        assert!(outside_bytes(3072,3072,u64::MAX).is_err());
+    }
     #[test] fn refined_geometry_is_separate_from_legacy(){assert_eq!(required_bytes(1536,1536).unwrap(),1536*1536*12);assert!(super::super::required_bytes(1536,1536).is_err());for (w,h) in [(0,1),(1,0),(1537,1),(1,1537),(-1,1)]{assert!(required_bytes(w,h).is_err());}}
     #[test] fn external_buffers_and_overflow_are_charged(){assert_eq!(outside_bytes(1536,1536,1536*1536*16).unwrap(),1536*1536*76);assert!(outside_bytes(1,1,u64::MAX).is_err());}
     #[cfg(feature="adreno-gpu")]
@@ -126,7 +154,7 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
             for budget in [128u32,256,384,512] {
                 if let Ok(plan)=crate::gpu_export::tile_plan(w,h,32,budget,128*1024*1024,outside) {
                     assert!(plan.estimated_bytes<=budget as u64*1024*1024);
-                    assert_eq!(plan.estimated_bytes,MEMORY_FIXED_ESTIMATE_BYTES+outside+256*plan.expanded_width as u64*plan.expanded_rows as u64);
+                    assert_eq!(plan.estimated_bytes,MEMORY_FIXED_ESTIMATE_BYTES+outside+272*plan.expanded_width as u64*plan.expanded_rows as u64);
                 }
             }
         }
@@ -143,6 +171,12 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
         let id=create(path.to_str().unwrap()).unwrap();let engine=get(id).unwrap();
         let lock=engine.render_lock.lock().unwrap();
         let mut p=MobileParams::default();p.memory_budget_mi_b=512;
+        if width.max(height)>MAX_EDGE {
+            p.zoom_refinement_edge=Some(2048);
+            p.pre_imaging=Some(PreImaging{version:1,frame_width:width,frame_height:height,
+                photo_width:width-248,photo_height:height-165,metering_width:6000,metering_height:4000,metering_path:None});
+            assert_eq!(p.runtime().camera.pixel_size_um_override,Some((35000.0/(width-248)as f64)as f32));
+        }
         p.highlight_boost_ev=0.4;p.scan_glare_percent=0.7;p.scan_blur=0.5;p.scan_sharpen_amount=0.3;
         if diffusion {p.diffusion_filter="glimmerglass".into();p.print_diffusion_filter="black_pro_mist".into();p.diffusion_strength=0.8;p.print_diffusion_strength=0.8;}
         let input:Vec<f32>=(0..width*height*3).map(|i|if i%113==0{2.0}else{0.02+((i*13+i/(width*3)*7)%251)as f32/300.}).collect();
@@ -167,5 +201,11 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     #[cfg(feature="adreno-gpu")]
     #[test] #[ignore="Explicit 1536 dual-diffusion GPU execution, run alone"]
     fn actual_1536_dual_diffusion_bounded_gpu(){actual_refined_frame(1536,1024,true);}
+    #[cfg(feature="adreno-gpu")]
+    #[test] #[ignore="Explicit higher-resolution GPU execution, run alone"]
+    fn actual_zoom_2048_bounded_gpu_and_cancel_reentry(){actual_refined_frame(2048,1365,false);}
+    #[cfg(feature="adreno-gpu")]
+    #[test] #[ignore="Explicit higher-resolution dual diffusion GPU execution, run alone"]
+    fn actual_zoom_2048_dual_diffusion_bounded_gpu(){actual_refined_frame(2048,1365,true);}
     #[test] fn low_budget_and_missing_shared_ae_fail_before_gpu(){let mut p=MobileParams::default();p.memory_budget_mi_b=128;assert_eq!(preflight(1536,1536,&p,0).unwrap_err().code,"MEMORY_BUDGET_TOO_SMALL");p.auto_exposure=true;assert_eq!(preflight(512,512,&p,0).unwrap_err().code,"INVALID_PARAMS");}
 }

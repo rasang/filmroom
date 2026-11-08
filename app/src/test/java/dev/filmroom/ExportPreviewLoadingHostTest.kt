@@ -237,6 +237,8 @@ class ExportPreviewLoadingHostTest {
                 advanceTimeBy(499);runCurrent();assertEquals(View.VISIBLE,rail.visibility);assertPresenting(a,done)
                 advanceTimeBy(1);runCurrent();assertEquals(View.GONE,rail.visibility);assertSaved(a,done)
                 (field(a,done.id,"open") as View).performClick()
+                // Opening now uses the lifecycle coroutine also shared by restored URI checks.
+                runCurrent()
                 val opened=org.robolectric.Shadows.shadowOf(a).nextStartedActivity
                 assertEquals(android.content.Intent.ACTION_VIEW,opened.action)
                 assertEquals(done.mediaUri,opened.data.toString())

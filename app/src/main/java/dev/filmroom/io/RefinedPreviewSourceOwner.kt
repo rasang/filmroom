@@ -9,12 +9,12 @@ import kotlinx.coroutines.sync.withLock
 
 /** One immutable, explicitly bounded source for ordinary whole-photo refinement.
  * It is independent of the 768 import image and zoom-detail source/session cache. */
-internal class RefinedPreviewInput(val bitmap:Bitmap?=null,val linear:LinearPreview?=null) {
+internal class RefinedPreviewInput(val bitmap:Bitmap?=null,val linear:LinearPreview?=null,private val allowedEdge:Int=NativeMemoryPolicy.REFINED_PREVIEW_EDGE) {
     init { require((bitmap==null)!=(linear==null)) }
     val width:Int get()=bitmap?.width ?: checkNotNull(linear).width
     val height:Int get()=bitmap?.height ?: checkNotNull(linear).height
     val bytes:Long get()=bitmap?.allocationByteCount?.toLong() ?: checkNotNull(linear).buffer().capacity().toLong()
-    init { require(width in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE && height in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE) }
+    init { require(allowedEdge in 1..NativeMemoryPolicy.ZOOM_REFINED_MAX_EDGE && width in 1..allowedEdge && height in 1..allowedEdge) }
     fun dispose(){bitmap?.takeUnless{it.isRecycled}?.recycle()}
 }
 
@@ -50,7 +50,7 @@ internal class RefinedPreviewSourceOwner(
     private fun retireLocked(){current?.let {current=null;it.retired=true;disposeIfUnused(it)}}
     private fun retire(token:Long){synchronized(lock){if(current?.token==token)retireLocked()}}
     suspend fun acquire(photo:PhotoSource,maxEdge:Int=NativeMemoryPolicy.REFINED_PREVIEW_EDGE):Borrow=mutex.withLock {
-        require(maxEdge in 1..NativeMemoryPolicy.REFINED_PREVIEW_EDGE)
+        require(maxEdge in 1..NativeMemoryPolicy.ZOOM_REFINED_MAX_EDGE)
         currentCoroutineContext().ensureActive()
         val revision=photo.previewSourceRevision()
         synchronized(lock){
@@ -94,8 +94,8 @@ private suspend fun loadRefinedPreviewSource(photo:PhotoSource,maxEdge:Int):Refi
             val source=photo.retainDetailSource()
             try {
                 job.ensureActive()
-                (photo.linearFile?.let {RefinedPreviewInput(linear=LinearSpool.refinedPreview(it,photo.originalWidth,photo.originalHeight,job,maxEdge))}
-                    ?: RefinedPreviewInput(bitmap=decodeFile(photo.localFile,maxEdge,job))).also{produced=it}
+                (photo.linearFile?.let {RefinedPreviewInput(linear=LinearSpool.refinedPreview(it,photo.originalWidth,photo.originalHeight,job,maxEdge),allowedEdge=maxEdge)}
+                    ?: RefinedPreviewInput(bitmap=decodeFile(photo.localFile,maxEdge,job),allowedEdge=maxEdge)).also{produced=it}
             } finally {source.close()}
         }
         handedOff=true

@@ -29,6 +29,8 @@ import java.io.File
 /** A durable task list, independent of the editor Activity and its preview engine. */
 class ExportQueueActivity : ComponentActivity() {
     private var renderedLanguage="zh"
+    private lateinit var archivedPhotoAccess:dev.filmroom.ui.ArchivedPhotoAccessUi
+    @Volatile private var archiveRelinkStore:ExportJobStore?=null
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
     companion object {
@@ -97,6 +99,9 @@ class ExportQueueActivity : ComponentActivity() {
         sequence.addListener(object:android.animation.AnimatorListenerAdapter(){override fun onAnimationEnd(animation:android.animation.Animator){if(finished)return;finished=true;leavingCards.remove(id);rows.removeView(view);if(!isDestroyed)render(renderedJobs)}})
         leavingCards[id]=LeavingCard(createdAt,view,sequence);sequence.start();return true
     }
+    private fun refreshArchivedPhotos() {
+        cards.values.forEach { card -> card.pauseVisuals();card.updateThumbnailVisibility() }
+    }
     private var readRetryDelay=2_000L
     private val acknowledging=mutableSetOf<String>()
     private val completionDrawObserver=android.view.ViewTreeObserver.OnDrawListener {
@@ -143,6 +148,20 @@ class ExportQueueActivity : ComponentActivity() {
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)ExportContourCache.clear()}
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        archivedPhotoAccess=dev.filmroom.ui.ArchivedPhotoAccessUi(this,
+            onPermissionResult={_,_->refreshArchivedPhotos()},
+            onRelink={id,uri->
+                val success=withContext(Dispatchers.IO) {
+                    val store=ExportQueue.get(this@ExportQueueActivity).store.also{archiveRelinkStore=it}
+                    val job=store.get(id)?.takeIf{it.archivedHistory}
+                    if(job==null || !BackupMediaLink.selectedMatches(this@ExportQueueActivity,job,uri))false
+                    else BackupMediaLink.selectedName(this@ExportQueueActivity,uri)?.let { name->
+                        store.relinkArchivedPhoto(id,job.mediaUri,uri.toString(),name)
+                    } ?: false
+                }
+                if(success)refreshArchivedPhotos()
+                success
+            },isLinked={id,uri->archiveRelinkStore?.get(id)?.let{it.archivedHistory && it.mediaUri==uri.toString()}==true})
         historyFlow.restore(savedInstanceState)
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         savedInstanceState?.getStringArrayList("previewIntros")?.forEach{seenIntro.put(it,true)}
@@ -321,6 +340,24 @@ class ExportQueueActivity : ComponentActivity() {
             setCompoundDrawablesRelative(HistoryActionIcon(muted,false).apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
             compoundDrawablePadding=dp(6)
         }
+        private val effect=button("") { latest?.let { job ->
+            val names=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))arrayOf("观片台","取景器漏光")else arrayOf("Light table","Viewfinder light leak")
+            android.app.AlertDialog.Builder(this@ExportQueueActivity).setTitle(if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects").setItems(names){_,which->
+                startActivity(Intent(this@ExportQueueActivity,dev.filmroom.effects.PhotoEffectActivity::class.java)
+                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.KIND,if(which==0)"LIGHT_TABLE"else "OPTICAL_LEAK")
+                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.RESULT_URI,job.mediaUri)
+                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.SOURCE_URI,job.originalUri)
+                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.JOB_ID,job.id))
+            }.show()
+        }}.apply {
+            tag="history-effects:${this@JobCard.id}"
+            contentDescription=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects"
+            minWidth=dp(48);minimumWidth=dp(48);minHeight=dp(48);minimumHeight=dp(48)
+            setPadding(dp(13),dp(13),dp(13),dp(13))
+            backgroundTintList=null
+            background=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x30ffffff),surface(FilmroomPalette.raised,14),null)
+            setCompoundDrawablesRelative(dev.filmroom.effects.EffectControlIcon("play",FilmroomPalette.accent).apply{setBounds(0,0,dp(22),dp(22))},null,null,null)
+        }
         private lateinit var actions:WrappingActionLayout
         private var previewKey:String?=null
         private var previewVersion:String?=null
@@ -330,6 +367,8 @@ class ExportQueueActivity : ComponentActivity() {
         private val sequence=previewSequences.get(id) ?: dev.filmroom.ui.ExportPreviewSequence().also{previewSequences.put(id,it)}
         private var sequenceTask:Job?=null
         private var introPending=false
+        private var archivedUnavailable=false
+        private var archivedOpenPending=false
         private fun presentingCompletion(job:ExportJob)=previewSequenceEnabled && sequence.active && job.state==ExportJobState.COMPLETED
         private fun presentVisuals(job:ExportJob) {
             // Finish every genuine image's visible dwell before showing Saved. This is
@@ -337,14 +376,15 @@ class ExportQueueActivity : ComponentActivity() {
             // still follow the real save. The result action follows this card's status.
             val concise=updateCompactLayout(job)
             val finishing=presentingCompletion(job)
-            val canOpen=job.state==ExportJobState.COMPLETED && job.mediaUri!=null && !finishing
+            val canOpen=job.state==ExportJobState.COMPLETED && (job.mediaUri!=null || job.archivedHistory) && !finishing
             val openVisibility=if(canOpen)View.VISIBLE else View.GONE
             // Timers and lifecycle recovery call this without another queue emission.
             // Bind the action with the rail/status so it cannot appear early or stay hidden.
             if(open.visibility!=openVisibility)open.visibility=openVisibility
             if(open.isEnabled!=canOpen)open.isEnabled=canOpen
+            effect.visibility=openVisibility;effect.isEnabled=canOpen
             val compactMetadataWarning=concise && job.state==ExportJobState.COMPLETED && !job.metadataWarning.isNullOrBlank()
-            val messageVisibility=if(!finishing && !compactMetadataWarning && !job.localizedMessage.isNullOrBlank())View.VISIBLE else View.GONE
+            val messageVisibility=if(!finishing && !compactMetadataWarning && (!job.localizedMessage.isNullOrBlank() || (job.archivedHistory && archivedUnavailable)))View.VISIBLE else View.GONE
             if(message.visibility!=messageVisibility)message.visibility=messageVisibility
             rememberPresentation(id,sequence.active)
             val (stage,percent)=sequence.constrain(job.progress.displayStage,job.progress.displayPercent)
@@ -406,7 +446,7 @@ class ExportQueueActivity : ComponentActivity() {
             container.addView(body)
             actions=WrappingActionLayout(this@ExportQueueActivity,dp(4)).apply{
                 setPadding(dp(12),dp(6),dp(12),0)
-                addView(retry);addView(open);addView(detail);addView(delete);addView(cancel)
+                addView(retry);addView(open);addView(detail);addView(delete);addView(effect);addView(cancel)
             }
             container.addView(actions,LinearLayout.LayoutParams(-1,-2))
         }
@@ -469,7 +509,7 @@ class ExportQueueActivity : ComponentActivity() {
             presentVisuals(job)
             progress.setTextColor(if(job.state==ExportJobState.FAILED)Color.rgb(239,181,157)else ink)
             message.setTextColor(if(job.state==ExportJobState.FAILED)ink else muted)
-            message.text=job.localizedMessage ?: ""
+            message.text=if(job.archivedHistory && archivedUnavailable)getString(R.string.backup_history_no_photos)else job.localizedMessage ?: ""
             retry.visibility=if(presentation.canRetry)View.VISIBLE else View.GONE;retry.text=if(job.state==ExportJobState.PAUSED)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c9691192f1b)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b8784c8dd563)
             cancel.visibility=if(presentation.canCancel && !historyRemovable(job))View.VISIBLE else View.GONE
             delete.isEnabled=historyRemovable(job) && !working && !historyFlow.busy
@@ -478,13 +518,24 @@ class ExportQueueActivity : ComponentActivity() {
             retry.isEnabled=!working && queue?.store?.historyReserved(id)!=true;cancel.isEnabled=!working && queue?.store?.historyReserved(id)!=true;retry.alpha=if(working).45f else 1f;cancel.alpha=retry.alpha
             retry.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_183e988f1288, number, retry.text);cancel.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_38952e7e372e, number);open.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3f3f6c8c5093, number);detail.contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a9e8a732c910, number)
             open.setOnClickListener {
-                val ready=latest?.takeIf{it.state==ExportJobState.COMPLETED && it.mediaUri!=null && !presentingCompletion(it)} ?: return@setOnClickListener
-                try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(ready.mediaUri)).apply{addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})}
-                catch(e:Exception){toast(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.toast_open))}
+                val ready=latest?.takeIf{it.state==ExportJobState.COMPLETED && (it.mediaUri!=null || it.archivedHistory) && !presentingCompletion(it)} ?: return@setOnClickListener
+                if(archivedOpenPending) return@setOnClickListener
+                archivedOpenPending=true
+                lifecycleScope.launch {
+                    try {
+                    val readable = !ready.archivedHistory || withContext(Dispatchers.IO) {
+                        dev.filmroom.export.BackupMediaLink.inspectLogged(this@ExportQueueActivity, ready)==BackupMediaLink.Status.READABLE
+                    }
+                    if(latest?.mediaUri != ready.mediaUri || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch
+                    if(!readable) { archivedPhotoAccess.offer(ready.id); return@launch }
+                    try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(ready.mediaUri)).apply{addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})}
+                    catch(e:Exception){toast(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.toast_open))}
+                    } finally { archivedOpenPending=false }
+                }
             }
             details.text=(if(job.state in setOf(ExportJobState.COMPLETED,ExportJobState.CANCELLED))job.progress.compactText+"\n"else "")+"${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n${stockNames[job.parameters.filmStock] ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92)}\n${job.parameters.outputColorSpace}"+
                 if(job.state==ExportJobState.PAUSED && job.inputReady)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3be614977d5d)else ""
-            if(job.archivedHistory)details.text=getString(R.string.backup_history_no_photos)+"\n${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n$stock"
+            if(job.archivedHistory)details.text=(if(job.mediaUri==null)getString(R.string.backup_history_no_photos)else getString(R.string.backup_history_archived))+"\n${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n$stock"
             job.originalDiagnostics?.let { raw ->
                 details.append("\n\n"+dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.queue_original_details)+"\n"+raw)
             }
@@ -517,11 +568,44 @@ class ExportQueueActivity : ComponentActivity() {
                 !NegativePreviewStore.pending(dir) && (job.state==ExportJobState.COMPLETED || job.progress.displayStage>=6))
         }
         fun pauseVisuals(){sequence.visibility(false,previewClock());sequenceTask?.cancel();sequenceTask=null;bar.pause();image.setForeground(false);previewGeneration++;previewTask?.cancel();previewKey=null}
+        private fun updateArchivedThumbnail(job: ExportJob) {
+            if(container.height == 0) return
+            val near = container.bottom >= scroll.scrollY-dp(160) && container.top <= scroll.scrollY+scroll.height+dp(160)
+            if(!near || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                previewGeneration++; previewTask?.cancel(); previewTask=null; previewKey=null
+                image.release(); previewPlaceholder.visibility=View.VISIBLE; return
+            }
+            val key="archive:${job.mediaUri}"
+            if(previewKey == key) return
+            previewKey=key; previewTask?.cancel(); val generation=++previewGeneration
+            previewTask=lifecycleScope.launch {
+                var owned:android.graphics.Bitmap?=null
+                try {
+                    withContext(Dispatchers.IO) {
+                        owned=if(dev.filmroom.export.BackupMediaLink.readable(this@ExportQueueActivity,job)) {
+                            try { savedThumbnailDecoder(job.mediaUri!!) } catch(_:OutOfMemoryError) { null }
+                        } else null
+                    }
+                    if(generation != previewGeneration || latest?.mediaUri != job.mediaUri) return@launch
+                    val bitmap=owned
+                    archivedUnavailable=bitmap==null
+                    if(bitmap != null) {
+                        image.show(bitmap,key,false,0L); owned=null; image.setForeground(true)
+                        previewPlaceholder.visibility=View.GONE; message.text=""; message.visibility=View.GONE
+                    } else {
+                        image.release(); previewPlaceholder.visibility=View.VISIBLE
+                        previewPlaceholder.contentDescription=getString(R.string.backup_history_no_photos)
+                        message.text=getString(R.string.backup_history_no_photos); message.visibility=View.VISIBLE
+                    }
+                } catch(c:CancellationException) { throw c }
+                  catch(_:Exception) { if(generation==previewGeneration) { archivedUnavailable=true;message.text=getString(R.string.backup_history_no_photos);message.visibility=View.VISIBLE } }
+                finally {owned?.recycle()}
+            }
+        }
         fun updateThumbnailVisibility() {
             val job=latest ?: return
             if(job.archivedHistory){
-                previewTask?.cancel();image.release();previewPlaceholder.visibility=View.VISIBLE
-                previewPlaceholder.contentDescription=getString(R.string.backup_history_no_photos)
+                updateArchivedThumbnail(job)
                 return
             }
             if(container.height==0)return

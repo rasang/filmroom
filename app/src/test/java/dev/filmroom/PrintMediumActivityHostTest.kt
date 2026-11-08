@@ -89,6 +89,9 @@ class PrintMediumActivityHostTest {
                     layout()
                     for(item in papers){
                         val card=tagged(item.getString("id")) as Button
+                        assertEquals(android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL,card.gravity)
+                        assertEquals((tagged("none") as Button).top,card.top)
+                        assertEquals((tagged("none") as Button).minLines,card.minLines)
                         val expected=PrintMediumLabels.cardLabel(item.getString("id"),item.getString("name"),item.getString("kind"))
                         assertEquals(expected,card.text.toString())
                         assertEquals("No accidental line wraps: $language/${item.getString("id")}",expected.lines().size,card.layout.lineCount)

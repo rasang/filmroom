@@ -31,10 +31,11 @@ data class ExportJob(
     val outputName:String?=null,
     val archivedHistory:Boolean=false,
     val archivedSourceState:String?=null,
+    val originalUri:String?=null,
 ) {
     /** Render app-owned messages in the current language; legacy prose is diagnostics only. */
     val localizedMessage:String? get() {
-        if(archivedHistory)return L10n.text(R.string.backup_history_no_photos)
+        if(archivedHistory)return if(mediaUri==null)L10n.text(R.string.backup_history_no_photos)else null
         val primary=messageUi?.render() ?: message?.takeIf{it.isNotBlank()}?.let {
             L10n.text(when(state) {
                 ExportJobState.PENDING,ExportJobState.RETRY -> R.string.text_8fb3a3261b43
@@ -140,14 +141,57 @@ class ExportJobStore(val root:File) {
         check(archiveReadFailure==null){"Stored backup history is unreadable; existing data was preserved"}
         return ExportHistoryBackup.exportRows(mutable.value)
     }
-    @Synchronized internal fun mergeBackupHistory(rows:org.json.JSONArray):Int {
+    @Synchronized internal fun mergeBackupHistory(rows:org.json.JSONArray, validateOnly:Boolean=false):Int {
         check(archiveReadFailure==null){"Stored backup history is unreadable; existing data was preserved"}
-        val additions=ExportHistoryBackup.validateRows(rows).filter{row->get(row.id)==null}
-        if(additions.isEmpty())return 0
-        val merged=archived+additions
+        val incoming=ExportHistoryBackup.validateRows(rows)
+        val additions=incoming.filter{row->get(row.id)==null}
+        val upgrades=archived.mapNotNull { old ->
+            incoming.firstOrNull { it.id==old.id && it.createdAt==old.createdAt && it.width==old.width && it.height==old.height && it.state==old.state }?.let { newer ->
+                old.copy(mediaUri=old.mediaUri ?: newer.mediaUri,outputName=old.outputName ?: newer.outputName,
+                    originalUri=old.originalUri ?: newer.originalUri).takeUnless { it==old }
+            }
+        }.associateBy { it.id }
+        if(additions.isEmpty() && upgrades.isEmpty())return 0
+        val merged=archived.map{upgrades[it.id] ?: it}+additions
+        archive.validate(merged)
+        if(validateOnly)return additions.size
         archive.write(merged);archived=merged
-        mutable.value=(mutable.value+additions).sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
+        mutable.value=(mutable.value.map{upgrades[it.id] ?: it}+additions).sortedWith(compareBy<ExportJob>{it.createdAt}.thenBy{it.id})
         return additions.size
+    }
+    /** Only an explicit foreground picker-confirmation may replace an archive link. Never requeues a job. */
+    @Synchronized internal fun relinkArchivedPhoto(id:String, expectedUri:String?, selectedUri:String,selectedName:String):Boolean {
+        val old=get(id)?.takeIf{it.archivedHistory && it.mediaUri==expectedUri && !historyReserved(id)} ?: return false
+        require(BackupMediaLink.validOutput(selectedUri))
+        require(selectedName.isNotBlank() && selectedName.length<=255 && !selectedName.contains('/') && !selectedName.contains('\\'))
+        require(old.outputName==null || old.outputName==selectedName)
+        val updated=old.copy(mediaUri=selectedUri,outputName=selectedName)
+        val merged=archived.map{if(it.id==id)updated else it}
+        archive.write(merged);archived=merged
+        mutable.value=mutable.value.map{if(it.id==id)updated else it}
+        return true
+    }
+    /** Explicit foreground reselection for effects. CAS prevents stale screens overwriting newer links. */
+    @Synchronized internal fun relinkEffectPhoto(id:String, original:Boolean, expectedUri:String?, selectedUri:String, selectedName:String?=null):Boolean {
+        val old=get(id)?.takeIf{it.state==ExportJobState.COMPLETED && !historyReserved(id)} ?: return false
+        val actual=if(original)old.originalUri else old.mediaUri
+        if(actual!=expectedUri)return false
+        val updated=if(original) {
+            require(dev.filmroom.io.OriginalPhotoUri.sanitize(selectedUri)!=null)
+            old.copy(originalUri=selectedUri)
+        } else {
+            require(BackupMediaLink.validOutput(selectedUri))
+            require(!selectedName.isNullOrBlank() && selectedName.length<=255 && !selectedName.contains('/') && !selectedName.contains('\\'))
+            require(old.outputName==null || old.outputName==selectedName)
+            old.copy(mediaUri=selectedUri,outputName=selectedName)
+        }
+        if(old.archivedHistory) {
+            check(archiveReadFailure==null){"Stored backup history is unreadable"}
+            val merged=archived.map{if(it.id==id)updated else it}
+            archive.write(merged);archived=merged
+            mutable.value=mutable.value.map{if(it.id==id)updated else it}
+        } else update(updated)
+        return true
     }
     @Synchronized internal fun archiveSnapshot():org.json.JSONArray {
         check(archiveReadFailure==null){"Stored backup history is unreadable"}
@@ -215,7 +259,7 @@ class ExportJobStore(val root:File) {
         fun newId()=UUID.randomUUID().toString()
         private fun validId(id:String)=runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)
         private fun encode(j:ExportJob)=JSONObject().apply {
-            put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
+            put("originalUri",j.originalUri);put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
             put("completionViewed",j.completionViewed);put("version",if(j.parameters.imprint.enabled)7 else if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
             put("format",j.format.name);put("quality",j.quality);put("state",j.state.name);put("stage",j.progress.stage);put("done",j.progress.done);put("total",j.progress.total);put("gpuProgress",j.progress.gpu?.toJson());put("visualProgress",j.progress.visual?.let{JSONObject().put("stage",it.stage).put("percent",it.percent)})
             put("mediaUri",j.mediaUri);put("message",j.message);put("messageUi",j.messageUi?.toJson());put("inputReady",j.inputReady);put("inputKind",j.inputKind);put("sourceWidth",j.sourceWidth);put("sourceHeight",j.sourceHeight);put("maxEdge",j.maxEdge);put("requestGeneration",j.requestGeneration);put("failure",j.failure.name)
@@ -250,7 +294,7 @@ class ExportJobStore(val root:File) {
                 j.optString("photoMetadata").takeIf{it.isNotEmpty()}?.let{dev.filmroom.io.PhotoMetadata.fromJson(it).toJson()},
                 if(j.has("exportMillis"))j.getLong("exportMillis").takeIf{it>0}else null,
                 j.optString("metadataWarning").takeIf{it.isNotEmpty()}?.take(256),
-                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")),j.optString("outputName").takeIf{it.isNotEmpty()})
+                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")),j.optString("outputName").takeIf{it.isNotEmpty()},originalUri=dev.filmroom.io.OriginalPhotoUri.sanitize(j.optString("originalUri").takeIf{it.isNotEmpty()}))
         }
     }
 }

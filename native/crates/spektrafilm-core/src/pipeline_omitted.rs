@@ -1,4 +1,4 @@
-//! Explicit digital transport for omitted media; no real stock substitution.
+//! Digital transport for omitted media; optional Portra grain is a residual, not a stock colour substitution.
 use super::*;
 use spektrafilm_math::precision::from_f64;
 use crate::neutral_media::{PositiveDensityBridge, REFERENCE_GRAY};
@@ -19,7 +19,6 @@ impl Pipeline {
             p.scanner.white_correction=false;p.scanner.black_correction=false;
         }
         if film.is_omitted() {
-            p.film_render.grain.active=false;
             p.film_render.halation.active=false;
             p.film_render.halation.boost_ev=0.;
             p.film_render.dir_couplers.active=false;
@@ -39,6 +38,9 @@ impl Pipeline {
         let film=crate::profile::resolve_for_render(film,params.film_render.development_time);
         let paper=crate::profile::resolve_for_render(paper,params.print_render.development_time);
         let mut pipe=Self::new(film,paper,params);
+        if pipe.film.is_omitted() && pipe.params.film_render.grain.active && pipe.params.film_render.grain.amount>0. {
+            pipe.donor_grain=Some(Arc::new(crate::donor_grain::DonorGrain::load(data)?));
+        }
         if pipe.film.is_omitted(){pipe.spectral=Arc::new(crate::prepared_spectral::PreparedSpectral::omitted_rgb());}
         if !pipe.film.is_omitted() {
             apply_film_specific_params(&pipe.film,&mut pipe.params);
@@ -115,6 +117,7 @@ impl Pipeline {
             }
         }
         let log=stages::filming::expose(&image,&self.film,&self.params,backend,self.spectral.tc_lut.as_ref(),self.spectral.mallett_core.as_ref(),select_illuminant(&self.spectral.front_illuminant),1.);
+        let log=if self.film.is_omitted(){self.apply_donor_grain(log,backend)}else{log};
         if self.film.is_omitted() && !self.print.is_omitted() {
             let mut raw=self.expose_omitted_paper_raw(&log);
             let df=&self.params.enlarger.diffusion_filter;
@@ -133,6 +136,18 @@ impl Pipeline {
             return stages::scanning::process(&density,&self.film,&p,backend,&crate::color_reference::ColorReference::identity(),&self.output_gamut);
         }
         self.omitted_density_to_rgb(&density,backend,true)
+    }
+    fn apply_donor_grain(&self,mut log:ImageBuf,backend:&dyn ComputeBackend)->ImageBuf {
+        let g=&self.params.film_render.grain;
+        if !g.active || g.amount==0. {return log;}
+        let donor=self.donor_grain.as_ref().expect("enabled no-film grain must have validated donor");
+        let mut reference=ImageBuf::new(log.width,log.height);
+        for px in reference.data.chunks_exact_mut(3){for c in 0..3{px[c]=from_f64(donor.density[c]);}}
+        let mut p=self.params.clone();p.film_render.grain.amount=1.;
+        let noisy=stages::filming::grain_density(reference,&donor.profile,&p,backend);
+        let baseline=donor.baseline(g);
+        for (i,(out,noise)) in log.data.iter_mut().zip(noisy.data).enumerate(){*out=from_f64(crate::donor_grain::restore(*out as f64,noise as f64,baseline[i%3],g.amount));}
+        log
     }
     pub(super) fn expose_omitted_paper_raw(&self,log_rgb:&ImageBuf)->ImageBuf {
         let c=self.omitted_calibration.as_ref().expect("calibrated omitted pipeline");
@@ -191,7 +206,7 @@ mod tests {
         p.io.input_cctf_decoding=false;p.io.output_cctf_encoding=false;
         p.io.output_gamut_compress.algorithm="off".into();
         p.scanner.unsharp_mask=[0.,0.];p.scanner.lens_blur=0.;
-        p.print_render.glare.active=false;p.film_render.glare.active=false;
+        p.print_render.glare.active=false;p.film_render.glare.active=false;p.film_render.grain.active=false;
         p
     }
     #[test]

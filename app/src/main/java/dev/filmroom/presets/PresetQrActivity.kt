@@ -160,7 +160,9 @@ class PresetQrActivity : ComponentActivity() {
         }
     }
     private fun shareImage() {
-        val bitmap = model.state.value.takeIf { it.phase == "share" }?.bitmap ?: return
+        val screen = model.state.value.takeIf { it.phase == "share" } ?: return
+        val bitmap = screen.bitmap ?: return
+        val draft = screen.draft ?: return
         if (sharing) return
         sharing = true; share.isEnabled = false
         lifecycleScope.launch {
@@ -170,7 +172,11 @@ class PresetQrActivity : ComponentActivity() {
                     // Only our old generated PNGs. Never traverse another cache or touch source photos.
                     folder.listFiles()?.filter { it.isFile && it.name.startsWith("preset-") && it.extension == "png" && System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
                     val file = File(folder, "preset-${UUID.randomUUID()}.png")
-                    file.outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+                    val poster = PresetQrPoster.render(this@PresetQrActivity, bitmap, draft.name, draft.parameters)
+                    try {
+                        check(PresetQrImage.decode(poster) == screen.payload)
+                        file.outputStream().use { check(poster.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+                    } finally { poster.recycle() }
                     FileProvider.getUriForFile(this@PresetQrActivity, "$packageName.presetqr", file)
                 }
                 if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return@launch

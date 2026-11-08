@@ -13,6 +13,14 @@ object NativeMemoryPolicy {
     const val QUICK_PREVIEW_EDGE=512
     /** Separate GPU-only whole-photo refinement; never changes import/export limits. */
     const val REFINED_PREVIEW_EDGE=1536
+    /** Explicit zoom-only tier. Does not alter ordinary previews or admission budgets. */
+    const val ZOOM_REFINED_MAX_EDGE=3072
+    /** Necessary lower bound only. Native still admits halo/global-field/tile allocations. */
+    fun zoomFrameFloorFits(width:Int,height:Int,budgetMiB:Int):Boolean {
+        require(width in 1..ZOOM_REFINED_MAX_EDGE && height in 1..ZOOM_REFINED_MAX_EDGE)
+        require(budgetMiB in 128..512)
+        return 96L*MIB+width.toLong()*height*76L<budgetMiB.toLong()*MIB
+    }
     // Preserve the existing settled-work admission gate. Native planning then
     // independently rejects any1536 geometry/effects that do not fit this budget.
     const val REFINED_MIN_BUDGET_MIB=416

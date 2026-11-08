@@ -32,7 +32,7 @@ class IndependentMediaSelectionHostTest {
     @Test fun absenceDisablesOnlyDependentControlsWithoutChangingValues() {
         val original = EditorState()
         val noFilm = original.copy(filmStock = "none")
-        assertFalse(noFilm.controlSupported("grain"))
+        assertTrue(noFilm.controlSupported("grain"))
         assertFalse(noFilm.controlSupported("halation"))
         assertTrue(noFilm.controlSupported("filmExposure"))
         assertTrue(noFilm.controlSupported("diffusionFilter"))

@@ -120,7 +120,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             val restoredParameters=runCatching { EditorState.fromJson(preferences.getString("parameters","{}")!!).forLiveSessionRestore() }.getOrDefault(EditorState())
             idlePrewarmer.begin(restoredParameters)
             try {
-                val p=repository.reopen(key,preferences.getString("name",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7b50017ae47e))!!,ENGINE_EDGE,preferences.getString("rawSource",null))
+                val p=repository.reopen(key,preferences.getString("name",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7b50017ae47e))!!,ENGINE_EDGE,preferences.getString("rawSource",null),preferences.getString("originalUri",null))
                 idlePrewarmer.end()
                 history=EditHistory(restoredParameters)
                 mutable.value=mutable.value.copy(photo=p.source,original=p.preview,parameters=history.current,busyUi=null,busy=null,messageUi=null,messageIsDiagnostic=false,message=null)
@@ -149,7 +149,11 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             idlePrewarmer.begin(importParameters)
             try {
                 OperationTrace.run(Operation.IMPORT,SafeInfo(importDiagnostic=dev.filmroom.diagnostics.ImportDiagnosticInfo(origin))) { trace ->
-                val newPhoto=repository.import(uri,ENGINE_EDGE,origin) { info -> trace.mark(Stage.IMPORT_INPUT,SafeInfo(importDiagnostic=info)) };loaded=newPhoto
+                // The stored original URI needs a durable system grant, not just a private import copy.
+                // Unsupported/denied persistence is diagnostic only: current readable imports still proceed.
+                val originalGrant=withContext(Dispatchers.IO){dev.filmroom.io.OriginalPhotoAccess.retain(getApplication(),uri,origin)}
+                trace.mark(Stage.IMPORT_INPUT,SafeInfo(importDiagnostic=dev.filmroom.diagnostics.ImportDiagnosticInfo(origin=origin,originalPhotoGrant=originalGrant)))
+                val newPhoto=repository.import(uri,ENGINE_EDGE,origin) { info -> trace.mark(Stage.IMPORT_INPUT,SafeInfo(importDiagnostic=info.copy(originalPhotoGrant=originalGrant))) };loaded=newPhoto
                 idlePrewarmer.end()
                 trace.mark(Stage.DECODE_HEADER,SafeInfo(width=newPhoto.source.originalWidth,height=newPhoto.source.originalHeight,metadataIssues=newPhoto.source.photoMetadata.issues,metadataPhase=dev.filmroom.diagnostics.MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=newPhoto.source.photoMetadata.diagnosticDateBasis))
                 pendingScientificRender=null;pendingRefinement=null;scientificGestureAwaitingCommit=false
@@ -327,7 +331,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     fun cancelExportForSharing() = Unit
     private fun saveSession() {
         val s=mutable.value;val p=s.photo ?: return
-        preferences.edit().putString("source",p.cacheKey).putString("rawSource",p.rawCacheKey).putString("name",p.name).putString("parameters",(compositionBaseline ?: s.parameters).json()).apply()
+        preferences.edit().putString("source",p.cacheKey).putString("rawSource",p.rawCacheKey).putString("originalUri",p.originalUri).putString("name",p.name).putString("parameters",(compositionBaseline ?: s.parameters).json()).apply()
     }
     /** In pre-imaging mode geometry, artwork and imprints are scientific input, not overlays. */
     private fun previewScience(parameters:EditorState)=parameters.json(includePresentation=parameters.filmBorder && parameters.filmBorderStage==1)

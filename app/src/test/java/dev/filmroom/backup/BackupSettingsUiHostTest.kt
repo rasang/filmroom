@@ -23,7 +23,7 @@ class BackupSettingsUiHostTest {
             (all(activity.findViewById(android.R.id.content)).single{it.tag=="backup-export"} as Button).performClick()
             val intent=shadowOf(activity).nextStartedActivity
             assertEquals(Intent.ACTION_CREATE_DOCUMENT,intent.action)
-            assertEquals("application/json",intent.type)
+            assertEquals("application/zip",intent.type)
             assertTrue(intent.getStringExtra(Intent.EXTRA_TITLE)!!.startsWith("Filmroom-backup-"))
             assertNull(intent.data)
         }

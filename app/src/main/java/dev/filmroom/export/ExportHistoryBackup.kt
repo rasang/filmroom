@@ -9,10 +9,10 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-/** An allowlist, not a copy of manifests. No source/media references or diagnostic prose. */
+/** Allowlisted record metadata and explicitly requested content URIs; never private paths, bytes or diagnostics. */
 internal object ExportHistoryBackup {
     const val MAX_ROWS = 10000
-    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis")
+    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis", "mediaUri", "outputName", "originalUri")
     fun exportRows(jobs: List<ExportJob>): JSONArray = JSONArray().apply {
         require(jobs.size <= MAX_ROWS)
         jobs.forEach { job -> put(JSONObject().apply {
@@ -21,6 +21,10 @@ internal object ExportHistoryBackup {
             put("format",job.format.name); put("state",job.archivedSourceState ?: job.state.name)
             put("filmStock",job.parameters.filmStock); put("outputColorSpace",job.parameters.outputColorSpace)
             job.exportMillis?.let { put("exportMillis",it) }
+            if (job.state == ExportJobState.COMPLETED && BackupMediaLink.validOutput(job.mediaUri) && !job.outputName.isNullOrBlank()) {
+                put("mediaUri", job.mediaUri); put("outputName", job.outputName)
+            }
+            job.originalUri?.takeIf(BackupMediaLink::validOriginal)?.let { put("originalUri", it) }
         }) }
     }
     fun validateRows(rows: JSONArray): List<ExportJob> {
@@ -44,9 +48,13 @@ internal object ExportHistoryBackup {
             val sourceState=ExportJobState.valueOf(string("state"))
             val state=if(sourceState in setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED))sourceState else ExportJobState.CANCELLED
             val millis=if(row.has("exportMillis"))integer("exportMillis").also { require(it>=0) }else null
+            val uri = if(row.has("mediaUri")) string("mediaUri").also { require(BackupMediaLink.validOutput(it)) } else null
+            val name = if(row.has("outputName")) string("outputName").also { require(it.isNotBlank() && it.length <= 255 && !it.contains('/') && !it.contains('\\')) } else null
+            require((uri == null) == (name == null)); require(uri == null || sourceState == ExportJobState.COMPLETED)
+            val original = if(row.has("originalUri")) string("originalUri").also { require(BackupMediaLink.validOriginal(it)) } else null
             ExportJob(id,timestamp,EditorState(filmStock=film,outputColorSpace=color),width.toInt(),height.toInt(),
                 ExportFormat.valueOf(string("format")),95,state,ExportDisplayProgress(if(state==ExportJobState.COMPLETED)8 else 1),
-                inputReady=false,completionViewed=true,exportMillis=millis,archivedHistory=true,archivedSourceState=sourceState.name)
+                inputReady=false,completionViewed=true,exportMillis=millis,archivedHistory=true,archivedSourceState=sourceState.name,mediaUri=uri,outputName=name,originalUri=original)
         }
         require(result.map { it.id }.distinct().size==result.size) { "Duplicate history identifiers" }
         return result
@@ -72,15 +80,20 @@ internal class ArchivedExportHistory(private val file:File) {
         require(root.getInt("version")==1)
         return ExportHistoryBackup.validateRows(root.getJSONArray("rows"))
     }
-    fun write(jobs:List<ExportJob>) {
+    private fun encode(jobs:List<ExportJob>):ByteArray {
         val rows=ExportHistoryBackup.exportRows(jobs)
         ExportHistoryBackup.validateRows(rows)
         val bytes=JSONObject().put("version",1).put("rows",rows).toString().toByteArray(Charsets.UTF_8)
         require(bytes.size<=MAX_BYTES)
+        return bytes
+    }
+    fun validate(jobs:List<ExportJob>) { encode(jobs) }
+    fun write(jobs:List<ExportJob>) {
+        val bytes=encode(jobs)
         val atomic=AtomicFile(file);file.parentFile?.mkdirs()
         val out=atomic.startWrite()
         try {out.write(bytes);atomic.finishWrite(out)}catch(t:Throwable){atomic.failWrite(out);throw t}
         check(atomic.openRead().use { it.readBytes() }.contentEquals(bytes))
     }
-    companion object { const val MAX_BYTES=4*1024*1024 }
+    companion object { const val MAX_BYTES=8*1024*1024 }
 }

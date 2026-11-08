@@ -48,6 +48,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlin.math.roundToInt
 
 class MainActivity:ComponentActivity() {
+    private var startupUpdateUi:dev.filmroom.update.UpdateSettingsUi?=null
+    private var zoomFrames:dev.filmroom.roi.ZoomFrameController?=null
+    private var zoomExporting=false
     private var renderedLanguage="zh"
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
 
@@ -82,6 +85,9 @@ class MainActivity:ComponentActivity() {
     }
     private val films get()=listOf(Stock("none",getString(R.string.film_none),"none","none","print"))+catalog.filter{it.kind=="negative"||it.kind=="reversal"}
     private val papers get()=catalog.filter{it.kind=="paper"||it.kind=="cine_print"}.map{it.id to it.name}
+    private var filmFilterCategory=dev.filmroom.ui.FilmCatalogFilter.Category.ALL
+    private var filmFilterBrand:String?=null
+    private var filmFilterScrollX=0
     private var group="film";private var selected="brightness";private var dragging=false
     private val landscapeEditor get()=dev.filmroom.ui.EditorLayoutPolicy.usesTwoPanes(resources.configuration.screenWidthDp,resources.configuration.screenHeightDp,isInMultiWindowMode)
     private var renderedTwoPane=false
@@ -124,6 +130,9 @@ class MainActivity:ComponentActivity() {
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         compositionReturnTool=savedInstanceState?.getString("compositionReturnTool");compositionReturnGroup=savedInstanceState?.getString("compositionReturnGroup")
         group=savedInstanceState?.getString("group") ?: "film";selected=savedInstanceState?.getString("selected") ?: "brightness"
+        filmFilterCategory=dev.filmroom.ui.FilmCatalogFilter.restoreCategory(savedInstanceState?.getString("filmFilterCategory"))
+        filmFilterBrand=dev.filmroom.ui.FilmCatalogFilter.restoreBrand(savedInstanceState?.getString("filmFilterBrand"))
+        filmFilterScrollX=savedInstanceState?.getInt("filmFilterScrollX") ?: 0
         pendingSavedPreset=savedInstanceState?.getBundle("savedPresetDialog")
         pendingImprintDraft=savedInstanceState?.getBundle("imprintDraft");pendingImprintSource=savedInstanceState?.getString("imprintSource")
         restoredViewer=savedInstanceState?.getFloatArray("viewerNormalized");restoredZoom=savedInstanceState?.getFloatArray("zoom");restoredSource=savedInstanceState?.getString("zoomSource")
@@ -159,13 +168,13 @@ class MainActivity:ComponentActivity() {
             }
         }
     }
-    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
+    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){zoomFrames?.releaseForPressure();dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true);if(::histogram.isInitialized)histogram.setForeground(true)}
-    override fun onResume(){super.onResume();model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
-    override fun onPause(){model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
-    override fun onDestroy(){imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
+    override fun onPause(){zoomFrames?.foreground(false);model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
+    override fun onDestroy(){startupUpdateUi?.close();startupUpdateUi=null;zoomFrames?.close();zoomFrames=null;imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
         if(::histogram.isInitialized)histogram.setForeground(false)
@@ -180,6 +189,7 @@ class MainActivity:ComponentActivity() {
         super.onStop()
     }
     override fun onSaveInstanceState(outState:Bundle){
+        outState.putString("filmFilterCategory",filmFilterCategory.name);outState.putString("filmFilterBrand",filmFilterBrand);outState.putInt("filmFilterScrollX",filmFilterScrollX)
         (savedPresetDialogs.capture() ?: pendingSavedPreset)?.let{outState.putBundle("savedPresetDialog",it)}
         imprintDialog?.takeIf{it.isShowing}?.let{outState.putBundle("imprintDraft",dev.filmroom.imprint.ImprintDialog.capture(it));outState.putString("imprintSource",imprintDialogSource)}
         exportBackgroundGuidance.save(outState)
@@ -324,6 +334,23 @@ class MainActivity:ComponentActivity() {
         }
         frame.addView(detailLoading,FrameLayout.LayoutParams(dp(24),dp(24),Gravity.TOP or Gravity.END).apply{rightMargin=dp(12);topMargin=dp(12)})
         photo.onDetailStatusChanged={status->updateDetailStatus(status)}
+        val zoomEngine=dev.filmroom.engine.FilmEngine(applicationContext)
+        zoomFrames=dev.filmroom.roi.ZoomFrameController(object:dev.filmroom.roi.ZoomFrameProvider {
+            override suspend fun render(source:dev.filmroom.io.PhotoSource,parameters:EditorState,baseBitmap:android.graphics.Bitmap,edge:Int)=
+                zoomEngine.renderZoom(baseBitmap,source,parameters,edge)
+            override fun cancel()=zoomEngine.cancel()
+            override fun close()=zoomEngine.close()
+        },lifecycleScope,changed={
+            photo.zoomFrame=zoomFrames?.bitmap
+            updateDetailStatus(photo.detailStatus)
+        },retain={bitmap,evict->dev.filmroom.engine.NativeWorkReservations.retain(bitmap.allocationByteCount.toLong(),
+            {dev.filmroom.engine.NativeWorkReservations.snapshot(applicationContext)},evict)})
+        photo.onZoomViewportChanged={zoom,moving->zoomFrames?.viewport(zoom,moving)}
+        lifecycleScope.launch {
+            dev.filmroom.engine.ExportWorkAdmissions.active.collect { active->
+                zoomExporting=active;bindZoomFrame(model.state.value)
+            }
+        }
         loading=row().apply{background=shape(surface);setPadding(dp(12),dp(8),dp(8),dp(8))}
         loading.addView(ProgressBar(this),LinearLayout.LayoutParams(dp(24),dp(24)))
         loadingText=text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1663134e88db),14f).apply{setPadding(dp(10),0,dp(10),0)};loading.addView(loadingText,LinearLayout.LayoutParams(0,-2,1f))
@@ -364,6 +391,12 @@ class MainActivity:ComponentActivity() {
         buildTools()
     }
     private fun enabled(view:View,value:Boolean){view.isEnabled=value;view.alpha=if(value)1f else 0.38f}
+    private fun bindZoomFrame(s:EditorUiState) {
+        val allowed=model.localDetailEnabled && s.startupReady && s.busy==null && !s.updating && !s.previewRefining &&
+            !s.compositionEditing && s.rendered!=null && s.parameters==s.renderedParameters
+        zoomFrames?.bind(s.photo,s.parameters,s.rendered,allowed,s.compare,s.exporting || zoomExporting)
+        if(::photo.isInitialized){zoomFrames?.viewport(photo.viewport.zoom);photo.zoomFrame=zoomFrames?.bitmap}
+    }
     private fun updateDetailStatus(status:dev.filmroom.roi.DetailStatus){
         if(!::detailLoading.isInitialized)return
         val state=model.state.value
@@ -373,7 +406,7 @@ class MainActivity:ComponentActivity() {
         val compositionOnly=state.compositionSource!=null && scienceReady && (state.compositionEditing || presentationChanged)
         val eligible=!(state.parameters.filmBorder && state.parameters.filmBorderStage==1) && model.localDetailEnabled && state.startupReady && state.busy==null && !state.exporting && ((!state.updating && !state.previewRefining) || compositionOnly) && !state.compare && state.rendered!=null && scienceReady
         val wholeFrameRefining=state.parameters.preImagingBorder && state.previewRefining && state.startupReady && state.busy==null && !state.exporting && !state.compare && state.rendered!=null
-        detailLoading.visibility=if(detailForeground && (wholeFrameRefining || detailFeedback.showLoading(status,key,eligible,detailForeground)))View.VISIBLE else View.INVISIBLE
+        detailLoading.visibility=if(detailForeground && (zoomFrames?.loading==true || wholeFrameRefining || detailFeedback.showLoading(status,key,eligible,detailForeground)))View.VISIBLE else View.INVISIBLE
         detailFeedback.takeFailureToast(status,key,eligible,detailForeground)?.let{
             Toast.makeText(this,it,Toast.LENGTH_SHORT).show()
         }
@@ -409,6 +442,7 @@ class MainActivity:ComponentActivity() {
         photo.bindDetail(s.photo,s.parameters,!(s.parameters.filmBorder && s.parameters.filmBorderStage==1) && model.localDetailEnabled && s.startupReady && s.busy==null && ((!s.updating && !s.previewRefining) || compositionOnly) && !s.exporting && s.rendered!=null && scienceReady,s.compare,presentedBorder=!s.compare && s.rendered!=null && (s.renderedParameters?.filmBorder==true || s.cropPresentation!=null))
         if(sourceChanged){if(restoredSource==s.photo?.cacheKey&&restoredViewer!=null)photo.restoreViewerState(restoredViewer!!)else if(restoredSource==s.photo?.cacheKey&&restoredZoom!=null)photo.restoreTransform(restoredZoom!!)else photo.resetZoom();restoredZoom=null;restoredViewer=null}
         photo.preImagingCompositionPreview=!s.compare && s.renderedParameters?.preImagingBorder==true
+        bindZoomFrame(s)
         if((s.presentation!=null && s.renderedParameters?.filmBorder==true && s.renderedParameters.filmBorderStage==s.parameters.filmBorderStage && s.presentation.mediumFormat==s.parameters.effectiveMediumFormat && s.presentation.mediumPortrait==s.parameters.effectiveMediumPortrait) || (s.rendered==null && s.parameters.filmBorder))photo.bindComposition(if(s.compare)null else s.presentation,s.compositionSource,s.photo?.let{s.parameters.presentationTransform(it.originalWidth,it.originalHeight)} ?: s.parameters.composition,
             s.compositionEditing && presentationReady && !s.compare,interactiveBorder=s.interactiveBorder){transform,commit->model.composition(transform,commit)}
         else photo.bindCrop(if(s.compare)null else s.cropPresentation,s.compositionSource,s.parameters.crop,
@@ -978,40 +1012,92 @@ class MainActivity:ComponentActivity() {
         view.requestLayout()
     }
     private fun stockChoices(p:EditorState,s:EditorUiState,target:LinearLayout=tools){
-            // Film browsing is deliberately tap-only; short parameter enums retain their snap rails.
-            // Width comes from the visible pane, not the longest stock name.
-            val cardWidth=dp(112)
-            val carousel=dev.filmroom.ui.FilmStockScrollView(this,cardWidth).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false}
-            val cards=row();carousel.addView(cards)
-            fun chooseStock(index:Int){
-                val film=films[index]
-                finishCompositionForParameterEdit()
-                val current=model.state.value.parameters
-                if(!model.state.value.editable || current.filmStock==film.id)return
-                val old=films.firstOrNull{it.id==current.filmStock}
-                model.parameters(current.selectFilm(film.id,film.paper,film.route,old?.paper))
-            }
-            for(film in films){
-                val chosen=p.filmStock==film.id
-                val stock=button(dev.filmroom.ui.FilmStockArtwork.cardLabel(film.id,film.name)){
-                    chooseStock(films.indexOf(film))
-                }.apply{
-                    tag=film.id;isSelected=chosen;textSize=12f;minimumWidth=dp(48);minimumHeight=dp(48)
-                    setPadding(dp(10),dp(6),dp(10),dp(8))
-                    val art=dev.filmroom.ui.FilmStockArtwork.drawable(this@MainActivity,film.id)
-                    val edge=dp(72)
-                    art.setBounds(0,0,edge,edge)
-                    setCompoundDrawables(null,art,null,null)
-                    compoundDrawablePadding=dp(2)
-                    setTextColor(if(chosen)accent else ink)
-                    maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
-                    background=shape(if(chosen)raised else Color.TRANSPARENT,if(chosen)accent else null)
+            // Keep the existing tool tabs intact; only compact the stock cards to make room for filters.
+            val selector=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="film-selector"}
+            target.addView(selector,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8)})
+            fun drawSelector(){
+                forgetSectionStrips(selector);selector.removeAllViews()
+                val language=dev.filmroom.i18n.L10n.language(this)
+                fun label(key:String)=dev.filmroom.ui.FilmCatalogFilter.label(key,language)
+                val restoreTagsX=filmFilterScrollX
+                val tags=row()
+                val tagScroll=HorizontalScrollView(this).apply{
+                    tag="film-filter-scroll";isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false
+                    addView(tags)
+                    setOnScrollChangeListener{_,x,_,_,_->filmFilterScrollX=x}
+                    post{scrollTo(restoreTagsX,0)}
                 }
-                stock.contentDescription="${film.name}，${if(film.kind=="none")"" else if(film.kind=="reversal")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ed42cfc64f18)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d60c820b2be8)}"+if(chosen)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_657a8c2de63c)else ""
-                enabled(stock,s.editable);cards.addView(stock,LinearLayout.LayoutParams(cardWidth,-2).apply{if(film!==films.last())marginEnd=dp(4)})
+                fun addTag(key:String,title:String,chosen:Boolean,action:()->Unit):Button {
+                    val chip=button(title,action=action).apply{
+                        tag="film-filter:$key";isSelected=chosen;textSize=12f
+                        minHeight=dp(40);minimumHeight=dp(40);setPadding(dp(12),0,dp(12),0)
+                        maxLines=1;setTextColor(if(chosen)FilmroomPalette.onAccent else ink)
+                        background=shape(if(chosen)accent else raised)
+                    }
+                    tags.addView(chip,LinearLayout.LayoutParams(-2,dp(40)).apply{marginEnd=dp(6)})
+                    return chip
+                }
+                val categories=dev.filmroom.ui.FilmCatalogFilter.Category.values()
+                for(category in categories.filter{it!=dev.filmroom.ui.FilmCatalogFilter.Category.MOVIE}) {
+                    addTag(category.name,label(category.name),filmFilterCategory==category && (category!=dev.filmroom.ui.FilmCatalogFilter.Category.ALL || filmFilterBrand==null)){
+                        filmFilterCategory=category
+                        if(category==dev.filmroom.ui.FilmCatalogFilter.Category.ALL)filmFilterBrand=null
+                        drawSelector()
+                    }
+                }
+                lateinit var brandButton:Button
+                brandButton=addTag("brand",label(filmFilterBrand ?: "brand")+" ▾",filmFilterBrand!=null){
+                    android.widget.PopupMenu(this,brandButton).apply{
+                        val available=dev.filmroom.ui.FilmCatalogFilter.brands.filter{brand->films.any{dev.filmroom.ui.FilmCatalogFilter.brand(it.id)==brand}}
+                        menu.add(0,0,0,label("allBrands")).apply{isCheckable=true;isChecked=filmFilterBrand==null}
+                        available.forEachIndexed{index,brand->menu.add(0,index+1,index+1,label(brand)).apply{isCheckable=true;isChecked=filmFilterBrand==brand}}
+                        menu.setGroupCheckable(0,true,true)
+                        setOnMenuItemClickListener{item->filmFilterBrand=available.getOrNull(item.itemId-1);drawSelector();true}
+                        show()
+                    }
+                }
+                addTag("MOVIE",label("MOVIE"),filmFilterCategory==dev.filmroom.ui.FilmCatalogFilter.Category.MOVIE){
+                    filmFilterCategory=dev.filmroom.ui.FilmCatalogFilter.Category.MOVIE;drawSelector()
+                }
+                selector.addView(tagScroll,LinearLayout.LayoutParams(-1,dp(44)))
+                val shown=films.filter{dev.filmroom.ui.FilmCatalogFilter.matches(it.id,it.kind,filmFilterCategory,filmFilterBrand)}
+                val cardWidth=dp(112)
+                val labelLines=films.maxOf { dev.filmroom.ui.FilmStockArtwork.cardLabel(it.id,it.name).lines().size }
+                val carousel=dev.filmroom.ui.FilmStockScrollView(this,cardWidth,56).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false}
+                val cards=row().apply{gravity=Gravity.TOP;isBaselineAligned=false};carousel.addView(cards)
+                val referenceCards=ArrayList<View>()
+                for(film in films){
+                    val chosen=p.filmStock==film.id
+                    val stock=button(dev.filmroom.ui.FilmStockArtwork.cardLabel(film.id,film.name)){
+                        finishCompositionForParameterEdit()
+                        val current=model.state.value.parameters
+                        if(model.state.value.editable && current.filmStock!=film.id){
+                            val old=films.firstOrNull{it.id==current.filmStock}
+                            model.parameters(current.selectFilm(film.id,film.paper,film.route,old?.paper))
+                        }
+                    }.apply{
+                        tag=film.id;isSelected=chosen;textSize=12f;minLines=labelLines;minimumWidth=dp(48);minimumHeight=dp(48)
+                        gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                        setPadding(dp(8),dp(4),dp(8),dp(4))
+                        val art=dev.filmroom.ui.FilmStockArtwork.drawable(this@MainActivity,film.id)
+                        val edge=dp(56);art.setBounds(0,0,edge,edge)
+                        setCompoundDrawables(null,art,null,null);compoundDrawablePadding=dp(2)
+                        setTextColor(if(chosen)accent else ink)
+                        maxLines=Int.MAX_VALUE;setHorizontallyScrolling(false)
+                        background=shape(if(chosen)raised else Color.TRANSPARENT,if(chosen)accent else null)
+                    }
+                    stock.contentDescription="${film.name}，${if(film.kind=="none")"" else if(film.kind=="reversal")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ed42cfc64f18)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d60c820b2be8)}"+if(chosen)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_657a8c2de63c)else ""
+                    enabled(stock,s.editable)
+                    stock.layoutParams=LinearLayout.LayoutParams(cardWidth,-2).apply{marginEnd=dp(4)}
+                    referenceCards.add(stock)
+                    if(film in shown)cards.addView(stock)
+                }
+                carousel.heightReferenceCards=referenceCards
+                if(shown.isEmpty())cards.addView(TextView(this).apply{tag="film-filter-empty";text=label("empty");setTextColor(ink);textSize=13f;gravity=Gravity.CENTER;setPadding(dp(12),dp(24),dp(12),dp(24))})
+                retainStrip(carousel,cards,if(filmFilterCategory==dev.filmroom.ui.FilmCatalogFilter.Category.ALL && filmFilterBrand==null)"films" else "films:${filmFilterCategory.name}:${filmFilterBrand ?: "all"}",p.filmStock)
+                selector.addView(carousel,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(4)})
             }
-            retainStrip(carousel,cards,"films",p.filmStock)
-            target.addView(carousel,LinearLayout.LayoutParams(-1,-2))
+            drawSelector()
             val infoRow=row()
             val infoScroll=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false;tag="border-options-scroll";addView(infoRow)}
             if(dev.filmroom.border.BorderCatalog.PROTOTYPE_ENABLED){
@@ -1059,8 +1145,11 @@ class MainActivity:ComponentActivity() {
             isHorizontalScrollBarEnabled=false;isVerticalScrollBarEnabled=false
             contentDescription=getString(R.string.text_3691a3aa4ece)
         }
-        val cards=row();carousel.addView(cards)
+        val cards=row().apply{gravity=Gravity.TOP;isBaselineAligned=false};carousel.addView(cards)
         val choices=listOf("none" to getString(R.string.paper_none))+papers
+        val labelLines=choices.maxOf{(id,name)->
+            catalog.firstOrNull{it.id==id}?.let{dev.filmroom.ui.PrintMediumLabels.cardLabel(id,name,it.kind).lines().size} ?: 1
+        }
         for((id,name) in choices){
             val chosen=p.paperStock==id
             val medium=catalog.firstOrNull{it.id==id}
@@ -1074,6 +1163,7 @@ class MainActivity:ComponentActivity() {
                 }
             }.apply{
                 tag=id;isSelected=chosen;textSize=12f;minimumWidth=dp(48);minimumHeight=dp(48)
+                gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL;minLines=labelLines
                 setPadding(dp(8),dp(6),dp(8),dp(8))
                 breakStrategy=android.text.Layout.BREAK_STRATEGY_SIMPLE
                 hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE

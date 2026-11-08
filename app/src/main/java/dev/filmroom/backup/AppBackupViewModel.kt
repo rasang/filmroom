@@ -34,9 +34,9 @@ internal class AppBackupViewModel(app: Application) : AndroidViewModel(app) {
                     val store = ExportQueue.get(context).store
                     val document = AppBackupCodec.Document(BackupSettings.snapshot(context), SavedPresetStore(context).list(), store.exportBackupHistory())
                     validateStocks(document)
-                    val bytes = AppBackupCodec.encode(document)
+                    
                     context.contentResolver.openOutputStream(uri,"wt").use { stream ->
-                        checkNotNull(stream); stream.write(bytes); stream.flush()
+                        AppBackupCodec.writeZip(document, checkNotNull(stream))
                     }
                 }
                 mutable.value = State.Finished(false)
@@ -52,6 +52,7 @@ internal class AppBackupViewModel(app: Application) : AndroidViewModel(app) {
                     val decoded = context.contentResolver.openInputStream(uri).use { AppBackupCodec.read(checkNotNull(it)) }
                     validateStocks(decoded)
                     dev.filmroom.export.ExportHistoryBackup.validateRows(decoded.history)
+                    ExportQueue.get(context).store.mergeBackupHistory(decoded.history,validateOnly=true)
                     decoded
                 }
                 mutable.value = State.Preview(document)
@@ -72,6 +73,7 @@ internal class AppBackupViewModel(app: Application) : AndroidViewModel(app) {
                     val store = ExportQueue.get(context).store
                     dev.filmroom.export.ExportHistoryBackup.validateRows(document.history)
                     BackupSettings.validate(document.settings)
+                    store.mergeBackupHistory(document.history,validateOnly=true)
                     attemptedWrite = true
                     val recipes = SavedPresetStore(context).mergeBackup(document.recipes)
                     val history = store.mergeBackupHistory(document.history)

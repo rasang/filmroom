@@ -257,9 +257,31 @@ impl<'a> ChainImage<'a> {
     }
 }
 
+/// Fixed donor-density noise field for omitted film. The donor is used only
+/// to synthesize a grain residual, never as the image's sensitometry or colour.
+#[derive(Clone, Copy, Debug)]
+pub struct NeutralGrainReference {
+    pub density: [f32; 3],
+    pub baseline: [f32; 3],
+    pub amount: f32,
+}
+impl NeutralGrainReference {
+    pub fn valid(&self) -> bool {
+        self.density.iter().all(|v| v.is_finite() && *v >= 0.)
+            && self.baseline.iter().all(|v| v.is_finite())
+            && self.amount.is_finite() && self.amount > 0. && self.amount <= 2.
+    }
+    /// Additional GPU storage while the grain stage is live. Admission must
+    /// include this 12 B/pixel original-log-RGB copy in addition to grain scratch.
+    pub fn workspace_bytes(width: u32, height: u32) -> Option<u64> {
+        u64::from(width).checked_mul(u64::from(height))?.checked_mul(12)
+    }
+}
+
 /// Explicit digital transport when film or paper is omitted. Not a stock profile.
 #[derive(Clone, Copy, Debug)]
 pub struct NeutralMediaGpuParams {
+    pub grain_reference: Option<NeutralGrainReference>,
     pub film_omitted: bool,
     pub paper_omitted: bool,
     /// False for positive-film direct scanning, which keeps spectral scanning.
@@ -276,6 +298,7 @@ impl NeutralMediaGpuParams {
     pub fn valid(&self) -> bool {
         let gpu_finite=|v:f64|v.is_finite() && (v as f32).is_finite();
         if !self.film_omitted && !self.paper_omitted {return false;}
+        if self.grain_reference.is_some_and(|g| !self.film_omitted || !g.valid()) { return false; }
         if self.negative_readout && (self.film_omitted || !self.paper_omitted) {return false;}
         if self.film_omitted && !self.paper_omitted &&
             (!gpu_finite(self.paper_gray_log) || !gpu_finite(self.paper_log_min) || !gpu_finite(self.paper_log_max) || (self.paper_log_min as f32) >= (self.paper_log_max as f32) || self.paper_gain.iter().any(|v|!gpu_finite(*v)||*v<0.)) {return false;}
@@ -816,7 +839,20 @@ mod density_capture_tests {
 #[cfg(test)]
 mod neutral_media_contract_tests {
     use super::NeutralMediaGpuParams;
-    fn neutral()->NeutralMediaGpuParams {NeutralMediaGpuParams{film_omitted:true,paper_omitted:true,negative_readout:false,paper_gain:[1.;3],paper_gray_log:0.,paper_log_min:-4.,paper_log_max:2.,negative_min:[0.;3],negative_range:[1.;3],negative_gamma:[1.;3]}}
+    fn neutral()->NeutralMediaGpuParams {NeutralMediaGpuParams{grain_reference:None,film_omitted:true,paper_omitted:true,negative_readout:false,paper_gain:[1.;3],paper_gray_log:0.,paper_log_min:-4.,paper_log_max:2.,negative_min:[0.;3],negative_range:[1.;3],negative_gamma:[1.;3]}}
+    #[test]
+    fn donor_reference_is_explicit_finite_and_budgeted() {
+        let mut m=neutral();
+        m.grain_reference=Some(super::NeutralGrainReference {density:[1.;3],baseline:[1.;3],amount:1.});
+        assert!(m.valid());
+        assert_eq!(super::NeutralGrainReference::workspace_bytes(2048,1365),Some(2048*1365*12));
+        m.grain_reference.as_mut().unwrap().amount=0.;assert!(!m.valid());
+        m.grain_reference.as_mut().unwrap().amount=f32::NAN;assert!(!m.valid());
+        m.grain_reference.as_mut().unwrap().amount=1.;
+        m.grain_reference.as_mut().unwrap().density[0]=f32::INFINITY;assert!(!m.valid());
+        m.grain_reference.as_mut().unwrap().density[0]=1.;
+        m.film_omitted=false;assert!(!m.valid());
+    }
     #[test]
     fn digital_bridge_modes_are_explicit_and_validated() {
         let mut m=neutral();assert!(m.valid());

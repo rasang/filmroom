@@ -6,6 +6,7 @@ import android.graphics.ColorFilter
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 
@@ -39,8 +40,11 @@ class NoFilmArtwork : Drawable() {
     }
     override fun draw(canvas: Canvas) {
         val save = canvas.save()
-        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-        canvas.scale(bounds.width() / 240f, bounds.height() / 240f)
+        val visible=RectF().also { outline.computeBounds(it,true);it.inset(-stroke.strokeWidth/2,-stroke.strokeWidth/2) }
+        val scale=minOf(bounds.width(),bounds.height())*.75f/maxOf(visible.width(),visible.height())
+        canvas.translate(bounds.exactCenterX(),bounds.exactCenterY())
+        canvas.scale(scale,scale)
+        canvas.translate(-visible.centerX(),-visible.centerY())
         canvas.drawPath(outline, stroke)
         canvas.restoreToCount(save)
     }

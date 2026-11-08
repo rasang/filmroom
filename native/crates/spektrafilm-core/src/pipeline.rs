@@ -146,6 +146,7 @@ pub struct Pipeline {
     pub film: Profile,
     pub print: Profile,
     pub params: RuntimeParams,
+    pub donor_grain: Option<Arc<crate::donor_grain::DonorGrain>>,
     omitted_calibration: Option<Arc<omitted::Calibration>>,
     /// Shared immutable front data; the rest of this pipeline is recalibrated.
     spectral: Arc<crate::prepared_spectral::PreparedSpectral>,
@@ -542,6 +543,7 @@ impl Pipeline {
             print,
             params,
             omitted_calibration: None,
+            donor_grain: None,
             spectral: Arc::new(crate::prepared_spectral::PreparedSpectral::without_lut(front_illuminant)),
             film_log_front_identity: None,
             print_exposure_factor: 1.0,
@@ -810,6 +812,7 @@ impl Pipeline {
             print,
             params,
             omitted_calibration: None,
+            donor_grain: None,
             spectral,
             film_log_front_identity,
             print_exposure_factor: calibration.print_exposure_factor,
@@ -2125,7 +2128,7 @@ impl Pipeline {
         if g.active {
             if g.sublayers_active {
                 let pixel_area = pitch_um * pitch_um;
-                if let Some(sl) = build_grain_sublayers(&self.film, g, pixel_area, pitch_um) {
+                if let Some(sl) = build_grain_sublayers(self.donor_grain.as_ref().map_or(&self.film,|d|&d.profile), g, pixel_area, pitch_um) {
                     let max_od = sl.sl_params.iter().map(|p| p[1] as f64).fold(0.0, f64::max);
                     let dye_sigma = if g.blur_dye_clouds_um > 0.4 { g.blur_dye_clouds_um as f64 * max_od.sqrt() } else { 0.0 };
                     radius += fir((g.blur as f64).hypot(dye_sigma));
@@ -2459,6 +2462,7 @@ impl Pipeline {
                 negative_min:bridge.map_or([0.;3],|b|b.minimum),
                 negative_range:bridge.map_or([1.;3],|b|std::array::from_fn(|i|b.maximum[i]-b.minimum[i])),
                 negative_gamma:bridge.map_or([1.;3],|b|b.gamma),
+                grain_reference:self.donor_grain.as_ref().filter(|_|self.params.film_render.grain.active && self.params.film_render.grain.amount>0.).map(|d|spektrafilm_gpu::NeutralGrainReference{density:d.density.map(|x|x as f32),baseline:d.baseline(&self.params.film_render.grain).map(|x|x as f32),amount:self.params.film_render.grain.amount as f32}),
             }
         });
         if neutral_media.as_ref().is_some_and(|m|m.paper_omitted && (m.film_omitted || m.negative_readout)) {
@@ -2648,7 +2652,8 @@ impl Pipeline {
         // `apply_grain_to_density`. The GPU uses normal-approximation
         // sampling; CPU does the same whenever λ > 30 / var > 9, which is
         // the typical regime for ≥ 1 MP images.
-        let grain = if self.params.film_render.grain.active {
+        let grain = if self.params.film_render.grain.active && self.params.film_render.grain.amount > 0. {
+            let grain_film=self.donor_grain.as_ref().map_or(&self.film,|d|&d.profile);
             // Honor the export chunking override (full-image physical
             // pitch) exactly like the CPU stages; falls back to input dims.
             let pix_um = self.params.camera.pixel_size_um_override.unwrap_or_else(|| {
@@ -2667,7 +2672,7 @@ impl Pipeline {
                 let particle_area = g.agx_particle_area_um2 * g.agx_particle_scale[c];
                 npp[c] = ((pixel_area as f64 / particle_area) / n_sub as f64) as f32;
             }
-            let film_curves_f32 = self.film.density_curves_f32();
+            let film_curves_f32 = grain_film.density_curves_f32();
             let norm_curves_f32 =
                 spektrafilm_model::density_curves::normalize_density_curves(&film_curves_f32);
             let dmax_curves = spektrafilm_model::density_curves::max_density(&norm_curves_f32);
@@ -2682,7 +2687,7 @@ impl Pipeline {
             // rejects the resident attempt when requested layer curves
             // are malformed or degenerate; no silent model switch.
             let sublayers = if g.sublayers_active {
-                Some(build_grain_sublayers(&self.film, g, pixel_area, pix_um)?)
+                Some(build_grain_sublayers(grain_film, g, pixel_area, pix_um)?)
             } else {
                 None
             };
@@ -3043,7 +3048,7 @@ mod prepared_streamed_tests {
             let filtered=spektrafilm_model::diffusion::apply_diffusion_filter_um(&raw,&pipe.params.enlarger.diffusion_filter.to_model(),pitch as f64);
             let actual=prepared.develop_print_raw_chunk(&filtered,&backend).unwrap();
             assert_eq!(actual.data,reference.data,"split print changed {family}");
-            let expected_rgb=prepared.scanning.process_unclipped(&reference);
+            let expected_rgb=prepared.scanning.as_ref().expect("physical scan fixture").process_unclipped(&reference);
             assert_eq!(prepared.scan_print_density_chunk_unclipped(&actual).unwrap().data,expected_rgb.data);
         }
     }

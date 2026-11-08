@@ -41,7 +41,7 @@ class AppBackupCodecHostTest {
         val unknownRecipe = noneRecipe.copy(snapshot=SavedPresetStore.snapshot(EditorState(filmStock="future_unknown",paperStock="none")))
         bad { AppBackupCodec.validateStocks(base.copy(recipes=listOf(unknownRecipe)),emptyCatalog) }
     }
-    @Test fun unknownVersionRejected() { val root=JSONObject(String(AppBackupCodec.encode(document())));root.put("version",2);bad{AppBackupCodec.decode(root)} }
+    @Test fun unknownVersionRejected() { val root=JSONObject(String(AppBackupCodec.encode(document())));root.put("version",99);bad{AppBackupCodec.decode(root)} }
     @Test fun duplicateKeysAndTrailingDataRejected() {
         bad{AppBackupCodec.read("{\"type\":\"a\",\"type\":\"b\"}".byteInputStream())}
         bad{AppBackupCodec.read((String(AppBackupCodec.encode(document()))+"{} ").byteInputStream())}
@@ -85,5 +85,24 @@ class AppBackupCodecHostTest {
         assertEquals(2,store.list().size)
         assertEquals(original,store.list().first())
         assertEquals("我的配方 (2)",store.list().last().name)
+    }
+
+    @Test fun zipAndLegacyJsonRoundTrip() {
+        val out=java.io.ByteArrayOutputStream();AppBackupCodec.writeZip(document(),out)
+        assertEquals(80,out.toByteArray()[0].toInt())
+        assertEquals(document().settings.toString(),AppBackupCodec.read(out.toByteArray().inputStream()).settings.toString())
+        val legacy=JSONObject(String(AppBackupCodec.encode(document()))).put("version",1).toString()
+        assertEquals(1,AppBackupCodec.read(legacy.byteInputStream()).recipes.size)
+    }
+    @Test fun zipRejectsTraversalUnexpectedDuplicateAndOversizedEntries() {
+        fun archive(vararg entries:Pair<String,ByteArray>):ByteArray {
+            val out=java.io.ByteArrayOutputStream();java.util.zip.ZipOutputStream(out).use { z->
+                entries.forEach { (name,bytes)->z.putNextEntry(java.util.zip.ZipEntry(name));z.write(bytes);z.closeEntry() }
+            };return out.toByteArray()
+        }
+        val valid=AppBackupCodec.encode(document())
+        bad{AppBackupCodec.read(archive("../backup.json" to valid).inputStream())}
+        bad{AppBackupCodec.read(archive("backup.json" to valid,"extra.jpg" to byteArrayOf(1)).inputStream())}
+        bad{AppBackupCodec.read(archive("backup.json" to ByteArray(AppBackupCodec.MAX_BYTES+1){32}).inputStream())}
     }
 }

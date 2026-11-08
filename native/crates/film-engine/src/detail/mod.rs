@@ -380,6 +380,7 @@ impl DetailContext {
             ));
         }
         let p = &config.params;
+        if p.film_stock=="none" && p.grain_amount>0. {return Err(DetailError::Unsupported("Independent donor grain uses whole-frame preview until ROI residual context is implemented".into()));}
         let print_fft = p.output_route == "print" && p.print_diffusion_filter != "off" && p.print_diffusion_strength > 0.;
         if p.checkpoint_directory.as_ref().map_or(false, |v|v.len()>1024) {
             return Err(DetailError::InvalidGeometry("Excessive detail metadata".into()));

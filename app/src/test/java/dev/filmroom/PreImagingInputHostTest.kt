@@ -35,6 +35,21 @@ class PreImagingInputHostTest {
         (if(direct)ByteBuffer.allocateDirect(values.size*4)else ByteBuffer.allocate(values.size*4)).order(ByteOrder.nativeOrder()).apply{values.forEach(::putFloat);rewind()}
     private fun read(file:File)=ByteBuffer.wrap(file.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().let{f->FloatArray(f.remaining()).also(f::get)}
     private fun write(file:File,values:FloatArray){val b=ByteBuffer.allocate(values.size*4).order(ByteOrder.LITTLE_ENDIAN);values.forEach(b::putFloat);file.writeBytes(b.array())}
+    @Test fun explicitZoomUsesRealHigherSamplesAndMatchesSameGridExport() {
+        val s=snapshot(1800,200);val values=data(s.sourceWidth,s.sourceHeight);val raster=Fixture()
+        assertTrue(maxOf(s.outputWidth,s.outputHeight)>1536)
+        val input=LinearPreview(s.sourceWidth,s.sourceHeight,buffer(values,true))
+        assertThrows(IllegalArgumentException::class.java){PreImagingInput.refinedPreview(null,input,s,raster)}
+        val dir=Files.createTempDirectory("zoom-composite").toFile()
+        try {
+            val original=File(dir,"original.rgb");write(original,values)
+            val composed=File(dir,"composed.rgb");PreImagingInput.file(original,composed,s,raster)
+            val zoom=PreImagingInput.zoomPreview(null,input,s,raster,null,2048)
+            assertEquals(s.outputWidth,zoom.width);assertEquals(s.outputHeight,zoom.height)
+            val pixels=zoom.buffer().asFloatBuffer();val actual=FloatArray(pixels.remaining()).also(pixels::get)
+            assertArrayEquals(read(composed),actual,0f)
+        } finally {dir.deleteRecursively()}
+    }
     @Test fun floatPreviewAndExportShareExactUpstreamPixelsAndKeepHdr(){
         val s=snapshot();val values=data(s.sourceWidth,s.sourceHeight);val raster=Fixture()
         val dir=Files.createTempDirectory("preimaging-input").toFile()

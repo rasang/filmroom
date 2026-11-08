@@ -88,6 +88,9 @@ impl PreviewSourceIdentity {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all="camelCase", deny_unknown_fields)]
 pub struct MobileParams {
+    /// Explicit optional zoom grid. Never changes the settled 1536 preview contract.
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub zoom_refinement_edge:Option<u32>,
     #[serde(skip_serializing_if="Option::is_none")]
     pub pre_imaging:Option<PreImaging>,
     #[serde(skip_serializing)]
@@ -155,7 +158,7 @@ pub struct MobileParams {
 
 }
 impl Default for MobileParams {
-    fn default() -> Self { Self { pre_imaging:None,preview_source:None,export_reuse_reserve_bytes:None,preview_metering:None,checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
+    fn default() -> Self { Self { zoom_refinement_edge:None,pre_imaging:None,preview_source:None,export_reuse_reserve_bytes:None,preview_metering:None,checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
 }
 impl MobileParams {
     pub fn parse(json: &str) -> Result<Self> {
@@ -167,6 +170,11 @@ impl MobileParams {
         p.validate()?; Ok(p)
     }
     pub fn validate(&self)->Result<()> {
+        if let Some(edge)=self.zoom_refinement_edge {
+            if !matches!(edge,2048|3072) || self.mode!="preview" || !self.use_gpu {
+                return Err(EngineError::new("INVALID_PARAMS","Zoom refinement requires an explicit 2048/3072 GPU preview grid"));
+            }
+        }
         if let Some(p)=&self.pre_imaging {p.validate(self)?;}
         if let Some(source)=&self.preview_source {source.validate()?;if self.mode!="preview"{return Err(EngineError::new("INVALID_PARAMS","Preview source identity cannot enter export"));}}
         if let Some(m)=&self.preview_metering {
@@ -191,11 +199,11 @@ impl MobileParams {
     }
     pub fn expanded_tile_pixel_budget(&self)->Result<u64> {
         self.validate()?;
-        Ok((((self.memory_budget_mi_b as u64)*1024*1024-MEMORY_FIXED_ESTIMATE_BYTES)/MEMORY_ESTIMATE_BYTES_PER_PIXEL).min(2_097_152))
+        Ok((((self.memory_budget_mi_b as u64)*1024*1024-MEMORY_FIXED_ESTIMATE_BYTES)/(MEMORY_ESTIMATE_BYTES_PER_PIXEL+if self.film_stock=="none" && self.grain_amount>0. {48}else{0})).min(2_097_152))
     }
     pub fn check_preview_budget(&self,pixels:u64)->Result<()> {
         if pixels>self.expanded_tile_pixel_budget()? {return Err(EngineError::new("MEMORY_BUDGET_TOO_SMALL","Preview exceeds its conservative native working-memory estimate; use a smaller explicit preview"));}
-        let per_pixel=MEMORY_ESTIMATE_BYTES_PER_PIXEL+if self.preview_source.is_some(){PREVIEW_CANDIDATE_BYTES_PER_PIXEL}else{0};
+        let per_pixel=MEMORY_ESTIMATE_BYTES_PER_PIXEL+if self.film_stock=="none" && self.grain_amount>0. {48}else{0}+if self.preview_source.is_some(){PREVIEW_CANDIDATE_BYTES_PER_PIXEL}else{0};
         if MEMORY_FIXED_ESTIMATE_BYTES+pixels*per_pixel>self.memory_budget_mi_b as u64*1024*1024 {
             return Err(EngineError::new("MEMORY_BUDGET_TOO_SMALL","Preview cache candidate exceeds its active working-memory estimate"));
         }
@@ -284,7 +292,7 @@ impl MobileParams {
             p.enlarger.y_filter_shift=self.print_yellow as f32;
         }
         if self.film_stock=="none" {
-            p.film_render.grain.active=false;p.film_render.dir_couplers.active=false;
+            p.film_render.dir_couplers.active=false;
             p.film_render.halation.active=false;p.film_render.halation.boost_ev=0.;
             p.settings.neutral_print_filters_from_database=false;
             p.enlarger.c_filter_neutral=0.;p.enlarger.m_filter_neutral=0.;p.enlarger.y_filter_neutral=0.;
@@ -366,7 +374,7 @@ pub struct ExportPlan {pub checkpoint_reserve_bytes:u64,pub width:u32,pub height
 pub fn plan_export(width:i32,height:i32,params:&MobileParams)->Result<ExportPlan>{
     params.validate()?;
     if let Some(p)=&params.pre_imaging {p.check_frame(width as u32,height as u32)?;}
-    if params.preview_source.is_some() || params.preview_metering.is_some(){return Err(EngineError::new("INVALID_PARAMS","Preview metering/source cannot be used for export"));}
+    if params.preview_source.is_some() || params.preview_metering.is_some() || params.zoom_refinement_edge.is_some(){return Err(EngineError::new("INVALID_PARAMS","Preview metering/source cannot be used for export"));}
     if width<=0||height<=0||width>40000||height>40000{return Err(EngineError::new("INVALID_DIMENSIONS","Export dimensions must be 1..40000"));}
     let pixels=(width as u64).checked_mul(height as u64).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Pixel count overflow"))?;
     let input_bytes=pixels.checked_mul(12).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Byte count overflow"))?;
@@ -612,6 +620,7 @@ fn refresh_cache_revision(engine:&Engine,params:&MobileParams)->Result<()> {
     for stock in [&params.film_stock,&params.paper_stock] {
         if stock != "none" {files.push(format!("profiles/{stock}.json"));}
     }
+    if params.film_stock=="none" && params.grain_amount>0. {files.push("profiles/kodak_portra_400.json".into());}
     files.push("luts/spectral_upsampling/irradiance_xy_tc.npy".into());
     files.push("filters/neutral_print_filters.json".into());
     for name in files {
@@ -746,6 +755,7 @@ fn preview_warnings()->Vec<&'static str> {vec!["Preview size is explicitly bound
 pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,params:&MobileParams)->Result<RenderOutput> {
     let bytes=required_bytes(width as i32,height as i32)?;
     params.validate()?;
+    if params.zoom_refinement_edge.is_some(){return Err(EngineError::new("INVALID_PARAMS","Zoom refinement requires the refined preview entry point"));}
     if let Some(p)=&params.pre_imaging {p.check_frame(width,height)?;}
     params.check_preview_budget(width as u64*height as u64)?;
     if input.len()!=bytes/4 {return Err(EngineError::new("INVALID_BUFFER","Input length mismatch"));}

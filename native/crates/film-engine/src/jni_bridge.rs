@@ -27,7 +27,7 @@ fn preview_ok_json(rendered:&mobile::RenderOutput,params:&mobile::MobileParams,w
     #[cfg(feature="resource-audit")]
     crate::resource_probe::observe_vec("jni_preview_output_f32", &rendered.pixels);
     // RESOURCE_PROBE_END
-    serde_json::json!({"ok":true,"schemaVersion":1,"nativeAbiRevision":2,"outputEncoding":encoding,"operation":"preview","stage":"complete","engine":"spektrafilm-rs-portable","backend":rendered.gpu.backend,"gpu":rendered.gpu,"precision":if rendered.gpu.backend=="wgpu" {"gpu-f32-cpu-f64-boundaries-f32-io"} else if cfg!(feature="precision-f64") {"f64-internal-f32-io"} else {"f32"},"width":width,"height":height,"elapsedMs":rendered.elapsed_ms,"previewCache":rendered.preview_cache,"meteredEv":rendered.metered_ev,"preparedSpectral":rendered.prepared_spectral,"warnings":rendered.warnings,"outputValid":true,"maxPixels":if rendered.refined_plan.is_some(){mobile::refined::MAX_EDGE as usize*mobile::refined::MAX_EDGE as usize}else{mobile::MAX_PIXELS},"refinedPlan":rendered.refined_plan,"memoryBudgetMiB":params.memory_budget_mi_b,"estimatedPeakNativeBytes":rendered.refined_plan.map(|p|p.estimated_peak_bytes).unwrap_or_else(||mobile::MEMORY_FIXED_ESTIMATE_BYTES+(width as u64)*(height as u64)*(mobile::MEMORY_ESTIMATE_BYTES_PER_PIXEL+if params.preview_source.is_some(){mobile::PREVIEW_CANDIDATE_BYTES_PER_PIXEL}else{0})),"effectiveParams":params}).to_string()
+    serde_json::json!({"ok":true,"schemaVersion":1,"nativeAbiRevision":2,"outputEncoding":encoding,"operation":"preview","stage":"complete","engine":"spektrafilm-rs-portable","backend":rendered.gpu.backend,"gpu":rendered.gpu,"precision":if rendered.gpu.backend=="wgpu" {"gpu-f32-cpu-f64-boundaries-f32-io"} else if cfg!(feature="precision-f64") {"f64-internal-f32-io"} else {"f32"},"width":width,"height":height,"elapsedMs":rendered.elapsed_ms,"previewCache":rendered.preview_cache,"meteredEv":rendered.metered_ev,"preparedSpectral":rendered.prepared_spectral,"warnings":rendered.warnings,"outputValid":true,"maxPixels":if rendered.refined_plan.is_some(){params.zoom_refinement_edge.unwrap_or(mobile::refined::MAX_EDGE) as usize*params.zoom_refinement_edge.unwrap_or(mobile::refined::MAX_EDGE) as usize}else{mobile::MAX_PIXELS},"refinedPlan":rendered.refined_plan,"memoryBudgetMiB":params.memory_budget_mi_b,"estimatedPeakNativeBytes":rendered.refined_plan.map(|p|p.estimated_peak_bytes).unwrap_or_else(||mobile::MEMORY_FIXED_ESTIMATE_BYTES+(width as u64)*(height as u64)*(mobile::MEMORY_ESTIMATE_BYTES_PER_PIXEL+if params.preview_source.is_some(){mobile::PREVIEW_CANDIDATE_BYTES_PER_PIXEL}else{0})),"effectiveParams":params}).to_string()
 }
 fn non_overlapping(a:usize,b:usize,n:usize)->bool {match (a.checked_add(n),b.checked_add(n)) {(Some(ae),Some(be))=>ae<=b || be<=a,_=>false}}
 /// True when `[a,a+a_len)` and `[b,b+b_len)` intersect. Unlike `non_overlapping`
@@ -270,9 +270,12 @@ fn render_bitmap(mut env:JNIEnv<'_>,handle:jlong,src:JObject<'_>,dst:JObject<'_>
     // RESOURCE_PROBE_END
     let started=Instant::now();let mut stage="validate_request";let mut progress_job=None;
     let result=catch_unwind(AssertUnwindSafe(||->Result<String> {
-        if refined {mobile::refined::required_bytes(width,height)?} else {mobile::required_bytes(width,height)?}; // reject oversize before any allocation
         let params=mobile::MobileParams::parse(&string(&mut env,&params)?)?;
-        if !refined {params.check_preview_budget((width as u64)*(height as u64))?;}
+        if refined {mobile::refined::required_bytes_for_params(width,height,&params)?} else {mobile::required_bytes(width,height)?}; // before pixel allocation
+        if !refined {
+            if params.zoom_refinement_edge.is_some(){return Err(EngineError::new("INVALID_PARAMS","Zoom refinement requires the refined preview entry point"));}
+            params.check_preview_budget((width as u64)*(height as u64))?;
+        }
         stage="acquire_handle";let engine=mobile::get(handle)?;
         let _guard=engine.render_lock.try_lock().map_err(|_|EngineError::new("ENGINE_BUSY","Only one render may run per handle"))?;
         let generation=engine.cancel_generation.load(Ordering::Acquire);
@@ -345,9 +348,12 @@ fn render_linearbitmap(mut env:JNIEnv<'_>,handle:jlong,input:JByteBuffer<'_>,dst
     // RESOURCE_PROBE_END
     let started=Instant::now();let mut stage="validate_request";let mut progress_job=None;
     let result=catch_unwind(AssertUnwindSafe(||->Result<String> {
-        let required=if refined {mobile::refined::required_bytes(width,height)?} else {mobile::required_bytes(width,height)?};
         let params=mobile::MobileParams::parse(&string(&mut env,&params)?)?;
-        if !refined {params.check_preview_budget((width as u64)*(height as u64))?;}
+        let required=if refined {mobile::refined::required_bytes_for_params(width,height,&params)?} else {mobile::required_bytes(width,height)?};
+        if !refined {
+            if params.zoom_refinement_edge.is_some(){return Err(EngineError::new("INVALID_PARAMS","Zoom refinement requires the refined preview entry point"));}
+            params.check_preview_budget((width as u64)*(height as u64))?;
+        }
         stage="acquire_handle";let engine=mobile::get(handle)?;
         let _guard=engine.render_lock.try_lock().map_err(|_|EngineError::new("ENGINE_BUSY","Only one render may run per handle"))?;
         let generation=engine.cancel_generation.load(Ordering::Acquire);
@@ -455,7 +461,7 @@ pub extern "system" fn Java_dev_filmroom_engine_NativeFilmBridge_nativeGetProgre
 }
 
 fn native_capabilities_json()->String {
-    serde_json::json!({"ok":true,"schemaVersion":1,"nativeAbiRevision":2,"previewStageCacheAbi":mobile::PREVIEW_STAGE_CACHE_ABI,"previewStageCandidateBytesPerPixel":mobile::PREVIEW_CANDIDATE_BYTES_PER_PIXEL,"refinedPreviewAbi":if cfg!(feature="adreno-gpu"){1}else{0},"refinedPreviewMaxEdge":mobile::refined::MAX_EDGE,"sharedPreviewMeteringAbi":1,"preImagingAbi":1,"preparedSpectralCacheAbi":1,"preparedSpectralCacheBudgetBytes":mobile::PREPARED_ASSET_BUDGET_BYTES,"sharedPreviewMeteringAlgorithm":mobile::PREVIEW_METERING_ALGORITHM,"previewRgba8":true,"bitmapPreview":cfg!(target_os="android"),"previewLinearBitmap":cfg!(target_os="android"),"gpuResidentApproximate":cfg!(feature="adreno-gpu"),"gpuAlgorithm":spektrafilm_gpu::RESIDENT_APPROXIMATION_VERSION,"fullResolutionExport":true,"boundedGpuWait":cfg!(feature="adreno-gpu"),"maxPreviewPixels":mobile::MAX_PIXELS}).to_string()
+    serde_json::json!({"ok":true,"schemaVersion":1,"nativeAbiRevision":2,"previewStageCacheAbi":mobile::PREVIEW_STAGE_CACHE_ABI,"previewStageCandidateBytesPerPixel":mobile::PREVIEW_CANDIDATE_BYTES_PER_PIXEL,"refinedPreviewAbi":if cfg!(feature="adreno-gpu"){1}else{0},"refinedPreviewMaxEdge":mobile::refined::MAX_EDGE,"zoomRefinedPreviewAbi":if cfg!(feature="adreno-gpu"){1}else{0},"zoomRefinedPreviewMaxEdge":mobile::refined::ZOOM_MAX_EDGE,"sharedPreviewMeteringAbi":1,"preImagingAbi":1,"preparedSpectralCacheAbi":1,"preparedSpectralCacheBudgetBytes":mobile::PREPARED_ASSET_BUDGET_BYTES,"sharedPreviewMeteringAlgorithm":mobile::PREVIEW_METERING_ALGORITHM,"previewRgba8":true,"bitmapPreview":cfg!(target_os="android"),"previewLinearBitmap":cfg!(target_os="android"),"gpuResidentApproximate":cfg!(feature="adreno-gpu"),"gpuAlgorithm":spektrafilm_gpu::RESIDENT_APPROXIMATION_VERSION,"fullResolutionExport":true,"boundedGpuWait":cfg!(feature="adreno-gpu"),"maxPreviewPixels":mobile::MAX_PIXELS}).to_string()
 }
 #[cfg(test)]
 #[test]
