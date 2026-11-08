@@ -13,15 +13,81 @@ internal object EffectTextures {
         val c=Canvas(b);c.scale(b.width/g.width,b.height/g.height)
         val p=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.argb((.52*255).roundToInt(),12,15,10);style=Paint.Style.STROKE;strokeWidth=g.stroke}
         val cx=g.width/2;val cy=g.height/2
-        val left=cx-g.frameWidth/2;val right=cx+g.frameWidth/2
-        val top=cy-g.frameHeight/2;val bottom=cy+g.frameHeight/2
-        val path=Path()
-        for(v in arrayOf(floatArrayOf(left,top,1f,1f),floatArrayOf(right,top,-1f,1f),floatArrayOf(left,bottom,1f,-1f),floatArrayOf(right,bottom,-1f,-1f))){
-            path.moveTo(v[0]+v[2]*g.arm,v[1]);path.lineTo(v[0],v[1]);path.lineTo(v[0],v[1]+v[3]*g.arm)
-        }
-        c.drawPath(path,p);c.drawCircle(cx,cy,g.radius,p)
-        path.reset();path.moveTo(cx-g.crossHalf,cy);path.lineTo(cx+g.crossHalf,cy);path.moveTo(cx,cy-g.crossHalf);path.lineTo(cx,cy+g.crossHalf);c.drawPath(path,p)
+        // Thin optical focusing-screen etching, not a painted target or plastic ring.
+        val outer=min(g.imageWidth,g.imageHeight)*.31f
+        val split=min(14f,outer*.32f)
+        p.color=Color.argb(100,10,12,9);p.strokeWidth=.38f
+        c.drawCircle(cx,cy,outer,p)
+        c.drawCircle(cx,cy,split,p)
+        if(EffectGeometry.opticalLayout(sourceAspect).portrait) c.drawLine(cx,cy-split,cx,cy+split,p)
+        else c.drawLine(cx-split,cy,cx+split,cy,p)
+        p.color=Color.argb(28,17,19,14);c.drawCircle(cx,cy,split*1.38f,p)
         return b
+    }
+    /** The shutter LCD and optical aperture-direct-readout are deliberately different materials. */
+    fun readout(width:Int,height:Int,sourceAspect:Float,reading:EffectCameraReadout):Bitmap {
+        val layout=EffectGeometry.opticalLayout(sourceAspect)
+        val w=layout.outerW;val h=w*height/width
+        val scale=min(3f,2048f/max(w,h))
+        val b=Bitmap.createBitmap(ceil(w*scale).toInt(),ceil(h*scale).toInt(),Bitmap.Config.ARGB_8888)
+        val c=Canvas(b);c.scale(b.width/w,b.height/h)
+        // Draw one landscape instrument strip, then rotate it with the camera housing.
+        // Clockwise rotation places the former top strip at the right (not over the photo).
+        val stripW=if(layout.portrait)h else w
+        if(layout.portrait){c.translate(w,0f);c.rotate(90f)}
+        val p=Paint(Paint.ANTI_ALIAS_FLAG)
+        val textH=min(9f,stripW*.03f);val top=(22f-textH)/2f
+        reading.shutter?.let { value ->
+            val cell=textH*.57f;val total=max(value.length*cell+5f,textH*4.5f)
+            val left=stripW*.32f-total/2f
+            p.shader=LinearGradient(0f,top,0f,top+textH+2f,intArrayOf(Color.rgb(118,123,105),Color.rgb(151,155,130)),null,Shader.TileMode.CLAMP)
+            c.drawRect(left,top-1f,left+total,top+textH+1f,p);p.shader=null
+            p.color=Color.rgb(18,24,20)
+            value.forEachIndexed { i,ch ->
+                val x=left+total-value.length*cell-2.5f+i*cell
+                if(ch in '0'..'9') sevenSegment(c,p,ch,x,top,cell*.82f,textH)
+                else {p.textSize=textH;p.typeface=Typeface.MONOSPACE;c.drawText(ch.toString(),x,top+textH*.85f,p)}
+            }
+        }
+        reading.aperture?.let { value ->
+            p.color=Color.rgb(185,181,148);p.textSize=textH+1f
+            p.typeface=Typeface.create("sans-serif",Typeface.ITALIC);p.textAlign=Paint.Align.CENTER
+            c.drawText(value,stripW*.53f,top+textH*.88f,p)
+        }
+        return b
+    }
+    private fun sevenSegment(c:Canvas,p:Paint,ch:Char,x:Float,y:Float,w:Float,h:Float) {
+        val active=arrayOf("abcdef","bc","abdeg","abcdg","bcfg","acdfg","acdefg","abc","abcdefg","abcdfg")[ch-'0']
+        val t=h*.09f;val gap=t*.7f
+        p.style=Paint.Style.STROKE;p.strokeWidth=t;p.strokeCap=Paint.Cap.BUTT
+        fun line(key:Char,x1:Float,y1:Float,x2:Float,y2:Float){if(key in active)c.drawLine(x+x1,y+y1,x+x2,y+y2,p)}
+        line('a',gap,0f,w-gap,0f);line('g',gap,h/2,w-gap,h/2);line('d',gap,h,w-gap,h)
+        line('f',0f,gap,0f,h/2-gap);line('e',0f,h/2+gap,0f,h-gap)
+        line('b',w,gap,w,h/2-gap);line('c',w,h/2+gap,w,h-gap)
+        p.style=Paint.Style.FILL
+    }
+    /** Small cached Gaussian texture, independent of export resolution and allocated only once. */
+    fun defocused(source:Bitmap):Bitmap {
+        val factor=min(1f,256f/max(source.width,source.height))
+        val w=max(1,(source.width*factor).roundToInt());val h=max(1,(source.height*factor).roundToInt())
+        val b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
+        Canvas(b).drawBitmap(source,null,Rect(0,0,w,h),Paint(Paint.FILTER_BITMAP_FLAG))
+        val pixels=IntArray(w*h);b.getPixels(pixels,0,w,0,0,w,h)
+        val radius=10;val kernel=FloatArray(21){exp(-((it-radius)*(it-radius))/24.5).toFloat()};val sum=kernel.sum();for(k in kernel.indices)kernel[k]/=sum
+        val tmp=IntArray(w*h);val out=IntArray(w*h)
+        fun pass(input:IntArray,output:IntArray,horizontal:Boolean) {
+            for(y in 0 until h)for(x in 0 until w) {
+                var r=0f;var g=0f;var bl=0f
+                for(k in -radius..radius) {
+                    val xx=if(horizontal)(x+k).coerceIn(0,w-1)else x
+                    val yy=if(horizontal)y else (y+k).coerceIn(0,h-1)
+                    val col=input[yy*w+xx];val weight=kernel[k+radius]
+                    r+=((col ushr 16)and 255)*weight;g+=((col ushr 8)and 255)*weight;bl+=(col and 255)*weight
+                }
+                output[y*w+x]=Color.rgb(r.roundToInt(),g.roundToInt(),bl.roundToInt())
+            }
+        }
+        pass(pixels,tmp,true);pass(tmp,out,false);b.setPixels(out,0,w,0,0,w,h);return b
     }
     fun leak():Bitmap {
         val b=Bitmap.createBitmap(480,325,Bitmap.Config.ARGB_8888);val c=Canvas(b)

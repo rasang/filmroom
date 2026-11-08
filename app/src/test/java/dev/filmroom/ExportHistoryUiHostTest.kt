@@ -32,6 +32,12 @@ class ExportHistoryUiHostTest {
   val box=all.filterIsInstance<CheckBox>().single();val hint=all.single{it.tag=="history-remember-hint"};assertFalse(box.isChecked);assertEquals(View.GONE,hint.visibility);box.isChecked=true;assertEquals(View.VISIBLE,hint.visibility);box.isChecked=false;assertEquals(View.GONE,hint.visibility)
   d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();assertFalse(called)
  }}
+ @Test fun rememberedScopeOnlyPreselectsAndStillNeedsPositiveButton(){language();Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
+  var result:ExportHistoryMode?=null
+  val d=showHistoryChoice(c.get(),ExportHistoryAction.SINGLE,false,1,ExportHistoryMode.RECORDS_AND_PHOTOS){mode,_->result=mode}
+  assertTrue(all(d.window!!.decorView).filterIsInstance<RadioButton>()[1].isChecked);assertNull(result)
+  d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(ExportHistoryMode.RECORDS_AND_PHOTOS,result)
+ }}
  @Test fun clearAndSingleUseDistinctTitlesCopyAndConfirmationInAllLanguages(){for(lang in listOf("zh","en","ja","ko")){language(lang);Robolectric.buildActivity(SettingsActivity::class.java).setup().use{c->
   val single=showHistoryChoice(c.get(),ExportHistoryAction.SINGLE,false){_,_->};val singleTitle=shadowOf(single).title.toString();val singleConfirm=single.getButton(AlertDialog.BUTTON_POSITIVE).text.toString();single.dismiss()
   val clear=showHistoryChoice(c.get(),ExportHistoryAction.CLEAR,false,3){_,_->};assertNotEquals(singleTitle,shadowOf(clear).title.toString());assertNotEquals(singleConfirm,clear.getButton(AlertDialog.BUTTON_POSITIVE).text.toString());assertTrue(all(clear.window!!.decorView).filterIsInstance<TextView>().any{it.text.toString()==HistoryText.PHOTO_MANY.text(c.get())});clear.dismiss()

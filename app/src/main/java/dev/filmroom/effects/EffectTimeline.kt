@@ -11,6 +11,13 @@ object EffectTimeline {
     const val OPTICAL_SLOW_HOLD_MS = 500L
     // Slow cover/settle remains 7 1/3 times normal; leak itself always keeps its 610 ms.
     fun opticalHoldMs(slow: Boolean) = if (slow) OPTICAL_SLOW_HOLD_MS else OPTICAL_HOLD_MS
+    /** Focus settles inside the existing opening hold, leaving the shutter/leak timing unchanged. */
+    fun focusDurationMs(slow:Boolean=false):Long = if(slow) 425L else 850L
+    fun focusProgress(timeMs:Long,slow:Boolean=false):Float {
+        val duration=focusDurationMs(slow).toFloat()
+        val u=(timeMs/duration).coerceIn(0f,1f)
+        return u*u*(3f-2f*u)
+    }
     fun opticalTransitionMs(slow: Boolean) = if (slow) 1650L else 225L
     data class State(val gain:Float=1f,val lamp:Float=0f,val bloom:Float=0f,val cool:Float=0f,
                      val spill:Float=0f,val cover:Float=0f,val settling:Float=0f,

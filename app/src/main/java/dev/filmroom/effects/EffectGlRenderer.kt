@@ -7,11 +7,11 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Owns only GL resources, never the input bitmaps. Call all methods with a current GLES2 context. */
-class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap) {
+class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap,private val readout:EffectCameraReadout = EffectCameraReadout()) {
     private var program=0
     private var marksWidth=0
     private var marksHeight=0
-    private val textures=IntArray(4)
+    private val textures=IntArray(7)
     private val vertices=ByteBuffer.allocateDirect(8*4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
         put(floatArrayOf(-1f,-1f,1f,-1f,-1f,1f,1f,1f));position(0)
     }
@@ -25,32 +25,57 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
             program=glCreateProgram();glAttachShader(program,vs);glAttachShader(program,fs);glLinkProgram(program)
             val ok=IntArray(1);glGetProgramiv(program,GL_LINK_STATUS,ok,0)
             check(ok[0]!=0) { "Effect shader link: ${glGetProgramInfoLog(program)}" }
-            glGenTextures(4,textures,0)
+            glGenTextures(7,textures,0)
             val overlay=if(kind==EffectKind.LIGHT_TABLE)EffectTextures.bloom(result)else EffectTextures.leak()
             val marks=Bitmap.createBitmap(1,1,Bitmap.Config.ARGB_8888)
-            try { listOf(source,result,overlay,marks).forEachIndexed { i,b ->
+            val defocused=if(kind==EffectKind.OPTICAL_LEAK)EffectTextures.defocused(source)else Bitmap.createBitmap(1,1,Bitmap.Config.ARGB_8888)
+            try { listOf(source,result,overlay,marks,marks,defocused,marks).forEachIndexed { i,b ->
                 glBindTexture(GL_TEXTURE_2D,textures[i])
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE)
                 GLUtils.texImage2D(GL_TEXTURE_2D,0,b,0)
             }
-            } finally { overlay.recycle();marks.recycle() }
+            } finally { overlay.recycle();marks.recycle();defocused.recycle() }
             check(glGetError()==GL_NO_ERROR) { "Effect texture upload failed" }
         } catch(t:Throwable) {release();throw t} finally {glDeleteShader(vs);if(fs!=0)glDeleteShader(fs)}
     }
-    fun draw(width:Int,height:Int,timeMs:Long,slow:Boolean=false) {
+    private var pageAspect=1f
+    private var pageLoaded=false
+    /** Adjacent film texture is used only for interactive browsing, never the exported animation. */
+    fun setLightTablePage(photo:Bitmap?){
+        check(kind==EffectKind.LIGHT_TABLE && program!=0)
+        pageLoaded=photo!=null
+        glActiveTexture(GL_TEXTURE6);glBindTexture(GL_TEXTURE_2D,textures[6])
+        if(photo!=null){
+            pageAspect=photo.width.toFloat()/photo.height
+            GLUtils.texImage2D(GL_TEXTURE_2D,0,photo,0)
+            check(glGetError()==GL_NO_ERROR){"Adjacent film texture upload failed"}
+        }else{
+            // Drop the adjacent full texture after cancellation, not merely hide it.
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,ByteBuffer.allocateDirect(4))
+        }
+    }
+    fun draw(width:Int,height:Int,timeMs:Long,slow:Boolean=false,pageOffset:Float=0f,pageDirection:Int=0) {
         check(program!=0);if(width<=0||height<=0)return
         glViewport(0,0,width,height);glDisable(GL_BLEND);glDisable(GL_DEPTH_TEST);glDisable(GL_SCISSOR_TEST)
         if(kind==EffectKind.OPTICAL_LEAK && (width!=marksWidth || height!=marksHeight)) {
             val marks=EffectTextures.marks(width,height,source.width.toFloat()/source.height)
             try {glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D,textures[3]);GLUtils.texImage2D(GL_TEXTURE_2D,0,marks,0)
                 check(glGetError()==GL_NO_ERROR){"Viewfinder marks upload failed"}
+                val panel=EffectTextures.readout(width,height,source.width.toFloat()/source.height,readout)
+                try { glActiveTexture(GL_TEXTURE4);glBindTexture(GL_TEXTURE_2D,textures[4]);GLUtils.texImage2D(GL_TEXTURE_2D,0,panel,0) } finally {panel.recycle()}
                 marksWidth=width;marksHeight=height
             } finally {marks.recycle()}
         }
         glUseProgram(program)
-        for(i in 0..3){glActiveTexture(GL_TEXTURE0+i);glBindTexture(GL_TEXTURE_2D,textures[i])}
+        for(i in 0..6){glActiveTexture(GL_TEXTURE0+i);glBindTexture(GL_TEXTURE_2D,textures[i])}
         glUniform1i(location("src"),0);glUniform1i(location("dst"),1);glUniform1i(location("overlay"),2);glUniform1i(location("marks"),3)
+        glUniform1i(location("pagePhoto"),6);glUniform1f(location("pageAspect"),pageAspect)
+        glUniform1f(location("pageOffset"),pageOffset);glUniform1f(location("pageDirection"),pageDirection.toFloat())
+        glUniform1f(location("pageLoaded"),if(pageLoaded)1f else 0f)
+        glUniform1f(location("pageActive"),if(pageDirection!=0)1f else 0f)
+        glUniform1i(location("readout"),4);glUniform1i(location("srcBlur"),5)
+        glUniform1f(location("focus"),EffectTimeline.focusProgress(timeMs,slow))
         glUniform1f(location("screenAspect"),width.toFloat()/height)
         glUniform1f(location("sourceAspect"),source.width.toFloat()/source.height)
         glUniform1f(location("sourceViewportAspect"),EffectGeometry.sourceViewportAspect(width,height,source.width.toFloat()/source.height))
@@ -66,7 +91,7 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         val a=glGetAttribLocation(program,"a");glEnableVertexAttribArray(a);vertices.position(0)
         glVertexAttribPointer(a,2,GL_FLOAT,false,0,vertices);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glDisableVertexAttribArray(a)
     }
-    fun release(){if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(4,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0}
+    fun release(){if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(7,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0;pageLoaded=false}
     private fun location(name:String)=uniforms.getOrPut(name){glGetUniformLocation(program,name)}
     private fun compile(type:Int,text:String):Int {
         val shader=glCreateShader(type);glShaderSource(shader,text);glCompileShader(shader)
@@ -79,8 +104,9 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         private val FRAGMENT="""
 precision highp float;
 varying vec2 p;
-uniform sampler2D src,dst,overlay,marks;
-uniform float screenAspect,sourceAspect,sourceViewportAspect,resultAspect,spill,showResult;
+uniform sampler2D src,dst,overlay,marks,readout,srcBlur,pagePhoto;
+uniform float pageAspect,pageOffset,pageDirection,pageLoaded,pageActive;
+uniform float screenAspect,sourceAspect,sourceViewportAspect,resultAspect,spill,showResult,focus;
 uniform int kind;
 uniform vec4 light,optical;
 uniform vec2 opticalPad,opticalLogicalSize;
@@ -90,10 +116,40 @@ vec2 contain(vec2 q,float viewportAspect,float imageAspect){
 }
 float inside(vec2 q){return step(0.,q.x)*step(q.x,1.)*step(0.,q.y)*step(q.y,1.);}
 vec3 photo(sampler2D tex,vec2 q){return mix(vec3(24./255.),texture2D(tex,clamp(q,0.,1.)).rgb,inside(q));}
+// Cached optically blurred source blends into the sharp source; no radius-sampling aliasing.
+vec3 focusedPhoto(vec2 uv,vec2 q){
+ float blur=1.-focus;
+ vec2 center=(q-.5)*opticalLogicalSize*(1.-2.*opticalPad);
+ float split=1.-smoothstep(13.,14.,length(center));
+ if(sourceAspect<1.) uv.y-=sign(center.x)*blur*.009*split;
+ else uv.x+=sign(center.y)*blur*.009*split;
+ return mix(photo(srcBlur,uv),photo(src,uv),focus);
+}
 float field(vec2 q,vec2 c,vec2 r){vec2 v=(q-c)/r;return exp(-dot(v,v));}
 float disk(float d){d=clamp(d,-1.,1.);return .5+(asin(d)+d*sqrt(max(0.,1.-d*d)))/3.14159265;}
 vec3 screen(vec3 a,vec3 b){return 1.-(1.-a)*(1.-clamp(b,0.,1.));}
 float rounded(vec2 uv,vec2 size,float radius){vec2 d=abs((uv-.5)*size)-(size*.5-radius);float sd=length(max(d,0.))+min(max(d.x,d.y),0.)-radius;return 1.-smoothstep(-.5,.5,sd);}
+// The light field is fixed in table coordinates, not glued to the moving film.
+float tableLightCoverage(vec2 point){
+ vec2 logical=vec2(420.,420./1.1124);
+ vec2 boardSize=logical*vec2(.93,.88);
+ vec2 innerSize=boardSize-10.;
+ vec2 q=(point-vec2(.5,.49))*logical;
+ vec2 d=abs(q)-(innerSize*.5-5.);
+ float sd=length(max(d,0.))+min(max(d.x,d.y),0.)-5.;
+ return 1.-smoothstep(-6.,6.,sd);
+}
+vec3 slidingFilm(vec3 background,sampler2D image,float aspect,float offset){
+ vec2 board=(p-vec2(offset,0.)-vec2(.035,.05))/vec2(.93,.88);
+ vec2 area=(board-vec2(.042,.067))/vec2(.916,.866);
+ vec2 uv=contain(area,screenAspect*.93/.88*.916/.866,aspect);
+ if(inside(area)>.5&&inside(uv)>.5){
+  // Ambient room light leaves the film visible after it leaves the diffuser.
+  float transmission=mix(.13,1.,tableLightCoverage(p));
+  return clamp(texture2D(image,uv).rgb*light.x*transmission,0.,1.);
+ }
+ return background;
+}
 void main(){
  if(kind==0){
   float roomRadius=length((p-vec2(.35,.15))/(vec2(.65,.85)*1.41421356));
@@ -123,7 +179,7 @@ void main(){
     c=mix(c,vec3(.65,.84,.90),light.w);
     vec2 area=(board-vec2(.042,.067))/vec2(.916,.866);
     vec2 uv=contain(area,screenAspect*.93/.88*.916/.866,resultAspect);
-    if(inside(area)>.5&&inside(uv)>.5){
+    if(pageActive<.5&&inside(area)>.5&&inside(uv)>.5){
      vec3 base=texture2D(dst,uv).rgb*light.x;
      c=clamp(base,0.,1.);
     }
@@ -134,10 +190,17 @@ void main(){
    c=screen(c,min(bloomSample.rgb*3.5,vec3(bloomSample.a))*light.z);
    // Inset glass rim highlights and bottom edge shade.
    vec2 bp=board*logical*vec2(.93,.88);
-   float topRim=(1.-smoothstep(.5,1.5,abs(bp.y-5.)))*step(5.,bp.x)*step(bp.x,logical.x*.93-5.);
+   // Soft ambient reflection when off; the lamp gently lifts it instead of a fixed white stripe.
+   float rimEnds=smoothstep(5.,14.,bp.x)*smoothstep(5.,14.,logical.x*.93-bp.x);
+   float topRim=(1.-smoothstep(0.,2.2,abs(bp.y-5.)))*rimEnds;
+   float rimStrength=mix(.025,.12,clamp(light.y,0.,1.));
    float bottomRim=(1.-smoothstep(.5,1.5,abs(bp.y-(logical.y*.88-5.))))*step(5.,bp.x)*step(bp.x,logical.x*.93-5.);
-   c=mix(c,vec3(1.,1.,.96),topRim*.23);c*=1.-bottomRim*.2;
+   c=mix(c,vec3(1.,1.,.96),topRim*rimStrength);c*=1.-bottomRim*.2;
    c=mix(room,c,boardMask);
+  }
+  if(pageActive>.5){
+   c=slidingFilm(c,dst,resultAspect,pageOffset);
+   if(pageLoaded>.5)c=slidingFilm(c,pagePhoto,pageAspect,pageOffset+pageDirection);
   }
   vec2 led=(p-vec2(.5+2.5/logical.x,.965-2.5/logical.y))*logical;
   float ledDistance=length(led);
@@ -156,25 +219,30 @@ void main(){
   vec2 pad=opticalPad;
   vec2 q=(p-pad)/(1.-2.*pad);
 
+  // Camera-space coordinates rotate with the portrait housing; image stays upright.
+  bool portrait=sourceAspect<1.;
+  vec2 cameraQ=portrait?vec2(q.y,1.-q.x):q;
   float cover=optical.x;float angle=cover*1.57079633;float projected=pow(sin(angle),1.27);
-  float edge=-.24+1.63*projected;float bow=.018*pow((q.x-.5)*2.,2.);
-  float boundary=edge-bow+.012*(q.x-.5);float radius=.075+.035*cos(angle);
-  float occult=disk((boundary-q.y)/radius);
+  float edge=-.24+1.63*projected;float bow=.018*pow((cameraQ.x-.5)*2.,2.);
+  float boundary=edge-bow+.012*(cameraQ.x-.5);float radius=.075+.035*cos(angle);
+  float occult=disk((boundary-cameraQ.y)/radius);
   // Shift in the viewfinder plane first, then contain the source without stretching.
-  vec2 uv=contain(q+vec2(0.,-cover*.018),sourceViewportAspect,sourceAspect);
-  vec3 distant=pow(photo(src,uv),vec3(2.2))*(1.-.17*cover);
-  float localY=(q.y+.2)/max(.15,edge+.2);vec2 plane=vec2((q.x-.5)/(1.+.08*(1.-projected))+.5,localY);
+  vec2 uv=contain(q+(portrait?vec2(cover*.018,0.):vec2(0.,-cover*.018)),sourceViewportAspect,sourceAspect);
+  vec3 distant=pow(focusedPhoto(uv,q),vec3(2.2))*(1.-.17*cover);
+  float localY=(cameraQ.y+.2)/max(.15,edge+.2);vec2 plane=vec2((cameraQ.x-.5)/(1.+.08*(1.-projected))+.5,localY);
   vec3 nearColor=vec3(.195,.193,.171)+field(plane,vec2(.60,.31),vec2(.65,.35))*vec3(.17,.15,.109)
    -field(plane,vec2(.47,.32),vec2(.16,.19))*vec3(.105,.095,.073)
    +field(plane,vec2(.24+.12*cover,.57),vec2(.21,.48))*vec3(.025,.027,.025);
-  nearColor*=1.-.21*exp(-pow((q.y-boundary+.065)/.11,2.));
+  nearColor*=1.-.21*exp(-pow((cameraQ.y-boundary+.065)/.11,2.));
   nearColor+=.012*optical.y*field(plane,vec2(.68,.38),vec2(.35,.5));
   color=pow(mix(distant,pow(max(nearColor,vec3(.005)),vec3(2.2)),occult),vec3(1./2.2));
   color*=1.-.36*pow(clamp(length((q-.5)*vec2(1.,.94))/.7,0.,1.),2.7);
   color+=(fract(sin(dot(floor(q*vec2(960.,640.)),vec2(12.9898,78.233)))*43758.5453)-.5)*.009;
   vec4 mark=texture2D(marks,clamp(q,0.,1.));
   color=color*(1.-mark.a)+mark.rgb;
-  color=mix(vec3(.0706,.0745,.0627),color,rounded(q,opticalLogicalSize*(1.-2.*pad),5.));
+  color=mix(vec3(.018,.020,.017),color,rounded(q,opticalLogicalSize*(1.-2.*pad),5.));
+  vec4 panel=texture2D(readout,p);
+  color=color*(1.-panel.a)+panel.rgb;
   float eyeHeight=opticalLogicalSize.y;
   float topEdge=1.-smoothstep(.5,1.5,p.y*eyeHeight);
   float bottomEdge=1.-smoothstep(1.5,2.5,(1.-p.y)*eyeHeight);

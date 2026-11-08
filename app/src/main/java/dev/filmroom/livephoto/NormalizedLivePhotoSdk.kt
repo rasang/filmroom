@@ -18,7 +18,7 @@ class NormalizedLivePhotoSdk(context: Context) {
     suspend fun recover() = withContext(Dispatchers.IO) { publisher.recoverInterrupted() }
 
     suspend fun convert(request: VideoToLiveRequest, accepted: ProfileSelection, cancelled: () -> Boolean = { false }, onProgress: (ConversionProgress) -> Unit = {}): ConversionResult = withContext(Dispatchers.IO) {
-        require(request.startMs == 0L && request.durationMs == 3000L && !request.keepAudio && request.saveToGallery)
+        require(request.startMs == 0L && request.durationMs == 3000L && request.keepAudio && request.saveToGallery)
         require(request.input.scheme == "file")
         val file = File(requireNotNull(request.input.path))
         require(file.canonicalFile.parentFile == app.cacheDir.canonicalFile && file.name.startsWith("effect-live-")) { "Only app-rendered private videos are accepted" }

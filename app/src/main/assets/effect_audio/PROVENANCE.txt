@@ -1,0 +1,29 @@
+Filmroom integrated audio tracks, revised 2026-11-08 after listening feedback.
+
+Focus confirmation: original Filmroom synthesized double tone, unchanged from beta18.
+Shutter recording: "Nikon F3 Film Camera Shutter Sound" by whoisbenjamin, Pixabay 236350.
+https://pixabay.com/sound-effects/film-special-effects-nikon-f3-film-camera-shutter-sound-236350/
+Source SHA256: b53604cdf616797b49f52067e8f016a411e17a90305f819727c17464c0a258ab
+Source interval: 1.824–2.045 seconds. Mono mix, peak 0.68, 1ms fade-in / 30ms fade-out.
+
+Light switch recording: "Light Switch" by SoundReality, Pixabay 156813.
+https://pixabay.com/sound-effects/film-special-effects-light-switch-156813/
+Source SHA256: 4f06caae742659ee94bb73291cc5cc47e5b6d6e15c9b292476fcaf747828fdb4
+Source interval: 0.036–0.250 seconds. Mono mix, peak 0.55, 1ms fade-in / 30ms fade-out.
+
+License: Pixabay Content License, reviewed 2026-11-08.
+https://pixabay.com/service/license-summary/
+https://pixabay.com/service/terms/
+Use here is integrated and synchronized within Filmroom's visual animations, not standalone stock distribution.
+Do not separately distribute the source recordings or this sound pack as a standalone download.
+Do not place the original source MP3s in the public GitHub repository. Keep private build inputs separately.
+No endorsement by Nikon or the recording authors is claimed. The focus beep is a creative addition, not an authentic F3 feature.
+
+Build: tools/effect-audio/generate-recorded.py with the two private source files.
+Generated outputs: 48kHz mono AAC-LC, three seconds each.
+Normal: focus 775–850ms; shutter starts 1200ms. Slow: focus 350–425ms; shutter starts 500ms.
+Light table: switch starts 1000ms. All playback paths use the same assets.
+
+2026-11-08 room-air bed: original deterministic synthesis, 80Hz high-pass/1800Hz low-pass,
+-52 dBFS RMS before 40ms endpoint fades. No mains hum, repeat-loop, extra effects,
+or foreground gain/trigger changes. Same bed mixed into all three tracks.

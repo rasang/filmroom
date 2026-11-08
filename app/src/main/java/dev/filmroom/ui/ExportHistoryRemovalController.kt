@@ -67,8 +67,8 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
         }
         if(snapshots.isEmpty()){toast(HistoryText.PROTECTED);return}
         val saved=preferences.get(action)
-        if(saved!=ExportHistoryMode.ASK){start(action,snapshots,saved==ExportHistoryMode.RECORDS_AND_PHOTOS);return}
-        chooser=showHistoryChoice(activity,action,snapshots.any{it.state==ExportJobState.FAILED},snapshots.size){mode,remember->
+        // A remembered mode is only a default, never consent for this deletion.
+        chooser=showHistoryChoice(activity,action,snapshots.any{it.state==ExportJobState.FAILED},snapshots.size,saved){mode,remember->
             if(remember){try{preferences.set(action,mode)}catch(_:Exception){toast(HistoryText.SAVE_FAILED);return@showHistoryChoice}}
             start(action,snapshots,mode==ExportHistoryMode.RECORDS_AND_PHOTOS)
         }.also{dialog->dialog.setOnDismissListener{if(chooser===dialog)chooser=null}}
@@ -164,7 +164,7 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
     }
 }
 
-internal fun showHistoryChoice(activity:ComponentActivity,action:ExportHistoryAction,hasFailures:Boolean,count:Int=1,onConfirm:(ExportHistoryMode,Boolean)->Unit):AlertDialog {
+internal fun showHistoryChoice(activity:ComponentActivity,action:ExportHistoryAction,hasFailures:Boolean,count:Int=1,initialMode:ExportHistoryMode=ExportHistoryMode.ASK,onConfirm:(ExportHistoryMode,Boolean)->Unit):AlertDialog {
     fun dp(n:Int)=(n*activity.resources.displayMetrics.density).toInt()
     fun label(key:HistoryText,size:Float)=TextView(activity).apply{text=key.text(activity);textSize=size;setTextColor(FilmroomPalette.muted);setPadding(0,dp(6),0,dp(6))}
     val body=LinearLayout(activity).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),dp(8),dp(24),dp(8))}
@@ -172,7 +172,7 @@ internal fun showHistoryChoice(activity:ComponentActivity,action:ExportHistoryAc
     body.addView(label(if(action==ExportHistoryAction.CLEAR)HistoryText.CLEAR_NOTE else HistoryText.SINGLE_NOTE,14f))
     val group=RadioGroup(activity);val only=View.generateViewId();val both=View.generateViewId()
     listOf(only to (if(action==ExportHistoryAction.CLEAR)HistoryText.ONLY_CLEAR else HistoryText.ONLY),both to HistoryText.BOTH).forEach{(key,copy)->group.addView(RadioButton(activity).apply{id=key;text=copy.text(activity);textSize=15f;minHeight=dp(48);setTextColor(FilmroomPalette.ink);buttonTintList=ColorStateList.valueOf(FilmroomPalette.accent)})}
-    group.check(only);body.addView(group)
+    group.check(if(initialMode==ExportHistoryMode.RECORDS_AND_PHOTOS)both else only);body.addView(group)
     if(hasFailures)body.addView(label(HistoryText.RETRY_WARNING,12f))
     val remember=CheckBox(activity).apply{text=HistoryText.REMEMBER.text(activity);textSize=14f;minHeight=dp(48);setTextColor(FilmroomPalette.ink);buttonTintList=ColorStateList.valueOf(FilmroomPalette.accent);tag="history-remember"}
     val hint=label(HistoryText.HINT,12f).apply{visibility=View.GONE;tag="history-remember-hint"}

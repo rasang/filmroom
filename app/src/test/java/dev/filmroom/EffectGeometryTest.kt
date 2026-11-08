@@ -7,11 +7,12 @@ class EffectGeometryTest {
  @Test fun wholeBezelMatchesPortraitLandscapeSquare() {
   for(a in listOf(.6f,1f,1.6666666f,.05f,20f)) {
    val l=EffectGeometry.opticalLayout(a)
-   assertEquals(a,(l.outerW-20)/(l.outerH-20),.00001f)
-   assertEquals(10f,l.padX*l.outerW,.000001f);assertEquals(10f,l.padY*l.outerH,.000001f)
+   val px=if(a<1f)22f else 10f; val py=if(a<1f)10f else 22f
+   assertEquals(a,(l.outerW-2*px)/(l.outerH-2*py),.00001f)
+   assertEquals(px,l.padX*l.outerW,.000001f);assertEquals(py,l.padY*l.outerH,.000001f)
    assertEquals(l.outerW/l.outerH,EffectGeometry.sceneAspect(EffectKind.OPTICAL_LEAK,a),0f)
    assertEquals(1.1124f,EffectGeometry.sceneAspect(EffectKind.LIGHT_TABLE,a),0f)
-   assertTrue(if(a<1)l.outerW<l.outerH else if(a>1)l.outerW>l.outerH else l.outerW==l.outerH)
+   assertEquals(2*py,l.outerH-(if(a>=1f)400f/a else 400f),.0001f)
   }
  }
  @Test fun containPreservesShapeAndAllFourEdgesAtPreviewAndEncoderSizes() {

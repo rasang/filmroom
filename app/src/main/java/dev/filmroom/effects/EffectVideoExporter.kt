@@ -1,5 +1,6 @@
 package dev.filmroom.effects
 
+import dev.filmroom.diagnostics.*
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -16,7 +17,7 @@ import java.util.concurrent.CancellationException
 import kotlin.math.ceil
 import kotlin.math.max
 
-/** Native, silent H.264 export. Invoke on a worker thread; bitmaps remain owned by the caller. */
+/** Native H.264 + AAC effect export. Invoke on a worker thread; bitmaps remain owned by the caller. */
 object EffectVideoExporter {
     private const val FPS = 30
     private const val MIME = "video/avc"
@@ -27,35 +28,64 @@ object EffectVideoExporter {
         slow: Boolean = false, privateOutput: java.io.File? = null,
         quality: EffectExportQuality = EffectExportQuality.ORIGINAL,
         requestedSize: EffectExportSize? = null,
-        onResolution: (EffectExportReport) -> Unit = {}
-    ): Uri {
+        onResolution: (EffectExportReport) -> Unit = {},
+        readout: EffectCameraReadout = EffectCameraReadout()
+    ): Uri = EffectExportLog.trace(EffectExportScope.VIDEO) { log ->
         val requested = requestedSize ?: EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
         val available = EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
         var failure: Exception? = null
         var attempts = 0
         val tried=mutableSetOf<String>()
-        for(size in EffectExportResolution.candidates(requested,available,EffectExportResolution.budgetEdge(Runtime.getRuntime().maxMemory()))) {
-            for(choice in encoders(size.width,size.height)) {
+        val budget=EffectExportResolution.budgetEdge(Runtime.getRuntime().maxMemory())
+        log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.START,
+            if(available.longEdge<requested.longEdge)EffectExportReason.INPUT_RESOLUTION_LIMIT else EffectExportReason.NONE,
+            requestedWidth=requested.width,requestedHeight=requested.height,
+            availableWidth=available.width,availableHeight=available.height,budgetEdge=budget))
+        for(size in EffectExportResolution.candidates(requested,available,budget)) {
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.CANDIDATE,
+                if(budget<minOf(requested.longEdge,available.longEdge))EffectExportReason.HEAP_EDGE_CAP else EffectExportReason.NONE,
+                requestedWidth=requested.width,requestedHeight=requested.height,width=size.width,height=size.height,budgetEdge=budget))
+            val choices=encoders(size.width,size.height,log)
+            if(choices.isEmpty())log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.CODEC_REJECTED,
+                EffectExportReason.NO_ENCODER_FOR_SIZE,width=size.width,height=size.height))
+            for(choice in choices) {
                 if(!tried.add("${choice.name}:${choice.width}x${choice.height}"))continue
                 if(cancelled() || Thread.currentThread().isInterrupted) throw CancellationException("Video export cancelled")
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.ATTEMPT_START,
+                    requestedWidth=requested.width,requestedHeight=requested.height,width=choice.width,height=choice.height,
+                    codecIndex=choice.index,attempt=attempts+1))
+                log.failureReason=EffectExportReason.NONE
                 try {
-                    val uri = attempt(context,kind,source,result,onProgress,cancelled,slow,privateOutput,choice)
+                    val uri = attempt(context,kind,source,result,onProgress,cancelled,slow,privateOutput,choice,log,readout)
+                    log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.VIDEO_SAVED,
+                        requestedWidth=requested.width,requestedHeight=requested.height,width=choice.width,height=choice.height,
+                        availableWidth=available.width,availableHeight=available.height,codecIndex=choice.index,attempt=attempts+1))
                     runCatching { onResolution(EffectExportReport(requested,EffectExportSize(choice.width,choice.height),
                         (available.longEdge < requested.longEdge), (attempts > 0))) }
-                    return uri
+                    return@trace uri
                 } catch(e: CancellationException) { throw e }
                   catch(e: SecurityException) { throw e }
-                  catch(e: OutOfMemoryError) { failure=IOException("Export memory budget exceeded",e); attempts++ }
-                  catch(e: Exception) { failure=e; attempts++ }
+                  catch(e: OutOfMemoryError) { logFailure(log,e,choice,attempts+1); failure=IOException("Export memory budget exceeded",e); attempts++ }
+                  catch(e: Exception) { logFailure(log,e,choice,attempts+1); failure=e; attempts++ }
             }
         }
         throw IOException("No usable H.264 export size on this device",failure)
     }
 
-    private data class EncoderChoice(val name:String,val width:Int,val height:Int,val bitrate:Int)
+    private fun logFailure(log:EffectExportLog,error:Throwable,choice:EncoderChoice,attempt:Int) {
+        log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.ATTEMPT_FAILED,
+            if(log.failureReason!=EffectExportReason.NONE)log.failureReason else EffectExportLog.reason(error),log.step,
+            width=choice.width,height=choice.height,codecIndex=choice.index,attempt=attempt,
+            codecErrorCode=(error as? MediaCodec.CodecException)?.errorCode))
+    }
+    private data class EncoderChoice(val name:String,val width:Int,val height:Int,val bitrate:Int,val index:Int)
     private fun attempt(context: Context, kind: EffectKind, source: Bitmap, result: Bitmap,
         onProgress: (Float) -> Unit, cancelled: () -> Boolean, slow: Boolean,
-        privateOutput: java.io.File?, choice:EncoderChoice): Uri {
+        privateOutput: java.io.File?, choice:EncoderChoice, log:EffectExportLog, readout:EffectCameraReadout): Uri {
+        fun failed(reason:EffectExportReason,message:String):Nothing {
+            log.failureReason=reason
+            throw IOException(message)
+        }
         fun checkCancelled() {
             if (Thread.currentThread().isInterrupted || cancelled()) throw CancellationException("Video export cancelled")
         }
@@ -81,21 +111,33 @@ object EffectVideoExporter {
         var input: android.view.Surface? = null
         var egl: EffectEncoderEgl? = null
         var renderer: EffectGlRenderer? = null
+        var audio: EffectAudioTrack? = null
+        var audioTrack = -1
         var renderSource: Bitmap? = null
         var renderResult: Bitmap? = null
         try {
+            log.step=EffectExportStep.CREATE_CODEC
             val encoder = MediaCodec.createByCodecName(choice.name).also { codec = it }
+            log.step=EffectExportStep.CONFIGURE_CODEC
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            log.step=EffectExportStep.CREATE_SURFACE
             input = encoder.createInputSurface()
+            log.step=EffectExportStep.CREATE_EGL
             egl = EffectEncoderEgl(input!!)
             egl.makeCurrent()
+            log.step=EffectExportStep.QUERY_GL_LIMITS
             val limits = IntArray(1)
             android.opengl.GLES20.glGetIntegerv(android.opengl.GLES20.GL_MAX_TEXTURE_SIZE,limits,0)
             val viewportLimits = IntArray(2)
             android.opengl.GLES20.glGetIntegerv(android.opengl.GLES20.GL_MAX_VIEWPORT_DIMS,viewportLimits,0)
+            val glUnsupported=width>viewportLimits[0] || height>viewportLimits[1] || maxOf(width,height)>limits[0]
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.GL_LIMITS,
+                if(glUnsupported)EffectExportReason.GL_LIMIT else EffectExportReason.NONE,log.step,
+                width=width,height=height,codecIndex=choice.index,textureLimit=limits[0],
+                viewportWidth=viewportLimits[0],viewportHeight=viewportLimits[1]))
             // Reject this size and retry lower rather than stretch a silently downscaled texture.
             if (width>viewportLimits[0] || height>viewportLimits[1] || maxOf(width,height)>limits[0]) {
-                throw IOException("GL texture or viewport size unsupported")
+                failed(EffectExportReason.GL_LIMIT,"GL texture or viewport size unsupported")
             }
             fun fitted(bitmap: Bitmap): Bitmap {
                 val edge=maxOf(width,height)
@@ -103,14 +145,18 @@ object EffectVideoExporter {
                 return if(scale>=1.0)bitmap else Bitmap.createScaledBitmap(bitmap,
                     (bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
             }
+            log.step=EffectExportStep.PREPARE_TEXTURES
             renderSource=fitted(source)
             renderResult=if(source===result)renderSource else fitted(result)
             checkCancelled()
-            renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!)
+            renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!,readout)
+            log.step=EffectExportStep.INITIALIZE_RENDERER
             renderer.initialize()
+            log.step=EffectExportStep.START_CODEC
             encoder.start()
             codecStarted = true
             checkCancelled()
+            log.step=EffectExportStep.OPEN_OUTPUT
             val writer = if (privateOutput != null) {
                 require(privateOutput.parentFile?.canonicalFile == context.cacheDir.canonicalFile) { "Private video must be in app cache" }
                 check(privateOutput.createNewFile()) { "Private video output already exists" }
@@ -122,28 +168,31 @@ object EffectVideoExporter {
                     put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
                     put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Filmroom")
                     put(MediaStore.Video.Media.IS_PENDING, 1)
-                }) ?: throw IOException("Cannot create video")
-                descriptor = resolver.openFileDescriptor(output!!, "w") ?: throw IOException("Cannot open video")
+                }) ?: failed(EffectExportReason.OUTPUT_CREATE_FAILED,"Cannot create video")
+                descriptor = resolver.openFileDescriptor(output!!, "w") ?: failed(EffectExportReason.OUTPUT_OPEN_FAILED,"Cannot open video")
                 MediaMuxer(descriptor!!.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             }.also { muxer = it }
+            audio = EffectAudioTrack(context,kind,slow)
             var track = -1
             var eosSeen = false
             var samples = 0
             val info = MediaCodec.BufferInfo()
             fun drain(waitForEnd: Boolean) {
+            log.step=EffectExportStep.DRAIN
                 val deadline = SystemClock.elapsedRealtime() + if (waitForEnd) 15_000 else 2_000
                 while (true) {
                     checkCancelled()
-                    if (SystemClock.elapsedRealtime() > deadline) throw IOException("Video encoder timed out")
+                    if (SystemClock.elapsedRealtime() > deadline) failed(EffectExportReason.ENCODER_TIMEOUT,"Video encoder timed out")
                     val index = encoder.dequeueOutputBuffer(info, if (waitForEnd) 10_000L else 0L)
                     when {
                         index == MediaCodec.INFO_TRY_AGAIN_LATER -> if (!waitForEnd) return
                         index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                            if (muxerStarted) throw IOException("Video format changed twice")
+                            if (muxerStarted) failed(EffectExportReason.ENCODER_FORMAT_CHANGED,"Video format changed twice")
                             val actualFormat=encoder.outputFormat
                             if(actualFormat.getInteger(MediaFormat.KEY_WIDTH)!=width || actualFormat.getInteger(MediaFormat.KEY_HEIGHT)!=height)
-                                throw IOException("Encoder changed the requested resolution")
+                                failed(EffectExportReason.ENCODER_SIZE_CHANGED,"Encoder changed the requested resolution")
                             track = writer.addTrack(actualFormat)
+                            audioTrack = writer.addTrack(audio!!.format)
                             writer.start()
                             muxerStarted = true
                         }
@@ -151,8 +200,8 @@ object EffectVideoExporter {
                             try {
                                 if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
                                 if (info.size > 0) {
-                                    if (!muxerStarted) throw IOException("Video format missing")
-                                    val buffer = encoder.getOutputBuffer(index) ?: throw IOException("Video buffer missing")
+                                    if (!muxerStarted) failed(EffectExportReason.ENCODER_FORMAT_MISSING,"Video format missing")
+                                    val buffer = encoder.getOutputBuffer(index) ?: failed(EffectExportReason.ENCODER_BUFFER_MISSING,"Video buffer missing")
                                     buffer.position(info.offset)
                                     buffer.limit(info.offset + info.size)
                                     writer.writeSampleData(track, buffer, info)
@@ -171,14 +220,22 @@ object EffectVideoExporter {
                 checkCancelled()
                 drain(false)
                 // Sample the same wall-clock time as preview; the final 2966 ms frame is already settled.
+            log.step=EffectExportStep.DRAW
                 renderer.draw(width, height, timelineTimeMs(frame), slow)
+            log.step=EffectExportStep.PRESENT
                 egl.present(presentationTimeNanos(frame))
                 drain(false)
                 onProgress((frame + 1).toFloat() / frameCount * .95f)
             }
+            log.step=EffectExportStep.SIGNAL_EOS
             encoder.signalEndOfInputStream()
             drain(true)
-            if (!eosSeen || samples == 0 || !muxerStarted) throw IOException("Video is incomplete")
+            if (!eosSeen || samples == 0 || !muxerStarted) failed(EffectExportReason.INCOMPLETE_VIDEO,"Video is incomplete")
+            log.step=EffectExportStep.FINALIZE
+            audio!!.writeTo(writer,audioTrack,::checkCancelled)
+            audio!!.close()
+            audio = null
+            log.step=EffectExportStep.FINALIZE
             writer.stop()
             muxerStarted = false
             writer.release()
@@ -186,14 +243,16 @@ object EffectVideoExporter {
             descriptor?.close()
             descriptor = null
             checkCancelled()
+            log.step=EffectExportStep.PUBLISH
             if (privateOutput == null && resolver.update(output!!, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null) != 1) {
-                throw IOException("Cannot publish video")
+                failed(EffectExportReason.OUTPUT_PUBLISH_FAILED,"Cannot publish video")
             }
             committed = true
             // Observer failures must not turn a published video into an apparent failed export.
             runCatching { onProgress(1f) }
             return privateOutput?.let(Uri::fromFile) ?: output!!
         } finally {
+            runCatching { audio?.close() }
             runCatching { renderer?.release() }
             if(renderSource!==source)renderSource?.recycle()
             if(renderResult!==result && renderResult!==renderSource)renderResult?.recycle()
@@ -221,21 +280,29 @@ object EffectVideoExporter {
                else even(1080.0 * aspect) to 1080
     }
 
-    private fun encoders(width: Int, height: Int): List<EncoderChoice> {
+    private fun encoders(width: Int, height: Int,log:EffectExportLog): List<EncoderChoice> {
         val result = mutableListOf<EncoderChoice>()
-        for (codec in MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos) {
+        for ((codecIndex,codec) in MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.withIndex()) {
             if (!codec.isEncoder || !codec.supportedTypes.any { it.equals(MIME, true) }) continue
-            val caps = runCatching { codec.getCapabilitiesForType(MIME) }.getOrNull() ?: continue
-            if (MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface !in caps.colorFormats) continue
-            val video = caps.videoCapabilities ?: continue
+            fun rejected(reason:EffectExportReason,w:Int=width,h:Int=height){log.record(EffectExportDiagnosticInfo(
+                log.scope,EffectExportEvent.CODEC_REJECTED,reason,width=w,height=h,codecIndex=codecIndex))}
+            val caps = runCatching { codec.getCapabilitiesForType(MIME) }.getOrNull()
+            if(caps==null){rejected(EffectExportReason.CODEC_CAPABILITIES_UNAVAILABLE);continue}
+            if (MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface !in caps.colorFormats){rejected(EffectExportReason.CODEC_NO_SURFACE);continue}
+            val video = caps.videoCapabilities
+            if(video==null){rejected(EffectExportReason.CODEC_NO_VIDEO_CAPABILITIES);continue}
             val aw = max(2, video.widthAlignment); val ah = max(2, video.heightAlignment)
             val w = width / aw * aw; val h = height / ah * ah
-            if (w<2 || h<2) continue
-            if (runCatching{video.areSizeAndRateSupported(w,h,FPS.toDouble())}.getOrDefault(false)) {
+            if (w<2 || h<2){rejected(EffectExportReason.CODEC_ALIGNMENT,w,h);continue}
+            val supported=runCatching{video.areSizeAndRateSupported(w,h,FPS.toDouble())}
+            if(supported.getOrDefault(false)) {
                 val bitrate=(w.toLong()*h*8).coerceIn(2_000_000L,100_000_000L).toInt()
                     .coerceIn(video.bitrateRange.lower,video.bitrateRange.upper)
-                result += EncoderChoice(codec.name,w,h,bitrate)
-            }
+                result += EncoderChoice(codec.name,w,h,bitrate,codecIndex)
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.CODEC_ACCEPTED,
+                    if(w!=width || h!=height)EffectExportReason.CODEC_ALIGNMENT else EffectExportReason.NONE,
+                    requestedWidth=width,requestedHeight=height,width=w,height=h,codecIndex=codecIndex))
+            } else rejected(if(supported.isFailure)EffectExportReason.CODEC_CAPABILITY_QUERY_FAILED else EffectExportReason.CODEC_SIZE_RATE_UNSUPPORTED,w,h)
         }
         return result
     }

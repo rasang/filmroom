@@ -14,3 +14,8 @@
 /native/target-android/
 /codecs/artifacts/
 /codecs/target/
+
+# Licensed recording-derived audio: generate locally; see docs/EFFECT_AUDIO_SETUP.md.
+/app/src/main/assets/effect_audio/*.m4a
+/app/src/main/assets/effect_audio/*.wav
+/app/src/main/assets/effect_audio/*.mp3

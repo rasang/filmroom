@@ -341,8 +341,8 @@ class ExportQueueActivity : ComponentActivity() {
             compoundDrawablePadding=dp(6)
         }
         private val effect=button("") { latest?.let { job ->
-            val names=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))arrayOf("观片台","取景器漏光")else arrayOf("Light table","Viewfinder light leak")
-            android.app.AlertDialog.Builder(this@ExportQueueActivity).setTitle(if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects").setItems(names){_,which->
+            val names=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))arrayOf("观片台","取景器")else arrayOf("Light table","Viewfinder")
+            android.app.AlertDialog.Builder(this@ExportQueueActivity).setTitle(if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects").setAdapter(dev.filmroom.effects.EffectPickerAdapter(this@ExportQueueActivity,names)){_,which->
                 startActivity(Intent(this@ExportQueueActivity,dev.filmroom.effects.PhotoEffectActivity::class.java)
                     .putExtra(dev.filmroom.effects.PhotoEffectActivity.KIND,if(which==0)"LIGHT_TABLE"else "OPTICAL_LEAK")
                     .putExtra(dev.filmroom.effects.PhotoEffectActivity.RESULT_URI,job.mediaUri)

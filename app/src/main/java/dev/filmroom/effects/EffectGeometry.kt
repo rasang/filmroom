@@ -2,12 +2,17 @@ package dev.filmroom.effects
 
 /** One logical layout shared by preview, video, source fitting, bezel and etched marks. */
 internal object EffectGeometry {
-    data class OpticalLayout(val outerW:Float,val outerH:Float,val padX:Float,val padY:Float)
+    data class OpticalLayout(val outerW:Float,val outerH:Float,val padX:Float,val padY:Float,val portrait:Boolean)
     fun opticalLayout(sourceAspect:Float):OpticalLayout {
         require(sourceAspect>0 && sourceAspect.isFinite())
         val imageW=if(sourceAspect>=1f)400f else 400f*sourceAspect
         val imageH=if(sourceAspect>=1f)400f/sourceAspect else 400f
-        return OpticalLayout(imageW+20f,imageH+20f,10f/(imageW+20f),10f/(imageH+20f))
+        // A portrait finder is a clockwise-rotated camera: its top readout is on the right.
+        // Use the final, already oriented/composed bitmap aspect, never raw EXIF orientation.
+        val portrait=sourceAspect<1f
+        val side=if(portrait)22f else 10f
+        val top=if(portrait)10f else 22f
+        return OpticalLayout(imageW+side*2,imageH+top*2,side/(imageW+side*2),top/(imageH+top*2),portrait)
     }
     fun sceneAspect(kind:EffectKind,sourceAspect:Float):Float =
         if(kind==EffectKind.LIGHT_TABLE)1.1124f else opticalLayout(sourceAspect).let{it.outerW/it.outerH}

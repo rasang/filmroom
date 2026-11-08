@@ -232,6 +232,7 @@ data class SafeInfo(
     val previewObservedElapsedMs: Long? = null,
     val encodedPayloadCacheHit:Boolean?=null, val encodedPayloadCacheBytes:Long?=null,
     val encodedPayloadSourceBackend:GpuBackend?=null,
+    val effectExport: EffectExportDiagnosticInfo? = null,
 ) {
     internal fun fields(): Map<String, String> = typedFields().mapValues { it.value.toString() }
 
@@ -253,6 +254,7 @@ data class SafeInfo(
         previewNativeCompleted?.let{put("previewNativeCompleted",it)}
         integer("width", width?.toLong(), 30_000, 1); integer("height", height?.toLong(), 30_000, 1)
         integer("durationMs", durationMs, 7L * 24 * 60 * 60 * 1000)
+        effectExport?.fields()?.let { putAll(it) }
         previewTiming?.fields()?.let { putAll(it) }
         detailTiming?.fields()?.let { putAll(it) }
         previewFailureStage?.let { put("previewFailureStage",it.name) }
@@ -448,6 +450,7 @@ data class SafeInfo(
             previewDisposition=fields["previewDisposition"]?.let{v->PreviewDisposition.entries.firstOrNull{it.name==v}},
             previewNativeCompleted=fields["previewNativeCompleted"]?.toBooleanStrictOrNull(),
             width = fields["width"]?.toIntOrNull(), height = fields["height"]?.toIntOrNull(),
+            effectExport=EffectExportDiagnosticInfo.parse(fields),
             previewTiming=PreviewTimingSnapshot.parse(fields),
             detailTiming=DetailTimingSnapshot.parse(fields),
             previewFailureStage=PreviewFailureStage.entries.firstOrNull { it.name==fields["previewFailureStage"] },

@@ -1,5 +1,6 @@
 package dev.filmroom.effects
 
+import dev.filmroom.diagnostics.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
@@ -18,7 +19,7 @@ object EffectLivePhotoExporter {
         val unsupported get() = selection.selectedProfile == null || status == SupportStatus.UNSUPPORTED
     }
     private fun request(input: Uri, gallery: String? = null, profile: LivePhotoProfile? = null, maxLongEdge: Int = 1080) = VideoToLiveRequest(
-        input = input, profile = profile, durationMs = 3000, coverOffsetMs = 2900, keepAudio = false,
+        input = input, profile = profile, durationMs = 3000, coverOffsetMs = 2900, keepAudio = true,
         maxLongEdge = maxLongEdge, allowExperimentalProfiles = true, targetGalleryPackage = gallery)
 
     suspend fun preflight(context: Context, gallery: String? = null): Preflight = withContext(Dispatchers.IO) {
@@ -37,7 +38,8 @@ object EffectLivePhotoExporter {
         cancelled: () -> Boolean = { false }, onProgress: (Float) -> Unit = {},
         quality: EffectExportQuality = EffectExportQuality.ORIGINAL,
         requestedSize: EffectExportSize? = null,
-        onResolution: (EffectExportReport) -> Unit = {}): ConversionResult {
+        onResolution: (EffectExportReport) -> Unit = {},
+        readout: EffectCameraReadout = EffectCameraReadout()): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO) { log ->
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
         check(exportLock.tryLock()) { "Live Photo export already running" }
         val app = context.applicationContext
@@ -56,7 +58,7 @@ object EffectLivePhotoExporter {
             withContext(Dispatchers.IO) {
                 EffectVideoExporter.export(app, kind, source, result,
                     onProgress = { onProgress(it * .75f) },
-                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it})
+                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it},readout=readout)
                 rendered = true
             }
             coroutine.ensureActive()
@@ -68,7 +70,16 @@ object EffectLivePhotoExporter {
             val actualSelection=sdk.resolve(actualRequest)
             originalRequest=originalRequest ?: requireNotNull(resolution).requested
             try {
-            return sdk.convert(actualRequest, actualSelection, cancelled) {
+            log.step=EffectExportStep.LIVE_PROBE
+            return@trace sdk.convert(actualRequest, actualSelection, cancelled) {
+                log.step=when(it.stage){
+                    ConversionStage.PROBING -> EffectExportStep.LIVE_PROBE
+                    ConversionStage.EXTRACTING_COVER -> EffectExportStep.COVER
+                    ConversionStage.PACKAGING -> EffectExportStep.LIVE_PACKAGE
+                    ConversionStage.VERIFYING -> EffectExportStep.LIVE_VERIFY
+                    ConversionStage.PUBLISHING -> EffectExportStep.LIVE_PUBLISH
+                    else -> log.step
+                }
                 onProgress(when(it.stage) {
                     ConversionStage.PROBING -> .76f
                     ConversionStage.EXTRACTING_COVER -> .80f
@@ -78,18 +89,29 @@ object EffectLivePhotoExporter {
                     ConversionStage.COMPLETE -> 1f
                     else -> .75f
                 })
-            }.also { resolution?.let { report -> runCatching { onResolution(report.copy(
+            }.also { resolution?.let { report ->
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.LIVE_SAVED,
+                    requestedWidth=requireNotNull(originalRequest).width,requestedHeight=requireNotNull(originalRequest).height,
+                    width=report.actual.width,height=report.actual.height))
+                runCatching { onResolution(report.copy(
                 requested=requireNotNull(originalRequest),fallback=report.fallback || coverRetried)) } } }
             } catch(error:CoverDecodeException) {
                 coroutine.ensureActive()
                 if(cancelled())throw CancellationException("Live Photo export cancelled")
-                val next=nextCoverAttempt(requireNotNull(resolution).actual) ?: throw error
+                val actual=requireNotNull(resolution).actual
+                val next=nextCoverAttempt(actual)
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.COVER_RETRY,
+                    if(next==null)EffectExportReason.COVER_RETRY_EXHAUSTED else EffectExportReason.COVER_DECODE_FAILED,
+                    EffectExportStep.COVER,requestedWidth=actual.width,requestedHeight=actual.height,
+                    width=next?.width,height=next?.height))
+                if(next==null)throw error
                 // SDK has not reached packaging/publication for this exception. Remove only our
                 // private normalized video, then render the smaller scene and retry its decoder.
                 check(video.delete() || !video.exists()) { "Cannot remove failed private Live Photo video" }
                 rendered=false;attemptSize=next;coverRetried=true
             }
             }
+            error("Unreachable Live export loop completion")
         } finally { withContext(NonCancellable + Dispatchers.IO) { if (rendered) video.delete() }; exportLock.unlock() }
     }
 
