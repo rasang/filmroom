@@ -152,7 +152,7 @@ object EffectVideoExporter {
             renderSource=fitted(source)
             renderResult=if(source===result)renderSource else fitted(result)
             checkCancelled()
-            renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!,readout)
+            renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!,readout,previewFinder=true)
             log.step=EffectExportStep.INITIALIZE_RENDERER
             renderer.initialize()
             motionSource?.reset()

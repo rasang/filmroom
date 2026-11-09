@@ -11,7 +11,7 @@ internal object EffectGeometry {
         val roundingBand=sourceWidth.toLong()+sourceHeight+resultWidth+resultHeight
         return cross>roundingBand
     }
-    /** Preview-only finder contained in the unchanged result canvas. Export geometry is untouched. */
+    /** Opening finder contained in the unchanged result canvas, shared by preview and video/Live export. */
     data class PreviewFinder(val scaleX:Float,val scaleY:Float,val rasterWidth:Int,val rasterHeight:Int,val aspect:Float)
     fun previewFinder(width:Int,height:Int,sourceAspect:Float):PreviewFinder {
         require(width>0 && height>0 && sourceAspect>0f && sourceAspect.isFinite())

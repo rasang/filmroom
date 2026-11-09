@@ -29,6 +29,7 @@ import java.io.File
 /** A durable task list, independent of the editor Activity and its preview engine. */
 class ExportQueueActivity : ComponentActivity() {
     private var renderedLanguage="zh"
+    private var effectEntry:dev.filmroom.effects.EffectPreviewEntry?=null
     private lateinit var archivedPhotoAccess:dev.filmroom.ui.ArchivedPhotoAccessUi
     @Volatile private var archiveRelinkStore:ExportJobStore?=null
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
@@ -145,7 +146,7 @@ class ExportQueueActivity : ComponentActivity() {
     }
     override fun onResume(){foregroundSince=previewWallClock();super.onResume();if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this))recreate();if(::scroll.isInitialized)scroll.post{cards.values.forEach{it.updateThumbnailVisibility()}}}
     override fun onPause(){finishCompletionAnimations();cards.values.forEach{it.pauseVisuals()};super.onPause()}
-    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)ExportContourCache.clear()}
+    override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){effectEntry?.close();effectEntry=null;ExportContourCache.clear()}}
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         archivedPhotoAccess=dev.filmroom.ui.ArchivedPhotoAccessUi(this,
@@ -222,7 +223,7 @@ class ExportQueueActivity : ComponentActivity() {
         super.onDestroy()
     }
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus && ::scroll.isInitialized)scroll.invalidate()}
-    override fun onStop(){finishRemovalAnimations();cards.values.forEach{it.pauseVisuals()};super.onStop()}
+    override fun onStop(){effectEntry?.close();effectEntry=null;finishRemovalAnimations();cards.values.forEach{it.pauseVisuals()};super.onStop()}
     override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);focusId=intent.getStringExtra(EXTRA_JOB_ID);focusId?.let{expandedIds.add(it)};queue?.jobs?.value?.let(::render)}
     override fun onSaveInstanceState(out:Bundle){
         historyFlow.save(out)
@@ -342,13 +343,13 @@ class ExportQueueActivity : ComponentActivity() {
         }
         private val effect=button("") { latest?.let { job ->
             val names=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))arrayOf("观片台","取景器")else arrayOf("Light table","Viewfinder")
+            effectEntry?.close()
+            val entry=dev.filmroom.effects.EffectPreviewEntry(this@ExportQueueActivity,job).also{effectEntry=it}
+            var selected=false
             android.app.AlertDialog.Builder(this@ExportQueueActivity).setTitle(if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects").setAdapter(dev.filmroom.effects.EffectPickerAdapter(this@ExportQueueActivity,names)){_,which->
-                startActivity(Intent(this@ExportQueueActivity,dev.filmroom.effects.PhotoEffectActivity::class.java)
-                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.KIND,if(which==0)"LIGHT_TABLE"else "OPTICAL_LEAK")
-                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.RESULT_URI,job.mediaUri)
-                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.SOURCE_URI,job.originalUri)
-                    .putExtra(dev.filmroom.effects.PhotoEffectActivity.JOB_ID,job.id))
-            }.show()
+                selected=true
+                entry.launch(if(which==0)dev.filmroom.effects.EffectKind.LIGHT_TABLE else dev.filmroom.effects.EffectKind.OPTICAL_LEAK)
+            }.setOnDismissListener{if(!selected)entry.close()}.show()
         }}.apply {
             tag="history-effects:${this@JobCard.id}"
             contentDescription=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects"

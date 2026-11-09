@@ -37,6 +37,7 @@ class PhotoEffectActivity : ComponentActivity() {
         const val SOURCE_URI="effect_source_uri"
         const val JOB_ID="effect_job_id"
         const val KIND="effect_kind"
+        internal const val PREPARED_ENTRY="effect_prepared_entry"
         internal const val SOURCE_PICKER_KEY="effect-source-photo"
         internal const val RESULT_PICKER_KEY="effect-result-photo"
     }
@@ -47,6 +48,8 @@ class PhotoEffectActivity : ComponentActivity() {
     private lateinit var replayButton:Button
     private lateinit var livePhotoButton:Button
     private lateinit var qualityButton:Button
+    @Volatile private var liveOriginalAudioEnabled=true
+    private var liveOriginalAudioSwitch:android.widget.Switch?=null
     private var selectedQuality=EffectExportQuality.ORIGINAL
     @Volatile private var selectedSlow=false
     private var preview:EffectPreview?=null
@@ -105,10 +108,6 @@ class PhotoEffectActivity : ComponentActivity() {
     private val sourcePicker=activityResultRegistry.register(SOURCE_PICKER_KEY,this,ActivityResultContracts.OpenDocument()){uri->
         if(uri!=null)selectPhoto(true,uri)
     }
-    private val originalPermission=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        // Recheck actual access (including partial grants); denial leaves the explicit reselection action available.
-        load(refreshLinks=true,autoPlay=true)
-    }
     private val resultPicker=activityResultRegistry.register(RESULT_PICKER_KEY,this,ActivityResultContracts.OpenDocument()){uri->
         if(uri!=null)selectPhoto(false,uri)
     }
@@ -143,10 +142,10 @@ class PhotoEffectActivity : ComponentActivity() {
             "View" to ("表示" to "보기"),
             "Open your gallery to view it" to ("ギャラリーを開いて確認してください" to "갤러리를 열어 확인하세요"),
             "Live Photo export failed. Retry or export a video" to ("Live Photoを書き出せませんでした。再試行してください" to "Live Photo 내보내기에 실패했습니다. 다시 시도하세요"),
-            "Allow photo access and retry" to ("写真へのアクセスを許可して再試行" to "사진 접근 허용 후 재시도"),
             "Original photo unavailable. Select it again." to ("元の写真にアクセスできません。選び直してください。" to "원본 사진에 접근할 수 없습니다. 다시 선택하세요."),
             "Exported photo unavailable. Select it again." to ("書き出した写真にアクセスできません。選び直してください。" to "내보낸 사진에 접근할 수 없습니다. 다시 선택하세요."),
             "This device could not display the effect" to ("この端末では効果を表示できません" to "이 기기에서 효과를 표시할 수 없습니다"),
+            "Live original audio" to ("Liveの元の音声" to "Live 원본 소리"),
             "No video player available" to ("動画を再生するアプリがありません" to "동영상 재생 앱이 없습니다")
         )
         val label=labels[en] ?: liveLabels[en]
@@ -158,6 +157,7 @@ class PhotoEffectActivity : ComponentActivity() {
     override fun attachBaseContext(base:android.content.Context){super.attachBaseContext(dev.filmroom.i18n.L10n.wrap(base))}
     override fun onCreate(state:Bundle?){
         super.onCreate(state)
+        liveOriginalAudioEnabled=EffectOriginalAudioPreference.read(this)
         kind=runCatching{EffectKind.valueOf(intent.getStringExtra(KIND).orEmpty())}.getOrDefault(EffectKind.LIGHT_TABLE)
         resultUri=state?.getString(RESULT_URI) ?: intent.getStringExtra(RESULT_URI)
         sourceUri=state?.getString(SOURCE_URI) ?: intent.getStringExtra(SOURCE_URI)
@@ -207,6 +207,22 @@ class PhotoEffectActivity : ComponentActivity() {
         status=TextView(this).apply{setTextColor(Palette.muted);textSize=14f;gravity=Gravity.CENTER;visibility=android.view.View.GONE;setPadding(0,dp(8),0,dp(12))};root.addView(status)
         qualityButton=EffectControls.button(this,qualityLabel(),"video",false){chooseQuality()}
         root.addView(qualityButton,LinearLayout.LayoutParams(-2,-2).apply{gravity=Gravity.CENTER_HORIZONTAL;bottomMargin=dp(8)})
+        if(kind==EffectKind.OPTICAL_LEAK) {
+            liveOriginalAudioSwitch=android.widget.Switch(this).apply {
+                text=t("Live 原声","Live original audio");setTextColor(Palette.ink)
+                isChecked=liveOriginalAudioEnabled
+                setPadding(dp(12),dp(4),dp(12),dp(4))
+                setOnCheckedChangeListener { button,enabled ->
+                    if(enabled==liveOriginalAudioEnabled)return@setOnCheckedChangeListener
+                    if(working||liveChecking||pageBusy){button.isChecked=liveOriginalAudioEnabled;return@setOnCheckedChangeListener}
+                    liveOriginalAudioEnabled=enabled
+                    EffectOriginalAudioPreference.write(this@PhotoEffectActivity,enabled)
+                    // Restart this preview so image and the retained shutter/ambience stay in sync.
+                    preview?.replay()
+                }
+            }
+            root.addView(liveOriginalAudioSwitch,LinearLayout.LayoutParams(-2,-2).apply{gravity=Gravity.CENTER_HORIZONTAL})
+        }
         val actions=EffectActionBar(this)
         replayButton=EffectControls.button(this,t("重播","Replay"),"replay"){preview?.replay()}.apply{isEnabled=false}
         exportButton=EffectControls.button(this,t("导出视频","Export video"),"video",false){if(working)cancelled.set(true)else export()}.apply{isEnabled=false}
@@ -316,14 +332,7 @@ class PhotoEffectActivity : ComponentActivity() {
         }
         prefetchJob=worker;prefetchWorkers.add(worker);worker.start()
     }
-    private suspend fun decodePage(savedRecord:dev.filmroom.export.ExportJob,edge:Int):EffectPagePhoto {
-        val resolved=if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){
-            dev.filmroom.io.OriginalPhotoRecovery.resolve(this@PhotoEffectActivity,savedRecord.originalUri)
-        }else null
-        val record=if(resolved!=null && resolved!=savedRecord.originalUri) {
-            withContext(Dispatchers.IO){checkNotNull(EffectPhotoAccess.recoverOriginal(
-                dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store,savedRecord.id,savedRecord.originalUri,resolved))}
-        }else savedRecord
+    private suspend fun decodePage(record:dev.filmroom.export.ExportJob,edge:Int):EffectPagePhoto {
         var output:Bitmap?=null;var input:Bitmap?=null;var motionFile:File?=null
         try {
             val composition=EffectSourceComposition.from(record)
@@ -534,28 +543,34 @@ class PhotoEffectActivity : ComponentActivity() {
         if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle()
     }
     private fun load(refreshLinks:Boolean=false,autoPlay:Boolean=false){
-        loadJob?.cancel();replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false;status.visibility=android.view.View.VISIBLE;status.text=t("加载照片…","Loading photo…")
+        loadJob?.cancel();replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false;status.visibility=android.view.View.VISIBLE;status.text=t("加载照片…","Loading photo…");if(intent.hasExtra(PREPARED_ENTRY))status.visibility=android.view.View.GONE
         loadJob=lifecycleScope.launch{
             var ownedOutput:Bitmap?=null;var ownedInput:Bitmap?=null;var ownedMotion:File?=null
             try {
-                var record=jobId?.let{id->withContext(Dispatchers.IO){runCatching{dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store.get(id)}.getOrNull()}}
+                val record=jobId?.let{id->withContext(Dispatchers.IO){runCatching{dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store.get(id)}.getOrNull()}}
+                val token=intent.getStringExtra(PREPARED_ENTRY)
+                intent.removeExtra(PREPARED_ENTRY)
+                val prepared=EffectEntryHandoff.take(token,record)
+                if(prepared!=null && kind==EffectKind.OPTICAL_LEAK){
+                    ownedInput=prepared.input;ownedOutput=prepared.output;ownedMotion=prepared.motionFile
+                    sourceUri=prepared.record.originalUri;resultUri=prepared.record.mediaUri
+                    recordSourceUri=sourceUri;recordResultUri=resultUri
+                    sourceComposition=prepared.composition;cameraReadout=prepared.readout
+                    clearPreview();currentRecord=prepared.record;result=ownedOutput;source=ownedInput;sourceMotionFile=ownedMotion
+                    ownedOutput=null;ownedInput=null;ownedMotion=null
+                    preview=EffectPreview(requireNotNull(source),requireNotNull(result),cameraReadout,autoPlay,sourceMotionFile,sourceComposition).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))}
+                    fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
+                    replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;preloadAdjacentPhotos()
+                    return@launch
+                }
+                prepared?.close()
+                if(token!=null)status.visibility=android.view.View.VISIBLE
+                sourceComposition=EffectSourceComposition.from(record)
                 if(refreshLinks && jobId!=null) {
-                    record?.let{recordSourceUri=it.originalUri;recordResultUri=it.mediaUri}
+                    if(record!=null){recordSourceUri=record.originalUri;recordResultUri=record.mediaUri}
                     val links=EffectPhotoAccess.restoredLinks(record,sourceUri,resultUri,sourceTemporary,resultTemporary)
                     sourceUri=links.source;resultUri=links.result
                 }
-                if(kind==EffectKind.OPTICAL_LEAK) {
-                    val oldSource=sourceUri
-                    val recovered=withContext(Dispatchers.IO){dev.filmroom.io.OriginalPhotoRecovery.resolve(this@PhotoEffectActivity,oldSource)}
-                    if(recovered!=null && recovered!=oldSource) {
-                        val saved=withContext(Dispatchers.IO){EffectPhotoAccess.recoverOriginal(
-                            dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store,jobId,oldSource,recovered)}
-                        sourceUri=recovered
-                        sourceTemporary=saved==null
-                        if(saved!=null){record=saved;recordSourceUri=saved.originalUri}
-                    }
-                }
-                sourceComposition=EffectSourceComposition.from(record)
                 cameraReadout=withContext(Dispatchers.IO){EffectCameraReadout.read(contentResolver,sourceUri,record?.photoMetadata)}
                 withContext(Dispatchers.IO){ownedOutput=runCatching{decode(requireNotNull(resultUri))}.getOrNull()}
                 val output=ownedOutput
@@ -594,12 +609,7 @@ class PhotoEffectActivity : ComponentActivity() {
         clearPreview()
         replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false
         status.visibility=android.view.View.VISIBLE;status.text=if(original)t("无法访问原图，请重新选择原图。","Original photo unavailable. Select it again.")else t("无法访问导出照片，请重新选择照片。","Exported photo unavailable. Select it again.")
-        val dialog=AlertDialog.Builder(this).setMessage(status.text).setNegativeButton(t("取消","Cancel"),null)
-            .setPositiveButton(t("选择照片","Select photo")){_,_->if(original)sourcePicker.launch(arrayOf("image/*"))else resultPicker.launch(arrayOf("image/*"))}
-        if(original)dialog.setNeutralButton(t("授予相册权限并重试","Allow photo access and retry")){_,_->
-            originalPermission.launch(dev.filmroom.ui.ArchivedPhotoAccessUi.requestedPermissions())
-        }
-        dialog.show()
+        AlertDialog.Builder(this).setMessage(status.text).setNegativeButton(t("取消","Cancel"),null).setPositiveButton(t("选择照片","Select photo")){_,_->if(original)sourcePicker.launch(arrayOf("image/*"))else resultPicker.launch(arrayOf("image/*"))}.show()
     }
     private fun refreshLiveSupport(){
         lifecycleScope.launch {
@@ -639,6 +649,7 @@ class PhotoEffectActivity : ComponentActivity() {
         livePhotoButton.text=t("取消导出","Cancel export")
         status.visibility=android.view.View.VISIBLE;status.text=t("导出中 0%","Exporting 0%")
         val quality=selectedQuality
+        val motionAudio=EffectOriginalAudioPreference.source(kind,liveOriginalAudioEnabled,sourceMotionFile)
         lifecycleScope.launch {
             val images=EffectExportImages()
             var report:EffectExportReport?=null
@@ -647,7 +658,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 withContext(Dispatchers.IO){images.load(contentResolver,kind,sourceUri,requireNotNull(resultUri),quality,live=true,composition=sourceComposition){cancelled.get()||!isActive}}
                 val captureMetadata=withContext(Dispatchers.IO){EffectCaptureMetadata.read(contentResolver,currentRecord?.photoMetadata,sourceUri,resultUri)}
                 withContext(Dispatchers.IO){motion=openExportMotion()}
-                val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=sourceMotionFile,photoMetadata=captureMetadata)
+                val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=motionAudio,photoMetadata=captureMetadata)
                 status.text=t("Live Photo 已保存，请在相册确认播放效果","Live Photo saved. Check playback in your gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看","View")){_,_->saved.publishedUris.firstOrNull()?.let{uri->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply{saved.selection?.environment?.galleryPackage?.let{setPackage(it)}})}.onFailure{showLiveMessage(t("请打开系统相册查看","Open your gallery to view it"))}}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.text=t("已取消导出","Export cancelled")}
@@ -664,6 +675,7 @@ class PhotoEffectActivity : ComponentActivity() {
         stopPreviewAudio();preview?.reset()
         qualityButton.isEnabled=false;working=true;liveExport=false;cancelled.set(false);exportButton.text=t("取消导出","Cancel export");replayButton.isEnabled=false;livePhotoButton.isEnabled=false
         val quality=selectedQuality
+        val motionAudio=EffectOriginalAudioPreference.source(kind,liveOriginalAudioEnabled,sourceMotionFile)
         lifecycleScope.launch{
             val images=EffectExportImages()
             var report:EffectExportReport?=null
@@ -672,7 +684,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 val uri=withContext(Dispatchers.IO){
                     images.load(contentResolver,kind,sourceUri,requireNotNull(resultUri),quality,composition=sourceComposition){cancelled.get()||!isActive}
                     motion=openExportMotion()
-                    EffectVideoExporter.export(applicationContext,kind,images.source,images.result,{p->runOnUiThread{if(!isDestroyed){val percent=(p*100).toInt();status.visibility=android.view.View.VISIBLE;status.text=t("导出中 $percent%","Exporting $percent%")}}}, {cancelled.get()||!isActive},slow=slow,quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=sourceMotionFile)}
+                    EffectVideoExporter.export(applicationContext,kind,images.source,images.result,{p->runOnUiThread{if(!isDestroyed){val percent=(p*100).toInt();status.visibility=android.view.View.VISIBLE;status.text=t("导出中 $percent%","Exporting $percent%")}}}, {cancelled.get()||!isActive},slow=slow,quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=motionAudio)}
                 status.visibility=android.view.View.VISIBLE;status.text=t("视频已保存到相册","Video saved to gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看视频","View video")){_,_->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))}.onFailure{Toast.makeText(this@PhotoEffectActivity,t("没有可播放视频的应用","No video player available"),Toast.LENGTH_SHORT).show()}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.visibility=android.view.View.VISIBLE;status.text=t("已取消导出","Export cancelled")}
@@ -705,6 +717,7 @@ class PhotoEffectActivity : ComponentActivity() {
         private var motionPrimed=false
         private var motionFramePrepared=false
         private var preparedSourceAudio=false
+        private var playingAudioFile=EffectOriginalAudioPreference.source(kind,liveOriginalAudioEnabled,motionFile)
         private var pendingFirstFrame=false
         private var pendingFirstPts:Long?=null
         private var pendingFirstSubmitNs=0L
@@ -755,7 +768,7 @@ class PhotoEffectActivity : ComponentActivity() {
         private fun recordMotionFrame(ptsUs:Long?,timeMs:Long,cpuNs:Long){
             if(!motionPrimed){pendingFirstFrame=true;pendingFirstPts=ptsUs;pendingFirstSubmitNs=cpuNs}else motionLog?.frame(ptsUs,timeMs,cpuNs)
         }
-        init{setEGLContextClientVersion(2);setRenderer(this);renderMode=RENDERMODE_CONTINUOUSLY;if(autoPlay)previewAudio.prepare(kind,selectedSlow,motionFile)}
+        init{setEGLContextClientVersion(2);setRenderer(this);renderMode=RENDERMODE_CONTINUOUSLY;if(autoPlay)previewAudio.prepare(kind,selectedSlow,playingAudioFile)}
         override fun onSurfaceCreated(gl:GL10?,config:EGLConfig?){
             val recreated=hadSurface;hadSurface=true;disposeMotion(false,Outcome.CANCELLED);motionAttempted=false;motionPrimed=false;motionFramePrepared=false;preparedSourceAudio=false;pendingFirstFrame=false;motionWaitBegan=0;reportedFrame=false;frameDrawn=false;filmSlide=0f;filmDirection=0
             runCatching{renderer=EffectGlRenderer(kind,a,b,readout,previewFinder=true);failed=false;renderer.initialize();start=SystemClock.elapsedRealtime();playingSlow=selectedSlow;renderMode=RENDERMODE_CONTINUOUSLY}
@@ -773,7 +786,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 ensureMotion()
                 val frameReady=tickMotion(if(motionPrimed)elapsed.coerceIn(0,duration)else 0)
                 motionFramePrepared=motionFramePrepared||frameReady
-                val audioReady=previewAudio.isPrepared(kind,playingSlow,motionFile)
+                val audioReady=previewAudio.isPrepared(kind,playingSlow,playingAudioFile)
                 var ready=frameReady&&audioReady
                 if(!motionPrimed&&!ready){val now=SystemClock.elapsedRealtime();if(motionWaitBegan==0L)motionWaitBegan=now;start=now
                     if(now-motionWaitBegan<1500){drawPreparingFrame();return}
@@ -791,26 +804,19 @@ class PhotoEffectActivity : ComponentActivity() {
             if(!reportedFrame){reportedFrame=true;postOnAnimation{firstFrame?.invoke(this)}}
             if(!playback.stopped && !audioRequested){
                 audioRequested=true
-                val epoch=audioEpoch.get();val began=start;val slow=playingSlow;val prepared=preparedSourceAudio
+                val epoch=audioEpoch.get();val began=start;val slow=playingSlow;val prepared=preparedSourceAudio;val audioFile=playingAudioFile
                 runOnUiThread{
                     if(audioEpoch.get()==epoch && preview===this && !working && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
-                        previewAudio.play(kind,slow,began,motionFile,prepared)
+                        previewAudio.play(kind,slow,began,audioFile,prepared)
                 }
             }
             playback.rendered(elapsed,duration)
             if(playback.stopped){renderMode=RENDERMODE_WHEN_DIRTY;disposeMotion(true,Outcome.SUCCESS)}
         }.onFailure{renderError()}}
-        /** Preparation is not an animation frame: never flash the source or completed photo here.
-         * The timeline starts at zero only after video/audio priming (or bounded fallback).
-         * This is preview-only; export renders exactly the same 3-second timeline as before. */
+        /** Freeze the real opening composition while codecs warm up. Never show the final photo.
+         * The three-second clock and sound still start only when primed; export is unaffected. */
         private fun drawPreparingFrame(){
-            android.opengl.GLES20.glBindFramebuffer(android.opengl.GLES20.GL_FRAMEBUFFER,0)
-            android.opengl.GLES20.glViewport(0,0,widthPx,heightPx)
-            android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_SCISSOR_TEST)
-            android.opengl.GLES20.glColorMask(true,true,true,true)
-            val color=Palette.background
-            android.opengl.GLES20.glClearColor(android.graphics.Color.red(color)/255f,android.graphics.Color.green(color)/255f,android.graphics.Color.blue(color)/255f,1f)
-            android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT)
+            renderer.draw(widthPx,heightPx,0,playingSlow,filmSlide,filmDirection)
         }
         fun isFrameReady()=frameDrawn&&!failed
         fun hasFailed()=failed
@@ -843,7 +849,7 @@ class PhotoEffectActivity : ComponentActivity() {
             }
             requestRender()
         }
-        fun replay(){stopPreviewAudio();val slow=selectedSlow;previewAudio.prepare(kind,slow,motionFile);queueEvent{disposeMotion(true,Outcome.CANCELLED);motionAttempted=false;renderer.resetMotionFrame();motionPrimed=false;motionFramePrepared=false;preparedSourceAudio=false;pendingFirstFrame=false;motionWaitBegan=0;audioRequested=false;playingSlow=slow;playback.replay();phase="";start=SystemClock.elapsedRealtime();renderMode=RENDERMODE_CONTINUOUSLY};requestRender()}
+        fun replay(){stopPreviewAudio();val slow=selectedSlow;val audioFile=EffectOriginalAudioPreference.source(kind,liveOriginalAudioEnabled,motionFile);previewAudio.prepare(kind,slow,audioFile);queueEvent{playingAudioFile=audioFile;disposeMotion(true,Outcome.CANCELLED);motionAttempted=false;renderer.resetMotionFrame();motionPrimed=false;motionFramePrepared=false;preparedSourceAudio=false;pendingFirstFrame=false;motionWaitBegan=0;audioRequested=false;playingSlow=slow;playback.replay();phase="";start=SystemClock.elapsedRealtime();renderMode=RENDERMODE_CONTINUOUSLY};requestRender()}
         fun reset(){queueEvent{playback.stop();disposeMotion(true,Outcome.CANCELLED);phase=""};requestRender()}
         private fun renderError(){if(failed)return;failed=true;runCatching{disposeMotion(true,Outcome.FAILED)};renderMode=RENDERMODE_WHEN_DIRTY;runOnUiThread{if(incomingPreview===this || (preview===this&&pageBusy)){failedPage();return@runOnUiThread};if(preview!==this)return@runOnUiThread;stopPreviewAudio();status.visibility=android.view.View.VISIBLE;status.text=t("当前设备无法显示此效果","This device could not display the effect");exportButton.isEnabled=false;livePhotoButton.isEnabled=false;replayButton.isEnabled=false}}
     }

@@ -15,20 +15,6 @@ internal object EffectPhotoAccess {
     fun restoredLinks(record:ExportJob?,source:String?,result:String?,sourceTemporary:Boolean,resultTemporary:Boolean)=
         Links(if(record!=null && !sourceTemporary)record.originalUri else source,
               if(record!=null && !resultTemporary)record.mediaUri else result)
-    /** Only after OriginalPhotoRecovery has certified and read the equivalent provider URI.
-     * Return the durable record, not a caller-side copy: Activity CAS tokens and page cache identity
-     * must advance together. A stale record or failed write must remain session-only.
-     */
-    fun recoverOriginal(store:ExportJobStore,jobId:String?,expectedUri:String?,equivalentUri:String):ExportJob? {
-        val id=jobId ?: return null
-        return try {
-            val before=store.get(id)?.takeIf { it.state==ExportJobState.COMPLETED } ?: return null
-            if(before.originalUri==equivalentUri)return before
-            if(before.originalUri!=expectedUri)return null
-            if(!store.relinkEffectPhoto(id,true,expectedUri,equivalentUri))return null
-            store.get(id)?.takeIf { it.originalUri==equivalentUri && it.state==ExportJobState.COMPLETED }
-        }catch(_:Exception){null}
-    }
     enum class Status { SAVED, TEMPORARY_PERMISSION, RECORD_UNAVAILABLE, RECORD_CHANGED, SAVE_FAILED, INVALID_RESULT }
     fun remember(context:Context,store:ExportJobStore,jobId:String?,original:Boolean,expectedUri:String?,selected:Uri,
                  retain:()->Boolean={OriginalPhotoAccess.retainRead(context,selected).let{it==OriginalPhotoGrant.PERSISTED || it==OriginalPhotoGrant.ALREADY_PERSISTED}},

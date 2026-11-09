@@ -7,7 +7,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Owns only GL resources, never the input bitmaps. Call all methods with a current GLES2 context. */
-class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap,private val readout:EffectCameraReadout = EffectCameraReadout(),private val previewFinder:Boolean=false) {
+class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap,private val readout:EffectCameraReadout = EffectCameraReadout(),private val previewFinder:Boolean=true) {
     // Keep the original program and geometry for equal-aspect images, including pixel rounding.
     private val fitPreviewFinder=previewFinder && kind==EffectKind.OPTICAL_LEAK &&
         EffectGeometry.needsPreviewFinder(source.width,source.height,result.width,result.height)
@@ -312,7 +312,7 @@ void main(){
  gl_FragColor=vec4(clamp(color,0.,1.),1.);
 }
 """.trimIndent()
-        /** Keep FRAGMENT byte-for-byte for exports. Only remap the opening finder for app preview. */
+        /** Remap only the opening finder in both preview and video/Live export. Final result sampling stays unchanged. */
         private val PREVIEW_FRAGMENT by lazy {
             val openingStart=FRAGMENT.indexOf(" if(showResult<.5){")
             val openingEnd=FRAGMENT.indexOf(" // The original cached Canvas light field",openingStart)

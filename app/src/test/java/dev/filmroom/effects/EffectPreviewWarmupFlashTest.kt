@@ -10,19 +10,17 @@ class EffectPreviewWarmupFlashTest {
         val path="src/main/java/dev/filmroom/effects/PhotoEffectActivity.kt"
         return listOf(File(path),File("app/$path")).first{it.isFile}.readText()
     }
-    @Test fun bothWarmupWaitsClearInsteadOfShowingCompletedPhoto(){
+    @Test fun bothWarmupWaitsHoldOpeningInsteadOfShowingCompletedPhoto(){
         val code=source().substringAfter("override fun onDrawFrame").substringBefore("fun isFrameReady")
         assertEquals(2,Regex("drawPreparingFrame\\(\\);return").findAll(code).count())
         assertFalse(code.contains("renderer.draw(widthPx,heightPx,duration"))
         assertTrue(code.contains("elapsed=0"))
     }
-    @Test fun waitingFrameDoesNotSampleEitherPhotoAndClearsWholeTarget(){
+    @Test fun waitingFrameRendersOpeningCompositionWithoutShowingCompletedPhoto(){
         val code=source().substringAfter("private fun drawPreparingFrame(){").substringBefore("fun isFrameReady")
-        assertTrue(code.contains("GL_FRAMEBUFFER,0"))
-        assertTrue(code.contains("GL_SCISSOR_TEST"))
-        assertTrue(code.contains("glColorMask(true,true,true,true)"))
-        assertTrue(code.contains("glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT)"))
-        assertFalse(code.contains("renderer.draw"));assertFalse(code.contains("glDrawArrays"))
+        assertTrue(code.contains("renderer.draw(widthPx,heightPx,0,"))
+        assertFalse(code.contains("glClear("))
+        assertFalse(code.contains("duration"))
     }
     @Test fun warmupNeverConsumesThreeSecondPlayback(){
         val p=EffectPreviewPlayback(true)

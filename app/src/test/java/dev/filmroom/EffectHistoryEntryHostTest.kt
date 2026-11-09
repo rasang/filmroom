@@ -35,13 +35,21 @@ class EffectHistoryEntryHostTest {
                 val dialog=ShadowAlertDialog.getLatestAlertDialog()
                 assertEquals(2,dialog.listView.adapter.count)
                 dialog.listView.performItemClick(null,index,index.toLong())
-                val intent=shadowOf(activity).nextStartedActivity
+                // Viewfinder preparation is asynchronous; assert the same intent once its
+                // bounded chooser-side preparation completes rather than assuming an inline launch.
+                var intent=shadowOf(activity).nextStartedActivity
+                val deadline=System.nanoTime()+2_000_000_000L
+                while(intent==null && System.nanoTime()<deadline){
+                    shadowOf(android.os.Looper.getMainLooper()).idle()
+                    Thread.sleep(5)
+                    intent=shadowOf(activity).nextStartedActivity
+                }
                 assertNotNull(intent)
-                assertEquals(PhotoEffectActivity::class.java.name,intent.component!!.className)
-                assertEquals(kind,intent.getStringExtra(PhotoEffectActivity.KIND))
-                assertEquals(job.mediaUri,intent.getStringExtra(PhotoEffectActivity.RESULT_URI))
-                assertEquals(job.originalUri,intent.getStringExtra(PhotoEffectActivity.SOURCE_URI))
-                assertEquals(job.id,intent.getStringExtra(PhotoEffectActivity.JOB_ID))
+                assertEquals(PhotoEffectActivity::class.java.name,intent!!.component!!.className)
+                assertEquals(kind,intent!!.getStringExtra(PhotoEffectActivity.KIND))
+                assertEquals(job.mediaUri,intent!!.getStringExtra(PhotoEffectActivity.RESULT_URI))
+                assertEquals(job.originalUri,intent!!.getStringExtra(PhotoEffectActivity.SOURCE_URI))
+                assertEquals(job.id,intent!!.getStringExtra(PhotoEffectActivity.JOB_ID))
                 dialog.dismiss()
             }
         }
