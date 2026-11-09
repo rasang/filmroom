@@ -18,9 +18,8 @@ internal class EffectMotionGpuBlur:AutoCloseable {
         try {
             if(program==0){
                 val vertex=shader(GL_VERTEX_SHADER,"attribute vec2 a;varying vec2 uv;void main(){uv=(a+1.0)*0.5;gl_Position=vec4(a,0.0,1.0);}")
-                val weights=FloatArray(21){exp(-((it-10)*(it-10))/24.5).toFloat()};val sum=weights.sum()
                 var fragment=0
-                try{fragment=shader(GL_FRAGMENT_SHADER,"precision highp float;varying vec2 uv;uniform sampler2D s;uniform vec2 d;uniform vec2 bounds;void main(){vec4 c=vec4(0.0);"+weights.indices.joinToString("\n"){"c+=texture2D(s,clamp(uv+d*${it-10},bounds,vec2(1.0)-bounds))*${weights[it]/sum};"}+" gl_FragColor=vec4(c.rgb,1.0);}")
+                try{fragment=shader(GL_FRAGMENT_SHADER,fragmentSource())
                     program=glCreateProgram();glAttachShader(program,vertex);glAttachShader(program,fragment);glLinkProgram(program);val status=IntArray(1);glGetProgramiv(program,GL_LINK_STATUS,status,0);check(status[0]!=0){glGetProgramInfoLog(program)}
                 }finally{glDeleteShader(vertex);if(fragment!=0)glDeleteShader(fragment)}
                 glGenTextures(1,scratch,0);glGenFramebuffers(1,framebuffer,0)
@@ -35,4 +34,12 @@ internal class EffectMotionGpuBlur:AutoCloseable {
     }
     fun invalidateSize(){width=0;height=0}
     override fun close(){if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(1,scratch,0);glDeleteFramebuffers(1,framebuffer,0);scratch[0]=0;framebuffer[0]=0;invalidateSize()}
+    companion object {
+        internal fun fragmentSource():String {
+            val weights=FloatArray(21){exp(-((it-10)*(it-10))/24.5).toFloat()};val sum=weights.sum()
+            // GLSL ES 1.00 does not implicitly convert integer operands to floats.
+            return "precision highp float;varying vec2 uv;uniform sampler2D s;uniform vec2 d;uniform vec2 bounds;void main(){vec4 c=vec4(0.0);"+weights.indices.joinToString("\n"){"c+=texture2D(s,clamp(uv+d*${(it-10).toFloat()},bounds,vec2(1.0)-bounds))*${weights[it]/sum};"}+" gl_FragColor=vec4(c.rgb,1.0);}"
+        }
+    }
+
 }

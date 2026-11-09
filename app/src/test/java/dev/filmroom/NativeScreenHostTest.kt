@@ -34,7 +34,12 @@ class NativeScreenHostTest {
    assertTrue(views.filterIsInstance<Button>().first{it.text.toString()=="导入照片"}.isEnabled)
    assertFalse(views.filterIsInstance<Button>().first{it.contentDescription=="导出"}.isEnabled)
    val permissions=activity.packageManager.getPackageInfo(activity.packageName,PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
-   assertFalse(permissions.contains("android.permission.INTERNET"));assertFalse(permissions.contains("android.permission.READ_MEDIA_IMAGES"))
+   // Updates and user-initiated photo access recovery already exist in the released manifest.
+   assertTrue(permissions.contains("android.permission.INTERNET"))
+   assertTrue(permissions.contains("android.permission.READ_MEDIA_IMAGES"))
+   assertFalse(permissions.contains("android.permission.RECORD_AUDIO"))
+   assertFalse(permissions.contains("android.permission.ACCESS_FINE_LOCATION"))
+   assertFalse(permissions.contains("android.permission.READ_MEDIA_VIDEO"))
   }
  }
  @Test fun activityRecreationDoesNotInventPhotoOrEffect(){

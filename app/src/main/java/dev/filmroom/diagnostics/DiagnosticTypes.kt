@@ -234,6 +234,7 @@ data class SafeInfo(
     val encodedPayloadSourceBackend:GpuBackend?=null,
     val effectExport: EffectExportDiagnosticInfo? = null,
     val motionPreview: MotionPreviewDiagnosticInfo? = null,
+    val motionInput: MotionInputDiagnosticInfo? = null,
 ) {
     internal fun fields(): Map<String, String> = typedFields().mapValues { it.value.toString() }
 
@@ -257,6 +258,7 @@ data class SafeInfo(
         integer("durationMs", durationMs, 7L * 24 * 60 * 60 * 1000)
         effectExport?.fields()?.let { putAll(it) }
         motionPreview?.fields()?.let { putAll(it) }
+        motionInput?.fields()?.let { putAll(it) }
         previewTiming?.fields()?.let { putAll(it) }
         detailTiming?.fields()?.let { putAll(it) }
         previewFailureStage?.let { put("previewFailureStage",it.name) }
@@ -454,6 +456,7 @@ data class SafeInfo(
             width = fields["width"]?.toIntOrNull(), height = fields["height"]?.toIntOrNull(),
             effectExport=EffectExportDiagnosticInfo.parse(fields),
             motionPreview=MotionPreviewDiagnosticInfo.parse(fields),
+            motionInput=MotionInputDiagnosticInfo.parse(fields),
             previewTiming=PreviewTimingSnapshot.parse(fields),
             detailTiming=DetailTimingSnapshot.parse(fields),
             previewFailureStage=PreviewFailureStage.entries.firstOrNull { it.name==fields["previewFailureStage"] },

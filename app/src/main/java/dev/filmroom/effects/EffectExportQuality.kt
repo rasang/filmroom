@@ -15,12 +15,12 @@ object EffectExportResolution {
     fun desired(kind: EffectKind, sourceWidth: Int, sourceHeight: Int, resultWidth: Int, resultHeight: Int,
                 quality: EffectExportQuality): EffectExportSize {
         require(minOf(sourceWidth,sourceHeight,resultWidth,resultHeight)>0)
-        val aspect=EffectGeometry.sceneAspect(kind,sourceWidth.toFloat()/sourceHeight).toDouble()
+        val aspect=EffectGeometry.sceneAspect(kind,resultWidth.toFloat()/resultHeight).toDouble()
         // Scene fractions match the renderer's contain() image viewport, including its bezel.
         val fullWidth = if(kind==EffectKind.LIGHT_TABLE)
             max(resultWidth/(.93*.916), resultHeight/(.88*.866)*aspect)
         else {
-            val layout=EffectGeometry.opticalLayout(sourceWidth.toFloat()/sourceHeight)
+            val layout=EffectGeometry.opticalLayout(resultWidth.toFloat()/resultHeight)
             max(max(sourceWidth.toDouble(),resultWidth.toDouble())/(1-2*layout.padX),
                 max(sourceHeight.toDouble(),resultHeight.toDouble())/(1-2*layout.padY)*aspect)
         }

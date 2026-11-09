@@ -210,6 +210,6 @@ internal object EffectMotionAudioEnvelope {
     }
     fun endUs(slow:Boolean,clipDurationUs:Long):Long=minOf(clipDurationUs.coerceAtLeast(0),
         (EffectTimeline.opticalHoldMs(slow)+EffectTimeline.opticalTransitionMs(slow)*135/225)*1000L)
-    fun mix(base:Float,source:Float,timeUs:Long,endUs:Long,startUs:Long):Float=
+    fun mix(base:Float,source:Float,timeUs:Long,endUs:Long,startUs:Long=0):Float=
         (base+source*gain(timeUs,endUs,startUs)).coerceIn(-1f,1f)
 }

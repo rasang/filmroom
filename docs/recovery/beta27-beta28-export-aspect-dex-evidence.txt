@@ -1,0 +1,167 @@
+Ldev/filmroom/effects/EffectExportResolution;->desired(Ldev/filmroom/effects/EffectKind; I I I I Ldev/filmroom/effects/EffectExportQuality;)Ldev/filmroom/effects/EffectExportSize;
+
+BETA27
+const-string 0:0,kind
+invoke-static 0:10,0:0,Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object; Ljava/lang/String;)V
+const-string 0:0,quality
+invoke-static 0:15,0:0,Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object; Ljava/lang/String;)V
+filled-new-array 0:12,0:13,0:14,[I
+move-result-object 0:0
+invoke-static 0:11,0:0,Lkotlin/comparisons/ComparisonsKt;->minOf(I [I)I
+move-result 0:0
+if-lez 0:0,3:110
+sget-object 0:0,Ldev/filmroom/effects/EffectGeometry;->INSTANCE Ldev/filmroom/effects/EffectGeometry;
+int-to-float 0:1,0:13
+int-to-float 0:2,0:14
+div-float/2addr 0:1,0:2
+invoke-virtual 0:0,0:10,0:1,Ldev/filmroom/effects/EffectGeometry;->sceneAspect(Ldev/filmroom/effects/EffectKind; F)F
+move-result 0:0
+float-to-double 0:2,0:0
+sget-object 0:0,Ldev/filmroom/effects/EffectKind;->LIGHT_TABLE Ldev/filmroom/effects/EffectKind;
+const/4 0:4,1:2
+if-ne 0:10,0:0,3:22
+int-to-double 0:10,0:13
+const-wide 0:12,1:4605848272446405173
+div-double/2addr 0:10,0:12
+int-to-double 0:12,0:14
+const-wide 0:0,1:4605039425953329431
+div-double/2addr 0:12,0:0
+mul-double/2addr 0:12,0:2
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+goto 3:44
+sget-object 0:10,Ldev/filmroom/effects/EffectGeometry;->INSTANCE Ldev/filmroom/effects/EffectGeometry;
+invoke-virtual 0:10,0:1,Ldev/filmroom/effects/EffectGeometry;->opticalLayout(F)Ldev/filmroom/effects/EffectGeometry$OpticalLayout;
+move-result-object 0:10
+int-to-double 0:0,0:11
+int-to-double 0:5,0:13
+invoke-static 0:0,0:1,0:5,0:6,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:0
+const/4 0:11,1:1
+int-to-float 0:11,0:11
+int-to-float 0:13,0:4
+invoke-virtual 0:10,Ldev/filmroom/effects/EffectGeometry$OpticalLayout;->getPadX()F
+move-result 0:5
+mul-float/2addr 0:5,0:13
+sub-float 0:5,0:11,0:5
+float-to-double 0:5,0:5
+div-double/2addr 0:0,0:5
+int-to-double 0:5,0:12
+int-to-double 0:7,0:14
+invoke-static 0:5,0:6,0:7,0:8,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:5
+invoke-virtual 0:10,Ldev/filmroom/effects/EffectGeometry$OpticalLayout;->getPadY()F
+move-result 0:10
+mul-float/2addr 0:13,0:10
+sub-float/2addr 0:11,0:13
+float-to-double 0:10,0:11
+div-double/2addr 0:5,0:10
+mul-double/2addr 0:5,0:2
+invoke-static 0:0,0:1,0:5,0:6,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+div-double 0:12,0:10,0:2
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+sget-object 0:12,Ldev/filmroom/effects/EffectExportQuality;->ORIGINAL Ldev/filmroom/effects/EffectExportQuality;
+if-ne 0:15,0:12,3:3
+goto 3:10
+invoke-virtual 0:15,Ldev/filmroom/effects/EffectExportQuality;->getLongEdge()I
+move-result 0:12
+int-to-double 0:12,0:12
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->min(D D)D
+move-result-wide 0:10
+double-to-int 0:10,0:10
+invoke-static 0:10,0:4,Lkotlin/ranges/RangesKt;->coerceAtLeast(I I)I
+move-result 0:10
+invoke-virtual 0:9,0:2,0:3,0:10,Ldev/filmroom/effects/EffectExportResolution;->fit(D I)Ldev/filmroom/effects/EffectExportSize;
+move-result-object 0:9
+return-object 0:9
+new-instance 0:9,Ljava/lang/IllegalArgumentException;
+const-string 0:10,Failed requirement.
+invoke-virtual 0:10,Ljava/lang/Object;->toString()Ljava/lang/String;
+move-result-object 0:10
+invoke-direct 0:9,0:10,Ljava/lang/IllegalArgumentException;-><init>(Ljava/lang/String;)V
+throw 0:9
+
+BETA28
+const-string 0:0,kind
+invoke-static 0:10,0:0,Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object; Ljava/lang/String;)V
+const-string 0:0,quality
+invoke-static 0:15,0:0,Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object; Ljava/lang/String;)V
+filled-new-array 0:12,0:13,0:14,[I
+move-result-object 0:0
+invoke-static 0:11,0:0,Lkotlin/comparisons/ComparisonsKt;->minOf(I [I)I
+move-result 0:0
+if-lez 0:0,3:110
+sget-object 0:0,Ldev/filmroom/effects/EffectGeometry;->INSTANCE Ldev/filmroom/effects/EffectGeometry;
+int-to-float 0:1,0:11
+int-to-float 0:2,0:12
+div-float/2addr 0:1,0:2
+invoke-virtual 0:0,0:10,0:1,Ldev/filmroom/effects/EffectGeometry;->sceneAspect(Ldev/filmroom/effects/EffectKind; F)F
+move-result 0:0
+float-to-double 0:2,0:0
+sget-object 0:0,Ldev/filmroom/effects/EffectKind;->LIGHT_TABLE Ldev/filmroom/effects/EffectKind;
+const/4 0:4,1:2
+if-ne 0:10,0:0,3:22
+int-to-double 0:10,0:13
+const-wide 0:12,1:4605848272446405173
+div-double/2addr 0:10,0:12
+int-to-double 0:12,0:14
+const-wide 0:0,1:4605039425953329431
+div-double/2addr 0:12,0:0
+mul-double/2addr 0:12,0:2
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+goto 3:44
+sget-object 0:10,Ldev/filmroom/effects/EffectGeometry;->INSTANCE Ldev/filmroom/effects/EffectGeometry;
+invoke-virtual 0:10,0:1,Ldev/filmroom/effects/EffectGeometry;->opticalLayout(F)Ldev/filmroom/effects/EffectGeometry$OpticalLayout;
+move-result-object 0:10
+int-to-double 0:0,0:11
+int-to-double 0:5,0:13
+invoke-static 0:0,0:1,0:5,0:6,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:0
+const/4 0:11,1:1
+int-to-float 0:11,0:11
+int-to-float 0:13,0:4
+invoke-virtual 0:10,Ldev/filmroom/effects/EffectGeometry$OpticalLayout;->getPadX()F
+move-result 0:5
+mul-float/2addr 0:5,0:13
+sub-float 0:5,0:11,0:5
+float-to-double 0:5,0:5
+div-double/2addr 0:0,0:5
+int-to-double 0:5,0:12
+int-to-double 0:7,0:14
+invoke-static 0:5,0:6,0:7,0:8,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:5
+invoke-virtual 0:10,Ldev/filmroom/effects/EffectGeometry$OpticalLayout;->getPadY()F
+move-result 0:10
+mul-float/2addr 0:13,0:10
+sub-float/2addr 0:11,0:13
+float-to-double 0:10,0:11
+div-double/2addr 0:5,0:10
+mul-double/2addr 0:5,0:2
+invoke-static 0:0,0:1,0:5,0:6,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+div-double 0:12,0:10,0:2
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->max(D D)D
+move-result-wide 0:10
+sget-object 0:12,Ldev/filmroom/effects/EffectExportQuality;->ORIGINAL Ldev/filmroom/effects/EffectExportQuality;
+if-ne 0:15,0:12,3:3
+goto 3:10
+invoke-virtual 0:15,Ldev/filmroom/effects/EffectExportQuality;->getLongEdge()I
+move-result 0:12
+int-to-double 0:12,0:12
+invoke-static 0:10,0:11,0:12,0:13,Ljava/lang/Math;->min(D D)D
+move-result-wide 0:10
+double-to-int 0:10,0:10
+invoke-static 0:10,0:4,Lkotlin/ranges/RangesKt;->coerceAtLeast(I I)I
+move-result 0:10
+invoke-virtual 0:9,0:2,0:3,0:10,Ldev/filmroom/effects/EffectExportResolution;->fit(D I)Ldev/filmroom/effects/EffectExportSize;
+move-result-object 0:9
+return-object 0:9
+new-instance 0:9,Ljava/lang/IllegalArgumentException;
+const-string 0:10,Failed requirement.
+invoke-virtual 0:10,Ljava/lang/Object;->toString()Ljava/lang/String;
+move-result-object 0:10
+invoke-direct 0:9,0:10,Ljava/lang/IllegalArgumentException;-><init>(Ljava/lang/String;)V
+throw 0:9

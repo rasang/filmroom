@@ -1,0 +1,46 @@
+Ldev/filmroom/effects/EffectMotionGpuBlur;->render$lambda$1([F F I)Ljava/lang/CharSequence;
+
+BETA27
+add-int/lit8 0:0,0:3,1:-10
+int-to-float 0:0,0:0
+aget 0:1,0:1,0:3
+div-float/2addr 0:1,0:2
+new-instance 0:2,Ljava/lang/StringBuilder;
+const-string 0:3,c+=texture2D(s,clamp(uv+d*
+invoke-direct 0:2,0:3,Ljava/lang/StringBuilder;-><init>(Ljava/lang/String;)V
+invoke-virtual 0:2,0:0,Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+move-result-object 0:2
+const-string 0:3,,bounds,vec2(1.0)-bounds))*
+invoke-virtual 0:2,0:3,Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+move-result-object 0:2
+invoke-virtual 0:2,0:1,Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+move-result-object 0:1
+const-string 0:2,;
+invoke-virtual 0:1,0:2,Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+move-result-object 0:1
+invoke-virtual 0:1,Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+move-result-object 0:1
+check-cast 0:1,Ljava/lang/CharSequence;
+return-object 0:1
+
+BETA28
+add-int/lit8 0:0,0:3,1:-10
+aget 0:1,0:1,0:3
+div-float/2addr 0:1,0:2
+new-instance 0:2,Ljava/lang/StringBuilder;
+const-string 0:3,c+=texture2D(s,clamp(uv+d*
+invoke-direct 0:2,0:3,Ljava/lang/StringBuilder;-><init>(Ljava/lang/String;)V
+invoke-virtual 0:2,0:0,Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+move-result-object 0:2
+const-string 0:3,,bounds,vec2(1.0)-bounds))*
+invoke-virtual 0:2,0:3,Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+move-result-object 0:2
+invoke-virtual 0:2,0:1,Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+move-result-object 0:1
+const-string 0:2,;
+invoke-virtual 0:1,0:2,Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+move-result-object 0:1
+invoke-virtual 0:1,Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+move-result-object 0:1
+check-cast 0:1,Ljava/lang/CharSequence;
+return-object 0:1

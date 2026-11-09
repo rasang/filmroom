@@ -14,6 +14,7 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
     private var program=0
     private var motionAspect:Float?=null
     private val motionBlur=EffectMotionGpuBlur()
+    private val motionBlurPolicy=EffectMotionBlurPolicy()
     private var motionWidth=0
     private var motionHeight=0
     private var marksWidth=0
@@ -52,20 +53,32 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         if(motionWidth==frame.sharp.width&&motionHeight==frame.sharp.height)GLUtils.texSubImage2D(GL_TEXTURE_2D,0,0,0,frame.sharp)
         else {GLUtils.texImage2D(GL_TEXTURE_2D,0,frame.sharp,0);motionWidth=frame.sharp.width;motionHeight=frame.sharp.height}
         if(frame.blurred!=null){glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,textures[5]);GLUtils.texImage2D(GL_TEXTURE_2D,0,frame.blurred,0)}
-        else {val scale=minOf(1f,256f/maxOf(frame.sharp.width,frame.sharp.height));try{motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.sharp.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.sharp.height*scale).toInt().coerceAtLeast(1))}
-            catch(_:Exception){motionAspect=frame.sharp.width.toFloat()/frame.sharp.height;motionBlur.close();resetMotionFrame()}}
+        else {val scale=minOf(1f,256f/maxOf(frame.sharp.width,frame.sharp.height))
+            motionBlurPolicy.render(
+                gpu={motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.sharp.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.sharp.height*scale).toInt().coerceAtLeast(1))},
+                close={motionBlur.close();clearMotionGlErrors()},
+                cpu={
+                    // Preserve the newly uploaded sharp frame. Only replace its blur texture.
+                    val blurred=EffectTextures.defocused(frame.sharp)
+                    try {glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,textures[5]);GLUtils.texImage2D(GL_TEXTURE_2D,0,blurred,0)}finally{blurred.recycle()}
+                })}
+
         check(glGetError()==GL_NO_ERROR){"Motion frame upload failed"}
         motionAspect=frame.sharp.width.toFloat()/frame.sharp.height;return true
     }
     internal fun updateMotionSurface(stream:EffectMotionSurfaceTexture,rawWidth:Int,rawHeight:Int,rotation:Int,composition:EffectSourceComposition?,needsBlur:Boolean):EffectMotionSurfaceTexture.Frame? {
-        if(kind!=EffectKind.OPTICAL_LEAK||program==0)return null
+        check(kind==EffectKind.OPTICAL_LEAK&&program!=0)
         try {
             val frame=stream.drawLatest(textures[0],rawWidth,rawHeight,rotation,composition)?:return null
             motionWidth=frame.width;motionHeight=frame.height;motionAspect=frame.width.toFloat()/frame.height
-            if(needsBlur){val scale=minOf(1f,256f/maxOf(frame.width,frame.height));motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.height*scale).toInt().coerceAtLeast(1))}
+            if(needsBlur){val scale=minOf(1f,256f/maxOf(frame.width,frame.height))
+                try {check(motionBlurPolicy.gpuEnabled);motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.height*scale).toInt().coerceAtLeast(1))}
+                catch(e:Exception){motionBlurPolicy.rejectGpu{motionBlur.close()};throw e}
+            }
             check(glGetError()==GL_NO_ERROR){"Surface motion draw failed"};return frame
         }catch(e:Exception){for(i in 0 until 8){if(glGetError()==GL_NO_ERROR)break};resetMotionFrame(true);throw e}
     }
+    private fun clearMotionGlErrors(){for(i in 0 until 8){if(glGetError()==GL_NO_ERROR)break}}
     fun resetMotionFrame(force:Boolean=false){
         if(kind!=EffectKind.OPTICAL_LEAK||program==0)return
         if(force||motionAspect!=null){glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,textures[0]);GLUtils.texImage2D(GL_TEXTURE_2D,0,source,0)
@@ -131,7 +144,7 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         val a=glGetAttribLocation(program,"a");glEnableVertexAttribArray(a);vertices.position(0)
         glVertexAttribPointer(a,2,GL_FLOAT,false,0,vertices);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glDisableVertexAttribArray(a)
     }
-    fun release(){motionBlur.close();motionWidth=0;motionHeight=0;if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(7,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0;pageLoaded=false}
+    fun release(){motionBlur.close();motionAspect=null;motionWidth=0;motionHeight=0;if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(7,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0;pageLoaded=false}
     private fun location(name:String)=uniforms.getOrPut(name){glGetUniformLocation(program,name)}
     private fun compile(type:Int,text:String):Int {
         val shader=glCreateShader(type);glShaderSource(shader,text);glCompileShader(shader)

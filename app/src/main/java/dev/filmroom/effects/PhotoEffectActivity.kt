@@ -747,6 +747,10 @@ class PhotoEffectActivity : ComponentActivity() {
                 var ready=frameReady&&audioReady
                 if(!motionPrimed&&!ready){val now=SystemClock.elapsedRealtime();if(motionWaitBegan==0L)motionWaitBegan=now;start=now
                     if(now-motionWaitBegan<1500){renderer.draw(widthPx,heightPx,duration,playingSlow,filmSlide,filmDirection);return}
+                    if(EffectMotionWarmupPolicy.retryBitmapDecoder(now-motionWaitBegan,motionFramePrepared,surfaceMotion!=null)) {
+                        fallbackMotion(MotionPreviewFallback.TIMEOUT);motionWaitBegan=now
+                        renderer.draw(widthPx,heightPx,duration,playingSlow,filmSlide,filmDirection);return
+                    }
                     if(!motionFramePrepared){surfaceMotion?.let{motionLog?.decoder(it.snapshot());it.close()};surfaceMotion=null;motion?.close();motion=null;motionLog?.path(MotionPreviewPath.STATIC,MotionPreviewFallback.TIMEOUT)}
                     ready=true
                 }

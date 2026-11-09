@@ -44,8 +44,8 @@ object EffectLivePhotoExporter {
         motionSource: EffectMotionSource? = null, motionAudioFile: File? = null,
         photoMetadata: PhotoMetadata = PhotoMetadata.unavailable()): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO) { log ->
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
-        check(exportLock.tryLock()) { "Live Photo export already running" }
         val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
+        check(exportLock.tryLock()) { "Live Photo export already running" }
         val app = context.applicationContext
         val video = File(app.cacheDir, "effect-live-${UUID.randomUUID()}.mp4")
         var rendered = false

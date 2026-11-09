@@ -34,4 +34,9 @@ class EffectMotionAudioEnvelopeTest {
             (EffectTimeline.opticalHoldMs(slow)+EffectTimeline.opticalTransitionMs(slow)*135/225)*1000L,
             EffectMotionAudioEnvelope.endUs(slow,10_000_000))
     }
+    @Test fun omittedSourceStartMatchesOriginalZeroDefault() {
+        assertEquals(EffectMotionAudioEnvelope.mix(.2f,.4f,500_000,1_000_000,0),
+            EffectMotionAudioEnvelope.mix(.2f,.4f,500_000,1_000_000),0f)
+    }
+
 }
