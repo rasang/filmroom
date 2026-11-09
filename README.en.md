@@ -1,5 +1,3 @@
-> **Filmroom 0.1.20.2**: Corrects the standard ordering of the temporary HEIF view's property table, which Android 17's new parser rejected. SDR primary only; the original stays unchanged. No GPU experiments. [Scope and validation](docs/RELEASE_0_1_20_2.md).
-
 <div align="center">
 
 # Filmroom
@@ -10,7 +8,7 @@ Native Android film simulation · Offline, on-device processing · No account or
 
 [简体中文](README.md) · **English**
 
-[Screenshots & samples](#screenshots--samples) · [Get started](#availability) · [Workflow](#your-first-photo) · [Formats](#supported-formats) · [Build guide](docs/DEVELOPMENT.md)
+[Screenshots & samples](#screenshots--samples) · [Get started](#availability) · [Workflow](#your-first-photo) · [Presets & effects](#presets-and-photo-effects) · [Formats](#supported-formats) · [Build guide](docs/DEVELOPMENT.md)
 
 <img src="app/src/main/assets/film-rolls/kodak_portra_400.webp" width="100" alt="Original Portra 400 film-stock artwork" />
 <img src="app/src/main/assets/film-rolls/fujifilm_c200.webp" width="100" alt="Original Fujifilm C200 film-stock artwork" />
@@ -71,16 +69,18 @@ Landscape and portrait compositions, keeping every perforation and the entire fr
 
 Filmroom brings film stocks, photographic papers and scanning paths into one mobile darkroom. Choose a stock, shape the exposure, grain and halation, then save a new image. Processing stays on your device, and your original file is never overwritten.
 
-- **18 film stocks, 20 film profiles** — Color negatives, slide films and two pushed Portra 800 variants, plus 6 photographic paper and 2 motion-picture print-film profiles.
+- **Color and monochrome stocks and papers** — Negative, reversal, push and monochrome profiles, including CineStill 800T, Tri-X 400, T-Max 100, Acros II, HP5 Plus and Ilford Multigrade IV RC. Film and paper each have a None option, with illustrated film and paper-package selectors.
 - **More than a filter picker** — Film exposure, print or direct-scan rendering, grain, halation and development controls, with original-image comparison, undo and redo.
-- **Compose and frame** — Free or fixed-ratio cropping, composition locking and optional film-edge frames with a white-perforation option for negatives.
+- **Compose and frame** — Free or fixed-ratio cropping, composition locking, ±15° leveling in 0.1° steps, 135/120 film frames, and date/exposure imprints. Frames and imprints can be composited before film rendering. The luminance histogram measures the preview photo area, excluding frames and imprints; it is not a full-resolution source histogram.
 - **Export in the background** — A queue snapshots each image and its settings, reports progress and supports checkpoints with manual resumption after interruption. Android can still stop background work.
 - **Save for your next step** — JPEG, PNG or 16-bit TIFF, with sRGB, Display P3 or Adobe RGB (1998) SDR output.
+- **Save and share presets** — Name and save editing settings; import preset QR codes using the camera or a gallery image, then confirm and save them.
+- **Animate your photos** — Light-table and viewfinder effects with preview, video and Live photo export.
 - **Four interface languages** — 中文, English, 日本語 and 한국어, selectable in Settings.
 
 ## Availability
 
-**Current stable version: 0.1.20.1.** Download an APK from [GitHub Releases](https://github.com/rasang/filmroom/releases), or [build from source](docs/DEVELOPMENT.md) (Chinese guide).
+**This README covers `dev` source version 0.1.22-beta22 (versionCode 74, `0762a9f`).** Development and stable builds may differ. Check [GitHub Releases](https://github.com/rasang/filmroom/releases) for available APKs, or [build from source](docs/DEVELOPMENT.md) (Chinese guide). Candidate changes not yet merged into this branch are outside this scope.
 
 - Requires **64-bit Android 10 (API 29) or later**. Source builds include ARM64 and x86_64 by default; an ARM64-only phone build is also available.
 - This is an early-stage project. Host builds, algorithm checks and JNI/UI tests exist, but **end-to-end testing on physical Android devices is not complete**. No phone performance or battery-life guarantees are made.
@@ -98,6 +98,32 @@ See [0.1.20 notes](docs/RELEASE_0_1_20.md) for JPEG XL DNG, medium-format and co
 
 The [user guide](使用说明.txt) is currently in Chinese. Exports retain supported capture metadata, **including existing GPS and author information**—check before sharing publicly. See the [metadata rules](docs/EXPORT_METADATA.md) for details.
 
+## Presets and photo effects
+
+### Save your darkroom recipe
+
+Name, save, load or delete presets, generate a sharing image/QR code, and import codes from the camera or gallery. Import requires confirmation and saves a preset; it does not immediately overwrite the current edit.
+
+Presets include film, paper, color, grain, composition/leveling, frame and date/exposure-imprint settings, **not the photo itself**. Applying a preset to another photo also reuses its saved composition and custom date; adjust them as needed. See [presets](docs/SAVED_PRESETS.md) and [QR sharing](docs/PRESET_QR_SHARING.md).
+
+### Light table and viewfinder
+
+Open photo effects from export history. Each sequence is approximately 3 seconds:
+
+- **Light table:** Simulated illumination and film viewing. When paging, the table stays fixed while the film slides; portions outside the illuminated area darken.
+- **Viewfinder:** Nikon F3-inspired shutter/aperture readouts, blurred-to-sharp split-image focus and mirror occlusion. Portrait compositions place the readouts on the right and rotate the split-image and mirror directions accordingly.
+- **Browse and replay:** The entry photo plays once automatically. Swiping, including returning to the first photo, does not autoplay; use Replay. Distance or a deliberate fast flick can change pages. Adjacent preloading and a bounded cache reduce decoding; low-memory conditions or leaving the page can still require a reload, and zero latency is not guaranteed.
+- **Original comparison:** Uses the composition/leveling snapshot saved with that export, rather than the uncropped original. Older records without that information cannot guarantee the same composition.
+- **Sound and export:** Preview and video/Live exports use focus beeps, a mechanical shutter or light-switch sound, plus subtle noise with fades at the ends. Choose original size, a 1920-pixel or 1080-pixel long edge. Encoder/resource limits can cause a fallback; see [export diagnostics](docs/EFFECT_EXPORT_DIAGNOSTICS.md).
+
+**Live scope:** This packages an effect as a Live photo; it does not mean the app can read embedded videos from other brands' Live originals. Photo import still reads a static image. Gallery recognition, audio playback and encoder support require device testing; compatibility with every brand/gallery is not guaranteed.
+
+## Backup, deletion and updates
+
+- **Local backup:** Settings can export/restore a ZIP containing supported preferences, presets, export records and photo-access links, **not the source or exported image files**. Restore requires confirmation. Reinstallation may require renewed photo permission or relinking; this does not recover missing photos or running export jobs. Backups are unencrypted and contain records/access links, so store them carefully.
+- **Deletion confirmation:** A remembered deletion scope now gets a confirmation stating that scope. Without a remembered scope, the existing scope-selection dialog remains the confirmation, without an extra duplicate prompt.
+- **Update checks:** Check manually in Settings, or through rate-limited cold-start checks. The update dialog shows notes and download links that open in the browser; the app does not automatically download or install APKs.
+
 ## Supported formats
 
 | Input | Current scope |
@@ -114,6 +140,7 @@ The [user guide](使用说明.txt) is currently in Chinese. Exports retain suppo
 | JPEG · 8-bit | Everyday sharing; quality 1–100, default 95. |
 | PNG · 8-bit | Avoiding another JPEG compression pass; does not recover missing input precision. |
 | TIFF · 16-bit | Further editing; larger files, not displayed by every gallery. An 8-bit source does not become RAW. |
+| MP4 / Live photo | Export from the photo-effects page; encoder, gallery and audio-playback limitations are described above. |
 
 **Know the limits:** A `.dng` extension does not guarantee compatibility. HEIC export, other unlisted camera RAW formats, AVIF, EXR and HDR enhancement/preservation are not implemented. RAW/HEIC import is limited to 52 megapixels; final encoding is limited to 84 megapixels, subject to format, memory and storage constraints. Zoomed previews have a maximum long edge of 1536 pixels—**not source-resolution detail**. Unsupported variants or insufficient memory/temporary storage produce an explicit failure, rather than silently downsizing a full-resolution export.
 
@@ -123,15 +150,17 @@ Detailed contracts: [HEIC](docs/HEIC_IMPORT.md) · [DNG/codecs](codecs/README.md
 
 ## Your photos stay on your device
 
-The app has no network permission, account or upload feature, and does not request access to your entire photo library. It reads only the photo authorized through the system picker. Temporary processing files stay in app-private storage; app backup is disabled.
+Photo processing stays on the device, without accounts or automatic photo uploads. Network permission is used for manual or rate-limited cold-start update checks. Camera permission is used when you choose to scan a code; restoring photo access may request photo-library permission. Normal imports use the system picker. Temporary files stay in app-private storage. Automatic Android app backup is disabled; manual ZIP backups are initiated by you in Settings.
 
 For troubleshooting, manually share a redacted TXT from Diagnostic Logs and describe your version, device and reproduction steps in [Issues](https://github.com/rasang/filmroom/issues). Logs exclude photos, filenames, GPS and paths. Sharing is your choice; nothing is uploaded automatically.
 
 ## Development and documentation
 
-Native Kotlin Android UI with Rust/JNI image-processing and codec components. The app runs offline; resolving build dependencies for the first time may need internet access.
+Native Kotlin Android UI with Rust/JNI image-processing and codec components. Image processing runs offline; update checks and first-time build dependency resolution may need internet access.
 
 - [Build guide](docs/DEVELOPMENT.md) (Chinese): prerequisites, builds, replacing native components and verification scope.
+- [Effect audio setup](docs/EFFECT_AUDIO_SETUP.md) (Chinese): the public repository does not include standalone mixed tracks containing third-party recordings. Obtain and generate them under their source licenses; a source checkout alone does not reproduce release audio. Prepare native JNI libraries using the build guide too.
+- [Effect paging and caching](docs/EFFECT_PAGE_CACHE_BETA22.md): cache ownership, flick gestures, shutter-digit spacing and validation boundaries.
 - [Development history](docs/HISTORY.md) (Chinese): the complete previous README through 0.1.16, including changes and validation limits.
 - [Validation record](验证记录.md) (Chinese): tests performed and device workflows not yet covered.
 
@@ -146,3 +175,4 @@ The film-selector illustrations are original project artwork. Film-edge frames i
 ## Signing migration in 0.1.17
 
 This version uses a new fixed release certificate. Upgrading from 0.1.16 or earlier requires uninstalling the old app first: private edit settings, temporary photos and export queues are removed; images already saved to the system gallery/downloads remain. Future versions using this same certificate can update in place. Source builds are unsigned by default. See [release notes](docs/RELEASE_0_1_17.md).
+
