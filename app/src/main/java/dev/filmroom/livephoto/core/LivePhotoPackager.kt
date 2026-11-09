@@ -38,7 +38,7 @@ object LivePhotoPackager {
             LivePhotoProfile.VIVO_SINGLE -> ascii("multi-frame: 1;\nispap:1;\nmodule: photo;\u0000")
             else -> null
         }
-        val base = Jpeg.insert(clean,Jpeg.exif(comment) + xmp)
+        val base = Jpeg.insert(clean,Jpeg.exif(comment, request.captureDates) + xmp)
         val jpeg = if(profile == LivePhotoProfile.OPLUS) {
             val mpfSize = Jpeg.mpf(1).size
             Jpeg.insert(base,Jpeg.mpf(base.size.toLong() + mpfSize))

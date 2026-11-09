@@ -40,7 +40,8 @@ data class PackageRequest(
     val cover: CoverInfo,
     val allowExperimentalProfiles: Boolean = false,
     /** Optional reproducible ID for integration tests. Production defaults to a random 112-bit ID. */
-    val bindingId: String? = null
+    val bindingId: String? = null,
+    val captureDates: LivePhotoDates? = null
 )
 
 data class VideoRange(val offset: Long, val length: Long)

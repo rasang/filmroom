@@ -21,7 +21,9 @@ data class VideoToLiveRequest(
     /** null = this device. Non-null = another target: local evidence is intentionally not reused. */
     val targetBrand: TargetBrand? = null,
     val targetGalleryPackage: String? = null,
-    val requireConfirmedSupport: Boolean = false
+    val requireConfirmedSupport: Boolean = false,
+    val captureDates: LivePhotoDates? = null,
+    val captureTimeMillis: Long? = null
 ) {
     init {
         require(input.scheme == "content" || input.scheme == "file") { "Only local content:// and file:// sources are allowed" }

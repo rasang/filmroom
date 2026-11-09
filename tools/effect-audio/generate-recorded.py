@@ -43,11 +43,11 @@ def make(kind,slow=False):
         for i,v in enumerate(clip):y[offset+i]+=v
     if kind=='light_table':place(switch,1.0)
     else:
-        end=.425 if slow else .850
+        end=.545 if slow else 1.150
         tone(end-.075,.025,2300,.13);tone(end-.035,.035,2300,.13)
-        place(shutter,.500 if slow else 1.200)
+        place(shutter,.620 if slow else 1.500)
     # Foreground synthesis, gain and trigger positions above remain unchanged.
-    y=[v+room for v,room in zip(y,ROOM_TONE)]
+    y=[v+room*.5 for v,room in zip(y,ROOM_TONE)]
     assert max(map(abs,y))<1
     name=kind+('_slow' if slow else '')
     wav=OUT/(name+'.wav')

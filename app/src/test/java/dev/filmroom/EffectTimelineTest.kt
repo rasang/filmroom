@@ -12,8 +12,8 @@ class EffectTimelineTest {
   assertEquals(0f,EffectTimeline.at(EffectKind.LIGHT_TABLE,3000).bloom,.00001f)
  }
  @Test fun opticalOpeningIsUncoveredAndLongerInBothModes(){
-  assertEquals(1200L,EffectTimeline.opticalHoldMs(false))
-  assertEquals(500L,EffectTimeline.opticalHoldMs(true))
+  assertEquals(1500L,EffectTimeline.opticalHoldMs(false))
+  assertEquals(620L,EffectTimeline.opticalHoldMs(true))
   for(slow in listOf(false,true)) {
    val first=EffectTimeline.at(EffectKind.OPTICAL_LEAK,0,slow)
    val hold=EffectTimeline.opticalHoldMs(slow)
@@ -39,12 +39,12 @@ class EffectTimelineTest {
   assertEquals(1650L,EffectTimeline.opticalTransitionMs(true))
   // Compare corresponding points of all cover/settling stages, not only endpoints.
   for(t in listOf(0L,45L,90L,135L,180L,225L)) {
-   val normal=EffectTimeline.at(EffectKind.OPTICAL_LEAK,1200+t)
-   val slow=EffectTimeline.at(EffectKind.OPTICAL_LEAK,500+t*22/3,true)
+   val normal=EffectTimeline.at(EffectKind.OPTICAL_LEAK,1500+t)
+   val slow=EffectTimeline.at(EffectKind.OPTICAL_LEAK,620+t*22/3,true)
    assertEquals(normal.cover,slow.cover,.00001f)
    assertEquals(normal.settling,slow.settling,.00001f)
   }
-  assertEquals(EffectTimeline.at(EffectKind.OPTICAL_LEAK,3000,true),EffectTimeline.at(EffectKind.OPTICAL_LEAK,2760,true))
+  assertEquals(EffectTimeline.at(EffectKind.OPTICAL_LEAK,3000,true),EffectTimeline.at(EffectKind.OPTICAL_LEAK,2880,true))
  }
  @Test fun allNinetyFramesAndLiveCoverUseSameCompletedTail(){
   for(k in EffectKind.values())for(slow in listOf(false,true)) {

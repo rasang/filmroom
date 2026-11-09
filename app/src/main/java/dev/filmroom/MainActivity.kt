@@ -1165,7 +1165,7 @@ class MainActivity:ComponentActivity() {
                 tag=id;isSelected=chosen;textSize=12f;minimumWidth=dp(48);minimumHeight=dp(48)
                 gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL;minLines=labelLines
                 setPadding(dp(8),dp(6),dp(8),dp(8))
-                breakStrategy=android.text.Layout.BREAK_STRATEGY_SIMPLE
+                breakStrategy=android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
                 hyphenationFrequency=android.text.Layout.HYPHENATION_FREQUENCY_NONE
                 val art=dev.filmroom.ui.PrintMediumArtwork.drawable(this@MainActivity,id)
                 val edge=dp(72);art.setBounds(0,0,edge,edge)

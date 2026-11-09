@@ -1,7 +1,7 @@
 import pathlib,subprocess,json,array,math
 p=pathlib.Path(__file__).absolute().parents[2]/'app/src/main/assets/effect_audio'
 checks=0
-for name,windows in [('light_table',[(1,1.214)]),('optical_leak',[(.775,.85),(1.2,1.421)]),('optical_leak_slow',[(.35,.425),(.5,.721)])]:
+for name,windows in [('light_table',[(1,1.214)]),('optical_leak',[(1.075,1.15),(1.5,1.721)]),('optical_leak_slow',[(.47,.545),(.62,.841)])]:
  f=p/(name+'.m4a')
  s=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',str(f)]))['streams'][0]
  assert s['codec_name']=='aac' and s['sample_rate']=='48000' and s['channels']==1
@@ -13,7 +13,7 @@ for name,windows in [('light_table',[(1,1.214)]),('optical_leak',[(.775,.85),(1.
  # Away from foreground events, require a quiet audible room-air bed, no clipping.
  quiet=[v for i,v in enumerate(a) if not any(start-.04 <= i/48000 <= end+.04 for start,end in windows)]
  rms=math.sqrt(sum(v*v for v in quiet)/len(quiet))
- assert -55 < 20*math.log10(rms) < -49;checks+=1
+ assert -61 < 20*math.log10(rms) < -55;checks+=1
  assert max(map(abs,quiet))<.025;checks+=1
  assert abs(sum(quiet)/len(quiet))<.0002;checks+=1
  assert max(map(abs,a[:48]))<.001 and max(map(abs,a[143952:144000]))<.001;checks+=1

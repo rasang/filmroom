@@ -36,6 +36,17 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
 
     fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).put("imprintFallback",imprintFallback).put("imprintFallbackKind",imprintFallbackKind).toString()
 
+    fun livePhotoDates(exportMillis:Long):dev.filmroom.livephoto.core.LivePhotoDates {
+        val original=attributes["DateTimeOriginal"]?.takeIf { parseImprintDate(it)!=null }
+        val source=sourceCreateDate?.takeIf { validatedSourceInstant(attributes,it)!=null }?.let(OffsetDateTime::parse)
+        val now=Instant.ofEpochMilli(exportMillis).atOffset(ZoneOffset.UTC)
+        return dev.filmroom.livephoto.core.LivePhotoDates(
+            original=original,
+            originalOffset=if(original!=null) attributes["OffsetTimeOriginal"] ?: source?.offset?.id?.let{if(it=="Z")"+00:00" else it} else null,
+            originalSubsec=if(original!=null) attributes["SubSecTimeOriginal"] ?: source?.takeIf{it.nano!=0}?.nano?.toString()?.padStart(9,'0')?.trimEnd('0') else null,
+            modified=DATE.format(now),modifiedOffset="+00:00",modifiedSubsec=String.format(Locale.ROOT,"%03d",now.nano/1_000_000))
+    }
+
     /** A timestamp without its original offset is a local wall time, not an invented UTC instant. */
     fun captureTimeMillis():Long?=runCatching {
         val date=attributes["DateTimeOriginal"] ?: return null
@@ -132,6 +143,13 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             put("GPSVersionID",Spec(2,0,1,4));put("GPSProcessingMethod",Spec(2,27,7));put("GPSAreaInformation",Spec(2,28,7))
         }
         fun unavailable():PhotoMetadata=PhotoMetadata(emptyMap(),dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_62634ce08e7b),issues=listOf(MetadataIssue(MetadataField.METADATA,MetadataIssueReason.READ_FAILED)))
+        fun readCaptureDates(input:java.io.InputStream):PhotoMetadata=try {
+            val exif=ExifInterface(input)
+            val fields=listOf("DateTimeOriginal","OffsetTimeOriginal","SubSecTimeOriginal").mapNotNull{key->exif.getAttribute(key)?.let{key to it}}.toMap()
+            val checked=fromAttributes(fields)
+            val hint=runCatching{XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP))}.getOrNull()?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
+            checked.copy(sourceCreateDate=hint)
+        }catch(_:Exception){unavailable()}
         fun read(file:File):PhotoMetadata=try {
             val cr3=CanonCr3CaptureMetadata.read(file,SCHEMA.values.map{it.group to it.tag}.toSet())
             if(cr3!=null)fromCanonCr3(cr3) else {

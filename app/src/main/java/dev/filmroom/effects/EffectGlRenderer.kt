@@ -7,8 +7,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Owns only GL resources, never the input bitmaps. Call all methods with a current GLES2 context. */
-class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap,private val readout:EffectCameraReadout = EffectCameraReadout()) {
+class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,private val result:Bitmap,private val readout:EffectCameraReadout = EffectCameraReadout(),private val previewFinder:Boolean=false) {
+    // Keep the original program and geometry for equal-aspect images, including pixel rounding.
+    private val fitPreviewFinder=previewFinder && kind==EffectKind.OPTICAL_LEAK &&
+        EffectGeometry.needsPreviewFinder(source.width,source.height,result.width,result.height)
     private var program=0
+    private var motionAspect:Float?=null
+    private val motionBlur=EffectMotionGpuBlur()
+    private var motionWidth=0
+    private var motionHeight=0
     private var marksWidth=0
     private var marksHeight=0
     private val textures=IntArray(7)
@@ -21,7 +28,7 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         val vs=compile(GL_VERTEX_SHADER,VERTEX)
         var fs=0
         try {
-            fs=compile(GL_FRAGMENT_SHADER,FRAGMENT)
+            fs=compile(GL_FRAGMENT_SHADER,if(fitPreviewFinder)PREVIEW_FRAGMENT else FRAGMENT)
             program=glCreateProgram();glAttachShader(program,vs);glAttachShader(program,fs);glLinkProgram(program)
             val ok=IntArray(1);glGetProgramiv(program,GL_LINK_STATUS,ok,0)
             check(ok[0]!=0) { "Effect shader link: ${glGetProgramInfoLog(program)}" }
@@ -38,6 +45,32 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
             } finally { overlay.recycle();marks.recycle();defocused.recycle() }
             check(glGetError()==GL_NO_ERROR) { "Effect texture upload failed" }
         } catch(t:Throwable) {release();throw t} finally {glDeleteShader(vs);if(fs!=0)glDeleteShader(fs)}
+    }
+    fun updateMotionFrame(frame:EffectMotionFrame):Boolean {
+        if(kind!=EffectKind.OPTICAL_LEAK||program==0)return false
+        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,textures[0])
+        if(motionWidth==frame.sharp.width&&motionHeight==frame.sharp.height)GLUtils.texSubImage2D(GL_TEXTURE_2D,0,0,0,frame.sharp)
+        else {GLUtils.texImage2D(GL_TEXTURE_2D,0,frame.sharp,0);motionWidth=frame.sharp.width;motionHeight=frame.sharp.height}
+        if(frame.blurred!=null){glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,textures[5]);GLUtils.texImage2D(GL_TEXTURE_2D,0,frame.blurred,0)}
+        else {val scale=minOf(1f,256f/maxOf(frame.sharp.width,frame.sharp.height));try{motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.sharp.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.sharp.height*scale).toInt().coerceAtLeast(1))}
+            catch(_:Exception){motionAspect=frame.sharp.width.toFloat()/frame.sharp.height;motionBlur.close();resetMotionFrame()}}
+        check(glGetError()==GL_NO_ERROR){"Motion frame upload failed"}
+        motionAspect=frame.sharp.width.toFloat()/frame.sharp.height;return true
+    }
+    internal fun updateMotionSurface(stream:EffectMotionSurfaceTexture,rawWidth:Int,rawHeight:Int,rotation:Int,composition:EffectSourceComposition?,needsBlur:Boolean):EffectMotionSurfaceTexture.Frame? {
+        if(kind!=EffectKind.OPTICAL_LEAK||program==0)return null
+        try {
+            val frame=stream.drawLatest(textures[0],rawWidth,rawHeight,rotation,composition)?:return null
+            motionWidth=frame.width;motionHeight=frame.height;motionAspect=frame.width.toFloat()/frame.height
+            if(needsBlur){val scale=minOf(1f,256f/maxOf(frame.width,frame.height));motionBlur.render(textures[0],textures[5],kotlin.math.round(frame.width*scale).toInt().coerceAtLeast(1),kotlin.math.round(frame.height*scale).toInt().coerceAtLeast(1))}
+            check(glGetError()==GL_NO_ERROR){"Surface motion draw failed"};return frame
+        }catch(e:Exception){for(i in 0 until 8){if(glGetError()==GL_NO_ERROR)break};resetMotionFrame(true);throw e}
+    }
+    fun resetMotionFrame(force:Boolean=false){
+        if(kind!=EffectKind.OPTICAL_LEAK||program==0)return
+        if(force||motionAspect!=null){glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,textures[0]);GLUtils.texImage2D(GL_TEXTURE_2D,0,source,0)
+            val blur=EffectTextures.defocused(source);try{glActiveTexture(GL_TEXTURE5);glBindTexture(GL_TEXTURE_2D,textures[5]);GLUtils.texImage2D(GL_TEXTURE_2D,0,blur,0)}finally{blur.recycle()}
+            motionAspect=null;motionWidth=0;motionHeight=0;motionBlur.invalidateSize()}
     }
     private var pageAspect=1f
     private var pageLoaded=false
@@ -58,11 +91,16 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
     fun draw(width:Int,height:Int,timeMs:Long,slow:Boolean=false,pageOffset:Float=0f,pageDirection:Int=0) {
         check(program!=0);if(width<=0||height<=0)return
         glViewport(0,0,width,height);glDisable(GL_BLEND);glDisable(GL_DEPTH_TEST);glDisable(GL_SCISSOR_TEST)
+        val finder=if(fitPreviewFinder)
+            EffectGeometry.previewFinder(width,height,source.width.toFloat()/source.height) else null
+        val finderWidth=finder?.rasterWidth ?: width
+        val finderHeight=finder?.rasterHeight ?: height
+        val finderAspect=finder?.aspect ?: (result.width.toFloat()/result.height)
         if(kind==EffectKind.OPTICAL_LEAK && (width!=marksWidth || height!=marksHeight)) {
-            val marks=EffectTextures.marks(width,height,source.width.toFloat()/source.height)
+            val marks=EffectTextures.marks(finderWidth,finderHeight,source.width.toFloat()/source.height,finderAspect)
             try {glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D,textures[3]);GLUtils.texImage2D(GL_TEXTURE_2D,0,marks,0)
                 check(glGetError()==GL_NO_ERROR){"Viewfinder marks upload failed"}
-                val panel=EffectTextures.readout(width,height,source.width.toFloat()/source.height,readout)
+                val panel=EffectTextures.readout(finderWidth,finderHeight,finderAspect,readout)
                 try { glActiveTexture(GL_TEXTURE4);glBindTexture(GL_TEXTURE_2D,textures[4]);GLUtils.texImage2D(GL_TEXTURE_2D,0,panel,0) } finally {panel.recycle()}
                 marksWidth=width;marksHeight=height
             } finally {marks.recycle()}
@@ -77,11 +115,13 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         glUniform1i(location("readout"),4);glUniform1i(location("srcBlur"),5)
         glUniform1f(location("focus"),EffectTimeline.focusProgress(timeMs,slow))
         glUniform1f(location("screenAspect"),width.toFloat()/height)
-        glUniform1f(location("sourceAspect"),source.width.toFloat()/source.height)
-        glUniform1f(location("sourceViewportAspect"),EffectGeometry.sourceViewportAspect(width,height,source.width.toFloat()/source.height))
-        val layout=EffectGeometry.opticalLayout(source.width.toFloat()/source.height)
+        glUniform1f(location("sourceAspect"),motionAspect ?: (source.width.toFloat()/source.height))
+        glUniform1f(location("sourceViewportAspect"),finder?.aspect ?: EffectGeometry.sourceViewportAspect(width,height,result.width.toFloat()/result.height))
+        val layout=EffectGeometry.opticalLayout(finderAspect)
         glUniform2f(location("opticalPad"),layout.padX,layout.padY)
-        glUniform2f(location("opticalLogicalSize"),layout.outerW,layout.outerW*height/width)
+        glUniform2f(location("opticalLogicalSize"),layout.outerW,if(finder!=null)layout.outerW/finder.aspect else layout.outerW*height/width)
+        glUniform2f(location("finderScale"),finder?.scaleX ?: 1f,finder?.scaleY ?: 1f)
+        glUniform1f(location("finderAspect"),finderAspect)
         glUniform1f(location("resultAspect"),result.width.toFloat()/result.height)
         glUniform1i(location("kind"),if(kind==EffectKind.LIGHT_TABLE)0 else 1)
         val s=EffectTimeline.at(kind,timeMs,slow)
@@ -91,7 +131,7 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
         val a=glGetAttribLocation(program,"a");glEnableVertexAttribArray(a);vertices.position(0)
         glVertexAttribPointer(a,2,GL_FLOAT,false,0,vertices);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glDisableVertexAttribArray(a)
     }
-    fun release(){if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(7,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0;pageLoaded=false}
+    fun release(){motionBlur.close();motionWidth=0;motionHeight=0;if(program!=0)glDeleteProgram(program);program=0;glDeleteTextures(7,textures,0);textures.fill(0);uniforms.clear();marksWidth=0;marksHeight=0;pageLoaded=false}
     private fun location(name:String)=uniforms.getOrPut(name){glGetUniformLocation(program,name)}
     private fun compile(type:Int,text:String):Int {
         val shader=glCreateShader(type);glShaderSource(shader,text);glCompileShader(shader)
@@ -121,7 +161,7 @@ vec3 focusedPhoto(vec2 uv,vec2 q){
  float blur=1.-focus;
  vec2 center=(q-.5)*opticalLogicalSize*(1.-2.*opticalPad);
  float split=1.-smoothstep(13.,14.,length(center));
- if(sourceAspect<1.) uv.y-=sign(center.x)*blur*.009*split;
+ if(resultAspect<1.) uv.y-=sign(center.x)*blur*.009*split;
  else uv.x+=sign(center.y)*blur*.009*split;
  return mix(photo(srcBlur,uv),photo(src,uv),focus);
 }
@@ -214,13 +254,15 @@ void main(){
   gl_FragColor=vec4(c,1.);return;
  }
  vec2 resultUv=contain(p,screenAspect,resultAspect);
- vec3 color=photo(dst,resultUv);
+ // Only encoder/pixel rounding can leave a subpixel seam now. Extend the edge
+ // texel there, rather than exposing gray; interior sampling remains contain().
+ vec3 color=texture2D(dst,clamp(resultUv,0.,1.)).rgb;
  if(showResult<.5){
   vec2 pad=opticalPad;
   vec2 q=(p-pad)/(1.-2.*pad);
 
   // Camera-space coordinates rotate with the portrait housing; image stays upright.
-  bool portrait=sourceAspect<1.;
+  bool portrait=resultAspect<1.;
   vec2 cameraQ=portrait?vec2(q.y,1.-q.x):q;
   float cover=optical.x;float angle=cover*1.57079633;float projected=pow(sin(angle),1.27);
   float edge=-.24+1.63*projected;float bow=.018*pow((cameraQ.x-.5)*2.,2.);
@@ -257,5 +299,18 @@ void main(){
  gl_FragColor=vec4(clamp(color,0.,1.),1.);
 }
 """.trimIndent()
+        /** Keep FRAGMENT byte-for-byte for exports. Only remap the opening finder for app preview. */
+        private val PREVIEW_FRAGMENT by lazy {
+            val openingStart=FRAGMENT.indexOf(" if(showResult<.5){")
+            val openingEnd=FRAGMENT.indexOf(" // The original cached Canvas light field",openingStart)
+            check(openingStart>=0 && openingEnd>openingStart)
+            val opening=FRAGMENT.substring(openingStart,openingEnd)
+                .replace(Regex("\\bp\\b"),"finderP")
+                .replace(" if(showResult<.5){"," if(showResult<.5){\n  vec2 finderP=(p-.5)/finderScale+.5;")
+            (FRAGMENT.substring(0,openingStart)+opening+FRAGMENT.substring(openingEnd))
+                .replace("uniform vec2 opticalPad,opticalLogicalSize;",
+                    "uniform vec2 opticalPad,opticalLogicalSize;\nuniform vec2 finderScale;\nuniform float finderAspect;")
+                .replace("resultAspect<1.","finderAspect<1.")
+        }
     }
 }

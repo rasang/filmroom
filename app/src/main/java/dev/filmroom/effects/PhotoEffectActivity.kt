@@ -1,6 +1,8 @@
 package dev.filmroom.effects
 
 import android.app.AlertDialog
+import java.io.File
+import dev.filmroom.diagnostics.*
 import android.animation.ValueAnimator
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -73,8 +75,8 @@ class PhotoEffectActivity : ComponentActivity() {
     private var pageAnimator:ValueAnimator?=null
     private val pageBusy get()=draggingPage||pageRequested||pageAnimator!=null||pageCommitPending
     private data class EffectPagePhoto(val record:dev.filmroom.export.ExportJob,val input:Bitmap,val output:Bitmap,
-        val composition:EffectSourceComposition?,val readout:EffectCameraReadout) {
-        fun close(){if(!input.isRecycled)input.recycle();if(output!==input&&!output.isRecycled)output.recycle()}
+        val composition:EffectSourceComposition?,val readout:EffectCameraReadout,val motionFile:File?=null) {
+        fun close(){motionFile?.delete();if(!input.isRecycled)input.recycle();if(output!==input&&!output.isRecycled)output.recycle()}
     }
     private val previewAudio by lazy { EffectPreviewAudio(this) }
     private val audioEpoch=java.util.concurrent.atomic.AtomicInteger()
@@ -85,6 +87,7 @@ class PhotoEffectActivity : ComponentActivity() {
     private var sourceUri:String?=null
     private var jobId:String?=null
     private var sourceComposition:EffectSourceComposition?=null
+    private var sourceMotionFile:File?=null
     private var cameraReadout=EffectCameraReadout()
     private var recordSourceUri:String?=null
     private var recordResultUri:String?=null
@@ -171,7 +174,7 @@ class PhotoEffectActivity : ComponentActivity() {
             private val maxFlingVelocity=ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat()
             private fun clearVelocity(){velocity?.recycle();velocity=null}
             override fun onDetachedFromWindow(){clearVelocity();super.onDetachedFromWindow()}
-            override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);if(w!=oldw&&oldw>0)cancelPageTransition();fitPreview();incomingPhoto?.let{incomingPreview?.layoutParams=pageLayout(it.input)}}
+            override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);if(w!=oldw&&oldw>0)cancelPageTransition();fitPreview();incomingPhoto?.let{incomingPreview?.layoutParams=pageLayout(it.output)}}
             override fun dispatchTouchEvent(event:MotionEvent):Boolean {
                 if(event.actionMasked==MotionEvent.ACTION_DOWN){clearVelocity();velocity=VelocityTracker.obtain()}
                 velocity?.addMovement(event)
@@ -309,7 +312,7 @@ class PhotoEffectActivity : ComponentActivity() {
         prefetchJob=worker;prefetchWorkers.add(worker);worker.start()
     }
     private suspend fun decodePage(record:dev.filmroom.export.ExportJob,edge:Int):EffectPagePhoto {
-        var output:Bitmap?=null;var input:Bitmap?=null
+        var output:Bitmap?=null;var input:Bitmap?=null;var motionFile:File?=null
         try {
             val composition=EffectSourceComposition.from(record)
             val readout=withContext(Dispatchers.IO){EffectCameraReadout.read(contentResolver,record.originalUri,record.photoMetadata)}
@@ -319,9 +322,10 @@ class PhotoEffectActivity : ComponentActivity() {
                 try{input=composition?.apply(raw){ensureActive()} ?: raw;if(input!==raw)raw.recycle()}
                 catch(t:Throwable){raw.recycle();throw t}
             }else input=output
+            if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){motionFile=EffectMotionInput.prepare(this@PhotoEffectActivity,record.originalUri){ensureActive()}}
             currentCoroutineContext().ensureActive()
-            return EffectPagePhoto(record,requireNotNull(input),requireNotNull(output),composition,readout).also{input=null;output=null}
-        }finally{input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}
+            return EffectPagePhoto(record,requireNotNull(input),requireNotNull(output),composition,readout,motionFile).also{input=null;output=null;motionFile=null}
+        }finally{motionFile?.delete();input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}
     }
     private fun canDragPage()=preview?.isFrameReady()==true && !pageCommitPending && !working && !liveChecking && pageAnimator==null && !pageRequested && loadJob?.isActive!=true && selectionJob?.isActive!=true
     private fun setPageControls(enabled:Boolean){
@@ -383,7 +387,7 @@ class PhotoEffectActivity : ComponentActivity() {
                         }
                     }
                 }else{
-                    val view=EffectPreview(photo.input,photo.output,photo.readout,false){rendered->
+                    val view=EffectPreview(photo.input,photo.output,photo.readout,false,photo.motionFile,photo.composition){rendered->
                         if(epoch==pageEpoch && incomingPreview===rendered){
                             incomingReady=true
                             if(pageRequested)settlePage(true) else if(draggingPage)applyPageDrag()
@@ -392,7 +396,7 @@ class PhotoEffectActivity : ComponentActivity() {
                     incomingPreview=view
                     view.setZOrderMediaOverlay(true)
                     view.translationX=stage.width.toFloat()*pageDirection
-                    stage.addView(view,pageLayout(photo.input))
+                    stage.addView(view,pageLayout(photo.output))
                     if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))view.onPause()
                 }
             }catch(e:CancellationException){throw e}
@@ -453,19 +457,19 @@ class PhotoEffectActivity : ComponentActivity() {
         if(nextPreview==null)return
         stopPreviewAudio()
         if(!lightTable)preview?.let{it.onPause();stage.removeView(it)}
-        val oldSource=source;val oldResult=result
+        val oldSource=source;val oldResult=result;val oldMotion=sourceMotionFile
         val oldRecord=currentRecord?.takeIf{!sourceTemporary&&!resultTemporary&&it.originalUri==sourceUri&&it.mediaUri==resultUri}
         val departed=if(oldRecord!=null&&oldSource!=null&&oldResult!=null)
-            EffectPagePhoto(oldRecord,oldSource,oldResult,sourceComposition,cameraReadout) else null
+            EffectPagePhoto(oldRecord,oldSource,oldResult,sourceComposition,cameraReadout,oldMotion) else null
         val retainEpoch=retentionEpoch
         val commitEpoch=pageEpoch
         currentRecord=photo.record
-        source=photo.input;result=photo.output;sourceComposition=photo.composition;cameraReadout=photo.readout
+        source=photo.input;result=photo.output;sourceComposition=photo.composition;cameraReadout=photo.readout;sourceMotionFile=photo.motionFile
         jobId=photo.record.id;sourceUri=photo.record.originalUri;resultUri=photo.record.mediaUri
         recordSourceUri=sourceUri;recordResultUri=resultUri;sourceTemporary=false;resultTemporary=false
         preview=nextPreview;preview?.translationX=0f
         incomingPhoto=null;incomingPreview=null;incomingId=null;incomingReady=false;pageRequested=false;pageDrag=0f
-        val disposeOld={oldSource?.takeUnless{it.isRecycled}?.recycle();if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle();Unit}
+        val disposeOld={oldMotion?.delete();oldSource?.takeUnless{it.isRecycled}?.recycle();if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle();Unit}
         pendingRetirements.add(disposeOld)
         val releaseOld={runOnUiThread{
             if(pendingRetirements.remove(disposeOld)){
@@ -512,6 +516,7 @@ class PhotoEffectActivity : ComponentActivity() {
         // The GL views have now stopped and detached; no upload can still access retired inputs.
         pendingRetirements.toList().also{pendingRetirements.clear()}.forEach{it()}
         pageCommitPending=false;currentRecord=null
+        sourceMotionFile?.delete();sourceMotionFile=null
         val oldSource=source;val oldResult=result;source=null;result=null
         oldSource?.takeUnless{it.isRecycled}?.recycle()
         if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle()
@@ -519,7 +524,7 @@ class PhotoEffectActivity : ComponentActivity() {
     private fun load(refreshLinks:Boolean=false,autoPlay:Boolean=false){
         loadJob?.cancel();replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false;status.visibility=android.view.View.VISIBLE;status.text=t("加载照片…","Loading photo…")
         loadJob=lifecycleScope.launch{
-            var ownedOutput:Bitmap?=null;var ownedInput:Bitmap?=null
+            var ownedOutput:Bitmap?=null;var ownedInput:Bitmap?=null;var ownedMotion:File?=null
             try {
                 val record=jobId?.let{id->withContext(Dispatchers.IO){runCatching{dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store.get(id)}.getOrNull()}}
                 sourceComposition=EffectSourceComposition.from(record)
@@ -540,10 +545,13 @@ class PhotoEffectActivity : ComponentActivity() {
                 ensureActive()
                 val input=ownedInput
                 if(input==null){missing(true);return@launch}
-                clearPreview();currentRecord=record;result=output;source=input;ownedOutput=null;ownedInput=null
-                preview=EffectPreview(input,output,cameraReadout,autoPlay).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
+                if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){ownedMotion=EffectMotionInput.prepare(this@PhotoEffectActivity,sourceUri){ensureActive()}}
+                ensureActive()
+                clearPreview();currentRecord=record;result=output;source=input;sourceMotionFile=ownedMotion;ownedOutput=null;ownedInput=null;ownedMotion=null
+                preview=EffectPreview(input,output,cameraReadout,autoPlay,sourceMotionFile,sourceComposition).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
                 replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;preloadAdjacentPhotos()
             } finally {
+                ownedMotion?.delete()
                 ownedInput?.takeUnless{it.isRecycled}?.recycle()
                 if(ownedOutput!==ownedInput)ownedOutput?.takeUnless{it.isRecycled}?.recycle()
             }
@@ -556,7 +564,7 @@ class PhotoEffectActivity : ComponentActivity() {
     }
     private fun fitPreview(){
         if(stage.width<=0||stage.height<=0)return
-        val photo=source ?: return
+        val photo=result ?: return
         preview?.layoutParams=pageLayout(photo)
     }
     private fun missing(original:Boolean){
@@ -606,15 +614,18 @@ class PhotoEffectActivity : ComponentActivity() {
         lifecycleScope.launch {
             val images=EffectExportImages()
             var report:EffectExportReport?=null
+            var motion:EffectMotionSource?=null
             try{
                 withContext(Dispatchers.IO){images.load(contentResolver,kind,sourceUri,requireNotNull(resultUri),quality,live=true,composition=sourceComposition){cancelled.get()||!isActive}}
-                val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout)
+                val captureMetadata=withContext(Dispatchers.IO){EffectCaptureMetadata.read(contentResolver,currentRecord?.photoMetadata,sourceUri,resultUri)}
+                withContext(Dispatchers.IO){motion=openExportMotion()}
+                val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=sourceMotionFile,photoMetadata=captureMetadata)
                 status.text=t("Live Photo 已保存，请在相册确认播放效果","Live Photo saved. Check playback in your gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看","View")){_,_->saved.publishedUris.firstOrNull()?.let{uri->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply{saved.selection?.environment?.galleryPackage?.let{setPackage(it)}})}.onFailure{showLiveMessage(t("请打开系统相册查看","Open your gallery to view it"))}}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.text=t("已取消导出","Export cancelled")}
             catch(e:OutOfMemoryError){status.text=t("内存不足，请选择较低清晰度后重试","Not enough memory. Choose a lower quality and retry")}
             catch(e:Exception){status.text=if(cancelled.get())t("已取消导出","Export cancelled")else t("Live Photo 导出失败，请重试或导出视频","Live Photo export failed. Retry or export a video")}
-            finally{images.close();working=false;liveExport=false;qualityButton.isEnabled=true;if(!isDestroyed){livePhotoButton.text=t("导出 Live Photo","Export Live Photo");replayButton.isEnabled=true;exportButton.isEnabled=true}}
+            finally{withContext(NonCancellable+Dispatchers.IO){motion?.close()};images.close();working=false;liveExport=false;qualityButton.isEnabled=true;if(!isDestroyed){livePhotoButton.text=t("导出 Live Photo","Export Live Photo");replayButton.isEnabled=true;exportButton.isEnabled=true}}
         }
     }
     private fun export(){
@@ -627,17 +638,24 @@ class PhotoEffectActivity : ComponentActivity() {
         lifecycleScope.launch{
             val images=EffectExportImages()
             var report:EffectExportReport?=null
+            var motion:EffectMotionSource?=null
             try{
                 val uri=withContext(Dispatchers.IO){
                     images.load(contentResolver,kind,sourceUri,requireNotNull(resultUri),quality,composition=sourceComposition){cancelled.get()||!isActive}
-                    EffectVideoExporter.export(applicationContext,kind,images.source,images.result,{p->runOnUiThread{if(!isDestroyed){val percent=(p*100).toInt();status.visibility=android.view.View.VISIBLE;status.text=t("导出中 $percent%","Exporting $percent%")}}}, {cancelled.get()||!isActive},slow=slow,quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout)}
+                    motion=openExportMotion()
+                    EffectVideoExporter.export(applicationContext,kind,images.source,images.result,{p->runOnUiThread{if(!isDestroyed){val percent=(p*100).toInt();status.visibility=android.view.View.VISIBLE;status.text=t("导出中 $percent%","Exporting $percent%")}}}, {cancelled.get()||!isActive},slow=slow,quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=sourceMotionFile)}
                 status.visibility=android.view.View.VISIBLE;status.text=t("视频已保存到相册","Video saved to gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看视频","View video")){_,_->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))}.onFailure{Toast.makeText(this@PhotoEffectActivity,t("没有可播放视频的应用","No video player available"),Toast.LENGTH_SHORT).show()}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.visibility=android.view.View.VISIBLE;status.text=t("已取消导出","Export cancelled")}
             catch(e:OutOfMemoryError){status.visibility=android.view.View.VISIBLE;status.text=t("内存不足，请选择较低清晰度后重试","Not enough memory. Choose a lower quality and retry")}
             catch(e:Exception){status.visibility=android.view.View.VISIBLE;status.text=if(cancelled.get())t("已取消导出","Export cancelled")else t("视频导出失败，请重试","Video export failed. Try again")}
-            finally{images.close();working=false;qualityButton.isEnabled=true;if(!isDestroyed){exportButton.text=t("导出视频","Export video");replayButton.isEnabled=true;livePhotoButton.isEnabled=true}}
+            finally{withContext(NonCancellable+Dispatchers.IO){motion?.close()};images.close();working=false;qualityButton.isEnabled=true;if(!isDestroyed){exportButton.text=t("导出视频","Export video");replayButton.isEnabled=true;livePhotoButton.isEnabled=true}}
         }
+    }
+    private fun openExportMotion():EffectMotionSource? {
+        if(kind!=EffectKind.OPTICAL_LEAK)return null
+        val file=sourceMotionFile ?: return null
+        return try{EffectMotionSource(file,sourceComposition)}catch(_:Exception){null}catch(_:OutOfMemoryError){null}
     }
     private fun leave(){if(!working)finish()else AlertDialog.Builder(this).setMessage(t("取消导出并返回？","Cancel export and return?")).setNegativeButton(t("继续导出","Keep exporting"),null).setPositiveButton(t("返回","Leave")){_,_->cancelled.set(true);finish()}.show()}
     override fun onSaveInstanceState(out:Bundle){out.putString("record_source_uri",recordSourceUri);out.putString("record_result_uri",recordResultUri);out.putBoolean("source_temporary",sourceTemporary);out.putBoolean("result_temporary",resultTemporary);out.putString(JOB_ID,jobId);out.putBoolean("effect_slow",selectedSlow);out.putString("effect_quality",selectedQuality.name);out.putString(RESULT_URI,resultUri);out.putString(SOURCE_URI,sourceUri);super.onSaveInstanceState(out)}
@@ -645,14 +663,72 @@ class PhotoEffectActivity : ComponentActivity() {
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)clearAdjacentPhotos()}
     override fun onPause(){cancelPageTransition();clearAdjacentPhotos();stopPreviewAudio();preview?.reset();preview?.onPause();super.onPause()}
     override fun onDestroy(){clearPreview();stopPreviewAudio();cancelled.set(true);super.onDestroy()}
-    private inner class EffectPreview(private var a:Bitmap,private var b:Bitmap,private var readout:EffectCameraReadout,autoPlay:Boolean,private val firstFrame:((EffectPreview)->Unit)?=null):GLSurfaceView(this@PhotoEffectActivity),GLSurfaceView.Renderer{
-        private var renderer=EffectGlRenderer(kind,a,b,readout)
+    private inner class EffectPreview(private var a:Bitmap,private var b:Bitmap,private var readout:EffectCameraReadout,autoPlay:Boolean,private val motionFile:File?=null,private val composition:EffectSourceComposition?=null,private val firstFrame:((EffectPreview)->Unit)?=null):GLSurfaceView(this@PhotoEffectActivity),GLSurfaceView.Renderer{
+        private var renderer=EffectGlRenderer(kind,a,b,readout,previewFinder=true)
         private var start=0L;private var widthPx=1;private var heightPx=1;@Volatile private var failed=false;private val playback=EffectPreviewPlayback(autoPlay);private var playingSlow=selectedSlow;private var phase="";private var audioRequested=false;private var reportedFrame=false;private var filmSlide=0f;private var filmDirection=0;private var hadSurface=false
         @Volatile private var frameDrawn=false
-        init{setEGLContextClientVersion(2);setRenderer(this);renderMode=RENDERMODE_CONTINUOUSLY}
+        private val motionLifecycle=EffectMotionLifecycleGate()
+        @Volatile private var motion:EffectMotionPreview?=null
+        @Volatile private var surfaceMotion:EffectSurfaceMotionPreview?=null
+        @Volatile private var motionLog:EffectMotionPreviewLog?=null
+        private var motionAttempted=false
+        private var motionPrimed=false
+        private var motionFramePrepared=false
+        private var preparedSourceAudio=false
+        private var pendingFirstFrame=false
+        private var pendingFirstPts:Long?=null
+        private var pendingFirstSubmitNs=0L
+        private var motionWaitBegan=0L
+        override fun onPause(){motionLifecycle.pause();disposeMotion(false,Outcome.CANCELLED);super.onPause()}
+        override fun onResume(){motionLifecycle.resume();super.onResume()}
+        private fun disposeMotion(releaseGl:Boolean,outcome:Outcome){
+            val (surface,old,log)=motionLifecycle.take{Triple(surfaceMotion,motion,motionLog).also{surfaceMotion=null;motion=null;motionLog=null}}
+            if(surface!=null)log?.decoder(surface.snapshot())
+            surface?.close(releaseGl);old?.close();log?.end(outcome)
+        }
+        private fun fallbackMotion(reason:MotionPreviewFallback){
+            surfaceMotion?.let{motionLog?.decoder(it.snapshot());it.close()};surfaceMotion=null
+            if(motionLifecycle.paused)return
+            motionLog?.path(MotionPreviewPath.BETA25_FALLBACK,reason)
+            val fallback=motionFile?.let{EffectMotionPreview(it,composition)}
+            if(!motionLifecycle.publish{motion=fallback})fallback?.close()
+        }
+        private fun ensureMotion(){
+            if(motionAttempted||motionLifecycle.paused)return
+            motionAttempted=true
+            val file=motionFile?:return
+            if(!motionLifecycle.publish{motionLog=EffectMotionPreviewLog()})return
+            try {val stream=EffectSurfaceMotionPreview(file,composition)
+                if(!motionLifecycle.publish{surfaceMotion=stream}){stream.close();return}
+                motionLog?.path(MotionPreviewPath.SURFACE)
+            }catch(_:Exception){fallbackMotion(MotionPreviewFallback.SURFACE)}catch(_:OutOfMemoryError){fallbackMotion(MotionPreviewFallback.OUT_OF_MEMORY)}
+        }
+        private fun tickMotion(timeMs:Long):Boolean {
+            surfaceMotion?.let{stream ->
+                if(stream.unavailable){val state=stream.snapshot();motionLog?.decoder(state);fallbackMotion(state.failureReason.takeUnless{it==MotionPreviewFallback.NONE}?:MotionPreviewFallback.CODEC)}
+                else {stream.request(timeMs,playingSlow);val began=System.nanoTime()
+                    try {val frame=stream.render(renderer,timeMs,playingSlow)
+                        if(frame!=null){motionLog?.path(MotionPreviewPath.SURFACE,width=stream.sourceWidth,height=stream.sourceHeight,hardware=stream.hardware)
+                            if(!motionFramePrepared)motionLog?.decoder(stream.snapshot())
+                            recordMotionFrame(frame.timestampNs/1000,timeMs,System.nanoTime()-began);return true}
+                        return motionFramePrepared
+                    }catch(_:Exception){fallbackMotion(MotionPreviewFallback.SURFACE)}catch(_:OutOfMemoryError){fallbackMotion(MotionPreviewFallback.OUT_OF_MEMORY)}
+                }
+            }
+            val fallback=motion?:return true
+            fallback.request(timeMs,playingSlow)
+            val frame=fallback.poll()
+            if(frame!=null){val began=System.nanoTime();frame.use{if(!renderer.updateMotionFrame(it)){fallback.close();motion=null;motionLog?.path(MotionPreviewPath.STATIC,MotionPreviewFallback.SURFACE)}};recordMotionFrame(null,timeMs,System.nanoTime()-began);return true}
+            if(fallback.isUnavailable()){fallback.close();motion=null;motionLog?.path(MotionPreviewPath.STATIC,MotionPreviewFallback.CODEC);return true}
+            return motionFramePrepared
+        }
+        private fun recordMotionFrame(ptsUs:Long?,timeMs:Long,cpuNs:Long){
+            if(!motionPrimed){pendingFirstFrame=true;pendingFirstPts=ptsUs;pendingFirstSubmitNs=cpuNs}else motionLog?.frame(ptsUs,timeMs,cpuNs)
+        }
+        init{setEGLContextClientVersion(2);setRenderer(this);renderMode=RENDERMODE_CONTINUOUSLY;if(autoPlay)previewAudio.prepare(kind,selectedSlow,motionFile)}
         override fun onSurfaceCreated(gl:GL10?,config:EGLConfig?){
-            val recreated=hadSurface;hadSurface=true;reportedFrame=false;frameDrawn=false;filmSlide=0f;filmDirection=0
-            runCatching{renderer=EffectGlRenderer(kind,a,b,readout);failed=false;renderer.initialize();start=SystemClock.elapsedRealtime();playingSlow=selectedSlow;renderMode=RENDERMODE_CONTINUOUSLY}
+            val recreated=hadSurface;hadSurface=true;disposeMotion(false,Outcome.CANCELLED);motionAttempted=false;motionPrimed=false;motionFramePrepared=false;preparedSourceAudio=false;pendingFirstFrame=false;motionWaitBegan=0;reportedFrame=false;frameDrawn=false;filmSlide=0f;filmDirection=0
+            runCatching{renderer=EffectGlRenderer(kind,a,b,readout,previewFinder=true);failed=false;renderer.initialize();start=SystemClock.elapsedRealtime();playingSlow=selectedSlow;renderMode=RENDERMODE_CONTINUOUSLY}
                 .onFailure{renderError()}
             if(recreated)runOnUiThread{
                 if(preview===this && (pageBusy||incomingId!=null))cancelPageTransition()
@@ -662,27 +738,40 @@ class PhotoEffectActivity : ComponentActivity() {
         override fun onSurfaceChanged(gl:GL10?,width:Int,height:Int){widthPx=width;heightPx=height}
         override fun onDrawFrame(gl:GL10?){if(failed)return;runCatching{
             val duration=EffectTimeline.durationMs(kind,playingSlow)
-            val elapsed=playback.elapsed(SystemClock.elapsedRealtime(),start,duration)
+            var elapsed=playback.elapsed(SystemClock.elapsedRealtime(),start,duration)
+            if(!playback.stopped&&!motionLifecycle.paused){
+                ensureMotion()
+                val frameReady=tickMotion(if(motionPrimed)elapsed.coerceIn(0,duration)else 0)
+                motionFramePrepared=motionFramePrepared||frameReady
+                val audioReady=previewAudio.isPrepared(kind,playingSlow,motionFile)
+                var ready=frameReady&&audioReady
+                if(!motionPrimed&&!ready){val now=SystemClock.elapsedRealtime();if(motionWaitBegan==0L)motionWaitBegan=now;start=now
+                    if(now-motionWaitBegan<1500){renderer.draw(widthPx,heightPx,duration,playingSlow,filmSlide,filmDirection);return}
+                    if(!motionFramePrepared){surfaceMotion?.let{motionLog?.decoder(it.snapshot());it.close()};surfaceMotion=null;motion?.close();motion=null;motionLog?.path(MotionPreviewPath.STATIC,MotionPreviewFallback.TIMEOUT)}
+                    ready=true
+                }
+                if(!motionPrimed&&ready){motionPrimed=true;preparedSourceAudio=audioReady;motionWaitBegan=0;start=SystemClock.elapsedRealtime();motionLog?.started();if(pendingFirstFrame){motionLog?.frame(pendingFirstPts,0,pendingFirstSubmitNs);pendingFirstFrame=false};elapsed=0}
+            }
             renderer.draw(widthPx,heightPx,elapsed.coerceIn(0,duration),playingSlow,filmSlide,filmDirection)
             frameDrawn=true
             if(!reportedFrame){reportedFrame=true;postOnAnimation{firstFrame?.invoke(this)}}
             if(!playback.stopped && !audioRequested){
                 audioRequested=true
-                val epoch=audioEpoch.get();val began=start;val slow=playingSlow
+                val epoch=audioEpoch.get();val began=start;val slow=playingSlow;val prepared=preparedSourceAudio
                 runOnUiThread{
                     if(audioEpoch.get()==epoch && preview===this && !working && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
-                        previewAudio.play(kind,slow,began)
+                        previewAudio.play(kind,slow,began,motionFile,prepared)
                 }
             }
             playback.rendered(elapsed,duration)
-            if(playback.stopped)renderMode=RENDERMODE_WHEN_DIRTY
+            if(playback.stopped){renderMode=RENDERMODE_WHEN_DIRTY;disposeMotion(true,Outcome.SUCCESS)}
         }.onFailure{renderError()}}
         fun isFrameReady()=frameDrawn&&!failed
         fun hasFailed()=failed
         fun restoreCurrentFrame(){
             queueEvent{
                 filmSlide=0f;filmDirection=0;playback.stop()
-                if(failed)runCatching{renderer.release();renderer=EffectGlRenderer(kind,a,b,readout);renderer.initialize();failed=false}.onFailure{
+                if(failed)runCatching{renderer.release();renderer=EffectGlRenderer(kind,a,b,readout,previewFinder=true);renderer.initialize();failed=false}.onFailure{
                     failed=true
                     runOnUiThread{
                         status.visibility=android.view.View.VISIBLE;status.text=t("当前设备无法显示此效果","This device could not display the effect")
@@ -702,14 +791,14 @@ class PhotoEffectActivity : ComponentActivity() {
         fun replaceFilm(input:Bitmap,output:Bitmap,camera:EffectCameraReadout,releaseOld:()->Unit){
             queueEvent{
                 a=input;b=output;readout=camera
-                try{renderer.release();renderer=EffectGlRenderer(kind,a,b,readout);renderer.initialize();filmSlide=0f;filmDirection=0;playback.stop()}
+                try{renderer.release();renderer=EffectGlRenderer(kind,a,b,readout,previewFinder=true);renderer.initialize();filmSlide=0f;filmDirection=0;playback.stop()}
                 catch(t:Throwable){renderError()}
                 finally{releaseOld()}
             }
             requestRender()
         }
-        fun replay(){stopPreviewAudio();val slow=selectedSlow;queueEvent{audioRequested=false;playingSlow=slow;playback.replay();phase="";start=SystemClock.elapsedRealtime();renderMode=RENDERMODE_CONTINUOUSLY};requestRender()}
-        fun reset(){queueEvent{playback.stop();phase=""};requestRender()}
-        private fun renderError(){if(failed)return;failed=true;renderMode=RENDERMODE_WHEN_DIRTY;runOnUiThread{if(incomingPreview===this || (preview===this&&pageBusy)){failedPage();return@runOnUiThread};if(preview!==this)return@runOnUiThread;stopPreviewAudio();status.visibility=android.view.View.VISIBLE;status.text=t("当前设备无法显示此效果","This device could not display the effect");exportButton.isEnabled=false;livePhotoButton.isEnabled=false;replayButton.isEnabled=false}}
+        fun replay(){stopPreviewAudio();val slow=selectedSlow;previewAudio.prepare(kind,slow,motionFile);queueEvent{disposeMotion(true,Outcome.CANCELLED);motionAttempted=false;renderer.resetMotionFrame();motionPrimed=false;motionFramePrepared=false;preparedSourceAudio=false;pendingFirstFrame=false;motionWaitBegan=0;audioRequested=false;playingSlow=slow;playback.replay();phase="";start=SystemClock.elapsedRealtime();renderMode=RENDERMODE_CONTINUOUSLY};requestRender()}
+        fun reset(){queueEvent{playback.stop();disposeMotion(true,Outcome.CANCELLED);phase=""};requestRender()}
+        private fun renderError(){if(failed)return;failed=true;runCatching{disposeMotion(true,Outcome.FAILED)};renderMode=RENDERMODE_WHEN_DIRTY;runOnUiThread{if(incomingPreview===this || (preview===this&&pageBusy)){failedPage();return@runOnUiThread};if(preview!==this)return@runOnUiThread;stopPreviewAudio();status.visibility=android.view.View.VISIBLE;status.text=t("当前设备无法显示此效果","This device could not display the effect");exportButton.isEnabled=false;livePhotoButton.isEnabled=false;replayButton.isEnabled=false}}
     }
 }

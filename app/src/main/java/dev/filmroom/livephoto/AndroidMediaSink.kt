@@ -10,7 +10,7 @@ import dev.filmroom.livephoto.core.*
 import java.io.File
 import java.io.IOException
 
-internal class AndroidMediaSink(private val context:Context):MediaSink {
+internal class AndroidMediaSink(private val context:Context, private val captureTimeMillis:Long? = null):MediaSink {
     private val resolver=context.contentResolver
     private fun collection(mime:String):Uri = if(mime.startsWith("image/"))MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY) else MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
     override fun insertPending(displayName:String,mimeType:String,relativePath:String):String {
@@ -19,6 +19,7 @@ internal class AndroidMediaSink(private val context:Context):MediaSink {
             put(MediaStore.MediaColumns.MIME_TYPE,mimeType)
             put(MediaStore.MediaColumns.RELATIVE_PATH,relativePath)
             put(MediaStore.MediaColumns.IS_PENDING,1)
+            captureTimeMillis?.let{put(MediaStore.Images.Media.DATE_TAKEN,it)}
         }
         return resolver.insert(collection(mimeType),values)?.toString() ?: throw IOException("MediaStore insert returned null")
     }
@@ -39,7 +40,7 @@ internal class AndroidMediaSink(private val context:Context):MediaSink {
     }
     override fun publish(id:String) {
         val uri=Uri.parse(id); requireOwned(uri)
-        val values=ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING,0) }
+        val values=ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING,0); captureTimeMillis?.let{put(MediaStore.Images.Media.DATE_TAKEN,it)} }
         if(resolver.update(uri,values,null,null)!=1)throw IOException("Could not publish media row")
     }
     override fun existsOwned(id:String):Boolean = owner(Uri.parse(id))==context.packageName

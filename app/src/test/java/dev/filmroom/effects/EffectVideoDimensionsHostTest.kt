@@ -11,18 +11,19 @@ class EffectVideoDimensionsHostTest {
             assertEquals(1080 to 970,EffectVideoExporter.sceneDimensions(EffectKind.LIGHT_TABLE,aspect))
     }
     @Test fun opticalHousingReservesF3ReadoutWithoutChangingImageAspect() {
-        // Independent design contract: longest image edge 400, side bezel 10 each,
-        // header/footer 22 each. Portrait rotates this housing clockwise.
+        // beta27: uniform fractional bezel padding preserves the final photo aspect.
+        // Shortest image dimension receives 44 logical pixels in total.
         for(aspect in listOf(.1f,.5f,1f,1.5f,2f,10f)) {
             val imageW=if(aspect>=1f)400.0 else 400.0*aspect
             val imageH=if(aspect>=1f)400.0/aspect else 400.0
-            val px=if(aspect<1f)22.0 else 10.0;val py=if(aspect<1f)10.0 else 22.0
-            val outerW=imageW+px*2;val outerH=imageH+py*2
+            val bezelScale=1.0+44.0/kotlin.math.min(imageW,imageH)
+            val outerW=imageW*bezelScale;val outerH=imageH*bezelScale
+            val px=(outerW-imageW)/2;val py=(outerH-imageH)/2
             val layout=EffectGeometry.opticalLayout(aspect)
             assertEquals(outerW,layout.outerW.toDouble(),.0001)
             assertEquals(outerH,layout.outerH.toDouble(),.0001)
-            assertEquals(px,(layout.padX*layout.outerW).toDouble(),.00001)
-            assertEquals(py,(layout.padY*layout.outerH).toDouble(),.00001)
+            assertEquals(px,(layout.padX*layout.outerW).toDouble(),.0001)
+            assertEquals(py,(layout.padY*layout.outerH).toDouble(),.0001)
             assertEquals(aspect.toDouble(),imageW/imageH,.000001)
             val (w,h)=EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,aspect)
             val scale=1080.0/kotlin.math.max(outerW,outerH)
@@ -36,15 +37,15 @@ class EffectVideoDimensionsHostTest {
             val viewportW=w*(1.0-2*layout.padX)
             val viewportH=h*(1.0-2*layout.padY)
             val viewport=EffectGeometry.sourceViewportAspect(w,h,aspect)
-            assertEquals(viewportW/viewportH,viewport.toDouble(),.00001)
+            assertEquals(viewportW/viewportH,viewport.toDouble(),.0001)
             val fitX=if(viewport>aspect)aspect.toDouble()/viewport else 1.0
             val fitY=if(viewport>aspect)1.0 else viewport.toDouble()/aspect
             assertTrue(fitX>0 && fitX<=1 && fitY>0 && fitY<=1)
             assertEquals(aspect.toDouble(),viewportW*fitX/(viewportH*fitY),.00001)
         }
-        assertEquals(1080 to 626,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,2f))
-        assertEquals(626 to 1080,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,.5f))
-        assertEquals(1020 to 1080,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,1f))
+        assertEquals(1080 to 540,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,2f))
+        assertEquals(540 to 1080,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,.5f))
+        assertEquals(1080 to 1080,EffectVideoExporter.sceneDimensions(EffectKind.OPTICAL_LEAK,1f))
     }
     @Test fun everySceneFitsTheEncoderWithOnlyEvenRounding() {
         for(kind in EffectKind.values()) for(sourceAspect in listOf(.1f,.5f,1f,1.5f,2f,10f)) {

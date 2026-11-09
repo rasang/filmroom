@@ -5,8 +5,8 @@ import kotlin.math.*
 
 /** Native one-time raster assets, not HTML or a WebView. Canvas leak commands match paintLeak(150). */
 internal object EffectTextures {
-    fun marks(width:Int,height:Int,sourceAspect:Float):Bitmap {
-        val g=EffectGeometry.marks(width,height,sourceAspect)
+    fun marks(width:Int,height:Int,sourceAspect:Float,canvasAspect:Float=sourceAspect):Bitmap {
+        val g=EffectGeometry.marks(width,height,sourceAspect,canvasAspect)
         // Rasterize once per viewport, capped for extreme display sizes. Geometry remains logical.
         val scale=min(2f,2048f/max(g.width,g.height))
         val b=Bitmap.createBitmap(ceil(g.width*scale).toInt().coerceAtLeast(1),ceil(g.height*scale).toInt().coerceAtLeast(1),Bitmap.Config.ARGB_8888)
@@ -19,7 +19,7 @@ internal object EffectTextures {
         p.color=Color.argb(100,10,12,9);p.strokeWidth=.38f
         c.drawCircle(cx,cy,outer,p)
         c.drawCircle(cx,cy,split,p)
-        if(EffectGeometry.opticalLayout(sourceAspect).portrait) c.drawLine(cx,cy-split,cx,cy+split,p)
+        if(EffectGeometry.opticalLayout(canvasAspect).portrait) c.drawLine(cx,cy-split,cx,cy+split,p)
         else c.drawLine(cx-split,cy,cx+split,cy,p)
         p.color=Color.argb(28,17,19,14);c.drawCircle(cx,cy,split*1.38f,p)
         return b

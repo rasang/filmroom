@@ -7,12 +7,12 @@ enum class EffectKind { LIGHT_TABLE, OPTICAL_LEAK }
 /** Millisecond-driven state shared by on-screen playback and offline video export. */
 object EffectTimeline {
     const val LIGHT_HOLD_MS = 1000L
-    const val OPTICAL_HOLD_MS = 1200L
-    const val OPTICAL_SLOW_HOLD_MS = 500L
+    const val OPTICAL_HOLD_MS = 1500L
+    const val OPTICAL_SLOW_HOLD_MS = 620L
     // Slow cover/settle remains 7 1/3 times normal; leak itself always keeps its 610 ms.
     fun opticalHoldMs(slow: Boolean) = if (slow) OPTICAL_SLOW_HOLD_MS else OPTICAL_HOLD_MS
     /** Focus settles inside the existing opening hold, leaving the shutter/leak timing unchanged. */
-    fun focusDurationMs(slow:Boolean=false):Long = if(slow) 425L else 850L
+    fun focusDurationMs(slow:Boolean=false):Long = if(slow) 545L else 1150L
     fun focusProgress(timeMs:Long,slow:Boolean=false):Float {
         val duration=focusDurationMs(slow).toFloat()
         val u=(timeMs/duration).coerceIn(0f,1f)

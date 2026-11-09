@@ -33,7 +33,7 @@ internal object PresetQrPoster {
             typeface=Typeface.create("sans-serif",if(bold)Typeface.BOLD else Typeface.NORMAL)
         }
         return StaticLayout.Builder.obtain(text,0,text.length,paint,width).setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setIncludePad(false).setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY).build()
+            .setIncludePad(false).setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY).build()
     }
     private fun fit(text:String,width:Int,maxSize:Float,minSize:Float,lines:Int,color:Int,bold:Boolean=false):StaticLayout {
         var size=maxSize;var result=layout(text,size,width,color,bold)

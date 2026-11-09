@@ -3,6 +3,7 @@ import dev.filmroom.effects.*
 import org.junit.Assert.*
 import org.junit.Test
 class EffectF3FocusTest {
+ @Test fun beta27FocusDurations() { assertEquals(1150L,EffectTimeline.focusDurationMs(false));assertEquals(545L,EffectTimeline.focusDurationMs(true)) }
  @Test fun focusIsMonotonicAndSettlesBeforeShutter() {
   for(slow in listOf(false,true)) {
    assertEquals(0f,EffectTimeline.focusProgress(0,slow),0f)

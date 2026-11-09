@@ -21,9 +21,19 @@ No endorsement by Nikon or the recording authors is claimed. The focus beep is a
 
 Build: tools/effect-audio/generate-recorded.py with the two private source files.
 Generated outputs: 48kHz mono AAC-LC, three seconds each.
-Normal: focus 775–850ms; shutter starts 1200ms. Slow: focus 350–425ms; shutter starts 500ms.
+Normal: focus 1075–1150ms; shutter starts 1500ms. Slow: focus 470–545ms; shutter starts 620ms.
 Light table: switch starts 1000ms. All playback paths use the same assets.
 
 2026-11-08 room-air bed: original deterministic synthesis, 80Hz high-pass/1800Hz low-pass,
 -52 dBFS RMS before 40ms endpoint fades. No mains hum, repeat-loop, extra effects,
 or foreground gain/trigger changes. Same bed mixed into all three tracks.
+
+2026-11-09: focus blur-to-clear extended by 300ms normal / 120ms slow, borrowed
+from final still hold. Both foreground cues move by that amount; room bed,
+light-table track and full mirror/leak stages remain unchanged. Total duration 3s.
+
+2026-11-09 next preview revision: user requested half the ambient-bed amplitude.
+ROOM_TONE is multiplied by 0.5 before mixing (approximately -58.0206 dBFS RMS
+before existing 40ms fades). Foreground clips, focus-tone PCM, gains and timing
+are unchanged. Re-encoded AAC quiet-region ratios are approximately 0.506,
+not exactly 0.5 sample-by-sample due to lossy coding.

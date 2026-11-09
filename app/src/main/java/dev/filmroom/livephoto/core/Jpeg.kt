@@ -83,7 +83,8 @@ internal object Jpeg {
             writeInt(0); writeInt(0x00030000); writeInt(imageSize.toInt()); writeInt(0); writeShort(0); writeShort(0)
         })
     }
-    fun exif(comment: ByteArray?): ByteArray {
+    fun exif(comment: ByteArray?, dates: LivePhotoDates? = null): ByteArray {
+        if (dates != null) return datedExif(comment, dates)
         val tiff = bytes {
             write(ascii("II")); write(byteArrayOf(42, 0)); write(le32(8))
             write(byteArrayOf(if (comment == null) 1 else 2, 0))
@@ -96,5 +97,36 @@ internal object Jpeg {
         }
         return app(0xe1, ascii("Exif\u0000\u0000") + tiff)
     }
+    private data class Entry(val tag:Int,val type:Int,val count:Int,val value:ByteArray)
+    private fun datedExif(comment:ByteArray?,dates:LivePhotoDates):ByteArray {
+        fun text(tag:Int,value:String):Entry { val b=ascii(value)+byteArrayOf(0);return Entry(tag,2,b.size,b) }
+        val main=mutableListOf(Entry(0x112,3,1,byteArrayOf(1,0)),text(0x132,dates.modified))
+        val exif=mutableListOf(text(0x9010,dates.modifiedOffset))
+        dates.modifiedSubsec?.let{exif+=text(0x9290,it)}
+        dates.original?.let{exif+=text(0x9003,it)}
+        dates.originalOffset?.let{exif+=text(0x9011,it)}
+        dates.originalSubsec?.let{exif+=text(0x9291,it)}
+        comment?.let{exif+=Entry(0x9286,7,it.size,it)}
+        val exifStart=8+2+(main.size+1)*12+4
+        main+=Entry(0x8769,4,1,le32(exifStart.toLong()))
+        var offset=exifStart+2+exif.size*12+4
+        val payload=java.io.ByteArrayOutputStream()
+        fun directory(entries:List<Entry>):ByteArray=bytes {
+            val sorted=entries.sortedBy{it.tag}
+            writeShort(java.lang.Short.reverseBytes(sorted.size.toShort()).toInt())
+            for(e in sorted) {
+                writeShort(java.lang.Short.reverseBytes(e.tag.toShort()).toInt())
+                writeShort(java.lang.Short.reverseBytes(e.type.toShort()).toInt())
+                write(le32(e.count.toLong()))
+                if(e.value.size<=4)write(e.value.copyOf(4)) else {
+                    write(le32(offset.toLong()));payload.write(e.value);offset+=e.value.size
+                    if(offset%2!=0){payload.write(0);offset++}
+                }
+            }
+            write(le32(0))
+        }
+        return app(0xe1,ascii("Exif\u0000\u0000")+ascii("II")+byteArrayOf(42,0)+le32(8)+directory(main)+directory(exif)+payload.toByteArray())
+    }
+
 }
 

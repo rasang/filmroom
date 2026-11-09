@@ -6,6 +6,12 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.SystemClock
+import java.io.File
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CancellationException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Main-thread audio playback using exactly the AAC asset embedded in exported MP4s. */
 internal class EffectPreviewAudio(private val context:Context) {
@@ -14,8 +20,40 @@ internal class EffectPreviewAudio(private val context:Context) {
     private var focus:AudioFocusRequest?=null
     private val attributes=AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build()
-    fun play(kind:EffectKind,slow:Boolean,beganAt:Long) {
-        stop()
+    private val prepareEpoch=AtomicInteger()
+    @Volatile private var preparedKey:String?=null
+    @Volatile private var preparingKey:String?=null
+    @Volatile private var mixedFile:File?=null
+    companion object {
+        private val audioWorker=ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,
+            ArrayBlockingQueue<Runnable>(1),
+            { runnable -> Thread(runnable,"effect-audio-prepare").apply { isDaemon=true } },
+            ThreadPoolExecutor.DiscardOldestPolicy())
+    }
+    private fun key(kind:EffectKind,slow:Boolean,file:File?)="$kind/$slow/${file?.absolutePath}"
+    fun prepare(kind:EffectKind,slow:Boolean,sourceMotionFile:File?) {
+        val key=key(kind,slow,sourceMotionFile)
+        if(preparedKey==key || preparingKey==key)return
+        val epoch=prepareEpoch.incrementAndGet()
+        preparedKey=null;preparingKey=key;mixedFile=null
+        if(kind!=EffectKind.OPTICAL_LEAK || sourceMotionFile==null) {
+            preparedKey=key;preparingKey=null;return
+        }
+        audioWorker.execute {
+            val result=try {
+                EffectMotionAudio.prepare(context,kind,slow,sourceMotionFile) {
+                    if(prepareEpoch.get()!=epoch)throw CancellationException()
+                }
+            }catch(_:Exception){null}catch(_:OutOfMemoryError){null}
+            if(prepareEpoch.get()==epoch) {
+                mixedFile=result;preparedKey=key;preparingKey=null
+            }
+        }
+    }
+    fun isPrepared(kind:EffectKind,slow:Boolean,sourceMotionFile:File?)=
+        preparedKey==key(kind,slow,sourceMotionFile)
+    fun play(kind:EffectKind,slow:Boolean,beganAt:Long,sourceMotionFile:File?=null,usePreparedSource:Boolean=true) {
+        stopPlayback()
         val request=AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(attributes).setOnAudioFocusChangeListener { change ->
                 if(change<0)stop()
@@ -25,7 +63,9 @@ internal class EffectPreviewAudio(private val context:Context) {
         val current=MediaPlayer();player=current
         try {
             current.setAudioAttributes(attributes)
-            context.assets.openFd(EffectAudioTrack.assetPath(kind,slow)).use {
+            val mixed=if(usePreparedSource && isPrepared(kind,slow,sourceMotionFile))mixedFile else null
+            if(mixed!=null && mixed.isFile)current.setDataSource(mixed.absolutePath)
+            else context.assets.openFd(EffectAudioTrack.assetPath(kind,slow)).use {
                 current.setDataSource(it.fileDescriptor,it.startOffset,it.length)
             }
             current.setOnPreparedListener {
@@ -44,6 +84,10 @@ internal class EffectPreviewAudio(private val context:Context) {
         }catch(_:Exception){stop()}
     }
     fun stop(){
+        prepareEpoch.incrementAndGet();preparedKey=null;preparingKey=null;mixedFile=null
+        stopPlayback()
+    }
+    private fun stopPlayback(){
         val old=player;player=null
         old?.setOnPreparedListener(null);old?.setOnSeekCompleteListener(null)
         old?.setOnCompletionListener(null);old?.setOnErrorListener(null)

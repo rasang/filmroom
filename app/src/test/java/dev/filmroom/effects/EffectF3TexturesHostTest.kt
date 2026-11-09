@@ -42,19 +42,19 @@ class EffectF3TexturesHostTest {
   val empty=EffectTextures.readout(1260,852,1.5f,EffectCameraReadout())
   val px=IntArray(empty.width*empty.height);empty.getPixels(px,0,empty.width,0,0,empty.width,empty.height)
   assertTrue(px.all{it==0});empty.recycle()
-  val b=EffectTextures.readout(1260,932,1.5f,EffectCameraReadout("250","5.6"))
+  val b=EffectTextures.readout(1260,840,1.5f,EffectCameraReadout("250","5.6"))
   val pixels=IntArray(b.width*b.height);b.getPixels(pixels,0,b.width,0,0,b.width,b.height)
   assertTrue(pixels.any{it ushr 24>0})
   for(y in b.height/8 until b.height)for(x in 0 until b.width)assertEquals(0,pixels[y*b.width+x])
   System.getProperty("filmroom.f3.capture")?.let{dir ->
    File(dir).mkdirs();File(dir,"readout.png").outputStream().use{b.compress(Bitmap.CompressFormat.PNG,100,it)}
-   val marks=EffectTextures.marks(1260,932,1.5f);File(dir,"marks.png").outputStream().use{marks.compress(Bitmap.CompressFormat.PNG,100,it)};marks.recycle()
+   val marks=EffectTextures.marks(1260,840,1.5f);File(dir,"marks.png").outputStream().use{marks.compress(Bitmap.CompressFormat.PNG,100,it)};marks.recycle()
   };b.recycle()
  }
  @Test fun portraitReadoutIsOnRightAndRotatedClockwiseNotAtTop() {
   val reading=EffectCameraReadout("250","5.6")
-  val landscape=EffectTextures.readout(1260,932,1.5f,reading)
-  val portrait=EffectTextures.readout(932,1260,2f/3f,reading)
+  val landscape=EffectTextures.readout(1260,840,1.5f,reading)
+  val portrait=EffectTextures.readout(840,1260,2f/3f,reading)
   fun bounds(b:Bitmap):android.graphics.Rect {
    var left=b.width;var top=b.height;var right=0;var bottom=0
    for(y in 0 until b.height)for(x in 0 until b.width)if(b.getPixel(x,y) ushr 24>0){left=minOf(left,x);top=minOf(top,y);right=maxOf(right,x);bottom=maxOf(bottom,y)}
@@ -68,7 +68,7 @@ class EffectF3TexturesHostTest {
   assertEquals(lb.width().toDouble(),pb.height().toDouble(),2.0)
   assertEquals(lb.height().toDouble(),pb.width().toDouble(),2.0)
   System.getProperty("filmroom.f3.capture")?.let { dir ->
-   val marks=EffectTextures.marks(932,1260,2f/3f);File(dir,"portrait-marks.png").outputStream().use{marks.compress(Bitmap.CompressFormat.PNG,100,it)};marks.recycle()
+   val marks=EffectTextures.marks(840,1260,2f/3f);File(dir,"portrait-marks.png").outputStream().use{marks.compress(Bitmap.CompressFormat.PNG,100,it)};marks.recycle()
    File(dir,"portrait-readout.png").outputStream().use{portrait.compress(Bitmap.CompressFormat.PNG,100,it)}
    File(dir,"landscape-readout.png").outputStream().use{landscape.compress(Bitmap.CompressFormat.PNG,100,it)}
   }

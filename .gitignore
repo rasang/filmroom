@@ -19,3 +19,6 @@
 /app/src/main/assets/effect_audio/*.m4a
 /app/src/main/assets/effect_audio/*.wav
 /app/src/main/assets/effect_audio/*.mp3
+
+# Local native build/recovery outputs; source is in native/ and codecs/.
+/app/src/main/jniLibs/

@@ -29,7 +29,8 @@ object EffectVideoExporter {
         quality: EffectExportQuality = EffectExportQuality.ORIGINAL,
         requestedSize: EffectExportSize? = null,
         onResolution: (EffectExportReport) -> Unit = {},
-        readout: EffectCameraReadout = EffectCameraReadout()
+        readout: EffectCameraReadout = EffectCameraReadout(),
+        motionSource: EffectMotionSource? = null, motionAudioFile: java.io.File? = null
     ): Uri = EffectExportLog.trace(EffectExportScope.VIDEO) { log ->
         val requested = requestedSize ?: EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
         val available = EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
@@ -56,7 +57,7 @@ object EffectVideoExporter {
                     codecIndex=choice.index,attempt=attempts+1))
                 log.failureReason=EffectExportReason.NONE
                 try {
-                    val uri = attempt(context,kind,source,result,onProgress,cancelled,slow,privateOutput,choice,log,readout)
+                    val uri = attempt(context,kind,source,result,onProgress,cancelled,slow,privateOutput,choice,log,readout,motionSource,motionAudioFile)
                     log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.VIDEO_SAVED,
                         requestedWidth=requested.width,requestedHeight=requested.height,width=choice.width,height=choice.height,
                         availableWidth=available.width,availableHeight=available.height,codecIndex=choice.index,attempt=attempts+1))
@@ -81,7 +82,8 @@ object EffectVideoExporter {
     private data class EncoderChoice(val name:String,val width:Int,val height:Int,val bitrate:Int,val index:Int)
     private fun attempt(context: Context, kind: EffectKind, source: Bitmap, result: Bitmap,
         onProgress: (Float) -> Unit, cancelled: () -> Boolean, slow: Boolean,
-        privateOutput: java.io.File?, choice:EncoderChoice, log:EffectExportLog, readout:EffectCameraReadout): Uri {
+        privateOutput: java.io.File?, choice:EncoderChoice, log:EffectExportLog, readout:EffectCameraReadout,
+        motionSource:EffectMotionSource?,motionAudioFile:java.io.File?): Uri {
         fun failed(reason:EffectExportReason,message:String):Nothing {
             log.failureReason=reason
             throw IOException(message)
@@ -152,6 +154,7 @@ object EffectVideoExporter {
             renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!,readout)
             log.step=EffectExportStep.INITIALIZE_RENDERER
             renderer.initialize()
+            motionSource?.reset()
             log.step=EffectExportStep.START_CODEC
             encoder.start()
             codecStarted = true
@@ -172,7 +175,7 @@ object EffectVideoExporter {
                 descriptor = resolver.openFileDescriptor(output!!, "w") ?: failed(EffectExportReason.OUTPUT_OPEN_FAILED,"Cannot open video")
                 MediaMuxer(descriptor!!.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             }.also { muxer = it }
-            audio = EffectAudioTrack(context,kind,slow)
+            audio = EffectAudioTrack(context,kind,slow,motionAudioFile,::checkCancelled)
             var track = -1
             var eosSeen = false
             var samples = 0
@@ -220,9 +223,12 @@ object EffectVideoExporter {
                 checkCancelled()
                 drain(false)
                 // Sample the same wall-clock time as preview; the final 2966 ms frame is already settled.
-            log.step=EffectExportStep.DRAW
+                log.step=EffectExportStep.DRAW
+                if(kind==EffectKind.OPTICAL_LEAK)motionSource?.frameAt(timelineTimeMs(frame),slow)?.use {
+                    renderer.updateMotionFrame(it)
+                }
                 renderer.draw(width, height, timelineTimeMs(frame), slow)
-            log.step=EffectExportStep.PRESENT
+                log.step=EffectExportStep.PRESENT
                 egl.present(presentationTimeNanos(frame))
                 drain(false)
                 onProgress((frame + 1).toFloat() / frameCount * .95f)

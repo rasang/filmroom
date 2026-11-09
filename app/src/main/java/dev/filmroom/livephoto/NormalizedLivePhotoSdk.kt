@@ -45,11 +45,11 @@ class NormalizedLivePhotoSdk(context: Context) {
             emit(ConversionStage.EXTRACTING_COVER)
             MediaProbe.writeCover(file, cover, jpeg, request.jpegQuality, request.maxLongEdge, ::check)
             emit(ConversionStage.PACKAGING)
-            val asset = LivePhotoPackager.packageTo(PackageRequest(jpeg, file, profile, cover, request.allowExperimentalProfiles), target, ::check)
+            val asset = LivePhotoPackager.packageTo(PackageRequest(jpeg, file, profile, cover, request.allowExperimentalProfiles, captureDates=request.captureDates), target, ::check)
             packaged = true
             emit(ConversionStage.VERIFYING); LivePhotoVerifier.verify(asset, ::check)
             emit(ConversionStage.PUBLISHING)
-            val uris = publisher.publish(asset, request.relativePath, ::check).ids.map(Uri::parse)
+            val uris = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check).ids.map(Uri::parse)
             // Once committed, do not turn cancellation/observer errors into an apparent failed save.
             emit(ConversionStage.COMPLETE)
             ConversionResult(asset, uris, selection = current)

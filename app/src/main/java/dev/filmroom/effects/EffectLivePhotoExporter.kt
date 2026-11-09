@@ -4,6 +4,7 @@ import dev.filmroom.diagnostics.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import dev.filmroom.io.PhotoMetadata
 import dev.filmroom.livephoto.*
 import dev.filmroom.livephoto.core.*
 import kotlinx.coroutines.*
@@ -39,9 +40,12 @@ object EffectLivePhotoExporter {
         quality: EffectExportQuality = EffectExportQuality.ORIGINAL,
         requestedSize: EffectExportSize? = null,
         onResolution: (EffectExportReport) -> Unit = {},
-        readout: EffectCameraReadout = EffectCameraReadout()): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO) { log ->
+        readout: EffectCameraReadout = EffectCameraReadout(),
+        motionSource: EffectMotionSource? = null, motionAudioFile: File? = null,
+        photoMetadata: PhotoMetadata = PhotoMetadata.unavailable()): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO) { log ->
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
         check(exportLock.tryLock()) { "Live Photo export already running" }
+        val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
         val app = context.applicationContext
         val video = File(app.cacheDir, "effect-live-${UUID.randomUUID()}.mp4")
         var rendered = false
@@ -58,13 +62,15 @@ object EffectLivePhotoExporter {
             withContext(Dispatchers.IO) {
                 EffectVideoExporter.export(app, kind, source, result,
                     onProgress = { onProgress(it * .75f) },
-                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it},readout=readout)
+                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it},readout=readout,motionSource=motionSource,motionAudioFile=motionAudioFile)
                 rendered = true
             }
             coroutine.ensureActive()
             if (cancelled()) throw CancellationException("Live Photo export cancelled")
             val actualRequest=request(Uri.fromFile(video), preflight.selection.environment?.galleryPackage,
-                preflight.selection.selectedProfile, requireNotNull(resolution).actual.longEdge)
+                preflight.selection.selectedProfile, requireNotNull(resolution).actual.longEdge).copy(
+                captureDates=captureDates,
+                captureTimeMillis=if(captureDates.original!=null)photoMetadata.mediaStoreCaptureTimeMillis() else null)
             // Evidence keys include dimensions. Resolve again for the actual encoded size, never
             // reuse the 1080 preflight key as proof of high-resolution gallery compatibility.
             val actualSelection=sdk.resolve(actualRequest)

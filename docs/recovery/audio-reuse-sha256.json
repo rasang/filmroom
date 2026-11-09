@@ -1,0 +1,18 @@
+{
+  "assets/effect_audio/PROVENANCE.txt": {
+    "sha256": "dfbc5cbd0c7fc5932c6554aafa8bb7c3d6e74265c02aabddf2cbf3b48c653c63",
+    "matches": true
+  },
+  "assets/effect_audio/light_table.m4a": {
+    "sha256": "e9ac67395544a4131d6d954a186a5c189b9db63a153461187ec73923e65509d7",
+    "matches": true
+  },
+  "assets/effect_audio/optical_leak.m4a": {
+    "sha256": "6da4bff5d43ebd0439fe160ede8750f72ff534e80c1b13e4e7b143d1a0abcbb3",
+    "matches": true
+  },
+  "assets/effect_audio/optical_leak_slow.m4a": {
+    "sha256": "9bf8aa69284b49a5942f10d2dad83ffcc3c084a8aab0712ff96b4fcb9b733e6d",
+    "matches": true
+  }
+}
