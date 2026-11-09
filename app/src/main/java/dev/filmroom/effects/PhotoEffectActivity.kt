@@ -666,13 +666,16 @@ class PhotoEffectActivity : ComponentActivity() {
                 val captureMetadata=withContext(Dispatchers.IO){EffectCaptureMetadata.read(contentResolver,currentRecord?.photoMetadata,sourceUri,resultUri)}
                 withContext(Dispatchers.IO){motion=openExportMotion()}
                 val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=motionAudio,photoMetadata=captureMetadata)
+                // Publication may have completed just as the Activity was cancelled. Keep the
+                // saved result authoritative, but never show a dialog on a dead/leaving Activity.
+                if(!isActive || isDestroyed || isFinishing)return@launch
                 status.text=t("Live Photo 已保存，请在相册确认播放效果","Live Photo saved. Check playback in your gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看","View")){_,_->saved.publishedUris.firstOrNull()?.let{uri->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply{saved.selection?.environment?.galleryPackage?.let{setPackage(it)}})}.onFailure{showLiveMessage(t("请打开系统相册查看","Open your gallery to view it"))}}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.text=t("已取消导出","Export cancelled")}
             catch(e:EffectMotionExportException){status.text=t("原 Live 视频解码失败，未保存，请重试", "Original Live video could not be decoded. Nothing was saved; please retry")}
             catch(e:OutOfMemoryError){status.text=t("内存不足，请选择较低清晰度后重试","Not enough memory. Choose a lower quality and retry")}
             catch(e:Exception){status.text=if(cancelled.get())t("已取消导出","Export cancelled")else t("Live Photo 导出失败，请重试或导出视频","Live Photo export failed. Retry or export a video")}
-            finally{withContext(NonCancellable+Dispatchers.IO){motion?.close()};images.close();working=false;liveExport=false;qualityButton.isEnabled=true;if(!isDestroyed){livePhotoButton.text=t("导出 Live Photo","Export Live Photo");replayButton.isEnabled=true;exportButton.isEnabled=true}}
+            finally{withContext(NonCancellable){withContext(Dispatchers.IO){motion?.close()}};images.close();working=false;liveExport=false;qualityButton.isEnabled=true;if(!isDestroyed){livePhotoButton.text=t("导出 Live Photo","Export Live Photo");replayButton.isEnabled=true;exportButton.isEnabled=true}}
         }
     }
     private fun export(){

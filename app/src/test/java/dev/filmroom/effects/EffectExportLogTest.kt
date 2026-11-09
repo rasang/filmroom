@@ -12,7 +12,13 @@ class EffectExportLogTest {
         assertEquals(EffectExportReason.IO_ERROR,EffectExportLog.reason(IOException("content://private")))
         assertEquals(EffectExportReason.INVALID_ARGUMENT,EffectExportLog.reason(IllegalArgumentException("secret")))
         assertEquals(EffectExportReason.INVALID_STATE,EffectExportLog.reason(IllegalStateException("file name")))
+        assertEquals(EffectExportReason.PERMISSION_DENIED,EffectExportLog.reason(SecurityException("content://private")))
         assertEquals(EffectExportReason.UNKNOWN,EffectExportLog.reason(Exception("unknown")))
+    }
+    @Test fun liveFailureCodesArePreservedWithoutMessages() {
+        val error=dev.filmroom.livephoto.core.LivePhotoException(
+            dev.filmroom.livephoto.core.ErrorCode.VERIFICATION_FAILED,"content://private/output")
+        assertEquals(EffectExportReason.LIVE_VERIFY_FAILED,EffectExportLog.reason(error))
     }
     @Test fun observerDoesNotChangeReturnValue() {
         val value=Any()

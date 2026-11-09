@@ -1,5 +1,6 @@
 package dev.filmroom.presets
 
+import dev.filmroom.diagnostics.*
 import android.content.Context
 import android.util.AtomicFile
 import dev.filmroom.model.EditorState
@@ -27,27 +28,37 @@ internal class SavedPresetStore(private val file: File) {
     enum class Problem { INVALID_NAME, DUPLICATE_NAME, FULL, UNREADABLE, INCOMPATIBLE, WRITE_FAILED, MISSING }
     class Failure(val problem: Problem) : Exception(problem.name)
 
-    fun list(): List<Preset> = synchronized(lock) { read() }
-    fun save(name: String, parameters: EditorState): Preset = synchronized(lock) {
+    fun list(): List<Preset> = RecipeLog.trace(RecipeAction.LIST) { log -> synchronized(lock) {
+        log.at(RecipeStep.STORE_READ); read().also { log.end(Outcome.SUCCESS, count = it.size) }
+    } }
+    fun save(name: String, parameters: EditorState): Preset = RecipeLog.trace(RecipeAction.SAVE) { log -> synchronized(lock) {
+        log.at(RecipeStep.VALIDATE)
         val clean = cleanName(name)
+        log.at(RecipeStep.STORE_READ)
         val existing = read()
         if (existing.any { nameKey(it.name) == nameKey(clean) }) throw Failure(Problem.DUPLICATE_NAME)
         if (existing.size >= MAX_PRESETS) throw Failure(Problem.FULL)
         val item = Preset(UUID.randomUUID().toString(), clean, System.currentTimeMillis(), snapshot(parameters))
         // Catch serialization omissions instead of silently promising an incomplete preset.
         if (item.parameters() != parameters) throw Failure(Problem.INCOMPATIBLE)
+        log.at(RecipeStep.STORE_WRITE)
         write(listOf(item) + existing)
+        log.end(Outcome.SUCCESS, count = existing.size + 1)
         item
-    }
-    fun delete(id: String): Boolean = synchronized(lock) {
+    } }
+    fun delete(id: String): Boolean = RecipeLog.trace(RecipeAction.DELETE) { log -> synchronized(lock) {
+        log.at(RecipeStep.STORE_READ)
         val existing = read()
-        if (existing.none { it.id == id }) return@synchronized false
+        if (existing.none { it.id == id }) { log.end(Outcome.FAILED, RecipeReason.MISSING); return@synchronized false }
+        log.at(RecipeStep.STORE_WRITE)
         write(existing.filterNot { it.id == id })
+        log.end(Outcome.SUCCESS, count = existing.size - 1)
         true
-    }
+    } }
 
     /** Merge only: existing recipes are never replaced. One atomic write, retry-safe IDs. */
-    fun mergeBackup(items: List<Preset>): Int = synchronized(lock) {
+    fun mergeBackup(items: List<Preset>): Int = RecipeLog.trace(RecipeAction.MERGE) { log -> synchronized(lock) {
+        log.at(RecipeStep.STORE_READ)
         val merged = read().toMutableList()
         var added = 0
         items.forEach { incoming ->
@@ -66,9 +77,10 @@ internal class SavedPresetStore(private val file: File) {
             added++
         }
         if (merged.size > MAX_PRESETS) throw Failure(Problem.FULL)
-        if (added > 0) write(merged)
+        if (added > 0) { log.at(RecipeStep.STORE_WRITE); write(merged) }
+        log.end(Outcome.SUCCESS, count = added)
         added
-    }
+    } }
 
     private fun read(): List<Preset> {
         val atomic = AtomicFile(file)

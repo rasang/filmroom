@@ -1,5 +1,6 @@
 package dev.filmroom.presets
 
+import dev.filmroom.diagnostics.*
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.Intent
@@ -35,6 +36,7 @@ internal class PresetQrShareDialog(
     private val showReadable: (AlertDialog) -> Unit,
     private val onDismiss: () -> Unit,
 ) {
+    internal var renderQr: (android.content.Context, String) -> Bitmap = PresetQrImage::render
     private var dialog: AlertDialog? = null
     private var renderJob: Job? = null
     private var shareJob: Job? = null
@@ -160,47 +162,65 @@ internal class PresetQrShareDialog(
             sharing = true
             target.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
             shareJob = activity.lifecycleScope.launch {
+                val log = RecipeLog(RecipeAction.QR_SHARE)
                 try {
                     val uri = withContext(Dispatchers.IO) {
                         val folder = File(activity.cacheDir, "preset-qr-shares").apply { mkdirs() }
                         folder.listFiles()?.filter { it.isFile && it.name.startsWith("preset-") && it.extension == "png" && System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
                         val file = File(folder, "preset-${UUID.randomUUID()}.png")
+                        log.at(RecipeStep.POSTER)
                         val poster = PresetQrPoster.render(activity, image, item.name, item.parameters())
                         try {
+                            log.at(RecipeStep.QR_DECODE)
                             check(PresetQrImage.decode(poster) == PresetQrCodec.encode(item.name, item.parameters()))
+                            log.at(RecipeStep.FILE_WRITE)
                             file.outputStream().use { check(poster.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                         } finally { poster.recycle() }
                         FileProvider.getUriForFile(activity, "${activity.packageName}.presetqr", file)
                     }
-                    if (!active(target)) return@launch
+                    if (!active(target)) { log.end(Outcome.CANCELLED, RecipeReason.INACTIVE); return@launch }
+                    log.at(RecipeStep.SHARE_CHOOSER)
                     val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri)
                         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = ClipData.newRawUri("Filmroom recipe", uri) }
                     activity.startActivity(Intent.createChooser(send, text(R.string.preset_qr_share_image)))
-                } catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { if (active(target)) status.text = text(R.string.preset_qr_share_failed) }
+                    // Success means chooser opened, not that another app received the image.
+                    log.end(Outcome.SUCCESS)
+                } catch (cancelled: CancellationException) { log.failed(cancelled); throw cancelled }
+                catch (error: Exception) { log.failed(error); if (active(target)) status.text = text(R.string.preset_qr_share_failed) }
+                catch (error: OutOfMemoryError) { log.failed(error); throw error }
                 finally { if (dialog === target) { sharing = false; target.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = bitmap != null } }
             }
         }
         renderJob = activity.lifecycleScope.launch {
+            // Own the result before crossing back to Main: prompt cancellation may discard
+            // withContext's return value after Default has allocated the bitmap.
+            var owned: Bitmap? = null
+            val log = RecipeLog(RecipeAction.QR_SHARE)
             try {
                 val image = withContext(Dispatchers.Default) {
+                    log.at(RecipeStep.QR_ENCODE)
                     val payload = PresetQrCodec.encode(item.name, item.parameters())
-                    PresetQrImage.render(activity, payload)
+                    log.at(RecipeStep.QR_RENDER)
+                    renderQr(activity, payload).also { owned = it }
                 }
-                if (!active(target)) return@launch
-                bitmap = image
+                if (!active(target)) { log.end(Outcome.CANCELLED, RecipeReason.INACTIVE); return@launch }
                 qr.maxWidth = qrWidth(image.width, activity.resources.displayMetrics.widthPixels - dp(96))
                 qr.setImageBitmap(image)
+                bitmap = image
+                owned = null // The displayed/shareable bitmap now owns this allocation.
                 (qr.drawable as? BitmapDrawable)?.paint?.isFilterBitmap = false
                 qr.visibility = View.VISIBLE
                 status.text = text(R.string.preset_qr_share_scope)
                 target.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { if (active(target)) status.text = text(when {
+                log.end(Outcome.SUCCESS)
+            } catch (cancelled: CancellationException) { log.failed(cancelled); throw cancelled }
+            catch (error: Exception) { log.failed(error); if (active(target)) status.text = text(when {
                 error is PresetQrCodec.Failure && error.problem == PresetQrCodec.Problem.TOO_LARGE -> R.string.preset_qr_too_large
                 error is SavedPresetStore.Failure && error.problem == SavedPresetStore.Problem.INCOMPATIBLE -> R.string.preset_qr_incompatible
                 else -> R.string.preset_qr_share_failed
             }) }
+            catch (error: OutOfMemoryError) { log.failed(error); throw error }
+            finally { owned?.recycle() }
         }
     }
 

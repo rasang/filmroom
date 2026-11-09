@@ -20,6 +20,8 @@ internal data class DiagnosticMetadata(
 
 internal object ChineseDiagnostics {
     private fun operation(value: Operation): String = when (value) {
+        Operation.RECIPE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.diagnostic_operation_recipe)
+        Operation.BACKUP -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.diagnostic_operation_backup)
         Operation.ARCHIVED_PHOTO_ACCESS -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.backup_history_archived)
         Operation.SESSION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5c1712cb2d38); Operation.RESTORE -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b1336f82fea4); Operation.IMPORT -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a7fc4b2dbd50)
         Operation.PREVIEW_RENDER, Operation.PREVIEW_PRESENTATION -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5a9df9227ec6); Operation.ORIGINAL_SPOOL -> dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_9ced68312ac6)

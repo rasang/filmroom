@@ -1,5 +1,6 @@
 package dev.filmroom.presets
 
+import dev.filmroom.diagnostics.*
 import android.app.AlertDialog
 import android.os.Bundle
 import android.text.InputType
@@ -88,8 +89,8 @@ internal class SavedPresetDialogs(
         target.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             if (working || !active(target)) return@setOnClickListener
             val name = try { SavedPresetStore.cleanName(input.text.toString()) }
-            catch (error: SavedPresetStore.Failure) { input.error = problem(error); return@setOnClickListener }
-            if (!unchanged()) { input.error = text(R.string.saved_preset_stale); return@setOnClickListener }
+            catch (error: SavedPresetStore.Failure) { RecipeLog(RecipeAction.SAVE).failed(error); input.error = problem(error); return@setOnClickListener }
+            if (!unchanged()) { RecipeLog(RecipeAction.SAVE).end(Outcome.FAILED, RecipeReason.STALE); input.error = text(R.string.saved_preset_stale); return@setOnClickListener }
             val parameters = checkNotNull(baseline)
             working = true
             target.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
@@ -301,16 +302,19 @@ internal class SavedPresetDialogs(
         target.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             if (working || !active(target)) return@setOnClickListener
             val item = selected() ?: return@setOnClickListener
-            if (!unchanged()) { status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale); return@setOnClickListener }
+            if (!unchanged()) { RecipeLog(RecipeAction.APPLY).end(Outcome.FAILED, RecipeReason.STALE); status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale); return@setOnClickListener }
             working = true; buttons()
             listJob = activity.lifecycleScope.launch {
+                val log = RecipeLog(RecipeAction.APPLY)
                 try {
+                    log.at(RecipeStep.PARAMETERS)
                     val parameters = withContext(Dispatchers.IO) { measured("apply parse and stocks") { item.parameters().also(::validateStocks) } }
-                    if (!active(target)) return@launch
-                    if (unchanged() && apply(checkNotNull(source), checkNotNull(baseline), parameters)) target.dismiss()
-                    else { status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale) }
-                } catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) { if (active(target)) { status.visibility = View.VISIBLE; status.text = problem(error) } }
+                    if (!active(target)) { log.end(Outcome.CANCELLED, RecipeReason.INACTIVE); return@launch }
+                    log.at(RecipeStep.COMMIT)
+                    if (unchanged() && apply(checkNotNull(source), checkNotNull(baseline), parameters)) { log.end(Outcome.SUCCESS); target.dismiss() }
+                    else { log.end(Outcome.FAILED, RecipeReason.STALE); status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale) }
+                } catch (cancelled: CancellationException) { log.failed(cancelled); throw cancelled }
+                catch (error: Exception) { log.failed(error); if (active(target)) { status.visibility = View.VISIBLE; status.text = problem(error) } }
                 finally { if (dialog === target) { working = false; buttons() } }
             }
         }

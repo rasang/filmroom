@@ -24,7 +24,13 @@ object EffectLivePhotoExporter {
         maxLongEdge = maxLongEdge, allowExperimentalProfiles = true, targetGalleryPackage = gallery)
 
     suspend fun preflight(context: Context, gallery: String? = null): Preflight = withContext(Dispatchers.IO) {
-        Preflight(forDirectAttempt(NormalizedLivePhotoSdk(context).resolve(request(Uri.fromFile(File(context.cacheDir, "effect-live-preflight.mp4")), gallery))))
+        EffectExportLog.trace(EffectExportScope.PREFLIGHT) { log ->
+            log.phase(EffectExportStep.LIVE_RESOLVE)
+            Preflight(forDirectAttempt(NormalizedLivePhotoSdk(context).resolve(request(Uri.fromFile(File(context.cacheDir, "effect-live-preflight.mp4")), gallery)))).also {
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.PREFLIGHT_RESOLVED,
+                    profileIndex=it.selection.selectedProfile?.ordinal,supportIndex=it.status.ordinal))
+            }
+        }
     }
 
     /** Retain negative evidence for UI styling but permit an intentional retry with a writable format. */
@@ -52,7 +58,9 @@ object EffectLivePhotoExporter {
         var resolution: EffectExportReport? = null
         try {
             val sdk = NormalizedLivePhotoSdk(app)
+            log.phase(EffectExportStep.LIVE_RECOVER)
             val recovery = sdk.recover()
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.RECOVERY_COMPLETE,count=recovery.failures.size))
             check(recovery.failures.isEmpty()) { "上次 Live Photo 保存尚未清理完成，请稍后重试" }
             val coroutine = currentCoroutineContext()
             var attemptSize=requestedSize
@@ -73,19 +81,25 @@ object EffectLivePhotoExporter {
                 captureTimeMillis=if(captureDates.original!=null)photoMetadata.mediaStoreCaptureTimeMillis() else null)
             // Evidence keys include dimensions. Resolve again for the actual encoded size, never
             // reuse the 1080 preflight key as proof of high-resolution gallery compatibility.
+            log.phase(EffectExportStep.LIVE_RESOLVE)
             val actualSelection=sdk.resolve(actualRequest)
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.PREFLIGHT_RESOLVED,profileIndex=actualSelection.selectedProfile?.ordinal,supportIndex=actualSelection.status.ordinal))
             originalRequest=originalRequest ?: requireNotNull(resolution).requested
             try {
-            log.step=EffectExportStep.LIVE_PROBE
+            log.phase(EffectExportStep.LIVE_PROBE)
             return@trace sdk.convert(actualRequest, actualSelection, cancelled) {
-                log.step=when(it.stage){
+                // This callback runs after durable publication, before the IO -> caller handoff.
+                // A cancellation at that handoff may discard the return value, but not the saved asset.
+                if(it.stage==ConversionStage.COMPLETE)log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.LIVE_COMMITTED,
+                    step=EffectExportStep.LIVE_PUBLISH,elapsedMs=log.elapsed()))
+                log.phase(when(it.stage){
                     ConversionStage.PROBING -> EffectExportStep.LIVE_PROBE
                     ConversionStage.EXTRACTING_COVER -> EffectExportStep.COVER
                     ConversionStage.PACKAGING -> EffectExportStep.LIVE_PACKAGE
                     ConversionStage.VERIFYING -> EffectExportStep.LIVE_VERIFY
                     ConversionStage.PUBLISHING -> EffectExportStep.LIVE_PUBLISH
                     else -> log.step
-                }
+                })
                 onProgress(when(it.stage) {
                     ConversionStage.PROBING -> .76f
                     ConversionStage.EXTRACTING_COVER -> .80f
@@ -118,7 +132,13 @@ object EffectLivePhotoExporter {
             }
             }
             error("Unreachable Live export loop completion")
-        } finally { withContext(NonCancellable + Dispatchers.IO) { if (rendered) video.delete() }; exportLock.unlock() }
+        } finally {
+            // Keep the caller dispatcher on the outer NonCancellable handoff. Switching directly
+            // to NonCancellable + IO can throw on return to an already-cancelled caller after save.
+            try { withContext(NonCancellable) { withContext(Dispatchers.IO) {
+                if (rendered && !video.delete() && video.exists()) log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.CLEANUP_FAILED))
+            } } } finally { exportLock.unlock() }
+        }
     }
 
     internal fun nextCoverAttempt(actual:EffectExportSize):EffectExportSize? =

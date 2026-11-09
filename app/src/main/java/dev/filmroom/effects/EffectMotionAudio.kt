@@ -1,5 +1,6 @@
 package dev.filmroom.effects
 
+import dev.filmroom.diagnostics.*
 import android.content.Context
 import android.media.AudioFormat
 import android.media.MediaCodec
@@ -28,30 +29,33 @@ internal object EffectMotionAudio {
         val value="v1-half-bed-$kind-$slow-${file.absolutePath}-${file.length()}-${file.lastModified()}"
         return MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString(""){"%02x".format(it)}
     }
-    fun prepare(context:Context,kind:EffectKind,slow:Boolean,file:File?,checkActive:()->Unit={}):File? {
+    fun prepare(context:Context,kind:EffectKind,slow:Boolean,file:File?,checkActive:()->Unit={}):File? = EffectExportLog.trace(EffectExportScope.AUDIO_PREPARE) { log ->
         checkActive()
+        log.phase(EffectExportStep.AUDIO_LOCK)
         while(!prepareLock.tryLock(20,TimeUnit.MILLISECONDS))checkActive()
-        try {checkActive();return prepareLocked(context,kind,slow,file,checkActive)}
+        try {checkActive();return@trace prepareLocked(context,kind,slow,file,checkActive,log)}
         finally {prepareLock.unlock()}
     }
-    private fun prepareLocked(context:Context,kind:EffectKind,slow:Boolean,file:File?,checkActive:()->Unit):File? {
-        if(kind!=EffectKind.OPTICAL_LEAK || file==null || !file.isFile)return null
+    private fun prepareLocked(context:Context,kind:EffectKind,slow:Boolean,file:File?,checkActive:()->Unit,log:EffectExportLog):File? {
+        if(kind!=EffectKind.OPTICAL_LEAK || file==null || !file.isFile){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_ABSENT,EffectExportReason.AUDIO_SOURCE_MISSING));return null}
         val key=key(kind,slow,file)
-        if(key in noAudio)return null
+        if(key in noAudio){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_ABSENT,EffectExportReason.AUDIO_TRACK_ABSENT));return null}
         val dir=File(context.cacheDir,"effect-audio-mix").apply{mkdirs()}
         val output=File(dir,"$key.m4a")
-        if(output.isFile && output.length()>0){output.setLastModified(System.currentTimeMillis());return output}
+        if(output.isFile && output.length()>0){output.setLastModified(System.currentTimeMillis());log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_CACHE_HIT,bytes=output.length()));return output}
         val partial=File(dir,"$key.part")
         try {
             checkActive()
+            log.phase(EffectExportStep.AUDIO_DECODE)
             val source=decode({it.setDataSource(file.absolutePath)},1_635_000L,checkActive)
-            if(source==null){noAudio.add(key);while(noAudio.size>8)noAudio.remove(noAudio.first());return null}
+            if(source==null){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_ABSENT,EffectExportReason.AUDIO_TRACK_ABSENT));noAudio.add(key);while(noAudio.size>8)noAudio.remove(noAudio.first());return null}
             val endUs=EffectMotionAudioEnvelope.endUs(slow,source.durationUs)
             val base=decode({ extractor ->
                 context.assets.openFd(EffectAudioTrack.assetPath(kind,slow)).use {
                     extractor.setDataSource(it.fileDescriptor,it.startOffset,it.length)
                 }
-            },3_000_000L,checkActive)?:return null
+            },3_000_000L,checkActive)?:run {log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_FALLBACK,EffectExportReason.AUDIO_BASE_UNAVAILABLE));return null}
+            log.phase(EffectExportStep.AUDIO_MIX)
             for(frame in 0 until FRAMES) {
                 val timeUs=frame*1_000_000L/EffectMotionAudioEnvelope.SAMPLE_RATE
                 for(channel in 0 until CHANNELS) {
@@ -59,14 +63,16 @@ internal object EffectMotionAudio {
                     base.samples[i]=EffectMotionAudioEnvelope.mix(base.samples[i],source.samples[i],timeUs,endUs,source.startUs)
                 }
             }
+            log.phase(EffectExportStep.AUDIO_ENCODE)
             checkActive();encode(base.samples,partial,checkActive);checkActive()
             check(partial.renameTo(output)){"Cannot finalize local motion audio"}
             dir.listFiles()?.filter{it.extension=="m4a" && it!=output}
                 ?.sortedByDescending{it.lastModified()}?.drop(3)?.forEach{it.delete()}
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_READY,bytes=output.length()))
             return output
         }catch(e:CancellationException){throw e}
-        catch(_:Exception){return null}
-        catch(_:OutOfMemoryError){return null}
+        catch(e:Exception){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_FALLBACK,EffectExportLog.reason(e),log.step));return null}
+        catch(_:OutOfMemoryError){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.AUDIO_FALLBACK,EffectExportReason.OUT_OF_MEMORY,log.step));return null}
         finally {partial.delete()}
     }
     private data class Pcm(val samples:FloatArray,val durationUs:Long,val startUs:Long)

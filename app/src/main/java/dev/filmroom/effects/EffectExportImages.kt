@@ -28,6 +28,7 @@ internal class EffectExportImages : AutoCloseable {
             }.recycle()
             checkCancel();return requireNotNull(size)
         }
+        log.phase(EffectExportStep.IMAGE_BOUNDS)
         val output=bounds(resultUri)
         val input=if(kind==EffectKind.LIGHT_TABLE)output else bounds(requireNotNull(sourceUri))
         val composed=if(kind==EffectKind.LIGHT_TABLE)input else composition?.size(input.width,input.height) ?: input
@@ -55,9 +56,12 @@ internal class EffectExportImages : AutoCloseable {
             }
             owned.add(bitmap);checkCancel();return bitmap
         }
+        log.phase(EffectExportStep.DECODE_RESULT)
         result=read(resultUri,output)
         source=if(kind==EffectKind.LIGHT_TABLE)result else {
+            log.phase(EffectExportStep.DECODE_SOURCE)
             val raw=read(requireNotNull(sourceUri),input)
+            log.phase(EffectExportStep.COMPOSE_SOURCE)
             val transformed=composition?.applyForExport(raw,::checkCancel) ?: raw
             if(transformed!==raw){owned.add(transformed);owned.remove(raw);raw.recycle()}
             transformed

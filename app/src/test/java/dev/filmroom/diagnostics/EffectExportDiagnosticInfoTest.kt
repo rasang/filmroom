@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EffectExportDiagnosticInfoTest {
+    @Test fun detailedLiveMetricsRoundTripAndStayBounded() {
+        val detail=EffectExportDiagnosticInfo(EffectExportScope.LIVE_PHOTO,EffectExportEvent.STREAM_COMPLETE,
+            step=EffectExportStep.LIVE_VERIFY,elapsedMs=1234,count=90,bytes=10_000_000,
+            profileIndex=2,supportIndex=1,mediaErrorExtra=-1004)
+        assertEquals(detail,SafeInfo.parse(SafeInfo(effectExport=detail).fields()).effectExport)
+        val invalid=detail.copy(elapsedMs=-1,count=-1,bytes=1L shl 45,profileIndex=101,supportIndex=-1).fields()
+        for(key in listOf("effectElapsedMs","effectCount","effectBytes","effectProfileIndex","effectSupportIndex"))assertFalse(invalid.containsKey(key))
+    }
+    @Test fun unknownLiveMetadataNeverBecomesFreeText() {
+        val fields=mapOf("effectScope" to "PREFLIGHT","effectEvent" to "PREFLIGHT_RESOLVED",
+            "effectProfileIndex" to "content://private", "effectSupportIndex" to "my.gallery.package",
+            "effectElapsedMs" to "secret", "effectBytes" to "/storage/photo.jpg")
+        val clean=SafeInfo.parse(fields).fields()
+        assertFalse(clean.values.any { it.contains("private") || it.contains("gallery") || it.contains("secret") || it.contains("storage") })
+    }
+
     @Test fun allReasonsAndStagesRoundTripThroughSafeInfo() {
         for(reason in EffectExportReason.entries) for(step in EffectExportStep.entries) {
             val info=EffectExportDiagnosticInfo(EffectExportScope.VIDEO,EffectExportEvent.ATTEMPT_FAILED,reason,step,

@@ -17,7 +17,7 @@ class NormalizedLivePhotoSdk(context: Context) {
     suspend fun resolve(request: VideoToLiveRequest) = compatibility.resolve(request)
     suspend fun recover() = withContext(Dispatchers.IO) { publisher.recoverInterrupted() }
 
-    suspend fun convert(request: VideoToLiveRequest, accepted: ProfileSelection, cancelled: () -> Boolean = { false }, onProgress: (ConversionProgress) -> Unit = {}): ConversionResult = withContext(Dispatchers.IO) {
+    suspend fun convert(request: VideoToLiveRequest, accepted: ProfileSelection, cancelled: () -> Boolean = { false }, onProgress: (ConversionProgress) -> Unit = {}): ConversionResult = CommittedResultHandoff.run { committed ->
         require(request.startMs == 0L && request.durationMs == 3000L && request.keepAudio && request.saveToGallery)
         require(request.input.scheme == "file")
         val file = File(requireNotNull(request.input.path))
@@ -50,9 +50,12 @@ class NormalizedLivePhotoSdk(context: Context) {
             emit(ConversionStage.VERIFYING); LivePhotoVerifier.verify(asset, ::check)
             emit(ConversionStage.PUBLISHING)
             val uris = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check).ids.map(Uri::parse)
-            // Once committed, do not turn cancellation/observer errors into an apparent failed save.
+            // Mark only after the journaled publisher returns successfully. The handoff must not
+            // turn an already-saved asset into a cancelled result, nor publish it again.
+            val result=ConversionResult(asset, uris, selection = current)
+            committed(result)
             emit(ConversionStage.COMPLETE)
-            ConversionResult(asset, uris, selection = current)
+            result
         } finally {
             if (scratchCreated) scratch.deleteRecursively()
             // Published URIs remain; immutable hashes in the result still allow explicit gallery feedback.

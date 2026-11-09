@@ -66,6 +66,7 @@ object Diagnostics {
                 val directory = sharesDirectory ?: throw IOException(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2bec26a5c8e2))
                 check(directory.isDirectory || directory.mkdirs()) { dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_78d664a50890) }
                 DiagnosticArchive.cleanup(directory, clock.wallMs(), clock.elapsedMs())
+                QueuedDiagnosticTrace.flush()
                 val snapshot = source.snapshot(minutes)
                 val meta = metadata ?: DiagnosticMetadata()
                 val job = currentCoroutineContext()

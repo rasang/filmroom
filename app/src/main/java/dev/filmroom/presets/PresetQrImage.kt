@@ -67,7 +67,8 @@ internal object PresetQrImage {
     // Odd size and module-aligned edges. At most 17% of the code side / 2.9% area.
     internal fun logoPatchModules(modules: Int): Int = minOf(11, (modules * .17).toInt()).let { if (it % 2 == 0) it - 1 else it }.coerceAtLeast(3)
 
-    fun read(context: Context, uri: Uri): String {
+    fun read(context: Context, uri: Uri, log: RecipeLog? = null): String {
+        log?.at(dev.filmroom.diagnostics.RecipeStep.IMAGE_READ)
         require(uri.scheme == "content")
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
             val output = ByteArrayOutputStream()
@@ -88,7 +89,11 @@ internal object PresetQrImage {
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
             inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888
         }) ?: throw IllegalArgumentException()
-        return try { decode(bitmap) } finally { bitmap.recycle() }
+        return try {
+            log?.dimensions(bitmap.width, bitmap.height)
+            log?.at(dev.filmroom.diagnostics.RecipeStep.QR_DECODE)
+            decode(bitmap)
+        } finally { bitmap.recycle() }
     }
 
     fun decode(bitmap: Bitmap): String {

@@ -119,16 +119,16 @@ object EffectVideoExporter {
         var renderSource: Bitmap? = null
         var renderResult: Bitmap? = null
         try {
-            log.step=EffectExportStep.CREATE_CODEC
+            log.phase(EffectExportStep.CREATE_CODEC)
             val encoder = MediaCodec.createByCodecName(choice.name).also { codec = it }
-            log.step=EffectExportStep.CONFIGURE_CODEC
+            log.phase(EffectExportStep.CONFIGURE_CODEC)
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            log.step=EffectExportStep.CREATE_SURFACE
+            log.phase(EffectExportStep.CREATE_SURFACE)
             input = encoder.createInputSurface()
-            log.step=EffectExportStep.CREATE_EGL
+            log.phase(EffectExportStep.CREATE_EGL)
             egl = EffectEncoderEgl(input!!)
             egl.makeCurrent()
-            log.step=EffectExportStep.QUERY_GL_LIMITS
+            log.phase(EffectExportStep.QUERY_GL_LIMITS)
             val limits = IntArray(1)
             android.opengl.GLES20.glGetIntegerv(android.opengl.GLES20.GL_MAX_TEXTURE_SIZE,limits,0)
             val viewportLimits = IntArray(2)
@@ -148,19 +148,19 @@ object EffectVideoExporter {
                 return if(scale>=1.0)bitmap else Bitmap.createScaledBitmap(bitmap,
                     (bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
             }
-            log.step=EffectExportStep.PREPARE_TEXTURES
+            log.phase(EffectExportStep.PREPARE_TEXTURES)
             renderSource=fitted(source)
             renderResult=if(source===result)renderSource else fitted(result)
             checkCancelled()
             renderer = EffectGlRenderer(kind, renderSource!!, renderResult!!,readout,previewFinder=true)
-            log.step=EffectExportStep.INITIALIZE_RENDERER
+            log.phase(EffectExportStep.INITIALIZE_RENDERER)
             renderer.initialize()
             motionSource?.reset()
-            log.step=EffectExportStep.START_CODEC
+            log.phase(EffectExportStep.START_CODEC)
             encoder.start()
             codecStarted = true
             checkCancelled()
-            log.step=EffectExportStep.OPEN_OUTPUT
+            log.phase(EffectExportStep.OPEN_OUTPUT)
             val writer = if (privateOutput != null) {
                 require(privateOutput.parentFile?.canonicalFile == context.cacheDir.canonicalFile) { "Private video must be in app cache" }
                 check(privateOutput.createNewFile()) { "Private video output already exists" }
@@ -176,6 +176,7 @@ object EffectVideoExporter {
                 descriptor = resolver.openFileDescriptor(output!!, "w") ?: failed(EffectExportReason.OUTPUT_OPEN_FAILED,"Cannot open video")
                 MediaMuxer(descriptor!!.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             }.also { muxer = it }
+            log.phase(EffectExportStep.AUDIO_PREPARE)
             audio = EffectAudioTrack(context,kind,slow,motionAudioFile,::checkCancelled)
             var track = -1
             var eosSeen = false
@@ -236,15 +237,16 @@ object EffectVideoExporter {
                 drain(false)
                 onProgress((frame + 1).toFloat() / frameCount * .95f)
             }
-            log.step=EffectExportStep.SIGNAL_EOS
+            log.phase(EffectExportStep.SIGNAL_EOS)
             encoder.signalEndOfInputStream()
             drain(true)
             if (!eosSeen || samples == 0 || !muxerStarted) failed(EffectExportReason.INCOMPLETE_VIDEO,"Video is incomplete")
-            log.step=EffectExportStep.FINALIZE
+            log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.STREAM_COMPLETE,count=samples,elapsedMs=log.elapsed()))
+            log.phase(EffectExportStep.FINALIZE)
             audio!!.writeTo(writer,audioTrack,::checkCancelled)
             audio!!.close()
             audio = null
-            log.step=EffectExportStep.FINALIZE
+            log.phase(EffectExportStep.FINALIZE)
             writer.stop()
             muxerStarted = false
             writer.release()
@@ -252,7 +254,7 @@ object EffectVideoExporter {
             descriptor?.close()
             descriptor = null
             checkCancelled()
-            log.step=EffectExportStep.PUBLISH
+            log.phase(EffectExportStep.PUBLISH)
             if (privateOutput == null && resolver.update(output!!, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null) != 1) {
                 failed(EffectExportReason.OUTPUT_PUBLISH_FAILED,"Cannot publish video")
             }

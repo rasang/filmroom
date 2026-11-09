@@ -1,5 +1,6 @@
 package dev.filmroom.presets
 
+import dev.filmroom.diagnostics.*
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
@@ -22,34 +23,46 @@ internal class PresetQrViewModel(app: Application) : AndroidViewModel(app) {
     var externalPending = false
     var nameDraft = ""
     private val store = SavedPresetStore(app)
-    private fun run(next: suspend () -> Screen) {
+    private fun run(action: RecipeAction, input: RecipeInput? = null, next: suspend (RecipeLog) -> Screen) {
         if (mutable.value.phase == "working") return
         val before = mutable.value
         mutable.value = before.copy(phase = "working", error = null)
         viewModelScope.launch {
-            try { mutable.value = withContext(Dispatchers.IO) { next() } }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { mutable.value = before.copy(error = error) }
+            val log = RecipeLog(action, input)
+            try { mutable.value = withContext(Dispatchers.IO) { next(log) }; log.end(Outcome.SUCCESS) }
+            catch (cancelled: CancellationException) { log.failed(cancelled); throw cancelled }
+            catch (error: Exception) { log.failed(error); mutable.value = before.copy(error = error) }
+            catch (error: OutOfMemoryError) { log.failed(error); throw error }
         }
     }
-    fun share(id: String) = run {
+    fun share(id: String) = run(RecipeAction.QR_SHARE) { log ->
+        log.at(RecipeStep.STORE_READ)
         val item = store.list().firstOrNull { it.id == id } ?: throw SavedPresetStore.Failure(SavedPresetStore.Problem.MISSING)
+        log.at(RecipeStep.PARAMETERS)
         val parameters = item.parameters()
         validateStocks(parameters)
+        log.at(RecipeStep.QR_ENCODE)
         val payload = PresetQrCodec.encode(item.name, parameters)
+        log.at(RecipeStep.QR_RENDER)
         Screen("share", PresetQrCodec.Draft(item.name, parameters), PresetQrImage.render(getApplication(), payload), payload)
     }
-    fun read(text: String) = run { decoded(text) }
-    fun read(uri: Uri) = run { decoded(PresetQrImage.read(getApplication(), uri)) }
-    private fun decoded(text: String): Screen {
+    fun read(text: String, input: RecipeInput = RecipeInput.TEXT) = run(RecipeAction.QR_IMPORT, input) { decoded(text, it) }
+    fun read(uri: Uri) = run(RecipeAction.QR_IMPORT, RecipeInput.ALBUM) { log ->
+        log.at(RecipeStep.IMAGE_READ)
+        decoded(PresetQrImage.read(getApplication(), uri, log), log)
+    }
+    private fun decoded(text: String, log: RecipeLog): Screen {
+        log.at(RecipeStep.QR_DECODE)
         val draft = PresetQrCodec.decode(text)
+        log.at(RecipeStep.VALIDATE)
         validateStocks(draft.parameters)
+        log.at(RecipeStep.CONFIRM)
         nameDraft = draft.name
         return Screen("confirm", draft = draft, payload = text)
     }
     fun save(name: String) {
         val draft = mutable.value.takeIf { it.phase == "confirm" }?.draft ?: return
-        run { store.save(name, draft.parameters); Screen("saved", draft = draft.copy(name = SavedPresetStore.cleanName(name))) }
+        run(RecipeAction.SAVE) { log -> log.at(RecipeStep.COMMIT); store.save(name, draft.parameters); Screen("saved", draft = draft.copy(name = SavedPresetStore.cleanName(name))) }
     }
     fun home() { if (mutable.value.phase != "working") mutable.value = Screen() }
     private fun validateStocks(parameters: dev.filmroom.model.EditorState) {

@@ -1,0 +1,4 @@
+<resources>
+    <string name="diagnostic_operation_recipe">레시피</string>
+    <string name="diagnostic_operation_backup">백업</string>
+</resources>

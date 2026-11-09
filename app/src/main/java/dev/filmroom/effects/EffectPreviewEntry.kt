@@ -1,5 +1,6 @@
 package dev.filmroom.effects
 
+import dev.filmroom.diagnostics.*
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
@@ -57,13 +58,17 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
     private var launchRequested=false
     private val preparation=activity.lifecycleScope.launch {
         var owned:PreparedEffectPhoto?=null
+        val log=EffectExportLog(EffectExportScope.PRELOAD)
+        var outcome=Outcome.FAILED
         try {
-            owned=prepare(activity.applicationContext,job)
+            owned=prepare(activity.applicationContext,job,log)
             ensureActive()
             staged=owned;owned=null
-        }catch(e:CancellationException){throw e}
-        catch(_:Exception){}catch(_:OutOfMemoryError){}
-        finally{owned?.close()}
+            if(staged!=null)outcome=Outcome.SUCCESS
+        }catch(e:CancellationException){outcome=Outcome.CANCELLED;throw e}
+        catch(e:Exception){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.ERROR,EffectExportLog.reason(e),log.step))}
+        catch(_:OutOfMemoryError){log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.ERROR,EffectExportReason.OUT_OF_MEMORY,log.step))}
+        finally{owned?.close();log.end(outcome,flush=false)}
     }
     fun launch(kind:EffectKind){
         if(launchRequested)return
@@ -93,7 +98,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
         .apply{if(token!=null)putExtra(PhotoEffectActivity.PREPARED_ENTRY,token)})}
     override fun close(){if(closed)return;closed=true;preparation.cancel();waiting?.cancel();staged?.close();staged=null;dialog?.dismiss();dialog=null}
     companion object {
-        private suspend fun prepare(context:Context,requested:ExportJob):PreparedEffectPhoto? {
+        private suspend fun prepare(context:Context,requested:ExportJob,log:EffectExportLog):PreparedEffectPhoto? {
             var completed:PreparedEffectPhoto?=null
             try { withContext(Dispatchers.IO){
             val record=ExportQueue.get(context).store.get(requested.id)?:return@withContext
@@ -101,11 +106,15 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
             val composition=EffectSourceComposition.from(record)
             var input:Bitmap?=null;var output:Bitmap?=null;var motion:File?=null
             try {
+                log.phase(EffectExportStep.DECODE_RESULT)
                 output=decode(context,requireNotNull(record.mediaUri));ensureActive()
+                log.phase(EffectExportStep.DECODE_SOURCE)
                 val raw=decode(context,requireNotNull(record.originalUri))
+                log.phase(EffectExportStep.COMPOSE_SOURCE)
                 try{input=composition?.apply(raw){ensureActive()}?:raw;if(input!==raw)raw.recycle()}
                 catch(t:Throwable){raw.recycle();throw t}
                 val readout=EffectCameraReadout.read(context.contentResolver,record.originalUri,record.photoMetadata)
+                log.phase(EffectExportStep.MOTION_EXTRACT)
                 motion=EffectMotionInput.prepare(context,record.originalUri){ensureActive()};ensureActive()
                 completed=PreparedEffectPhoto(record,requireNotNull(input),requireNotNull(output),composition,readout,motion).also{input=null;output=null;motion=null}
             }finally{motion?.delete();input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}

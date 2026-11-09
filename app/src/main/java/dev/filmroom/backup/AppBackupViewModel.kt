@@ -4,6 +4,9 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.filmroom.diagnostics.BackupAction
+import dev.filmroom.diagnostics.BackupStep
+import kotlinx.coroutines.CancellationException
 import dev.filmroom.export.ExportQueue
 import dev.filmroom.presets.SavedPresetStore
 import kotlinx.coroutines.Dispatchers
@@ -29,34 +32,49 @@ internal class AppBackupViewModel(app: Application) : AndroidViewModel(app) {
         if (mutable.value is State.Busy) return
         mutable.value = State.Busy
         viewModelScope.launch {
+            val log = BackupLog(BackupAction.EXPORT)
             try {
                 withContext(Dispatchers.IO) {
                     val store = ExportQueue.get(context).store
                     val document = AppBackupCodec.Document(BackupSettings.snapshot(context), SavedPresetStore(context).list(), store.exportBackupHistory())
+                    log.counts(document.recipes.size, document.history.length())
+                    log.step(BackupStep.VALIDATE)
                     validateStocks(document)
-                    
+                    log.step(BackupStep.OPEN)
                     context.contentResolver.openOutputStream(uri,"wt").use { stream ->
+                        log.step(BackupStep.CODEC, writesStarted=true)
                         AppBackupCodec.writeZip(document, checkNotNull(stream))
                     }
                 }
+                log.success()
                 mutable.value = State.Finished(false)
-            } catch (_: Exception) { mutable.value = State.Failed(false) }
+            } catch (e: CancellationException) { log.failure(e); throw e }
+            catch (e: Exception) { log.failure(e); mutable.value = State.Failed(false) }
         }
     }
     fun read(uri: Uri) {
         if (mutable.value is State.Busy) return
         mutable.value = State.Busy
         viewModelScope.launch {
+            val log = BackupLog(BackupAction.READ)
             try {
                 val document = withContext(Dispatchers.IO) {
-                    val decoded = context.contentResolver.openInputStream(uri).use { AppBackupCodec.read(checkNotNull(it)) }
+                    log.step(BackupStep.OPEN)
+                    val decoded = context.contentResolver.openInputStream(uri).use {
+                        log.step(BackupStep.CODEC)
+                        AppBackupCodec.read(checkNotNull(it))
+                    }
+                    log.counts(decoded.recipes.size, decoded.history.length())
+                    log.step(BackupStep.VALIDATE)
                     validateStocks(decoded)
                     dev.filmroom.export.ExportHistoryBackup.validateRows(decoded.history)
                     ExportQueue.get(context).store.mergeBackupHistory(decoded.history,validateOnly=true)
                     decoded
                 }
+                log.success()
                 mutable.value = State.Preview(document)
-            } catch (_: Exception) { mutable.value = State.Failed(false) }
+            } catch (e: CancellationException) { log.failure(e); throw e }
+            catch (e: Exception) { log.failure(e); mutable.value = State.Failed(false) }
         }
     }
     private fun validateStocks(document: AppBackupCodec.Document) {
@@ -67,21 +85,31 @@ internal class AppBackupViewModel(app: Application) : AndroidViewModel(app) {
         val document = (mutable.value as? State.Preview)?.document ?: return
         mutable.value = State.Busy
         viewModelScope.launch {
+            val log = BackupLog(BackupAction.RESTORE)
+            log.counts(document.recipes.size, document.history.length())
             var attemptedWrite = false
             try {
                 val counts = withContext(Dispatchers.IO) {
                     val store = ExportQueue.get(context).store
+                    log.step(BackupStep.VALIDATE)
                     dev.filmroom.export.ExportHistoryBackup.validateRows(document.history)
                     BackupSettings.validate(document.settings)
                     store.mergeBackupHistory(document.history,validateOnly=true)
                     attemptedWrite = true
+                    log.step(BackupStep.RECIPES, writesStarted=true)
                     val recipes = SavedPresetStore(context).mergeBackup(document.recipes)
+                    log.step(BackupStep.HISTORY)
                     val history = store.mergeBackupHistory(document.history)
+                    log.step(BackupStep.SETTINGS)
                     BackupSettings.apply(context,document.settings)
                     recipes to history
                 }
+                log.counts(counts.first, counts.second)
+                log.success()
                 mutable.value = State.Finished(true, counts.first, counts.second)
-            } catch (_: Exception) {
+            } catch (e: CancellationException) { log.failure(e); throw e }
+            catch (e: Exception) {
+                log.failure(e)
                 // Each store writes atomically. Never undo concurrent user work; retry deduplicates.
                 mutable.value = State.Failed(attemptedWrite)
             }

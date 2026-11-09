@@ -1,0 +1,4 @@
+<resources>
+    <string name="diagnostic_operation_recipe">Recipe</string>
+    <string name="diagnostic_operation_backup">Backup</string>
+</resources>

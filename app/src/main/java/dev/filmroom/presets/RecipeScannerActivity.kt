@@ -1,5 +1,6 @@
 package dev.filmroom.presets
 
+import dev.filmroom.diagnostics.*
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -35,14 +36,16 @@ class RecipeScannerActivity : ComponentActivity() {
     private var returned = false
     private var resumed = false
     private var permissionRequested = false
+    private var scanLog: RecipeLog? = null
+    private var cameraFailureLogged = false
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) resumeCamera() else showCameraUnavailable()
+        if (granted) resumeCamera() else { scanLog?.note(RecipeReason.PERMISSION_DENIED); showCameraUnavailable() }
     }
     private val picker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         pickerPending = false
         album.isEnabled = true
         if (uri != null) deliver(Intent().setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        else resumeCamera()
+        else { scanLog?.at(RecipeStep.CAMERA); resumeCamera() }
     }
     private fun text(id: Int) = L10n.text(id)
     private fun dp(n: Int) = (n * resources.displayMetrics.density + .5f).toInt()
@@ -51,6 +54,8 @@ class RecipeScannerActivity : ComponentActivity() {
         android.graphics.drawable.GradientDrawable().apply { setColor(0xCC242424.toInt()); cornerRadius = dp(24).toFloat() }, null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        scanLog = RecipeLog(RecipeAction.SCAN)
+        scanLog?.at(RecipeStep.CAMERA)
         pickerPending = savedInstanceState?.getBoolean("pickerPending") ?: false
         permissionRequested = savedInstanceState?.getBoolean("permissionRequested") ?: false
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -83,8 +88,9 @@ class RecipeScannerActivity : ComponentActivity() {
             setOnClickListener {
                 if (pickerPending || returned) return@setOnClickListener
                 pickerPending = true; isEnabled = false; camera.pause()
+                scanLog?.at(RecipeStep.ALBUM)
                 try { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                catch (_: Exception) { pickerPending = false; isEnabled = true; resumeCamera() }
+                catch (error: Exception) { scanLog?.note(RecipeLog.reason(error)); pickerPending = false; isEnabled = true; resumeCamera() }
             }
         }
         root.addView(album, FrameLayout.LayoutParams(-2, dp(56), Gravity.BOTTOM or Gravity.LEFT).apply {
@@ -105,7 +111,10 @@ class RecipeScannerActivity : ComponentActivity() {
             override fun previewStarted() = Unit
             override fun previewStopped() = Unit
             override fun cameraClosed() = Unit
-            override fun cameraError(error: Exception) { showCameraUnavailable() }
+            override fun cameraError(error: Exception) {
+                if (!cameraFailureLogged) { cameraFailureLogged = true; scanLog?.note(RecipeReason.CAMERA_ERROR) }
+                showCameraUnavailable()
+            }
         })
         if (!hasPermission() && !permissionRequested) {
             permissionRequested = true
@@ -121,8 +130,10 @@ class RecipeScannerActivity : ComponentActivity() {
     }
     private fun deliver(result: Intent) {
         if (returned || isFinishing) return
+        scanLog?.end(Outcome.SUCCESS)
         returned = true; camera.pause(); setResult(Activity.RESULT_OK, result); finish()
     }
+    override fun onDestroy() { scanLog?.end(Outcome.CANCELLED); super.onDestroy() }
     override fun onResume() { super.onResume(); resumed = true; resumeCamera() }
     override fun onPause() { resumed = false; camera.pause(); super.onPause() }
     override fun onSaveInstanceState(outState: Bundle) {

@@ -74,6 +74,56 @@ class RecipeShareDialogHostTest {
             }
         }
     }
+    @Test(timeout=30000) fun cancelledRenderRecyclesBitmapCreatedBeforeMainHandoff() {
+        val app = RuntimeEnvironment.getApplication(); L10n.choose(app, "zh")
+        Robolectric.buildActivity(ComponentActivity::class.java).setup().use { host ->
+            val activity = host.get(); activity.setTheme(R.style.AppTheme)
+            val created = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            val produced = java.util.concurrent.atomic.AtomicReference<Bitmap>()
+            val presenter = PresetQrShareDialog(activity, { it.show() }, {})
+            presenter.renderQr = { _, _ ->
+                Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).also {
+                    produced.set(it); created.countDown()
+                    check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                }
+            }
+            try {
+                presenter.show(SavedPresetStore.Preset("fixture", "Recipe", 0,
+                    SavedPresetStore.snapshot(dev.filmroom.model.EditorState())))
+                await { created.count == 0L }
+                presenter.close()
+            } finally { release.countDown() }
+            await { produced.get()?.isRecycled == true }
+            assertFalse(presenter.isShowing)
+        }
+    }
+
+    @Test(timeout=30000) fun inactiveRenderRecyclesUnpublishedBitmap() {
+        val app = RuntimeEnvironment.getApplication(); L10n.choose(app, "zh")
+        Robolectric.buildActivity(ComponentActivity::class.java).setup().use { host ->
+            val activity = host.get(); activity.setTheme(R.style.AppTheme)
+            val created = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            val produced = java.util.concurrent.atomic.AtomicReference<Bitmap>()
+            val presenter = PresetQrShareDialog(activity, { it.show() }, {})
+            presenter.renderQr = { _, _ ->
+                Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).also {
+                    produced.set(it); created.countDown()
+                    check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                }
+            }
+            try {
+                presenter.show(SavedPresetStore.Preset("fixture", "Recipe", 0,
+                    SavedPresetStore.snapshot(dev.filmroom.model.EditorState())))
+                await { created.count == 0L }
+                host.pause().stop() // Activity is not active, but its lifecycleScope is not destroyed.
+            } finally { release.countDown() }
+            await { produced.get()?.isRecycled == true }
+            presenter.close()
+        }
+    }
+
     @Test fun scannerAloneIsPortraitInPhoneAndLargeWindowManifest() {
         val app=RuntimeEnvironment.getApplication()
         for(qualifiers in listOf("w360dp-h780dp-mdpi","w600dp-h840dp-mdpi")) {

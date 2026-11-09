@@ -1,0 +1,4 @@
+<resources>
+    <string name="diagnostic_operation_recipe">配方</string>
+    <string name="diagnostic_operation_backup">备份</string>
+</resources>

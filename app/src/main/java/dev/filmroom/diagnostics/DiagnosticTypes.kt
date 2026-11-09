@@ -1,7 +1,7 @@
 package dev.filmroom.diagnostics
 
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
-enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP, ARCHIVED_PHOTO_ACCESS }
+enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP, ARCHIVED_PHOTO_ACCESS, RECIPE, BACKUP }
 enum class Stage { START, IMPORT_INPUT, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
 enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED, NOT_APPLICABLE }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
@@ -232,6 +232,10 @@ data class SafeInfo(
     val previewObservedElapsedMs: Long? = null,
     val encodedPayloadCacheHit:Boolean?=null, val encodedPayloadCacheBytes:Long?=null,
     val encodedPayloadSourceBackend:GpuBackend?=null,
+    val diagnosticSuppressedEvents: Long? = null,
+    val diagnosticQueueRejectedEnqueues: Long? = null,
+    val recipe: RecipeDiagnosticInfo? = null,
+    val backup: BackupDiagnosticInfo? = null,
     val effectExport: EffectExportDiagnosticInfo? = null,
     val motionPreview: MotionPreviewDiagnosticInfo? = null,
     val motionInput: MotionInputDiagnosticInfo? = null,
@@ -256,6 +260,10 @@ data class SafeInfo(
         previewNativeCompleted?.let{put("previewNativeCompleted",it)}
         integer("width", width?.toLong(), 30_000, 1); integer("height", height?.toLong(), 30_000, 1)
         integer("durationMs", durationMs, 7L * 24 * 60 * 60 * 1000)
+        integer("diagnosticSuppressedEvents", diagnosticSuppressedEvents, 1_000_000)
+        integer("diagnosticQueueRejectedEnqueues", diagnosticQueueRejectedEnqueues, 1_000_000)
+        recipe?.fields()?.let { putAll(it) }
+        backup?.fields()?.let { putAll(it) }
         effectExport?.fields()?.let { putAll(it) }
         motionPreview?.fields()?.let { putAll(it) }
         motionInput?.fields()?.let { putAll(it) }
@@ -454,6 +462,10 @@ data class SafeInfo(
             previewDisposition=fields["previewDisposition"]?.let{v->PreviewDisposition.entries.firstOrNull{it.name==v}},
             previewNativeCompleted=fields["previewNativeCompleted"]?.toBooleanStrictOrNull(),
             width = fields["width"]?.toIntOrNull(), height = fields["height"]?.toIntOrNull(),
+            diagnosticSuppressedEvents=fields["diagnosticSuppressedEvents"]?.toLongOrNull(),
+            diagnosticQueueRejectedEnqueues=fields["diagnosticQueueRejectedEnqueues"]?.toLongOrNull(),
+            recipe=RecipeDiagnosticInfo.fromFields(fields),
+            backup=BackupDiagnosticInfo.parse(fields),
             effectExport=EffectExportDiagnosticInfo.parse(fields),
             motionPreview=MotionPreviewDiagnosticInfo.parse(fields),
             motionInput=MotionInputDiagnosticInfo.parse(fields),

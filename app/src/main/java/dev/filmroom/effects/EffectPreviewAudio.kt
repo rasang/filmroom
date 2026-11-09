@@ -1,5 +1,6 @@
 package dev.filmroom.effects
 
+import dev.filmroom.diagnostics.*
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -34,6 +35,12 @@ internal class EffectPreviewAudio(private val context:Context) {
             { runnable -> Thread(runnable,"effect-audio-prepare").apply { isDaemon=true } },
             ThreadPoolExecutor.DiscardOldestPolicy())
     }
+    private fun diagnostic(event:EffectExportEvent,reason:EffectExportReason=EffectExportReason.NONE,error:Int?=null,extra:Int?=null) {
+        val info=SafeInfo(effectExport=EffectExportDiagnosticInfo(EffectExportScope.AUDIO_PLAYBACK,event,reason,
+            codecErrorCode=error,mediaErrorExtra=extra))
+        QueuedDiagnosticTrace(Operation.EXPORT_ENCODE,info).end(
+            if(event==EffectExportEvent.AUDIO_PLAYER_ERROR || event==EffectExportEvent.ERROR)Outcome.FAILED else Outcome.SUCCESS,info)
+    }
     private fun key(kind:EffectKind,slow:Boolean,file:File?)="$kind/$slow/${file?.absolutePath}"
     fun prepare(kind:EffectKind,slow:Boolean,sourceMotionFile:File?) {
         val key=key(kind,slow,sourceMotionFile)
@@ -62,7 +69,7 @@ internal class EffectPreviewAudio(private val context:Context) {
             .setAudioAttributes(attributes).setOnAudioFocusChangeListener { change ->
                 if(change<0)stop()
             }.build()
-        if(manager.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)return
+        if(manager.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){diagnostic(EffectExportEvent.AUDIO_FOCUS_DENIED);return}
         focus=request
         val current=MediaPlayer();player=current
         try {
@@ -83,7 +90,7 @@ internal class EffectPreviewAudio(private val context:Context) {
                 }else current.start()
             }
             current.setOnCompletionListener { if(player===current)stop() }
-            current.setOnErrorListener { _,_,_->if(player===current)stop();true }
+            current.setOnErrorListener { _,what,extra->diagnostic(EffectExportEvent.AUDIO_PLAYER_ERROR,error=what,extra=extra);if(player===current)stop();true }
             current.prepareAsync()
             // Mixing may finish after the bounded visual warmup. Upgrade at the current
             // timeline position, never restart the original sound from zero.
@@ -93,7 +100,7 @@ internal class EffectPreviewAudio(private val context:Context) {
                         if(player!==current)return
                         when(EffectPreviewAudioUpgrade.decide(
                             SystemClock.elapsedRealtime(),beganAt,isPrepared(kind,slow,sourceMotionFile),mixedFile?.isFile==true)) {
-                            EffectPreviewAudioUpgrade.Action.UPGRADE -> play(kind,slow,beganAt,sourceMotionFile,true)
+                            EffectPreviewAudioUpgrade.Action.UPGRADE -> {diagnostic(EffectExportEvent.AUDIO_UPGRADED);play(kind,slow,beganAt,sourceMotionFile,true)}
                             EffectPreviewAudioUpgrade.Action.WAIT -> handler.postDelayed(this,50)
                             EffectPreviewAudioUpgrade.Action.DONE -> Unit
                         }
@@ -101,7 +108,7 @@ internal class EffectPreviewAudio(private val context:Context) {
                 }
                 pendingUpgrade=upgrade;handler.postDelayed(upgrade,50)
             }
-        }catch(_:Exception){stop()}
+        }catch(e:Exception){diagnostic(EffectExportEvent.ERROR,EffectExportLog.reason(e));stop()}
     }
     fun stop(){
         prepareEpoch.incrementAndGet();preparedKey=null;preparingKey=null;mixedFile=null
