@@ -58,7 +58,7 @@ internal class EffectExportImages : AutoCloseable {
         result=read(resultUri,output)
         source=if(kind==EffectKind.LIGHT_TABLE)result else {
             val raw=read(requireNotNull(sourceUri),input)
-            val transformed=composition?.apply(raw,::checkCancel) ?: raw
+            val transformed=composition?.applyForExport(raw,::checkCancel) ?: raw
             if(transformed!==raw){owned.add(transformed);owned.remove(raw);raw.recycle()}
             transformed
         }

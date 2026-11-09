@@ -64,7 +64,9 @@ internal object FinalImageRows {
     }
     fun bitmap(photo:Bitmap,outputWidth:Int,outputHeight:Int,map:FinalImageSampling,checkActive:()->Unit,
                compose:(Int,FloatArray,FloatArray,Double,FloatArray)->Unit):Bitmap {
-        checkActive();require(maxOf(photo.width,photo.height)<=2048){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5bba0c1f8416)}
+        checkActive()
+        require(photo.width==map.inputWidth && photo.height==map.inputHeight)
+        require(outputWidth>0 && outputHeight>0)
         val out=Bitmap.createBitmap(outputWidth,outputHeight,Bitmap.Config.ARGB_8888)
         try {
             val ints=IntArray(photo.width);val pixels=IntArray(outputWidth)

@@ -1,6 +1,7 @@
 package dev.filmroom.crop
 
 import android.graphics.Bitmap
+import dev.filmroom.io.OutputColorSpace
 import dev.filmroom.border.FinalImageSampling
 import dev.filmroom.border.FinalImageRows
 import java.io.File
@@ -21,14 +22,23 @@ object CropCompositor {
         }
     }
 }
-/** Preview uses identical float mapping/interpolation; Bitmap encoding exists only at preview boundary. */
-object CropPreview {
+/** Bitmap adapter for memory-budgeted effect export. Scratch memory is row/tile bounded.
+ * Caller owns and budgets the decoded source and output bitmaps; no preview-size cap applies. */
+object CropBitmapCompositor {
     fun compose(photo:Bitmap,s:CropSnapshot,imprint:dev.filmroom.imprint.ImprintPlan?=null,checkActive:()->Unit={}):Bitmap {
         require(photo.width==s.sourceWidth && photo.height==s.sourceHeight)
         val map=CropCompositor.map(s)
         return FinalImageRows.bitmap(photo,s.outputWidth,s.outputHeight,map,checkActive){y,first,second,fy,row->
             CropCompositor.row(map,first,second,fy,row)
-            imprint?.blendRow(y,row,dev.filmroom.io.OutputColorSpace.SRGB)
+            imprint?.blendRow(y,row,OutputColorSpace.SRGB)
         }
+    }
+}
+/** Preview retains its own admission limit; both adapters use exactly the same pixel traversal. */
+object CropPreview {
+    fun compose(photo:Bitmap,s:CropSnapshot,imprint:dev.filmroom.imprint.ImprintPlan?=null,checkActive:()->Unit={}):Bitmap {
+        checkActive()
+        require(maxOf(photo.width,photo.height)<=2048){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5bba0c1f8416)}
+        return CropBitmapCompositor.compose(photo,s,imprint,checkActive)
     }
 }

@@ -1,6 +1,7 @@
 package dev.filmroom.effects
 
 import android.graphics.Bitmap
+import dev.filmroom.crop.CropBitmapCompositor
 import dev.filmroom.crop.CropPreview
 import dev.filmroom.crop.CropSnapshot
 import dev.filmroom.export.ExportJob
@@ -18,6 +19,11 @@ internal data class EffectSourceComposition(val canonicalWidth:Int,val canonical
     fun apply(input:Bitmap,checkActive:()->Unit={}):Bitmap {
         val frozen=snapshot(input.width,input.height)
         return if(frozen.isIdentity)input else CropPreview.compose(input,frozen,checkActive=checkActive)
+    }
+    /** Export input has already passed EffectExportImages' memory/quality budget. */
+    fun applyForExport(input:Bitmap,checkActive:()->Unit={}):Bitmap {
+        val frozen=snapshot(input.width,input.height)
+        return if(frozen.isIdentity)input else CropBitmapCompositor.compose(input,frozen,checkActive=checkActive)
     }
     companion object {
         fun from(job:ExportJob?):EffectSourceComposition? {
