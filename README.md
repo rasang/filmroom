@@ -108,6 +108,14 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 ### 观片台与取景器
 
+| 观片台：灯光亮起 | 取景器：对焦、快门与成片 |
+| --- | --- |
+| [![观片台动效演示](docs/assets/effects/light-table.gif)](docs/assets/effects/light-table.mp4) | [![取景器动效演示](docs/assets/effects/viewfinder.gif)](docs/assets/effects/viewfinder.mp4) |
+
+[观片台 MP4](docs/assets/effects/light-table.mp4) · [取景器 MP4](docs/assets/effects/viewfinder.mp4)
+
+*无声、3 秒循环预览。使用本分支真实动效 shader、纹理与时间线离屏渲染，输入为自制示例插画；不是手机录屏，也不代表实机性能。GIF 用于 README 直接展示，点击可打开 30 fps MP4。[素材与生成说明](docs/assets/effects/README.md)。*
+
 在导出记录中打开照片动效，每段约 3 秒：
 
 - **观片台**：模拟灯光亮起与胶片观看；左右换图时观片台保持固定、胶片滑动，离开照明区域的部分变暗。
@@ -171,4 +179,5 @@ Filmroom 的胶片与相纸引擎基于 Andrea Volpato 的 [spektrafilm](https:/
 程序代码遵循 [GPL-3.0](LICENSE)；相关胶片档案与 LUT 数据遵循 **CC BY-SA 4.0**，见[上游许可与数据声明](app/src/main/assets/licenses/SPEKTRAFILM_LICENSE.txt)。其他组件保留各自的[许可和声明](app/src/main/assets/licenses)，恢复预设图标来自 [Material Symbols](third-party/material-symbols-reset-settings/NOTICE.txt)。
 
 胶卷选择插画为项目原创素材，边框包含参考重绘与模型化表现，并非原始胶片扫描；[素材说明](docs/FILM_STOCK_ARTWORK.md)保留来源与限制。Kodak、Fujifilm 及胶片名称归各权利人所有，仅用于识别配置，不表示合作或背书。
+
 

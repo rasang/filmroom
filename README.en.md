@@ -108,6 +108,14 @@ Presets include film, paper, color, grain, composition/leveling, frame and date/
 
 ### Light table and viewfinder
 
+| Light table: illumination | Viewfinder: focus, shutter and reveal |
+| --- | --- |
+| [![Light-table effect demonstration](docs/assets/effects/light-table.gif)](docs/assets/effects/light-table.mp4) | [![Viewfinder effect demonstration](docs/assets/effects/viewfinder.gif)](docs/assets/effects/viewfinder.mp4) |
+
+[Light-table MP4](docs/assets/effects/light-table.mp4) · [Viewfinder MP4](docs/assets/effects/viewfinder.mp4)
+
+*Silent, 3-second looping previews. Rendered offscreen using this branch's actual effect shaders, textures and timeline with an original example illustration; not a phone recording or a device-performance claim. GIFs display directly in the README; click for 30 fps MP4. [Provenance and generation notes](docs/assets/effects/README.md).*
+
 Open photo effects from export history. Each sequence is approximately 3 seconds:
 
 - **Light table:** Simulated illumination and film viewing. When paging, the table stays fixed while the film slides; portions outside the illuminated area darken.
@@ -175,4 +183,5 @@ The film-selector illustrations are original project artwork. Film-edge frames i
 ## Signing migration in 0.1.17
 
 This version uses a new fixed release certificate. Upgrading from 0.1.16 or earlier requires uninstalling the old app first: private edit settings, temporary photos and export queues are removed; images already saved to the system gallery/downloads remain. Future versions using this same certificate can update in place. Source builds are unsigned by default. See [release notes](docs/RELEASE_0_1_17.md).
+
 
