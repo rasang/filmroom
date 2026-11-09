@@ -6,14 +6,14 @@ import java.io.IOException
 import java.util.concurrent.CancellationException
 
 /** One bounded trace per user action. Exception text and user data never enter diagnostics. */
-internal class RecipeLog(private val action: RecipeAction, private val input: RecipeInput? = null) {
+internal class RecipeLog(private val action: RecipeAction, private val input: RecipeInput? = null, val correlation: Long = RecipeCorrelation.next()) {
     private val started = System.nanoTime()
     var step = RecipeStep.START
         private set
     private val id = QueuedDiagnosticTrace(Operation.RECIPE, SafeInfo(recipe = info()))
     private var ended = false
     private fun info(reason: RecipeReason = RecipeReason.NONE, count: Int? = null) =
-        RecipeDiagnosticInfo(action, step, reason, input, count, elapsedMs = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(0))
+        RecipeDiagnosticInfo(action, step, reason, input, count, elapsedMs = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(0), correlation = correlation)
     fun at(value: RecipeStep) { if (ended) return; step = value; id.event(Stage.ENCODE_PROGRESS, SafeInfo(recipe = info())) }
     fun dimensions(width: Int, height: Int) {
         if (!ended) id.event(Stage.ENCODE_PROGRESS, SafeInfo(recipe = info().copy(width = width, height = height)))
@@ -42,8 +42,8 @@ internal class RecipeLog(private val action: RecipeAction, private val input: Re
             is IllegalStateException -> RecipeReason.INVALID_STATE
             else -> RecipeReason.UNKNOWN
         }
-        inline fun <T> trace(action: RecipeAction, block: (RecipeLog) -> T): T {
-            val log = RecipeLog(action)
+        inline fun <T> trace(action: RecipeAction, correlation: Long = RecipeCorrelation.next(), block: (RecipeLog) -> T): T {
+            val log = RecipeLog(action, correlation = correlation)
             try { return block(log).also { log.end(Outcome.SUCCESS) } }
             catch (error: Throwable) { log.failed(error); throw error }
         }

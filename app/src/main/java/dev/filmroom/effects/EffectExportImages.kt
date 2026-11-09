@@ -17,12 +17,16 @@ internal class EffectExportImages : AutoCloseable {
     private val owned = mutableListOf<Bitmap>()
 
     fun load(resolver:ContentResolver, kind:EffectKind, sourceUri:String?, resultUri:String,
-             quality:EffectExportQuality, live:Boolean=false, composition:EffectSourceComposition?=null, cancelled:()->Boolean) = EffectExportLog.trace(EffectExportScope.INPUT_DECODE) { log ->
+             quality:EffectExportQuality, live:Boolean=false, composition:EffectSourceComposition?=null, correlationId:Long=EffectCorrelation.next(), parentCorrelationId:Long?=null, cancelled:()->Boolean) = EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId,parentCorrelationId) { log ->
         fun checkCancel(){if(cancelled())throw CancellationException("Image decode cancelled")}
+        checkCancel()
+        log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,parentCorrelationId=parentCorrelationId,inputFormat=dev.filmroom.io.formats.PhotoFormat.UNKNOWN))
+        checkCancel()
         fun bounds(uri:String):EffectExportSize {
             checkCancel()
             var size:EffectExportSize?=null
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver,Uri.parse(uri))){d,info,_->
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=if(uri==resultUri)EffectExportStep.DECODE_RESULT else EffectExportStep.DECODE_SOURCE,inputFormat=EffectInputFormat.fromDecodedHeader(info.mimeType)))
                 size=EffectExportSize(info.size.width,info.size.height)
                 d.setTargetSize(1,1); d.allocator=ImageDecoder.ALLOCATOR_SOFTWARE
             }.recycle()

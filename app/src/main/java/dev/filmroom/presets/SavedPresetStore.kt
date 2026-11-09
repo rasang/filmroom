@@ -31,7 +31,7 @@ internal class SavedPresetStore(private val file: File) {
     fun list(): List<Preset> = RecipeLog.trace(RecipeAction.LIST) { log -> synchronized(lock) {
         log.at(RecipeStep.STORE_READ); read().also { log.end(Outcome.SUCCESS, count = it.size) }
     } }
-    fun save(name: String, parameters: EditorState): Preset = RecipeLog.trace(RecipeAction.SAVE) { log -> synchronized(lock) {
+    fun save(name: String, parameters: EditorState, correlation: Long = RecipeCorrelation.next()): Preset = RecipeLog.trace(RecipeAction.SAVE, correlation) { log -> synchronized(lock) {
         log.at(RecipeStep.VALIDATE)
         val clean = cleanName(name)
         log.at(RecipeStep.STORE_READ)
@@ -43,6 +43,7 @@ internal class SavedPresetStore(private val file: File) {
         if (item.parameters() != parameters) throw Failure(Problem.INCOMPATIBLE)
         log.at(RecipeStep.STORE_WRITE)
         write(listOf(item) + existing)
+        RecipeCorrelation.saved(item.id, correlation)
         log.end(Outcome.SUCCESS, count = existing.size + 1)
         item
     } }
@@ -52,6 +53,7 @@ internal class SavedPresetStore(private val file: File) {
         if (existing.none { it.id == id }) { log.end(Outcome.FAILED, RecipeReason.MISSING); return@synchronized false }
         log.at(RecipeStep.STORE_WRITE)
         write(existing.filterNot { it.id == id })
+        RecipeCorrelation.deleted(id)
         log.end(Outcome.SUCCESS, count = existing.size - 1)
         true
     } }

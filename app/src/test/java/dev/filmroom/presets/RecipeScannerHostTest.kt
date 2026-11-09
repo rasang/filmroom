@@ -55,13 +55,33 @@ class RecipeScannerHostTest {
         }
     }
     @Test fun albumSelectionReturnsUriAndFinishes() {
-        Robolectric.buildActivity(RecipeScannerActivity::class.java).setup().use { host ->
+        val token = RecipeCorrelation.next()
+        val intent = android.content.Intent(RuntimeEnvironment.getApplication(), RecipeScannerActivity::class.java)
+            .putExtra(RecipeScannerActivity.EXTRA_CORRELATION, token)
+        Robolectric.buildActivity(RecipeScannerActivity::class.java, intent).setup().use { host ->
             val a=host.get();denyCamera(a); val root=a.findViewById<ViewGroup>(android.R.id.content)
             all(root).single{it.tag=="recipe-camera-album"}.performClick()
             val launch=shadowOf(a).nextStartedActivityForResult
             val uri=android.net.Uri.parse("content://fixture/recipe.png")
             a.activityResultRegistry.dispatchResult(launch.requestCode,Activity.RESULT_OK,android.content.Intent().setData(uri))
             assertTrue(a.isFinishing);assertEquals(Activity.RESULT_OK,shadowOf(a).resultCode);assertEquals(uri,shadowOf(a).resultIntent.data)
+            assertEquals(token, shadowOf(a).resultIntent.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
+        }
+    }
+    @Test fun recreationKeepsAnonymousTokenForScannerLaunchedWithoutExtra() {
+        Robolectric.buildActivity(RecipeScannerActivity::class.java).setup().use { host ->
+            val before = host.get(); denyCamera(before)
+            val saved = android.os.Bundle()
+            host.saveInstanceState(saved)
+            val token = saved.getLong(RecipeScannerActivity.EXTRA_CORRELATION)
+            assertTrue(token > 0)
+            host.recreate()
+            val restored = host.get()
+            all(restored.findViewById<ViewGroup>(android.R.id.content)).single { it.tag == "recipe-camera-album" }.performClick()
+            val launch = shadowOf(restored).nextStartedActivityForResult
+            restored.activityResultRegistry.dispatchResult(launch.requestCode, Activity.RESULT_OK,
+                android.content.Intent().setData(android.net.Uri.parse("content://fixture/recipe.png")))
+            assertEquals(token, shadowOf(restored).resultIntent.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
         }
     }
     @Test fun recreationDoesNotLaunchAlbumTwice() {

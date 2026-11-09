@@ -16,10 +16,12 @@ data class MotionPreviewDiagnosticInfo(
     val glSubmitCpuMeanUs: Long? = null,
     val glSubmitCpuMaxUs: Long? = null,
     val suppressedReports: Long = 0,
-    val decoder: MotionPreviewDecoderSnapshot? = null
+    val decoder: MotionPreviewDecoderSnapshot? = null,
+    val correlationId:Long?=null
 ) {
     internal fun fields(): Map<String, Any> = linkedMapOf<String, Any>().apply {
         fun n(k:String,v:Long?,min:Long,max:Long) { if(v != null && v in min..max) put("motionPreview"+k,v) }
+        n("CorrelationId",correlationId,1,Long.MAX_VALUE)
         n("SourceWidth", sourceWidth?.toLong(), 1, 30000)
         n("SourceHeight", sourceHeight?.toLong(), 1, 30000)
         n("SubmittedFrames", submittedFrames, 0, 10000)
@@ -53,7 +55,8 @@ data class MotionPreviewDiagnosticInfo(
                 glSubmitCpuMeanUs = n("GlSubmitCpuMeanUs", 0, 60000000),
                 glSubmitCpuMaxUs = n("GlSubmitCpuMaxUs", 0, 60000000),
                 suppressedReports = n("SuppressedReports", 0, 1000000) ?: 0,
-                decoder = MotionPreviewDecoderSnapshot.parse(fields)
+                decoder = MotionPreviewDecoderSnapshot.parse(fields),
+                correlationId=n("CorrelationId",1,Long.MAX_VALUE)
             )
         }
     }

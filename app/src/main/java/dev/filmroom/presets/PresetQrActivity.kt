@@ -47,9 +47,9 @@ class PresetQrActivity : ComponentActivity() {
         val data = result.data
         when {
             result.resultCode != RESULT_OK -> finish()
-            data?.data != null -> model.read(data.data!!)
+            data?.data != null -> model.read(data.data!!, data.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
             data?.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT) != null ->
-                model.read(data.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT)!!)
+                model.read(data.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT)!!, dev.filmroom.diagnostics.RecipeInput.CAMERA, data.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
             else -> finish()
         }
     }
@@ -125,7 +125,7 @@ class PresetQrActivity : ComponentActivity() {
     }
     private fun startScanner() {
         try {
-            scanner.launch(Intent(this, RecipeScannerActivity::class.java))
+            scanner.launch(Intent(this, RecipeScannerActivity::class.java).putExtra(RecipeScannerActivity.EXTRA_CORRELATION, model.beginImport()))
         } catch (_: Exception) { model.externalPending = false; render(model.state.value); status.text = text(R.string.preset_qr_camera_denied) }
     }
     private fun render(value: PresetQrViewModel.Screen) {

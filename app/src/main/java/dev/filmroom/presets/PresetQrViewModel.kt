@@ -23,12 +23,15 @@ internal class PresetQrViewModel(app: Application) : AndroidViewModel(app) {
     var externalPending = false
     var nameDraft = ""
     private val store = SavedPresetStore(app)
+    private var correlation = RecipeCorrelation.next()
+    fun beginImport(): Long { correlation = RecipeCorrelation.next(); return correlation }
     private fun run(action: RecipeAction, input: RecipeInput? = null, next: suspend (RecipeLog) -> Screen) {
         if (mutable.value.phase == "working") return
+        val operationCorrelation = correlation
         val before = mutable.value
         mutable.value = before.copy(phase = "working", error = null)
         viewModelScope.launch {
-            val log = RecipeLog(action, input)
+            val log = RecipeLog(action, input, operationCorrelation)
             try { mutable.value = withContext(Dispatchers.IO) { next(log) }; log.end(Outcome.SUCCESS) }
             catch (cancelled: CancellationException) { log.failed(cancelled); throw cancelled }
             catch (error: Exception) { log.failed(error); mutable.value = before.copy(error = error) }
@@ -46,10 +49,18 @@ internal class PresetQrViewModel(app: Application) : AndroidViewModel(app) {
         log.at(RecipeStep.QR_RENDER)
         Screen("share", PresetQrCodec.Draft(item.name, parameters), PresetQrImage.render(getApplication(), payload), payload)
     }
-    fun read(text: String, input: RecipeInput = RecipeInput.TEXT) = run(RecipeAction.QR_IMPORT, input) { decoded(text, it) }
-    fun read(uri: Uri) = run(RecipeAction.QR_IMPORT, RecipeInput.ALBUM) { log ->
-        log.at(RecipeStep.IMAGE_READ)
-        decoded(PresetQrImage.read(getApplication(), uri, log), log)
+    fun read(text: String, input: RecipeInput = RecipeInput.TEXT, token: Long? = null) {
+        if (mutable.value.phase == "working") return
+        correlation = token?.let(RecipeCorrelation::accept) ?: RecipeCorrelation.next()
+        run(RecipeAction.QR_IMPORT, input) { decoded(text, it) }
+    }
+    fun read(uri: Uri, token: Long? = null) {
+        if (mutable.value.phase == "working") return
+        correlation = token?.let(RecipeCorrelation::accept) ?: RecipeCorrelation.next()
+        run(RecipeAction.QR_IMPORT, RecipeInput.ALBUM) { log ->
+            log.at(RecipeStep.IMAGE_READ)
+            decoded(PresetQrImage.read(getApplication(), uri, log), log)
+        }
     }
     private fun decoded(text: String, log: RecipeLog): Screen {
         log.at(RecipeStep.QR_DECODE)
@@ -62,7 +73,7 @@ internal class PresetQrViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun save(name: String) {
         val draft = mutable.value.takeIf { it.phase == "confirm" }?.draft ?: return
-        run(RecipeAction.SAVE) { log -> log.at(RecipeStep.COMMIT); store.save(name, draft.parameters); Screen("saved", draft = draft.copy(name = SavedPresetStore.cleanName(name))) }
+        run(RecipeAction.SAVE) { log -> log.at(RecipeStep.COMMIT); store.save(name, draft.parameters, log.correlation); Screen("saved", draft = draft.copy(name = SavedPresetStore.cleanName(name))) }
     }
     fun home() { if (mutable.value.phase != "working") mutable.value = Screen() }
     private fun validateStocks(parameters: dev.filmroom.model.EditorState) {

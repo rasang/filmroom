@@ -10,7 +10,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 /** Pre-encoded original effects. The same audio track is embedded in video and Live output. */
-internal class EffectAudioTrack(context:Context,kind:EffectKind,slow:Boolean,sourceMotionFile:File?=null,checkActive:()->Unit={}):Closeable {
+internal class EffectAudioTrack(context:Context,kind:EffectKind,slow:Boolean,sourceMotionFile:File?=null,checkActive:()->Unit={},correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null):Closeable {
     companion object {
         fun assetPath(kind:EffectKind,slow:Boolean)= "effect_audio/"+when(kind){
             EffectKind.LIGHT_TABLE->"light_table"
@@ -21,7 +21,7 @@ internal class EffectAudioTrack(context:Context,kind:EffectKind,slow:Boolean,sou
     val format:MediaFormat
     init {
         try {
-            val mixed=EffectMotionAudio.prepare(context,kind,slow,sourceMotionFile,checkActive)
+            val mixed=EffectMotionAudio.prepare(context,kind,slow,sourceMotionFile,correlationId,parentCorrelationId,checkActive)
             if(mixed!=null) extractor.setDataSource(mixed.absolutePath)
             else context.assets.openFd(assetPath(kind,slow)).use {
                 extractor.setDataSource(it.fileDescriptor,it.startOffset,it.length)

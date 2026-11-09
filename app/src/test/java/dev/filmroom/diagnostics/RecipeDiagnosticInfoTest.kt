@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RecipeDiagnosticInfoTest {
+    @Test fun anonymousCorrelationRoundTripsWithoutAcceptingText() {
+        val info = RecipeDiagnosticInfo(RecipeAction.SAVE, correlation = Long.MAX_VALUE)
+        assertEquals(info, SafeInfo.parse(SafeInfo(recipe = info).fields()).recipe)
+        for (bad in listOf("-1", "0", "content://private", "9223372036854775808")) {
+            assertNull(RecipeDiagnosticInfo.fromFields(mapOf("recipeAction" to "SAVE", "recipeCorrelation" to bad))?.correlation)
+        }
+    }
+
     @Test fun allActionsStagesAndReasonsRoundTrip() {
         for (action in RecipeAction.entries) for (step in RecipeStep.entries) for (reason in RecipeReason.entries) {
             val info = RecipeDiagnosticInfo(action, step, reason, RecipeInput.ALBUM, 200, 1536, 1200, 800)

@@ -302,10 +302,10 @@ internal class SavedPresetDialogs(
         target.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             if (working || !active(target)) return@setOnClickListener
             val item = selected() ?: return@setOnClickListener
-            if (!unchanged()) { RecipeLog(RecipeAction.APPLY).end(Outcome.FAILED, RecipeReason.STALE); status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale); return@setOnClickListener }
+            if (!unchanged()) { RecipeLog(RecipeAction.APPLY, correlation = RecipeCorrelation.forApply(item.id)).end(Outcome.FAILED, RecipeReason.STALE); status.visibility = View.VISIBLE; status.text = text(R.string.saved_preset_stale); return@setOnClickListener }
             working = true; buttons()
             listJob = activity.lifecycleScope.launch {
-                val log = RecipeLog(RecipeAction.APPLY)
+                val log = RecipeLog(RecipeAction.APPLY, correlation = RecipeCorrelation.forApply(item.id))
                 try {
                     log.at(RecipeStep.PARAMETERS)
                     val parameters = withContext(Dispatchers.IO) { measured("apply parse and stocks") { item.parameters().also(::validateStocks) } }

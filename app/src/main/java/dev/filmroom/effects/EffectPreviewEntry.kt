@@ -51,6 +51,7 @@ internal object EffectEntryHandoff {
 
 /** Starts while the effect chooser is open. A cold launch waits on the existing list, never an empty page. */
 class EffectPreviewEntry(private val activity:ComponentActivity,private val job:ExportJob):AutoCloseable {
+    private val correlationId=EffectCorrelation.next()
     private var staged:PreparedEffectPhoto?=null
     private var waiting:Job?=null
     private var dialog:AlertDialog?=null
@@ -58,7 +59,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
     private var launchRequested=false
     private val preparation=activity.lifecycleScope.launch {
         var owned:PreparedEffectPhoto?=null
-        val log=EffectExportLog(EffectExportScope.PRELOAD)
+        val log=EffectExportLog(EffectExportScope.PRELOAD,correlationId)
         var outcome=Outcome.FAILED
         try {
             owned=prepare(activity.applicationContext,job,log)
@@ -93,6 +94,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
     }
     private fun zh()=dev.filmroom.i18n.L10n.language(activity).startsWith("zh")
     private fun open(kind:EffectKind,token:String?){activity.startActivity(Intent(activity,PhotoEffectActivity::class.java)
+        .putExtra(PhotoEffectActivity.CORRELATION_ID,correlationId)
         .putExtra(PhotoEffectActivity.KIND,kind.name).putExtra(PhotoEffectActivity.RESULT_URI,job.mediaUri)
         .putExtra(PhotoEffectActivity.SOURCE_URI,job.originalUri).putExtra(PhotoEffectActivity.JOB_ID,job.id)
         .apply{if(token!=null)putExtra(PhotoEffectActivity.PREPARED_ENTRY,token)})}
@@ -107,15 +109,15 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
             var input:Bitmap?=null;var output:Bitmap?=null;var motion:File?=null
             try {
                 log.phase(EffectExportStep.DECODE_RESULT)
-                output=decode(context,requireNotNull(record.mediaUri));ensureActive()
+                output=decode(context,requireNotNull(record.mediaUri),log);ensureActive()
                 log.phase(EffectExportStep.DECODE_SOURCE)
-                val raw=decode(context,requireNotNull(record.originalUri))
+                val raw=decode(context,requireNotNull(record.originalUri),log)
                 log.phase(EffectExportStep.COMPOSE_SOURCE)
                 try{input=composition?.apply(raw){ensureActive()}?:raw;if(input!==raw)raw.recycle()}
                 catch(t:Throwable){raw.recycle();throw t}
                 val readout=EffectCameraReadout.read(context.contentResolver,record.originalUri,record.photoMetadata)
                 log.phase(EffectExportStep.MOTION_EXTRACT)
-                motion=EffectMotionInput.prepare(context,record.originalUri){ensureActive()};ensureActive()
+                motion=EffectMotionInput.prepare(context,record.originalUri,log.correlationId){ensureActive()};ensureActive()
                 completed=PreparedEffectPhoto(record,requireNotNull(input),requireNotNull(output),composition,readout,motion).also{input=null;output=null;motion=null}
             }finally{motion?.delete();input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}
             }
@@ -123,9 +125,13 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
                 return completed
             } catch(t:Throwable){completed?.close();throw t}
         }
-        private fun decode(context:Context,uri:String):Bitmap=ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver,Uri.parse(uri))){decoder,info,_->
+        private fun decode(context:Context,uri:String,log:EffectExportLog):Bitmap {
+            var format=dev.filmroom.io.formats.PhotoFormat.UNKNOWN
+            try { return ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver,Uri.parse(uri))){decoder,info,_->
+            format=EffectInputFormat.fromDecodedHeader(info.mimeType)
             val scale=minOf(1.0,1600.0/maxOf(info.size.width,info.size.height));decoder.setTargetSize((info.size.width*scale).toInt().coerceAtLeast(1),(info.size.height*scale).toInt().coerceAtLeast(1))
             decoder.allocator=ImageDecoder.ALLOCATOR_SOFTWARE;decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
+        } } finally {log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=log.step,inputFormat=format))}
         }
     }
 }

@@ -6,18 +6,19 @@ import java.io.IOException
 import java.util.concurrent.CancellationException
 
 /** Local diagnostics only; no image identity, paths, messages or codec-provided text. */
-internal class EffectExportLog(val scope:EffectExportScope) {
+internal class EffectExportLog(val scope:EffectExportScope, val correlationId:Long = EffectCorrelation.next(),val parentCorrelationId:Long?=null) {
     private val started=System.nanoTime()/1_000_000
-    private val initial=SafeInfo(effectExport=EffectExportDiagnosticInfo(scope,EffectExportEvent.START))
+    private val initial=SafeInfo(effectExport=EffectExportDiagnosticInfo(scope,EffectExportEvent.START,correlationId=correlationId,parentCorrelationId=parentCorrelationId))
     private val queued=if(scope==EffectExportScope.PRELOAD || scope==EffectExportScope.LIVE_PHOTO)QueuedDiagnosticTrace(Operation.EXPORT_ENCODE,initial) else null
     private val id=if(queued==null)Diagnostics.begin(Operation.EXPORT_ENCODE,initial) else null
     var step:EffectExportStep=EffectExportStep.NONE
     var failureReason:EffectExportReason=EffectExportReason.NONE
-    fun record(info:EffectExportDiagnosticInfo){val safe=SafeInfo(effectExport=info);if(queued!=null)queued.event(Stage.ENCODE_PROGRESS,safe) else id?.let{Diagnostics.event(it,Stage.ENCODE_PROGRESS,safe)}}
+    fun record(info:EffectExportDiagnosticInfo){val safe=SafeInfo(effectExport=correlated(info,correlationId,parentCorrelationId));if(queued!=null)queued.event(Stage.ENCODE_PROGRESS,safe) else id?.let{Diagnostics.event(it,Stage.ENCODE_PROGRESS,safe)}}
     fun phase(value:EffectExportStep){if(step!=value){step=value;record(EffectExportDiagnosticInfo(scope,EffectExportEvent.STEP,step=value,elapsedMs=elapsed()))}}
     fun elapsed()=(System.nanoTime()/1_000_000-started).coerceAtLeast(0)
-    fun end(outcome:Outcome,flush:Boolean=true){val safe=SafeInfo(effectExport=EffectExportDiagnosticInfo(scope,EffectExportEvent.END,step=step,elapsedMs=elapsed()));if(queued!=null)queued.end(outcome,safe) else id?.let{Diagnostics.end(it,outcome,safe)};if(flush&&queued==null)Diagnostics.flush()}
+    fun end(outcome:Outcome,flush:Boolean=true){val safe=SafeInfo(effectExport=EffectExportDiagnosticInfo(scope,EffectExportEvent.END,step=step,elapsedMs=elapsed(),correlationId=correlationId,parentCorrelationId=parentCorrelationId));if(queued!=null)queued.end(outcome,safe) else id?.let{Diagnostics.end(it,outcome,safe)};if(flush&&queued==null)Diagnostics.flush()}
     companion object {
+        internal fun correlated(info:EffectExportDiagnosticInfo,id:Long,parent:Long?)=info.copy(correlationId=id,parentCorrelationId=parent)
         fun reason(error:Throwable):EffectExportReason=when(error){
             is OutOfMemoryError->EffectExportReason.OUT_OF_MEMORY
             is MediaCodec.CodecException->EffectExportReason.CODEC_ERROR
@@ -37,8 +38,8 @@ internal class EffectExportLog(val scope:EffectExportScope) {
             is IllegalStateException->EffectExportReason.INVALID_STATE
             else->EffectExportReason.UNKNOWN
         }
-        inline fun <T> trace(scope:EffectExportScope,block:(EffectExportLog)->T):T {
-            val log=EffectExportLog(scope)
+        inline fun <T> trace(scope:EffectExportScope,correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null,block:(EffectExportLog)->T):T {
+            val log=EffectExportLog(scope,correlationId,parentCorrelationId)
             var outcome=Outcome.FAILED
             try{return block(log).also{outcome=Outcome.SUCCESS}}
             catch(e:CancellationException){outcome=Outcome.CANCELLED;throw e}

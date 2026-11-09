@@ -29,7 +29,7 @@ internal object EffectMotionAudio {
         val value="v1-half-bed-$kind-$slow-${file.absolutePath}-${file.length()}-${file.lastModified()}"
         return MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString(""){"%02x".format(it)}
     }
-    fun prepare(context:Context,kind:EffectKind,slow:Boolean,file:File?,checkActive:()->Unit={}):File? = EffectExportLog.trace(EffectExportScope.AUDIO_PREPARE) { log ->
+    fun prepare(context:Context,kind:EffectKind,slow:Boolean,file:File?,correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null,checkActive:()->Unit={}):File? = EffectExportLog.trace(EffectExportScope.AUDIO_PREPARE,correlationId,parentCorrelationId) { log ->
         checkActive()
         log.phase(EffectExportStep.AUDIO_LOCK)
         while(!prepareLock.tryLock(20,TimeUnit.MILLISECONDS))checkActive()

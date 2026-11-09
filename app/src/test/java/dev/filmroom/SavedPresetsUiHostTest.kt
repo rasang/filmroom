@@ -312,8 +312,10 @@ class SavedPresetsUiHostTest {
             // Consume the already asserted scanner launch before checking no later screen opens.
             assertEquals(launch.intent.component,shadowOf(activity).nextStartedActivity.component)
             val payload=PresetQrCodec.encode("Scanned",EditorState(brightness=.8f))
+            val correlation = dev.filmroom.presets.RecipeCorrelation.next()
             activity.activityResultRegistry.dispatchResult(launch.requestCode,android.app.Activity.RESULT_OK,
-                Intent().putExtra(dev.filmroom.presets.RecipeScannerActivity.EXTRA_QR_TEXT,payload))
+                Intent().putExtra(dev.filmroom.presets.RecipeScannerActivity.EXTRA_QR_TEXT,payload)
+                    .putExtra(dev.filmroom.presets.RecipeScannerActivity.EXTRA_CORRELATION, correlation))
             await{latest()!==recipes && latest().isShowing}
             val naming=latest();assertEquals("recipe-import-name",input(naming).tag)
             assertEquals("Scanned",input(naming).text.toString())
@@ -324,6 +326,7 @@ class SavedPresetsUiHostTest {
             await{SavedPresetStore(activity).list().size==1 && latest()!==naming && latest().isShowing}
             assertTrue(all(latest().window!!.decorView).any{it.tag=="saved-preset-list"})
             assertEquals(.8f,SavedPresetStore(activity).list().single().parameters().brightness)
+            assertEquals(correlation, dev.filmroom.presets.RecipeCorrelation.forApply(SavedPresetStore(activity).list().single().id))
             assertEquals(original,flow.value.parameters)
             assertNull(shadowOf(activity).nextStartedActivity)
         }

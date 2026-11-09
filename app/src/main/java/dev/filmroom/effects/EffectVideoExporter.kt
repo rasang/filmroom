@@ -30,8 +30,8 @@ object EffectVideoExporter {
         requestedSize: EffectExportSize? = null,
         onResolution: (EffectExportReport) -> Unit = {},
         readout: EffectCameraReadout = EffectCameraReadout(),
-        motionSource: EffectMotionSource? = null, motionAudioFile: java.io.File? = null
-    ): Uri = EffectExportLog.trace(EffectExportScope.VIDEO) { log ->
+        motionSource: EffectMotionSource? = null, motionAudioFile: java.io.File? = null, correlationId:Long=EffectCorrelation.next(), parentCorrelationId:Long?=null
+    ): Uri = EffectExportLog.trace(EffectExportScope.VIDEO,correlationId,parentCorrelationId) { log ->
         val requested = requestedSize ?: EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
         val available = EffectExportResolution.desired(kind,source.width,source.height,result.width,result.height,quality)
         var failure: Exception? = null
@@ -177,7 +177,7 @@ object EffectVideoExporter {
                 MediaMuxer(descriptor!!.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             }.also { muxer = it }
             log.phase(EffectExportStep.AUDIO_PREPARE)
-            audio = EffectAudioTrack(context,kind,slow,motionAudioFile,::checkCancelled)
+            audio = EffectAudioTrack(context,kind,slow,motionAudioFile,::checkCancelled,log.correlationId,log.parentCorrelationId)
             var track = -1
             var eosSeen = false
             var samples = 0

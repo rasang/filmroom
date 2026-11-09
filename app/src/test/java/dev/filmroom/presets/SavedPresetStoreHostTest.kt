@@ -28,6 +28,20 @@ class SavedPresetStoreHostTest {
 
     private fun target() = File(temporary.newFolder(), "saved-presets.json")
 
+    @Test fun importCorrelationSurvivesSaveToApplyButIsNeverPersisted() {
+        val file = target()
+        val store = SavedPresetStore(file)
+        val token = RecipeCorrelation.next()
+        val item = store.save("Private recipe", EditorState(), token)
+        assertEquals(token, RecipeCorrelation.forApply(item.id))
+        val bytes = file.readText()
+        assertFalse(bytes.contains("correlation", ignoreCase = true))
+        assertFalse(bytes.contains(token.toString()))
+        assertTrue(store.delete(item.id))
+        assertNotEquals(token, RecipeCorrelation.forApply(item.id))
+    }
+
+
     private fun fails(problem: SavedPresetStore.Problem, action: () -> Unit) {
         try {
             action()

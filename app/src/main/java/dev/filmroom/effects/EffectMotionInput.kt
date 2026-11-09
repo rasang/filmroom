@@ -15,9 +15,9 @@ import java.util.concurrent.CancellationException
 /** Bounded original JPEG motion input; typed diagnostics never contain source identifiers. */
 internal object EffectMotionInput {
     private const val MAX_INPUT=134217728L
-    fun prepare(context:Context,uri:String?,checkActive:()->Unit={}):File? =
+    fun prepare(context:Context,uri:String?,correlationId:Long=EffectCorrelation.next(),checkActive:()->Unit={}):File? =
         prepareWithDiagnostics(context,uri,checkActive) { report ->
-            val info=SafeInfo(motionInput=report)
+            val info=SafeInfo(motionInput=report.copy(correlationId=correlationId))
             val outcome=when(report.status) {
                 MotionInputStatus.SUCCESS -> Outcome.SUCCESS
                 MotionInputStatus.CANCELLED -> Outcome.CANCELLED

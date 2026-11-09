@@ -52,9 +52,9 @@ internal class RecipeImportDialog(
     fun accept(resultCode: Int, data: Intent?) {
         if (resultCode != Activity.RESULT_OK) return
         when {
-            data?.data != null -> model.read(data.data!!)
+            data?.data != null -> model.read(data.data!!, data.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
             data?.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT) != null ->
-                model.read(data.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT)!!, dev.filmroom.diagnostics.RecipeInput.CAMERA)
+                model.read(data.getStringExtra(RecipeScannerActivity.EXTRA_QR_TEXT)!!, dev.filmroom.diagnostics.RecipeInput.CAMERA, data.getLongExtra(RecipeScannerActivity.EXTRA_CORRELATION, 0))
         }
     }
     private fun text(id: Int) = L10n.text(id)

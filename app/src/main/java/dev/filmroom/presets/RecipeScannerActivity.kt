@@ -54,7 +54,7 @@ class RecipeScannerActivity : ComponentActivity() {
         android.graphics.drawable.GradientDrawable().apply { setColor(0xCC242424.toInt()); cornerRadius = dp(24).toFloat() }, null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        scanLog = RecipeLog(RecipeAction.SCAN)
+        scanLog = RecipeLog(RecipeAction.SCAN, correlation = RecipeCorrelation.accept(savedInstanceState?.getLong(EXTRA_CORRELATION) ?: intent.getLongExtra(EXTRA_CORRELATION, 0)))
         scanLog?.at(RecipeStep.CAMERA)
         pickerPending = savedInstanceState?.getBoolean("pickerPending") ?: false
         permissionRequested = savedInstanceState?.getBoolean("permissionRequested") ?: false
@@ -131,15 +131,16 @@ class RecipeScannerActivity : ComponentActivity() {
     private fun deliver(result: Intent) {
         if (returned || isFinishing) return
         scanLog?.end(Outcome.SUCCESS)
-        returned = true; camera.pause(); setResult(Activity.RESULT_OK, result); finish()
+        returned = true; camera.pause(); result.putExtra(EXTRA_CORRELATION, scanLog?.correlation ?: 0); setResult(Activity.RESULT_OK, result); finish()
     }
     override fun onDestroy() { scanLog?.end(Outcome.CANCELLED); super.onDestroy() }
     override fun onResume() { super.onResume(); resumed = true; resumeCamera() }
     override fun onPause() { resumed = false; camera.pause(); super.onPause() }
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong(EXTRA_CORRELATION, scanLog?.correlation ?: 0)
         outState.putBoolean("pickerPending", pickerPending)
         outState.putBoolean("permissionRequested", permissionRequested)
         super.onSaveInstanceState(outState)
     }
-    companion object { const val EXTRA_QR_TEXT = "recipeQrText" }
+    companion object { const val EXTRA_CORRELATION = "recipeDiagnosticCorrelation"; const val EXTRA_QR_TEXT = "recipeQrText" }
 }

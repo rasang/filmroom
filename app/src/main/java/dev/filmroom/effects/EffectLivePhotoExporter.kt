@@ -23,8 +23,8 @@ object EffectLivePhotoExporter {
         input = input, profile = profile, durationMs = 3000, coverOffsetMs = 2900, keepAudio = true,
         maxLongEdge = maxLongEdge, allowExperimentalProfiles = true, targetGalleryPackage = gallery)
 
-    suspend fun preflight(context: Context, gallery: String? = null): Preflight = withContext(Dispatchers.IO) {
-        EffectExportLog.trace(EffectExportScope.PREFLIGHT) { log ->
+    suspend fun preflight(context: Context, gallery: String? = null, correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): Preflight = withContext(Dispatchers.IO) {
+        EffectExportLog.trace(EffectExportScope.PREFLIGHT,correlationId,parentCorrelationId) { log ->
             log.phase(EffectExportStep.LIVE_RESOLVE)
             Preflight(forDirectAttempt(NormalizedLivePhotoSdk(context).resolve(request(Uri.fromFile(File(context.cacheDir, "effect-live-preflight.mp4")), gallery)))).also {
                 log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.PREFLIGHT_RESOLVED,
@@ -48,7 +48,7 @@ object EffectLivePhotoExporter {
         onResolution: (EffectExportReport) -> Unit = {},
         readout: EffectCameraReadout = EffectCameraReadout(),
         motionSource: EffectMotionSource? = null, motionAudioFile: File? = null,
-        photoMetadata: PhotoMetadata = PhotoMetadata.unavailable()): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO) { log ->
+        photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(), correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO,correlationId,parentCorrelationId) { log ->
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
         val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
         check(exportLock.tryLock()) { "Live Photo export already running" }
@@ -70,7 +70,7 @@ object EffectLivePhotoExporter {
             withContext(Dispatchers.IO) {
                 EffectVideoExporter.export(app, kind, source, result,
                     onProgress = { onProgress(it * .75f) },
-                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it},readout=readout,motionSource=motionSource,motionAudioFile=motionAudioFile)
+                    cancelled = { cancelled() || !coroutine.isActive }, slow = slow, privateOutput = video, quality=quality, requestedSize=attemptSize, onResolution={resolution=it},readout=readout,motionSource=motionSource,motionAudioFile=motionAudioFile,correlationId=correlationId,parentCorrelationId=parentCorrelationId)
                 rendered = true
             }
             coroutine.ensureActive()

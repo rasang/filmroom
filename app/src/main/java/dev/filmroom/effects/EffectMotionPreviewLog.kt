@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 internal class EffectMotionPreviewLog(
     private val clockMs: () -> Long = { SystemClock.elapsedRealtime() },
+    private val correlationId:Long=EffectCorrelation.next(),
     private val sink: (MotionPreviewDiagnosticInfo, Outcome) -> Unit = { info,outcome -> MotionPreviewDiagnostics.record(info,outcome) },
 ) {
     private val created=clockMs()
@@ -48,7 +49,7 @@ internal class EffectMotionPreviewLog(
         prepareMs=began?.let{(it-created).coerceIn(0,60000)},activeMs=began?.let{(clockMs()-it).coerceIn(0,60000)},
         sampleSpanMs=firstFrameAt?.let{(requireNotNull(lastFrameAt)-it).coerceIn(0,60000)},
         ptsLagMeanUs=if(lagCount>0)lagSum/lagCount else null,ptsLagMaxUs=if(lagCount>0)lagMax else null,
-        glSubmitCpuMeanUs=if(count>0)submitSum/count else null,glSubmitCpuMaxUs=if(count>0)submitMax else null,decoder=decoder)
+        glSubmitCpuMeanUs=if(count>0)submitSum/count else null,glSubmitCpuMaxUs=if(count>0)submitMax else null,decoder=decoder,correlationId=correlationId)
     @Synchronized fun end(outcome:Outcome=Outcome.SUCCESS){if(ended)return;val info=snapshot();ended=true;sink(info,outcome)}
 }
 
