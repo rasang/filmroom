@@ -55,7 +55,7 @@ class EffectMotionSource internal constructor(file:File,private val composition:
         try {
             raw=if(sequential!=null)try{sequential!!.frameAt(sample)}catch(_:Exception){sequential?.close();sequential=null;openRetriever();decoder!!.getScaledFrameAtTime(sample,MediaMetadataRetriever.OPTION_CLOSEST,width,height)}
                 else decoder!!.getScaledFrameAtTime(sample,MediaMetadataRetriever.OPTION_CLOSEST,width,height)
-            val frame=raw ?: return null
+            val frame=raw ?: run { if(!preview)failed=true; return null }
             sharp=composition?.apply(frame)?:frame
             if(sharp!==frame)frame.recycle()
             val blurred=if(preview)null else EffectTextures.defocused(sharp)

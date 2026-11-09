@@ -29,6 +29,38 @@ class ExportHistoryBackupHostTest {
         assertEquals(job().mediaUri,JSONArray(text).getJSONObject(0).getString("mediaUri"));assertTrue(text.contains("private-filename"))
         listOf("/data/","secret","parameters","photoMetadata","message").forEach{assertFalse(it,text.contains(it))}
     }
+    @Test fun newBackupsPreserveCompositionAndTypedCaptureMetadata()=temp{dir->
+        val crop=dev.filmroom.crop.CropSnapshot.create(640,480)
+        val metadata=dev.filmroom.io.PhotoMetadata.fromAttributes(mapOf("DateTimeOriginal" to "2026:11:09 12:30:00","ExposureTime" to "1/125"))
+        val original=job().copy(crop=crop,photoMetadata=JSONObject(metadata.toJson()).put("warning","private /data/path").toString())
+        val rows=ExportHistoryBackup.exportRows(listOf(original))
+        assertFalse(rows.toString().contains("private /data/path"))
+        val store=ExportJobStore(dir);store.mergeBackupHistory(rows)
+        val restored=ExportJobStore(dir).get(original.id)!!
+        assertEquals(crop,restored.crop);assertNull(restored.border)
+        assertEquals(metadata.imprintDateTime(),dev.filmroom.io.PhotoMetadata.fromJson(restored.photoMetadata!!).imprintDateTime())
+        assertFalse(restored.inputReady);assertTrue(restored.archivedHistory)
+    }
+    @Test fun borderBackupKeepsSourceAndOutputDimensionsDistinct(){
+        val base=job()
+        val border=dev.filmroom.border.BorderSnapshot(base.parameters.filmStock,"v1",1,640,480,10,10)
+        val original=base.copy(parameters=base.parameters.copy(filmBorder=true),border=border)
+        val restored=ExportHistoryBackup.validateRows(ExportHistoryBackup.exportRows(listOf(original))).single()
+        assertEquals(border,restored.border);assertEquals(original.outputWidth,restored.outputWidth)
+        assertEquals(640,restored.width);assertEquals(original.parameters,restored.parameters)
+        val document=dev.filmroom.backup.AppBackupCodec.Document(JSONObject().put("resetOnImport",true).put("restoreLastPhoto",false),emptyList(),ExportHistoryBackup.exportRows(listOf(original)))
+        val decoded=dev.filmroom.backup.AppBackupCodec.read(dev.filmroom.backup.AppBackupCodec.encode(document).inputStream())
+        assertEquals(border,ExportHistoryBackup.validateRows(decoded.history).single().border)
+    }
+    @Test fun legacyBackupsWithoutNewFieldsStayReadable(){
+        val restored=ExportHistoryBackup.validateRows(ExportHistoryBackup.exportRows(listOf(job()))).single()
+        assertNull(restored.crop);assertNull(restored.border);assertNull(restored.photoMetadata)
+    }
+    @Test fun malformedGeometryRejectsInsteadOfMakingWrongComposition(){
+        val rows=ExportHistoryBackup.exportRows(listOf(job()))
+        rows.getJSONObject(0).put("crop","{}")
+        invalid{ExportHistoryBackup.validateRows(rows)}
+    }
     @Test fun restoredRunningRowsNeverQueueOrRetryAndAreNotShownAsSaved()=temp{dir->
         val store=ExportJobStore(dir);val row=job(ExportJobState.RUNNING)
         assertEquals(1,store.mergeBackupHistory(ExportHistoryBackup.exportRows(listOf(row))))

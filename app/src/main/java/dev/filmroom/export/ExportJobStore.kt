@@ -146,9 +146,14 @@ class ExportJobStore(val root:File) {
         val incoming=ExportHistoryBackup.validateRows(rows)
         val additions=incoming.filter{row->get(row.id)==null}
         val upgrades=archived.mapNotNull { old ->
-            incoming.firstOrNull { it.id==old.id && it.createdAt==old.createdAt && it.width==old.width && it.height==old.height && it.state==old.state }?.let { newer ->
-                old.copy(mediaUri=old.mediaUri ?: newer.mediaUri,outputName=old.outputName ?: newer.outputName,
-                    originalUri=old.originalUri ?: newer.originalUri).takeUnless { it==old }
+            incoming.firstOrNull { it.id==old.id && it.createdAt==old.createdAt && it.outputWidth==old.outputWidth && it.outputHeight==old.outputHeight && it.state==old.state }?.let { newer ->
+                val upgradeGeometry=old.crop==null && old.border==null && (newer.crop!=null || newer.border!=null)
+                old.copy(parameters=if(upgradeGeometry)newer.parameters else old.parameters,
+                    width=if(upgradeGeometry)newer.width else old.width,height=if(upgradeGeometry)newer.height else old.height,
+                    sourceWidth=if(upgradeGeometry)newer.sourceWidth else old.sourceWidth,sourceHeight=if(upgradeGeometry)newer.sourceHeight else old.sourceHeight,
+                    mediaUri=old.mediaUri ?: newer.mediaUri,outputName=old.outputName ?: newer.outputName,
+                    originalUri=old.originalUri ?: newer.originalUri,crop=old.crop ?: newer.crop,border=old.border ?: newer.border,
+                    photoMetadata=old.photoMetadata ?: newer.photoMetadata).takeUnless { it==old }
             }
         }.associateBy { it.id }
         if(additions.isEmpty() && upgrades.isEmpty())return 0

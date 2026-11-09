@@ -66,6 +66,7 @@ object EffectVideoExporter {
                     return@trace uri
                 } catch(e: CancellationException) { throw e }
                   catch(e: SecurityException) { throw e }
+                  catch(e: EffectMotionExportException) { log.failureReason=EffectExportReason.MOTION_DECODE_FAILED; logFailure(log,e,choice,attempts+1); throw e }
                   catch(e: OutOfMemoryError) { logFailure(log,e,choice,attempts+1); failure=IOException("Export memory budget exceeded",e); attempts++ }
                   catch(e: Exception) { logFailure(log,e,choice,attempts+1); failure=e; attempts++ }
             }
@@ -224,8 +225,10 @@ object EffectVideoExporter {
                 drain(false)
                 // Sample the same wall-clock time as preview; the final 2966 ms frame is already settled.
                 log.step=EffectExportStep.DRAW
-                if(kind==EffectKind.OPTICAL_LEAK)motionSource?.frameAt(timelineTimeMs(frame),slow)?.use {
-                    renderer.updateMotionFrame(it)
+                if(kind==EffectKind.OPTICAL_LEAK && motionSource!=null) {
+                    val motionFrame=motionSource.frameAt(timelineTimeMs(frame),slow)
+                    EffectMotionExportGuard.requireFrame(frame,motionFrame!=null,motionSource.isUnavailable())
+                    motionFrame?.use { renderer.updateMotionFrame(it) }
                 }
                 renderer.draw(width, height, timelineTimeMs(frame), slow)
                 log.step=EffectExportStep.PRESENT

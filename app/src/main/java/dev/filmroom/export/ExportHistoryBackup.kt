@@ -12,7 +12,7 @@ import java.util.UUID
 /** Allowlisted record metadata and explicitly requested content URIs; never private paths, bytes or diagnostics. */
 internal object ExportHistoryBackup {
     const val MAX_ROWS = 10000
-    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis", "mediaUri", "outputName", "originalUri")
+    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis", "mediaUri", "outputName", "originalUri", "crop", "border", "photoMetadata", "effectParameters")
     fun exportRows(jobs: List<ExportJob>): JSONArray = JSONArray().apply {
         require(jobs.size <= MAX_ROWS)
         jobs.forEach { job -> put(JSONObject().apply {
@@ -25,7 +25,20 @@ internal object ExportHistoryBackup {
                 put("mediaUri", job.mediaUri); put("outputName", job.outputName)
             }
             job.originalUri?.takeIf(BackupMediaLink::validOriginal)?.let { put("originalUri", it) }
+            if(job.crop!=null || job.border!=null)put("effectParameters",JSONObject(dev.filmroom.presets.SavedPresetStore.snapshot(job.parameters)))
+            job.crop?.let { put("crop",JSONObject(it.json())) }
+            job.border?.let { put("border",JSONObject(it.json())) }
+            job.photoMetadata?.let { put("photoMetadata",JSONObject(cleanMetadata(it))) }
         }) }
+    }
+    private fun cleanMetadata(text:String):String {
+        require(text.toByteArray(Charsets.UTF_8).size<=64*1024)
+        // Only the typed EXIF allowlist; no GPS, filenames, arbitrary warnings or diagnostic messages.
+        val typed=JSONObject(dev.filmroom.io.PhotoMetadata.fromJson(text).toJson())
+        val attrs=typed.getJSONObject("attributes")
+        attrs.keys().asSequence().filter { it.startsWith("GPS") }.toList().forEach(attrs::remove)
+        typed.remove("warning");typed.remove("issues")
+        return typed.toString()
     }
     fun validateRows(rows: JSONArray): List<ExportJob> {
         require(rows.length() <= MAX_ROWS) { "Too many history entries" }
@@ -52,9 +65,22 @@ internal object ExportHistoryBackup {
             val name = if(row.has("outputName")) string("outputName").also { require(it.isNotBlank() && it.length <= 255 && !it.contains('/') && !it.contains('\\')) } else null
             require((uri == null) == (name == null)); require(uri == null || sourceState == ExportJobState.COMPLETED)
             val original = if(row.has("originalUri")) string("originalUri").also { require(BackupMediaLink.validOriginal(it)) } else null
-            ExportJob(id,timestamp,EditorState(filmStock=film,outputColorSpace=color),width.toInt(),height.toInt(),
+            val crop=if(row.has("crop"))dev.filmroom.crop.CropSnapshot.fromJson(row.getJSONObject("crop").toString().also{require(it.length<=16384)})else null
+            val border=if(row.has("border"))dev.filmroom.border.BorderSnapshot.fromJson(row.getJSONObject("border").toString().also{require(it.length<=16384)})else null
+            val metadata=if(row.has("photoMetadata"))cleanMetadata(row.getJSONObject("photoMetadata").toString())else null
+            require(crop==null || border==null)
+            val parameters=if(row.has("effectParameters"))dev.filmroom.presets.PresetQrParameters.read(row.getJSONObject("effectParameters"))else EditorState(filmStock=film,outputColorSpace=color)
+            require(parameters.filmStock==film && parameters.outputColorSpace==color)
+            require((crop==null && border==null) || row.has("effectParameters"))
+            val sourceW=border?.sourceWidth ?: crop?.sourceWidth ?: width.toInt()
+            val sourceH=border?.sourceHeight ?: crop?.sourceHeight ?: height.toInt()
+            require((border?.outputWidth ?: crop?.outputWidth ?: width.toInt())==width.toInt())
+            require((border?.outputHeight ?: crop?.outputHeight ?: height.toInt())==height.toInt())
+            ExportJob(id,timestamp,parameters,sourceW,sourceH,
                 ExportFormat.valueOf(string("format")),95,state,ExportDisplayProgress(if(state==ExportJobState.COMPLETED)8 else 1),
-                inputReady=false,completionViewed=true,exportMillis=millis,archivedHistory=true,archivedSourceState=sourceState.name,mediaUri=uri,outputName=name,originalUri=original)
+                inputReady=false,completionViewed=true,exportMillis=millis,archivedHistory=true,archivedSourceState=sourceState.name,mediaUri=uri,outputName=name,originalUri=original,crop=crop,border=border,photoMetadata=metadata,
+                sourceWidth=border?.canonicalWidth ?: crop?.canonicalWidth ?: sourceW,
+                sourceHeight=border?.canonicalHeight ?: crop?.canonicalHeight ?: sourceH)
         }
         require(result.map { it.id }.distinct().size==result.size) { "Duplicate history identifiers" }
         return result

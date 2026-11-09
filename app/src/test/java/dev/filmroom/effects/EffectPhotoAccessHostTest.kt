@@ -23,6 +23,28 @@ class EffectPhotoAccessHostTest {
     state=ExportJobState.COMPLETED,mediaUri="content://docs/exported",outputName="out.png",originalUri=original)
  private fun remember(s:ExportJobStore,j:ExportJob,original:Boolean=true,expected:String?=if(original)j.originalUri else j.mediaUri,grant:Boolean=true,name:String?="out.png")=
     EffectPhotoAccess.remember(context,s,j.id,original,expected,Uri.parse("content://docs/reselected"),retain={grant},outputName={name})
+ @Test fun automaticRecoveryReturnsDurableRecordAndAdvancesSubsequentSelectionToken(){
+  val s=store();val j=row();s.update(j)
+  val equivalent="content://media/external/images/media/42"
+  val recovered=EffectPhotoAccess.recoverOriginal(s,j.id,j.originalUri,equivalent)!!
+  assertEquals(equivalent,recovered.originalUri)
+  assertEquals(recovered,ExportJobStore(s.root).get(j.id))
+  assertEquals(j.mediaUri,recovered.mediaUri)
+  // The returned record is also the next explicit picker action's CAS token.
+  assertEquals(EffectPhotoAccess.Status.SAVED,remember(s,recovered,expected=recovered.originalUri))
+ }
+ @Test fun failedOrStaleAutomaticRecoveryCannotPretendItsLocalCopyWasSaved(){
+  val s=store();val j=row();s.update(j)
+  assertNull(EffectPhotoAccess.recoverOriginal(s,j.id,"content://docs/stale","content://media/external/images/media/42"))
+  assertEquals(j,s.get(j.id))
+  assertNull(EffectPhotoAccess.recoverOriginal(s,null,j.originalUri,"content://media/external/images/media/42"))
+ }
+ @Test fun replayedAutomaticRecoveryReturnsTheCurrentRecordWithoutAnotherMutation(){
+  val s=store();val j=row();s.update(j)
+  val equivalent="content://media/external/images/media/42"
+  val recovered=EffectPhotoAccess.recoverOriginal(s,j.id,j.originalUri,equivalent)!!
+  assertEquals(recovered,EffectPhotoAccess.recoverOriginal(s,j.id,j.originalUri,equivalent))
+ }
  @Test fun sourceRelinkSurvivesFreshStoreAndNeverTouchesOutput(){
   val s=store();val j=row();s.update(j)
   assertEquals(EffectPhotoAccess.Status.SAVED,remember(s,j))

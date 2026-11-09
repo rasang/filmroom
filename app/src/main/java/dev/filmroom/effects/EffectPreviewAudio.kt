@@ -6,6 +6,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CancellationException
@@ -16,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Main-thread audio playback using exactly the AAC asset embedded in exported MP4s. */
 internal class EffectPreviewAudio(private val context:Context) {
     private var player:MediaPlayer?=null
+    private val handler=Handler(Looper.getMainLooper())
+    private var pendingUpgrade:Runnable?=null
     private val manager=context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var focus:AudioFocusRequest?=null
     private val attributes=AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
@@ -81,6 +85,22 @@ internal class EffectPreviewAudio(private val context:Context) {
             current.setOnCompletionListener { if(player===current)stop() }
             current.setOnErrorListener { _,_,_->if(player===current)stop();true }
             current.prepareAsync()
+            // Mixing may finish after the bounded visual warmup. Upgrade at the current
+            // timeline position, never restart the original sound from zero.
+            if(!usePreparedSource && sourceMotionFile!=null) {
+                val upgrade=object:Runnable {
+                    override fun run() {
+                        if(player!==current)return
+                        when(EffectPreviewAudioUpgrade.decide(
+                            SystemClock.elapsedRealtime(),beganAt,isPrepared(kind,slow,sourceMotionFile),mixedFile?.isFile==true)) {
+                            EffectPreviewAudioUpgrade.Action.UPGRADE -> play(kind,slow,beganAt,sourceMotionFile,true)
+                            EffectPreviewAudioUpgrade.Action.WAIT -> handler.postDelayed(this,50)
+                            EffectPreviewAudioUpgrade.Action.DONE -> Unit
+                        }
+                    }
+                }
+                pendingUpgrade=upgrade;handler.postDelayed(upgrade,50)
+            }
         }catch(_:Exception){stop()}
     }
     fun stop(){
@@ -88,6 +108,7 @@ internal class EffectPreviewAudio(private val context:Context) {
         stopPlayback()
     }
     private fun stopPlayback(){
+        pendingUpgrade?.let(handler::removeCallbacks);pendingUpgrade=null
         val old=player;player=null
         old?.setOnPreparedListener(null);old?.setOnSeekCompleteListener(null)
         old?.setOnCompletionListener(null);old?.setOnErrorListener(null)
@@ -97,4 +118,14 @@ internal class EffectPreviewAudio(private val context:Context) {
 }
 internal object EffectPreviewAudioTiming {
     fun offset(now:Long,beganAt:Long):Int?=(now-beganAt).coerceAtLeast(0).let{if(it>=3000)null else it.toInt()}
+}
+
+internal object EffectPreviewAudioUpgrade {
+    enum class Action { WAIT, UPGRADE, DONE }
+    fun decide(now:Long,beganAt:Long,prepared:Boolean,hasMixedFile:Boolean):Action = when {
+        EffectPreviewAudioTiming.offset(now,beganAt)==null -> Action.DONE
+        !prepared -> Action.WAIT
+        hasMixedFile -> Action.UPGRADE
+        else -> Action.DONE // An absent/unreadable source audio track is a completed preparation.
+    }
 }

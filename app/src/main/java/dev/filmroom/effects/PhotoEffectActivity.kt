@@ -105,6 +105,10 @@ class PhotoEffectActivity : ComponentActivity() {
     private val sourcePicker=activityResultRegistry.register(SOURCE_PICKER_KEY,this,ActivityResultContracts.OpenDocument()){uri->
         if(uri!=null)selectPhoto(true,uri)
     }
+    private val originalPermission=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        // Recheck actual access (including partial grants); denial leaves the explicit reselection action available.
+        load(refreshLinks=true,autoPlay=true)
+    }
     private val resultPicker=activityResultRegistry.register(RESULT_PICKER_KEY,this,ActivityResultContracts.OpenDocument()){uri->
         if(uri!=null)selectPhoto(false,uri)
     }
@@ -139,6 +143,7 @@ class PhotoEffectActivity : ComponentActivity() {
             "View" to ("表示" to "보기"),
             "Open your gallery to view it" to ("ギャラリーを開いて確認してください" to "갤러리를 열어 확인하세요"),
             "Live Photo export failed. Retry or export a video" to ("Live Photoを書き出せませんでした。再試行してください" to "Live Photo 내보내기에 실패했습니다. 다시 시도하세요"),
+            "Allow photo access and retry" to ("写真へのアクセスを許可して再試行" to "사진 접근 허용 후 재시도"),
             "Original photo unavailable. Select it again." to ("元の写真にアクセスできません。選び直してください。" to "원본 사진에 접근할 수 없습니다. 다시 선택하세요."),
             "Exported photo unavailable. Select it again." to ("書き出した写真にアクセスできません。選び直してください。" to "내보낸 사진에 접근할 수 없습니다. 다시 선택하세요."),
             "This device could not display the effect" to ("この端末では効果を表示できません" to "이 기기에서 효과를 표시할 수 없습니다"),
@@ -311,7 +316,14 @@ class PhotoEffectActivity : ComponentActivity() {
         }
         prefetchJob=worker;prefetchWorkers.add(worker);worker.start()
     }
-    private suspend fun decodePage(record:dev.filmroom.export.ExportJob,edge:Int):EffectPagePhoto {
+    private suspend fun decodePage(savedRecord:dev.filmroom.export.ExportJob,edge:Int):EffectPagePhoto {
+        val resolved=if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){
+            dev.filmroom.io.OriginalPhotoRecovery.resolve(this@PhotoEffectActivity,savedRecord.originalUri)
+        }else null
+        val record=if(resolved!=null && resolved!=savedRecord.originalUri) {
+            withContext(Dispatchers.IO){checkNotNull(EffectPhotoAccess.recoverOriginal(
+                dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store,savedRecord.id,savedRecord.originalUri,resolved))}
+        }else savedRecord
         var output:Bitmap?=null;var input:Bitmap?=null;var motionFile:File?=null
         try {
             val composition=EffectSourceComposition.from(record)
@@ -526,13 +538,24 @@ class PhotoEffectActivity : ComponentActivity() {
         loadJob=lifecycleScope.launch{
             var ownedOutput:Bitmap?=null;var ownedInput:Bitmap?=null;var ownedMotion:File?=null
             try {
-                val record=jobId?.let{id->withContext(Dispatchers.IO){runCatching{dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store.get(id)}.getOrNull()}}
-                sourceComposition=EffectSourceComposition.from(record)
+                var record=jobId?.let{id->withContext(Dispatchers.IO){runCatching{dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store.get(id)}.getOrNull()}}
                 if(refreshLinks && jobId!=null) {
-                    if(record!=null){recordSourceUri=record.originalUri;recordResultUri=record.mediaUri}
+                    record?.let{recordSourceUri=it.originalUri;recordResultUri=it.mediaUri}
                     val links=EffectPhotoAccess.restoredLinks(record,sourceUri,resultUri,sourceTemporary,resultTemporary)
                     sourceUri=links.source;resultUri=links.result
                 }
+                if(kind==EffectKind.OPTICAL_LEAK) {
+                    val oldSource=sourceUri
+                    val recovered=withContext(Dispatchers.IO){dev.filmroom.io.OriginalPhotoRecovery.resolve(this@PhotoEffectActivity,oldSource)}
+                    if(recovered!=null && recovered!=oldSource) {
+                        val saved=withContext(Dispatchers.IO){EffectPhotoAccess.recoverOriginal(
+                            dev.filmroom.export.ExportQueue.get(this@PhotoEffectActivity).store,jobId,oldSource,recovered)}
+                        sourceUri=recovered
+                        sourceTemporary=saved==null
+                        if(saved!=null){record=saved;recordSourceUri=saved.originalUri}
+                    }
+                }
+                sourceComposition=EffectSourceComposition.from(record)
                 cameraReadout=withContext(Dispatchers.IO){EffectCameraReadout.read(contentResolver,sourceUri,record?.photoMetadata)}
                 withContext(Dispatchers.IO){ownedOutput=runCatching{decode(requireNotNull(resultUri))}.getOrNull()}
                 val output=ownedOutput
@@ -571,7 +594,12 @@ class PhotoEffectActivity : ComponentActivity() {
         clearPreview()
         replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false
         status.visibility=android.view.View.VISIBLE;status.text=if(original)t("无法访问原图，请重新选择原图。","Original photo unavailable. Select it again.")else t("无法访问导出照片，请重新选择照片。","Exported photo unavailable. Select it again.")
-        AlertDialog.Builder(this).setMessage(status.text).setNegativeButton(t("取消","Cancel"),null).setPositiveButton(t("选择照片","Select photo")){_,_->if(original)sourcePicker.launch(arrayOf("image/*"))else resultPicker.launch(arrayOf("image/*"))}.show()
+        val dialog=AlertDialog.Builder(this).setMessage(status.text).setNegativeButton(t("取消","Cancel"),null)
+            .setPositiveButton(t("选择照片","Select photo")){_,_->if(original)sourcePicker.launch(arrayOf("image/*"))else resultPicker.launch(arrayOf("image/*"))}
+        if(original)dialog.setNeutralButton(t("授予相册权限并重试","Allow photo access and retry")){_,_->
+            originalPermission.launch(dev.filmroom.ui.ArchivedPhotoAccessUi.requestedPermissions())
+        }
+        dialog.show()
     }
     private fun refreshLiveSupport(){
         lifecycleScope.launch {
@@ -623,6 +651,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 status.text=t("Live Photo 已保存，请在相册确认播放效果","Live Photo saved. Check playback in your gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看","View")){_,_->saved.publishedUris.firstOrNull()?.let{uri->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply{saved.selection?.environment?.galleryPackage?.let{setPackage(it)}})}.onFailure{showLiveMessage(t("请打开系统相册查看","Open your gallery to view it"))}}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.text=t("已取消导出","Export cancelled")}
+            catch(e:EffectMotionExportException){status.text=t("原 Live 视频解码失败，未保存，请重试", "Original Live video could not be decoded. Nothing was saved; please retry")}
             catch(e:OutOfMemoryError){status.text=t("内存不足，请选择较低清晰度后重试","Not enough memory. Choose a lower quality and retry")}
             catch(e:Exception){status.text=if(cancelled.get())t("已取消导出","Export cancelled")else t("Live Photo 导出失败，请重试或导出视频","Live Photo export failed. Retry or export a video")}
             finally{withContext(NonCancellable+Dispatchers.IO){motion?.close()};images.close();working=false;liveExport=false;qualityButton.isEnabled=true;if(!isDestroyed){livePhotoButton.text=t("导出 Live Photo","Export Live Photo");replayButton.isEnabled=true;exportButton.isEnabled=true}}
@@ -647,6 +676,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 status.visibility=android.view.View.VISIBLE;status.text=t("视频已保存到相册","Video saved to gallery")+resolutionMessage(report)
                 AlertDialog.Builder(this@PhotoEffectActivity).setMessage(status.text).setNegativeButton(t("完成","Done"),null).setPositiveButton(t("查看视频","View video")){_,_->runCatching{startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))}.onFailure{Toast.makeText(this@PhotoEffectActivity,t("没有可播放视频的应用","No video player available"),Toast.LENGTH_SHORT).show()}}.show()
             }catch(e:CancellationException){if(!isActive)throw e;status.visibility=android.view.View.VISIBLE;status.text=t("已取消导出","Export cancelled")}
+            catch(e:EffectMotionExportException){status.visibility=android.view.View.VISIBLE;status.text=t("原 Live 视频解码失败，未保存，请重试", "Original Live video could not be decoded. Nothing was saved; please retry")}
             catch(e:OutOfMemoryError){status.visibility=android.view.View.VISIBLE;status.text=t("内存不足，请选择较低清晰度后重试","Not enough memory. Choose a lower quality and retry")}
             catch(e:Exception){status.visibility=android.view.View.VISIBLE;status.text=if(cancelled.get())t("已取消导出","Export cancelled")else t("视频导出失败，请重试","Video export failed. Try again")}
             finally{withContext(NonCancellable+Dispatchers.IO){motion?.close()};images.close();working=false;qualityButton.isEnabled=true;if(!isDestroyed){exportButton.text=t("导出视频","Export video");replayButton.isEnabled=true;livePhotoButton.isEnabled=true}}
@@ -655,7 +685,7 @@ class PhotoEffectActivity : ComponentActivity() {
     private fun openExportMotion():EffectMotionSource? {
         if(kind!=EffectKind.OPTICAL_LEAK)return null
         val file=sourceMotionFile ?: return null
-        return try{EffectMotionSource(file,sourceComposition)}catch(_:Exception){null}catch(_:OutOfMemoryError){null}
+        return try{EffectMotionSource(file,sourceComposition)}catch(e:Exception){throw EffectMotionExportException(e)}
     }
     private fun leave(){if(!working)finish()else AlertDialog.Builder(this).setMessage(t("取消导出并返回？","Cancel export and return?")).setNegativeButton(t("继续导出","Keep exporting"),null).setPositiveButton(t("返回","Leave")){_,_->cancelled.set(true);finish()}.show()}
     override fun onSaveInstanceState(out:Bundle){out.putString("record_source_uri",recordSourceUri);out.putString("record_result_uri",recordResultUri);out.putBoolean("source_temporary",sourceTemporary);out.putBoolean("result_temporary",resultTemporary);out.putString(JOB_ID,jobId);out.putBoolean("effect_slow",selectedSlow);out.putString("effect_quality",selectedQuality.name);out.putString(RESULT_URI,resultUri);out.putString(SOURCE_URI,sourceUri);super.onSaveInstanceState(out)}
@@ -746,10 +776,10 @@ class PhotoEffectActivity : ComponentActivity() {
                 val audioReady=previewAudio.isPrepared(kind,playingSlow,motionFile)
                 var ready=frameReady&&audioReady
                 if(!motionPrimed&&!ready){val now=SystemClock.elapsedRealtime();if(motionWaitBegan==0L)motionWaitBegan=now;start=now
-                    if(now-motionWaitBegan<1500){renderer.draw(widthPx,heightPx,duration,playingSlow,filmSlide,filmDirection);return}
+                    if(now-motionWaitBegan<1500){drawPreparingFrame();return}
                     if(EffectMotionWarmupPolicy.retryBitmapDecoder(now-motionWaitBegan,motionFramePrepared,surfaceMotion!=null)) {
                         fallbackMotion(MotionPreviewFallback.TIMEOUT);motionWaitBegan=now
-                        renderer.draw(widthPx,heightPx,duration,playingSlow,filmSlide,filmDirection);return
+                        drawPreparingFrame();return
                     }
                     if(!motionFramePrepared){surfaceMotion?.let{motionLog?.decoder(it.snapshot());it.close()};surfaceMotion=null;motion?.close();motion=null;motionLog?.path(MotionPreviewPath.STATIC,MotionPreviewFallback.TIMEOUT)}
                     ready=true
@@ -770,6 +800,18 @@ class PhotoEffectActivity : ComponentActivity() {
             playback.rendered(elapsed,duration)
             if(playback.stopped){renderMode=RENDERMODE_WHEN_DIRTY;disposeMotion(true,Outcome.SUCCESS)}
         }.onFailure{renderError()}}
+        /** Preparation is not an animation frame: never flash the source or completed photo here.
+         * The timeline starts at zero only after video/audio priming (or bounded fallback).
+         * This is preview-only; export renders exactly the same 3-second timeline as before. */
+        private fun drawPreparingFrame(){
+            android.opengl.GLES20.glBindFramebuffer(android.opengl.GLES20.GL_FRAMEBUFFER,0)
+            android.opengl.GLES20.glViewport(0,0,widthPx,heightPx)
+            android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_SCISSOR_TEST)
+            android.opengl.GLES20.glColorMask(true,true,true,true)
+            val color=Palette.background
+            android.opengl.GLES20.glClearColor(android.graphics.Color.red(color)/255f,android.graphics.Color.green(color)/255f,android.graphics.Color.blue(color)/255f,1f)
+            android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT)
+        }
         fun isFrameReady()=frameDrawn&&!failed
         fun hasFailed()=failed
         fun restoreCurrentFrame(){
