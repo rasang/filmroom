@@ -39,6 +39,18 @@ object EffectControls {
         button.setCompoundDrawablesRelative(EffectControlIcon(icon,ink).apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
         button.setPaddingRelative(start,top,end,bottom)
     }
+    /** A whole-button touch target with its switch embedded, matching the quality button. */
+    fun audioToggle(c:Context,label:String):android.widget.Switch {
+        fun dp(n:Int)=(n*c.resources.displayMetrics.density+.5f).toInt()
+        return android.widget.Switch(c).apply {
+            text=label;contentDescription=label;textSize=13f;setTextColor(P.ink)
+            gravity=android.view.Gravity.CENTER_VERTICAL
+            minWidth=0;minimumWidth=0;minHeight=dp(56);minimumHeight=dp(56)
+            setPadding(dp(12),dp(12),dp(12),dp(12));switchPadding=dp(8)
+            backgroundTintList=null
+            background=RippleDrawable(ColorStateList.valueOf(0x30ffffff),GradientDrawable().apply{setColor(P.raised);cornerRadius=dp(14).toFloat()},null)
+        }
+    }
     fun button(c:Context,label:String,icon:String,primary:Boolean=false,action:()->Unit):Button {
         fun dp(n:Int)=(n*c.resources.displayMetrics.density+.5f).toInt()
         val ink=if(primary)P.onAccent else P.ink

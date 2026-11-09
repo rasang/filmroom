@@ -91,6 +91,12 @@ class PhotoEffectActivity : ComponentActivity() {
     private var jobId:String?=null
     private var sourceComposition:EffectSourceComposition?=null
     private var sourceMotionFile:File?=null
+        set(value) {
+            field=value
+            // Only the committed, successfully extracted Live input owns this control.
+            // Includes preloaded entry, page commit, re-selection and clear/error paths.
+            liveOriginalAudioSwitch?.visibility=if(value!=null)android.view.View.VISIBLE else android.view.View.GONE
+        }
     private var cameraReadout=EffectCameraReadout()
     private var recordSourceUri:String?=null
     private var recordResultUri:String?=null
@@ -206,12 +212,12 @@ class PhotoEffectActivity : ComponentActivity() {
         };root.addView(stage,LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(12);bottomMargin=dp(12)})
         status=TextView(this).apply{setTextColor(Palette.muted);textSize=14f;gravity=Gravity.CENTER;visibility=android.view.View.GONE;setPadding(0,dp(8),0,dp(12))};root.addView(status)
         qualityButton=EffectControls.button(this,qualityLabel(),"video",false){chooseQuality()}
-        root.addView(qualityButton,LinearLayout.LayoutParams(-2,-2).apply{gravity=Gravity.CENTER_HORIZONTAL;bottomMargin=dp(8)})
+        val options=EffectActionBar(this)
+        options.addView(qualityButton)
         if(kind==EffectKind.OPTICAL_LEAK) {
-            liveOriginalAudioSwitch=android.widget.Switch(this).apply {
-                text=t("Live 原声","Live original audio");setTextColor(Palette.ink)
+            liveOriginalAudioSwitch=EffectControls.audioToggle(this,t("Live 原声","Live original audio")).apply {
                 isChecked=liveOriginalAudioEnabled
-                setPadding(dp(12),dp(4),dp(12),dp(4))
+                visibility=android.view.View.GONE // Unknown/ordinary input must not flash a Live-only control.
                 setOnCheckedChangeListener { button,enabled ->
                     if(enabled==liveOriginalAudioEnabled)return@setOnCheckedChangeListener
                     if(working||liveChecking||pageBusy){button.isChecked=liveOriginalAudioEnabled;return@setOnCheckedChangeListener}
@@ -221,8 +227,9 @@ class PhotoEffectActivity : ComponentActivity() {
                     preview?.replay()
                 }
             }
-            root.addView(liveOriginalAudioSwitch,LinearLayout.LayoutParams(-2,-2).apply{gravity=Gravity.CENTER_HORIZONTAL})
+            options.addView(liveOriginalAudioSwitch)
         }
+        root.addView(options,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         val actions=EffectActionBar(this)
         replayButton=EffectControls.button(this,t("重播","Replay"),"replay"){preview?.replay()}.apply{isEnabled=false}
         exportButton=EffectControls.button(this,t("导出视频","Export video"),"video",false){if(working)cancelled.set(true)else export()}.apply{isEnabled=false}
@@ -543,7 +550,7 @@ class PhotoEffectActivity : ComponentActivity() {
         if(oldResult!==oldSource)oldResult?.takeUnless{it.isRecycled}?.recycle()
     }
     private fun load(refreshLinks:Boolean=false,autoPlay:Boolean=false){
-        loadJob?.cancel();replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false;status.visibility=android.view.View.VISIBLE;status.text=t("加载照片…","Loading photo…");if(intent.hasExtra(PREPARED_ENTRY))status.visibility=android.view.View.GONE
+        loadJob?.cancel();liveOriginalAudioSwitch?.visibility=android.view.View.GONE;replayButton.isEnabled=false;livePhotoButton.isEnabled=false;exportButton.isEnabled=false;status.visibility=android.view.View.VISIBLE;status.text=t("加载照片…","Loading photo…");if(intent.hasExtra(PREPARED_ENTRY))status.visibility=android.view.View.GONE
         loadJob=lifecycleScope.launch{
             var ownedOutput:Bitmap?=null;var ownedInput:Bitmap?=null;var ownedMotion:File?=null
             try {
