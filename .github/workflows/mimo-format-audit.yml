@@ -1,0 +1,46 @@
+name: Mimo format interoperability audit
+on:
+  push:
+    branches: [livephoto-sdk]
+    paths: ['.github/workflows/mimo-format-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Resolve official public APK download
+        shell: bash
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY' | tee evidence/discovery.txt
+          import urllib.request, re, json, html
+          urls=[
+            'https://service-adhoc.dji.com/download/app/android/9bce0a64-3069-40c7-9bbf-1263da0bb900',
+            'https://www.dji.com/downloads/djiapp/dji-mimo'
+          ]
+          for url in urls:
+              print('\nPAGE',url,flush=True)
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36'})
+                  with urllib.request.urlopen(req,timeout=45) as r:
+                      data=r.read(3000000); print('FINAL',r.url,'TYPE',r.headers.get('Content-Type'),'BYTES',len(data),flush=True)
+                  text=data.decode('utf-8','replace')
+                  normalized=html.unescape(text.replace('\\/','/'))
+                  candidates=re.findall(r'https?://[^\s<>"\x27]+', normalized)
+                  print('RELEVANT_URLS',json.dumps(sorted(set(x for x in candidates if any(k in x.lower() for k in ['.apk','adhoc','download','mimo','.js']))),ensure_ascii=False),flush=True)
+                  if 'service-adhoc' in url:
+                      print('PAGE_BODY_BEGIN\n'+text[:60000]+'\nPAGE_BODY_END',flush=True)
+                  else:
+                      for m in list(re.finditer(r'(?i)(\.apk|android_url|androidUrl|9bce0a64|mimo.*apk)',normalized))[:25]:
+                          print('CONTEXT',normalized[max(0,m.start()-250):m.end()+500],flush=True)
+              except Exception as e:print('FETCH_ERROR',repr(e),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mimo-audit-discovery
+          path: evidence/
+          retention-days: 3
