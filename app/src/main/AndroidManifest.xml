@@ -25,7 +25,11 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/preset_qr_paths"/>
         </provider>
         <activity android:name=".SettingsActivity" android:exported="false"/>
-        <activity android:name=".effects.PhotoEffectActivity" android:exported="false"/>
+        <!-- This programmatic, size-responsive screen owns its export coroutine and bitmaps.
+             Keep that same owner across rotation/window resizing; stage.onSizeChanged lays
+             out the preview. Actual exit/destruction still cancels and releases its work. -->
+        <activity android:name=".effects.PhotoEffectActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"/>
         <activity android:name=".ExportQueueActivity" android:exported="false"/>
         <service android:name=".export.ExportService" android:exported="false" android:foregroundServiceType="dataSync|mediaProcessing"/>
         <provider android:name=".ui.DiagnosticFileProvider" android:authorities="${applicationId}.diagnostics" android:exported="false" android:grantUriPermissions="true">

@@ -109,7 +109,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
             var input:Bitmap?=null;var output:Bitmap?=null;var motion:File?=null
             try {
                 log.phase(EffectExportStep.DECODE_RESULT)
-                output=decode(context,requireNotNull(record.mediaUri),log);ensureActive()
+                output=decode(context,requireNotNull(record.mediaUri),log,allowRawFallback=false);ensureActive()
                 log.phase(EffectExportStep.DECODE_SOURCE)
                 val raw=decode(context,requireNotNull(record.originalUri),log)
                 log.phase(EffectExportStep.COMPOSE_SOURCE)
@@ -125,13 +125,11 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
                 return completed
             } catch(t:Throwable){completed?.close();throw t}
         }
-        private fun decode(context:Context,uri:String,log:EffectExportLog):Bitmap {
+        private suspend fun decode(context:Context,uri:String,log:EffectExportLog,allowRawFallback:Boolean=true):Bitmap {
             var format=dev.filmroom.io.formats.PhotoFormat.UNKNOWN
-            try { return ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver,Uri.parse(uri))){decoder,info,_->
-            format=EffectInputFormat.fromDecodedHeader(info.mimeType)
-            val scale=minOf(1.0,1600.0/maxOf(info.size.width,info.size.height));decoder.setTargetSize((info.size.width*scale).toInt().coerceAtLeast(1),(info.size.height*scale).toInt().coerceAtLeast(1))
-            decoder.allocator=ImageDecoder.ALLOCATOR_SOFTWARE;decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
-        } } finally {log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=log.step,inputFormat=format))}
+            try { return EffectImageDecoder(context,log.correlationId).use { decoder ->
+                decoder.read(uri,1600,allowRawFallback=allowRawFallback,report={format=EffectInputFormat.fromDecodedHeader(it)})
+            } } finally {log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=log.step,inputFormat=format))}
         }
     }
 }

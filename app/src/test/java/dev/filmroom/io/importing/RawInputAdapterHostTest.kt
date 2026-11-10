@@ -94,7 +94,7 @@ class RawInputAdapterHostTest {
         assertEquals(1,decoder.probes);assertEquals(0,decoder.decodes)
     }
     @Test fun cameraRawFormatsUseNativeIdentityDespiteMisleadingJpegName()=runBlocking {
-        for((format,mime) in mapOf("NEF" to "image/x-nikon-nef", "CR2" to "image/x-canon-cr2", "ARW" to "image/x-sony-arw", "RW2" to "image/x-panasonic-rw2", "CR3" to "image/x-canon-cr3", "ORF" to "image/x-olympus-orf", "PEF" to "image/x-pentax-pef")) {
+        for((format,mime) in mapOf("NEF" to "image/x-nikon-nef", "CR2" to "image/x-canon-cr2", "ARW" to "image/x-sony-arw", "RW2" to "image/x-panasonic-rw2", "CR3" to "image/x-canon-cr3", "ORF" to "image/x-olympus-orf", "PEF" to "image/x-pentax-pef", "RAF" to "image/x-fuji-raf")) {
             val decoder=Decoder{metadata().put("format",format)}
             val loaded=RawInputAdapter(decoder).load(request(temp.newFolder()),header)
             try {
@@ -112,6 +112,19 @@ class RawInputAdapterHostTest {
             catch(e:PhotoException){assertEquals(PhotoException.Reason.UNREADABLE,e.reason)}
             assertEquals(1,decoder.decodes)
         }
+    }
+    @Test fun rafSignatureRoutesToNativeAndTruncatedSignatureDoesNot()=runBlocking {
+        val bytes="FUJIFILMCCD-RAW ".toByteArray(Charsets.US_ASCII)
+        val raf=PhotoInputHeader(bytes,bytes.size)
+        val decoder=Decoder{metadata().put("format","RAF")}
+        val adapter=RawInputAdapter(decoder)
+        assertTrue(adapter.accepts(raf))
+        assertFalse(adapter.accepts(PhotoInputHeader(bytes,bytes.size-1)))
+        val selected=PhotoInputAdapters(listOf(adapter)).select(raf)
+        assertSame(adapter,selected)
+        val loaded=selected.load(request(temp.newFolder()),raf)
+        try { assertEquals("image/x-fuji-raf",loaded.source.mimeType);assertEquals(1,decoder.decodes) }
+        finally { loaded.preview.recycle() }
     }
     @Test fun classicTiffRoutingIsDisjointFromRasterAndHeicHeaders() {
         val adapter=RawInputAdapter(Decoder{metadata()})

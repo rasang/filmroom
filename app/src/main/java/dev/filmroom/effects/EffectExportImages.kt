@@ -1,7 +1,7 @@
 package dev.filmroom.effects
 
 import dev.filmroom.diagnostics.*
-import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
@@ -16,21 +16,20 @@ internal class EffectExportImages : AutoCloseable {
     lateinit var requested: EffectExportSize; private set
     private val owned = mutableListOf<Bitmap>()
 
-    fun load(resolver:ContentResolver, kind:EffectKind, sourceUri:String?, resultUri:String,
+    suspend fun load(context:Context, kind:EffectKind, sourceUri:String?, resultUri:String,
              quality:EffectExportQuality, live:Boolean=false, composition:EffectSourceComposition?=null, correlationId:Long=EffectCorrelation.next(), parentCorrelationId:Long?=null, cancelled:()->Boolean) = EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId,parentCorrelationId) { log ->
         fun checkCancel(){if(cancelled())throw CancellationException("Image decode cancelled")}
         checkCancel()
         log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,parentCorrelationId=parentCorrelationId,inputFormat=dev.filmroom.io.formats.PhotoFormat.UNKNOWN))
         checkCancel()
-        fun bounds(uri:String):EffectExportSize {
+        val decoder=EffectImageDecoder(context,correlationId,cancelled)
+        try {
+        suspend fun bounds(uri:String):EffectExportSize {
             checkCancel()
-            var size:EffectExportSize?=null
-            ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver,Uri.parse(uri))){d,info,_->
-                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=if(uri==resultUri)EffectExportStep.DECODE_RESULT else EffectExportStep.DECODE_SOURCE,inputFormat=EffectInputFormat.fromDecodedHeader(info.mimeType)))
-                size=EffectExportSize(info.size.width,info.size.height)
-                d.setTargetSize(1,1); d.allocator=ImageDecoder.ALLOCATOR_SOFTWARE
-            }.recycle()
-            checkCancel();return requireNotNull(size)
+            val size=decoder.bounds(uri,allowRawFallback=uri!=resultUri) { mime ->
+                log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=if(uri==resultUri)EffectExportStep.DECODE_RESULT else EffectExportStep.DECODE_SOURCE,inputFormat=EffectInputFormat.fromDecodedHeader(mime)))
+            }
+            checkCancel();return size
         }
         log.phase(EffectExportStep.IMAGE_BOUNDS)
         val output=bounds(resultUri)
@@ -51,13 +50,10 @@ internal class EffectExportImages : AutoCloseable {
         check(budget>=480){"Not enough memory to decode export photos"}
         val scale=minOf(1.0,requested.longEdge.toDouble()/native.longEdge,
             budget.toDouble()/maxOf(input.longEdge,output.longEdge))
-        fun read(uri:String,size:EffectExportSize):Bitmap {
+        suspend fun read(uri:String,size:EffectExportSize):Bitmap {
             checkCancel()
-            val bitmap=ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver,Uri.parse(uri))){d,_,_->
-                d.setTargetSize((size.width*scale).toInt().coerceAtLeast(1),(size.height*scale).toInt().coerceAtLeast(1))
-                d.allocator=ImageDecoder.ALLOCATOR_SOFTWARE
-                d.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
-            }
+            val edge=(size.longEdge*scale).toInt().coerceIn(1,6144)
+            val bitmap=decoder.read(uri,edge,allowRawFallback=uri!=resultUri)
             owned.add(bitmap);checkCancel();return bitmap
         }
         log.phase(EffectExportStep.DECODE_RESULT)
@@ -73,6 +69,7 @@ internal class EffectExportImages : AutoCloseable {
         log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_DECODED,
             sourceWidth=source.width,sourceHeight=source.height,resultWidth=result.width,resultHeight=result.height,
             requestedWidth=requested.width,requestedHeight=requested.height))
+        } finally { decoder.close() }
     }
     override fun close(){owned.forEach{if(!it.isRecycled)it.recycle()};owned.clear()}
     companion object {

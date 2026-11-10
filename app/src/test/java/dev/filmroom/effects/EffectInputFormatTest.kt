@@ -35,6 +35,11 @@ class EffectInputFormatTest {
             assertEquals(PhotoFormat.PNG,format)
         }finally{bitmap.recycle();file.delete()}
     }
+    @Test fun nativeValidatedRawIdentitiesAreFixedVocabulary() {
+        assertEquals(PhotoFormat.DNG,EffectInputFormat.fromDecodedHeader("image/x-adobe-dng"))
+        for(mime in listOf("image/x-nikon-nef","image/x-fuji-raf","image/x-canon-cr3"))
+            assertEquals(PhotoFormat.CAMERA_RAW,EffectInputFormat.fromDecodedHeader(mime))
+    }
     @Test fun unrecognizedHeaderMimeCannotBecomeFreeText() {
         for(value in listOf(null,"content://private/photo.jpg","/private.jpg","image/my-secret","image/jpeg;secret"))
             assertEquals(PhotoFormat.UNKNOWN,EffectInputFormat.fromDecodedHeader(value))
