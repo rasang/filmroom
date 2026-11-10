@@ -15,6 +15,18 @@ import org.robolectric.annotation.Config
 class LivePhotoDirectExportTest {
     private val context get()=ApplicationProvider.getApplicationContext<Context>()
     @Before fun reset(){context.getSharedPreferences("live_photo_export_notice",Context.MODE_PRIVATE).edit().clear().commit()}
+    @Test fun unavailableLiveButtonIsDimmedButStillClickableAndCanRecover(){
+        var clicks=0
+        val button=EffectControls.button(context,"Live","live",true){clicks++}
+        EffectControls.setLiveAvailability(button,true,true)
+        assertEquals(.45f,button.alpha)
+        assertTrue(button.isEnabled)
+        assertTrue(button.performClick())
+        assertEquals(1,clicks)
+        EffectControls.setLiveAvailability(button,true,false)
+        assertEquals(1f,button.alpha)
+        assertTrue(button.isEnabled)
+    }
     @Test fun noticeShownOnlyOnceAcrossInstances(){
         assertTrue(LivePhotoExportNotice(context).consumeFirstNotice())
         assertFalse(LivePhotoExportNotice(context).consumeFirstNotice())
@@ -39,6 +51,20 @@ class LivePhotoDirectExportTest {
     }
     @Test fun genuinelyEmptyCandidatesRemainUnavailable(){
         assertNull(EffectLivePhotoExporter.forDirectAttempt(selection(null,SupportStatus.UNSUPPORTED,emptyList())).selectedProfile)
+    }
+    @Test fun declaredUnsupportedCannotBeReenabledByDirectAttempt(){
+        val original=selection(null,SupportStatus.UNSUPPORTED,listOf(ProfileCapability(LivePhotoProfile.VIVO_SINGLE,SupportStatus.UNKNOWN,null)))
+            .copy(vivoCapability=VivoCapability.read { "2" })
+        val retry=EffectLivePhotoExporter.forDirectAttempt(original)
+        assertNull(retry.selectedProfile)
+        assertTrue(EffectLivePhotoExporter.Preflight(retry).deviceUnsupported)
+    }
+    @Test fun foreignVivoCapabilityCannotBlockAnotherBrand(){
+        val original=selection(null,SupportStatus.UNSUPPORTED,listOf(ProfileCapability(LivePhotoProfile.GOOGLE,SupportStatus.UNKNOWN,null)))
+            .copy(brand=TargetBrand.SAMSUNG,vivoCapability=VivoCapability.read { "2" })
+        val retry=EffectLivePhotoExporter.forDirectAttempt(original)
+        assertEquals(LivePhotoProfile.GOOGLE,retry.selectedProfile)
+        assertFalse(EffectLivePhotoExporter.Preflight(retry).deviceUnsupported)
     }
     @Test fun confirmedCandidateRetained(){
         val original=selection(LivePhotoProfile.GOOGLE,SupportStatus.SUPPORTED,emptyList())

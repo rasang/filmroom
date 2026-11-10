@@ -17,7 +17,8 @@ object EffectLivePhotoExporter {
     private val exportLock = Mutex()
     data class Preflight(val selection: ProfileSelection) {
         val status get() = selection.status
-        val unsupported get() = selection.selectedProfile == null || status == SupportStatus.UNSUPPORTED
+        val deviceUnsupported get() = selection.deviceExportBlockedReason != null
+        val unsupported get() = deviceUnsupported || selection.selectedProfile == null || status == SupportStatus.UNSUPPORTED
     }
     private fun request(input: Uri, gallery: String? = null, profile: LivePhotoProfile? = null, maxLongEdge: Int = 1080) = VideoToLiveRequest(
         input = input, profile = profile, durationMs = 3000, coverOffsetMs = 2900, keepAudio = true,
@@ -35,7 +36,7 @@ object EffectLivePhotoExporter {
 
     /** Retain negative evidence for UI styling but permit an intentional retry with a writable format. */
     internal fun forDirectAttempt(selection: ProfileSelection): ProfileSelection =
-        if (selection.selectedProfile != null) selection else selection.copy(
+        if (Preflight(selection).deviceUnsupported || selection.selectedProfile != null) selection else selection.copy(
             selectedProfile = selection.candidates.firstOrNull { it.profile != LivePhotoProfile.VIVO_PAIR_LEGACY }?.profile,
             reason = SelectionReason.MANUAL)
 
@@ -49,6 +50,7 @@ object EffectLivePhotoExporter {
         readout: EffectCameraReadout = EffectCameraReadout(),
         motionSource: EffectMotionSource? = null, motionAudioFile: File? = null,
         photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(), correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO,correlationId,parentCorrelationId) { log ->
+        require(!preflight.deviceUnsupported) { preflight.selection.deviceExportBlockedReason.orEmpty() }
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
         val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
         check(exportLock.tryLock()) { "Live Photo export already running" }

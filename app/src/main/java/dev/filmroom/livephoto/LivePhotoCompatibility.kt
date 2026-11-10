@@ -59,7 +59,9 @@ class LivePhotoCompatibility(
         val version = if (selected == null) null else try { manager.getPackageInfo(selected, 0).longVersionCode }
             catch (_: Exception) { null }
         return TargetEnvironment(Build.MANUFACTURER, Build.BRAND, Build.MODEL, Build.FINGERPRINT,
-            Build.VERSION.SDK_INT, selected, version, settings)
+            Build.VERSION.SDK_INT, selected, version, settings,
+            oplusOliveFeature = if (ProfileResolver.brandOf(Build.MANUFACTURER, Build.BRAND) == TargetBrand.OPLUS)
+                LocalExportPolicy.readOplusFeature { manager.hasSystemFeature(it) } else null)
     }
 
     suspend fun resolve(request: VideoToLiveRequest): ProfileSelection = withContext(Dispatchers.IO) {
@@ -77,12 +79,12 @@ class LivePhotoCompatibility(
         currentCoroutineContext().ensureActive()
         // Hidden SystemProperties access can be blocked for ordinary apps. Preserve that uncertainty.
         // Never borrow local properties when generating for an explicitly selected remote target.
-        val vivoVersion = if (local && brand == TargetBrand.VIVO) VivoVersionObservation.read { key ->
-            Class.forName("android.os.SystemProperties")
-                .getMethod("get", String::class.java, String::class.java)
-                .invoke(null, key, "") as? String
-        } else null
-        resolver.resolve(brand, env, request.profile, request.coverOffsetMs == 0L, hint, vivoVersion)
+        fun systemProperty(key: String): String? = Class.forName("android.os.SystemProperties")
+            .getMethod("get", String::class.java, String::class.java).invoke(null, key, "") as? String
+        val localVivo = local && brand == TargetBrand.VIVO
+        val vivoVersion = if (localVivo) VivoVersionObservation.read(::systemProperty) else null
+        val capability = if (localVivo) VivoCapability.read(::systemProperty) else null
+        resolver.resolve(brand, env, request.profile, request.coverOffsetMs == 0L, hint, vivoVersion, capability)
     }
 
     /**

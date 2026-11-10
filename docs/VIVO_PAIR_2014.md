@@ -15,7 +15,7 @@
 - 普通应用反射读取可能受限制；ADB 可读不代表应用可读。无需新增存储权限、执行 shell 或绕过 hidden API 限制。
 - 仅本机品牌为 vivo/iQOO 且未指定远端 targetBrand 时读取。远端目标没有属性观察，保持既有默认次序，新增 2014 供手动选择。
 - 手动 profile 与有效的用户相册验收记录仍优先。属性只能决定候选顺序，不能写入 SUPPORTED 记录。
-- 未加入 `support` 属性/机型白名单硬拦截；支持能力与封装版本是两件事。
+- 支持能力与封装版本是两件事；新增 support 判断见下文。
 
 ## 文件协议
 
@@ -78,3 +78,18 @@ SCANNED 只意味着系统扫描器回调了既有媒体行，绝不代表 vivo 
 有意差异：ID使用随机十进制而非毫秒数补零；保留Filmroom EXIF清理与日期恢复，不继承旧Live字段；使用MediaStore pending事务和回读校验，扫描用公开scanFile而非旧广播。以上为稳健性和scoped-storage适配，不应称与Mimo逐行或全部行为完全一致。
 
 本次正式版本：`0.1.37-beta37` / versionCode `89`，包名仍 `dev.filmroom`，不包含独立首页实验分支。
+
+
+## vivo 可用性判断（后续接入）
+
+本机 vivo/iQOO 同时读取 `ro.vivo.camera.livephoto.support`：
+- `1`：设备声明支持，只作为能力线索；不把 Filmroom 输出标为相册已验收。
+- `2`：设备明确声明不支持。优先突出视频按钮，Live 按钮视觉置灰但保留点击；点击 Toast 提示未满足导出条件，编码和发布前均拒绝。
+- 其他值、缺失、无法解析或无法读取：读取 `ro.product.model.bbk`，精确匹配此版本 SDK 的 36 项型号名单。匹配只算能力线索；不匹配保留 UNKNOWN，仍允许用户主动尝试。
+- version 仍独立决定单/双文件默认次序。support 不决定封装格式；version 也不能证明是否支持。
+- 明确 support=2 时，不允许手动 profile 或历史记录绕过。未知时不自动改存 MP4，用户需点击视频导出。
+
+与 Mimo 的区别：该版 SDK 在属性无结论且未命中名单时返回 false。Filmroom 刻意保留 UNKNOWN，避免把更新机型或读取受限误判为不支持。此名单不是完整的 vivo 支持列表。
+没有引入专有 SDK/AAR，也没有规避系统属性读取限制。能力判断仍不能检测系统相册是否把已保存文件识别成 Live。
+
+vivo 单独接入阶段验证：36 项 LivePhoto 定向测试及 126 项配方兼容 gate 通过。随后合并 OPPO / 荣耀 / 三星准入和 Toast 按钮行为，最终验证结果见 LIVE_PHOTO_DEVICE_ADMISSION.md。未跑真机相册验证，没有增加版本号或发布。

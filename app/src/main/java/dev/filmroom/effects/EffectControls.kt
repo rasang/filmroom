@@ -39,6 +39,11 @@ object EffectControls {
         button.setCompoundDrawablesRelative(EffectControlIcon(icon,ink).apply{setBounds(0,0,dp(18),dp(18))},null,null,null)
         button.setPaddingRelative(start,top,end,bottom)
     }
+    /** Visual unavailability only: retain enabled/click listener so the tap can explain why. */
+    fun setLiveAvailability(button:Button, primary:Boolean, deviceBlocked:Boolean) {
+        setPrimary(button,"live",primary && !deviceBlocked)
+        button.alpha=if(deviceBlocked) .45f else 1f
+    }
     /** A whole-button touch target with its switch embedded, matching the quality button. */
     fun audioToggle(c:Context,label:String):android.widget.Switch {
         fun dp(n:Int)=(n*c.resources.displayMetrics.density+.5f).toInt()

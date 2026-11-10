@@ -24,6 +24,7 @@ class NormalizedLivePhotoSdk(context: Context) {
         require(file.canonicalFile.parentFile == app.cacheDir.canonicalFile && file.name.startsWith("effect-live-")) { "Only app-rendered private videos are accepted" }
         val current = resolve(request)
         require(current.environment?.key == accepted.environment?.key && current.selectedProfile == accepted.selectedProfile && current.status == accepted.status) { "相册环境已变化，请重新检查后导出。" }
+        require(current.deviceExportBlockedReason == null) { current.deviceExportBlockedReason.orEmpty() }
         val profile = requireNotNull(current.selectedProfile) { "没有可用的 Live Photo 格式" }
         // Explicit button-triggered retries may target a previously unsupported gallery profile.
         require(!request.requireConfirmedSupport || current.status == SupportStatus.SUPPORTED)

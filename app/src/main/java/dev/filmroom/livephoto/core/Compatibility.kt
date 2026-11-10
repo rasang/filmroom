@@ -25,7 +25,8 @@ data class TargetEnvironment(
     val galleryPackage: String?,
     val galleryVersion: Long?,
     val mediaSettingsKey: String,
-    val writerRevision: String = SdkLimits.WRITER_REVISION
+    val writerRevision: String = SdkLimits.WRITER_REVISION,
+    val oplusOliveFeature: Boolean? = null
 ) {
     private fun known(value: String?) = !value.isNullOrBlank() && !value.equals("unknown", true)
     val canRemember: Boolean get() = known(manufacturer) && known(brand) && known(model) &&
@@ -60,8 +61,14 @@ data class ProfileSelection(
     val reason: SelectionReason,
     val candidates: List<ProfileCapability>,
     val warnings: List<String>,
-    val deviceHint: DeviceSupportHint? = null
-)
+    val deviceHint: DeviceSupportHint? = null,
+    val vivoCapability: VivoCapability? = null
+) {
+    val deviceExportBlockedReason: String? get() =
+        if (brand == TargetBrand.VIVO && vivoCapability?.blocksExport == true)
+            "设备明确声明不支持 Live Photo，请导出视频。"
+        else LocalExportPolicy.blockedReason(brand, environment)
+}
 
 interface CompatibilityStore {
     fun read(environmentKey: String, profile: LivePhotoProfile): CompatibilityRecord?
@@ -150,7 +157,8 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
         manual: LivePhotoProfile? = null,
         firstFrame: Boolean = true,
         deviceHint: DeviceSupportHint? = null,
-        vivoVersion: VivoVersionObservation? = null
+        vivoVersion: VivoVersionObservation? = null,
+        vivoCapability: VivoCapability? = null
     ): ProfileSelection {
         require(manual != LivePhotoProfile.VIVO_PAIR_LEGACY || firstFrame) { "Legacy vivo supports first-frame cover only" }
         val now = nowMs()
@@ -166,10 +174,14 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
         val profiles = (listOfNotNull(manual) + candidates(brand, firstFrame, vivoVersion) +
             observed.filter { it.status == SupportStatus.SUPPORTED }.map { it.profile }).distinct()
         val states = profiles.map { profile -> observed.single { it.profile == profile } }
-        val chosen = if (manual != null) states.first() else
+        val localCapability = vivoCapability.takeIf { brand == TargetBrand.VIVO }
+        val policyBlock = LocalExportPolicy.blockedReason(brand, environment)
+        val blocked = localCapability?.blocksExport == true || policyBlock != null
+        val chosen = if (blocked) null else if (manual != null) states.first() else
             states.filter { it.status == SupportStatus.SUPPORTED }.maxByOrNull { it.record!!.checkedAtMs }
                 ?: states.firstOrNull { it.status == SupportStatus.UNKNOWN }
         val reason = when {
+            blocked -> SelectionReason.NO_CANDIDATE
             manual != null -> SelectionReason.MANUAL
             chosen == null -> SelectionReason.NO_CANDIDATE
             chosen.status == SupportStatus.SUPPORTED -> SelectionReason.USER_CONFIRMED
@@ -179,11 +191,18 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
         if (brand == TargetBrand.VIVO && vivoVersion != null) warnings += vivoVersion.diagnostic
         if (environment == null) warnings += "接收端环境未知；不使用本机相册测试记录。"
         else if (!environment.canRemember) warnings += "相册包或版本等信息不完整；不会保存或套用兼容记录。"
-        if (chosen == null) warnings += "当前候选在此环境均有失败记录；不代表手机永远不支持实况。可手动重试或清除记录。"
+        if (localCapability != null) warnings += localCapability.diagnostic
+        if (localCapability?.blocksExport == true) warnings += "设备明确声明不支持 Live Photo；请导出视频。此声明不是相册播放实测。"
+        if (policyBlock != null) warnings += policyBlock
+        if (environment != null && brand in listOf(TargetBrand.OPLUS, TargetBrand.HONOR, TargetBrand.SAMSUNG))
+            warnings += "采用 Mimo 2.12.8 的设备准入条件，不等于当前封装已通过相册验收。"
+        if (environment != null && brand == TargetBrand.SAMSUNG)
+            warnings += "Mimo 三星使用 OLive；Filmroom 保留 SEF 格式，版本门槛不是 SEF 兼容证明。"
+        if (chosen == null && !blocked) warnings += "当前候选在此环境均有失败记录；不代表手机永远不支持实况。可手动重试或清除记录。"
         if (chosen?.status == SupportStatus.UNSUPPORTED) warnings += "手动选择了有失败记录的格式；本次只是重试，不会覆盖旧结果。"
         if (deviceHint != null) warnings += "厂商能力返回仅为线索，不等于当前自写封装格式通过相册验收。"
         return ProfileSelection(brand, environment, chosen?.profile, chosen?.status ?: SupportStatus.UNSUPPORTED,
-            reason, states, warnings, deviceHint)
+            reason, states, warnings, deviceHint, localCapability)
     }
     /** Call only after the user has viewed THIS output in the identified target gallery. */
     fun remember(selection: ProfileSelection, status: SupportStatus, assetSha256: String): CompatibilityRecord? {

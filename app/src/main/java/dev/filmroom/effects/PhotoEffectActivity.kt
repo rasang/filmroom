@@ -635,7 +635,7 @@ class PhotoEffectActivity : ComponentActivity() {
             livePreflight=runCatching{EffectLivePhotoExporter.preflight(this@PhotoEffectActivity,correlationId=correlationId)}.getOrNull()
             if(isDestroyed)return@launch
             val unavailable=livePreflight?.unsupported==true
-            EffectControls.setPrimary(livePhotoButton,"live",!unavailable)
+            EffectControls.setLiveAvailability(livePhotoButton,!unavailable,livePreflight?.deviceUnsupported==true)
             EffectControls.setPrimary(exportButton,"video",unavailable)
         }
     }
@@ -651,9 +651,10 @@ class PhotoEffectActivity : ComponentActivity() {
             livePreflight=check
             liveChecking=false
             if(isDestroyed)return@launch
-            EffectControls.setPrimary(livePhotoButton,"live",check?.unsupported!=true)
+            EffectControls.setLiveAvailability(livePhotoButton,check?.unsupported!=true,check?.deviceUnsupported==true)
             EffectControls.setPrimary(exportButton,"video",check?.unsupported==true)
             if(check==null){showLiveMessage(t("无法检查 Live Photo 支持情况，请重试","Unable to check Live Photo support. Try again"));return@launch}
+            if(check.deviceUnsupported){Toast.makeText(this@PhotoEffectActivity,t("当前设备未满足 Live 导出条件，请导出视频。","This device does not meet the Live export requirements. Export a video instead."),Toast.LENGTH_SHORT).show();return@launch}
             if(LivePhotoExportNotice(applicationContext).consumeFirstNotice()) {
                 Toast.makeText(this@PhotoEffectActivity,t("部分设备可能不支持。可导出视频，尝试相册的转实况功能。","Playback may vary. Try video export and gallery conversion if available."),Toast.LENGTH_LONG).show()
             }
