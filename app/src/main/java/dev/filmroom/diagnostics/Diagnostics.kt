@@ -87,7 +87,7 @@ object Diagnostics {
         return DiagnosticMetadata(version.coerceIn(0, 1_000_000_000), Build.VERSION.SDK_INT.coerceIn(0, 1000),
             Build.SUPPORTED_ABIS.firstNotNullOfOrNull { value -> DiagnosticAbi.entries.firstOrNull { it.id == value } } ?: DiagnosticAbi.UNKNOWN,
             Runtime.getRuntime().availableProcessors().coerceIn(0, 1024), Runtime.getRuntime().maxMemory().coerceIn(0, 1L shl 40),
-            memoryClass.coerceIn(0, 1_000_000))
+            memoryClass.coerceIn(0, 1_000_000), DiagnosticDeviceInfo.capture())
     }
 
 }

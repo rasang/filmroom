@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
 import java.security.MessageDigest
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -11,7 +13,7 @@ android {
     namespace = "dev.filmroom"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
-    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 91; versionName = "0.1.39-beta39"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "dev.filmroom"; minSdk = 29; targetSdk = 35; versionCode = 92; versionName = "0.1.40-beta40"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     // Optional distribution ABI filter; default source build retains both tested ABIs.
     providers.gradleProperty("filmroomAbi").orNull?.let { abi ->
         require(abi in setOf("arm64-v8a", "x86_64")) { "Unsupported filmroomAbi" }
@@ -55,8 +57,33 @@ tasks.withType<Test>().configureEach {
 }
 
 // Isolated candidate: transport compression only, original source asset remains untouched.
+// Release audio is a private licensed build input. Never silently ship without it.
+val requiredEffectAudio = listOf("light_table.m4a", "optical_leak.m4a", "optical_leak_slow.m4a")
+val effectAudioDir = file("src/main/assets/effect_audio")
+val verifyEffectAudioAssets by tasks.registering {
+    group = "verification"
+    description = "Reject missing or unapproved effect audio before assets are packed."
+    // Always verify: an absent private asset must not be hidden by incremental outputs.
+    doLast {
+        val manifest = effectAudioDir.resolve("SHA256SUMS").readLines()
+            .filter { it.isNotBlank() }.associate {
+                val parts = it.trim().split(Regex("\\s+"))
+                check(parts.size == 2) { "Invalid effect audio checksum manifest" }
+                parts[1] to parts[0]
+            }
+        check(manifest.keys == requiredEffectAudio.toSet()) { "Incomplete effect audio checksum manifest" }
+        requiredEffectAudio.forEach { name ->
+            val asset = effectAudioDir.resolve(name)
+            check(asset.isFile) { "Missing effect audio: $name. See docs/EFFECT_AUDIO_SETUP.md; refusing silent/broken package." }
+            val bytes = asset.readBytes()
+            val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            check(hash == manifest.getValue(name)) { "Unapproved effect audio: $name. Validate and update SHA256SUMS intentionally." }
+        }
+    }
+}
 val packedAssets = layout.buildDirectory.dir("generated/packedAssets")
 val preparePackedEngineAssets by tasks.registering(Sync::class) {
+    dependsOn(verifyEffectAudioAssets)
     from("src/main/assets")
     exclude("engine-data/luts/spectral_upsampling/irradiance_xy_tc.npy")
     into(packedAssets)
@@ -143,4 +170,34 @@ tasks.configureEach {
     if (name in setOf("check", "packageRelease", "packageReleaseBundle", "assembleRelease", "bundleRelease")) {
         dependsOn(verifySavedPresetCompatibility)
     }
+}
+
+// Check the actual APK as well as the source input: asset-copy/compression regressions
+// must fail assemble, rather than being discovered by the user's first export.
+listOf("Debug", "Release").forEach { variant ->
+    val verifyApkAudio = tasks.register("verify${variant}ApkEffectAudio") {
+        group = "verification"
+        dependsOn("package$variant", verifyEffectAudioAssets)
+        doLast {
+            val apkDir = layout.buildDirectory.dir("outputs/apk/${variant.lowercase()}").get().asFile
+            val apks = apkDir.listFiles()?.filter { it.extension == "apk" }.orEmpty()
+            check(apks.isNotEmpty()) { "No $variant APK found for effect audio validation" }
+            apks.forEach { apk ->
+                ZipFile(apk).use { zip ->
+                    requiredEffectAudio.forEach { name ->
+                        val entry = zip.getEntry("assets/effect_audio/$name")
+                        check(entry != null) { "${apk.name} missing effect audio $name" }
+                        check(entry.method == ZipEntry.STORED) {
+                            "${apk.name}: $name compressed; AssetManager.openFd requires stored audio"
+                        }
+                        val actual = zip.getInputStream(entry).use { it.readBytes() }
+                        check(actual.contentEquals(effectAudioDir.resolve(name).readBytes())) {
+                            "${apk.name}: packaged effect audio $name differs from verified input"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    tasks.matching { it.name == "assemble$variant" }.configureEach { dependsOn(verifyApkAudio) }
 }

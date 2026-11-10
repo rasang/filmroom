@@ -4,18 +4,19 @@ import java.io.File
 
 data class DiagnosticShare(val file: File, val summary: String, val eventCount: Int, val windowMinutes: Int)
 
-/** Metadata is numeric/enum-like only, not Build.MODEL/DEVICE/FINGERPRINT strings. */
+/** ABI values remain allowlisted; public product labels are separately sanitized. */
 internal enum class DiagnosticAbi(val id: String) { ARM64("arm64-v8a"), ARMV7("armeabi-v7a"), X86("x86"), X86_64("x86_64"), UNKNOWN("unknown") }
 internal object DiagnosticEngineVersion { const val BUILD=14; const val INTERFACE=2 }
 internal data class DiagnosticMetadata(
     val appVersionCode: Long = 0, val androidApi: Int = 0, val abi: DiagnosticAbi = DiagnosticAbi.UNKNOWN,
     val processorCount: Int = 0, val heapMaxBytes: Long = 0, val memoryClassMb: Int = 0,
+    val device: DiagnosticDeviceInfo = DiagnosticDeviceInfo.from(null, null, null, null),
 ) {
     init {
         require(appVersionCode in 0..1_000_000_000 && androidApi in 0..1000 && processorCount in 0..1024)
         require(heapMaxBytes in 0..(1L shl 40) && memoryClassMb in 0..1_000_000)
     }
-    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb, DiagnosticEngineVersion.BUILD, DiagnosticEngineVersion.INTERFACE)
+    fun text(): String = dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_60ef08049a72, appVersionCode, androidApi, abi.id, processorCount, heapMaxBytes, memoryClassMb, DiagnosticEngineVersion.BUILD, DiagnosticEngineVersion.INTERFACE) + "\n" + device.text()
 }
 
 internal object ChineseDiagnostics {
@@ -56,11 +57,15 @@ internal object ChineseDiagnostics {
         append(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a6a08f5857fd))
     }
     fun json(snapshot: DiagnosticSnapshot, metadata: DiagnosticMetadata): String = buildString {
-        // All strings originate in fixed enums/allowlists. No general-purpose raw JSON pass-through.
+        // Event strings remain allowlisted; public device labels are bounded and escaped. No raw JSON pass-through.
         append("{\"schemaVersion\":1,\"appVersionCode\":").append(metadata.appVersionCode)
         append(",\"engineBuildRevision\":").append(DiagnosticEngineVersion.BUILD).append(",\"engineInterfaceVersion\":").append(DiagnosticEngineVersion.INTERFACE).append(",\"androidApi\":").append(metadata.androidApi)
         append(",\"abi\":").append(jsonString(metadata.abi.id)).append(",\"processorCount\":").append(metadata.processorCount)
         append(",\"heapMaxBytes\":").append(metadata.heapMaxBytes).append(",\"memoryClassMb\":").append(metadata.memoryClassMb)
+        append(",\"deviceManufacturer\":").append(jsonString(metadata.device.manufacturer))
+        append(",\"deviceBrand\":").append(jsonString(metadata.device.brand))
+        append(",\"deviceModel\":").append(jsonString(metadata.device.model))
+        append(",\"androidRelease\":").append(jsonString(metadata.device.androidRelease))
         append(",\"minutes\":").append(snapshot.minutes).append(",\"snapshotUtcMs\":").append(snapshot.snapshotWallMs)
         append(",\"snapshotElapsedMs\":").append(snapshot.snapshotElapsedMs).append(",\"eventCount\":").append(snapshot.events.size)
         append(",\"crossRunTimeUncertain\":").append(snapshot.crossRunCount > 0)

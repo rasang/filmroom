@@ -28,3 +28,28 @@ python3 tools/effect-audio/verify.py
 ## 验证边界
 
 beta20 交付经过 191 项专项测试、完整生产代码编译及签名检查；完整测试、lint、真机音频/视频编码与相册播放尚未验证。音频素材准备也不能替代这些运行验证。JNI 原生库准备仍按 `docs/DEVELOPMENT.md`。
+
+## 发行包强制门禁（beta39 遗漏修复）
+
+独立音轨仍是受许可限制的私有构建输入，不提交到公开仓库。它们不是可选资源：
+预览使用 AssetManager.openFd；导出也必须准备同一音轨。缺任一文件时禁止继续构建，
+不能静默构建无声且导出失败的安装包。
+
+- `verifyEffectAudioAssets` 在所有资产准备前校验三条文件与受版本控制的
+  `assets/effect_audio/SHA256SUMS`。每次执行，不让增量资产缓存掩盖源文件丢失。
+- `assembleDebug/assembleRelease` 还会执行 `verifyDebugApkEffectAudio/
+  verifyReleaseApkEffectAudio`，校验成品中的路径、字节一致性与 STORED 存储方式。
+- 重压缩、签名后再次运行：
+  `python3 tools/effect-audio/verify-package.py /path/to/final.apk`。
+- 音轨重新生成时，先运行 `verify.py` 解码/音量检查并试听，再有意更新
+  SHA256SUMS；不得为了通过构建而自动接受任意字节或补空音轨。
+
+本次从已发行 beta38 APK 恢复私有构建输入，APK SHA256：
+`7cb03a8d95c26838a624f6747fdcd048969c976f781d5a2fa855a46912f68c91`。
+恢复后与 APK 内原字节一致，三条音轨均通过现有 AAC/48kHz/mono/3秒、音量、
+事件窗口与端点检查。公开仓库只保存校验清单，不发布独立音轨。
+
+持有这个已验证安装包时，可在自己的构建环境运行：
+`python3 tools/effect-audio/restore-from-beta38.py /path/to/beta38.apk`。
+该工具先校验 APK 和各音轨哈希，拒绝不同的安装包或覆盖不同的本地音轨；
+只恢复私有构建输入，不上传或公开独立素材。
