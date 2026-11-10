@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_motion_enabled">Live Photo 有効。写真を長押しして再生。</string>
+    <string name="home_motion_error">この端末ではエフェクトを再生できません</string>
+    <string name="home_motion_finder">ファインダー</string>
+    <string name="home_motion_label">Live Photo エフェクト</string>
+    <string name="home_motion_none">なし</string>
+    <string name="home_motion_table">ライトテーブル</string>
+</resources>

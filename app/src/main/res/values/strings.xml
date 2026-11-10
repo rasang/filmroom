@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Filmroom</string>
+    <string name="app_name" translatable="false">Filmroom 实验</string>
     <string name="text_3d05fc7cf7e4" formatted="false">正在清理上次的临时文件</string>
     <string name="text_5ec95121dc94" formatted="true">上次的临时文件有 %1$s 项未能清理。为避免占满空间，暂不开始编辑。请检查本机空间后点此重试；也可关闭应用稍后重开。原片未修改。</string>
     <string name="text_b3622bcacaaf" formatted="false">恢复本机编辑</string>

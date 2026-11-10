@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_motion_enabled">Live Photo enabled. Hold photo to play.</string>
+    <string name="home_motion_error">This device could not play this effect</string>
+    <string name="home_motion_finder">Viewfinder</string>
+    <string name="home_motion_label">Live Photo effect</string>
+    <string name="home_motion_none">None</string>
+    <string name="home_motion_table">Light table</string>
+</resources>

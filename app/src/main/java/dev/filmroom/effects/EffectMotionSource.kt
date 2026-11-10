@@ -66,7 +66,7 @@ class EffectMotionSource internal constructor(file:File,private val composition:
     }
     @Synchronized override fun close(){failed=true;decoder?.release();decoder=null;sequential?.close();sequential=null}
 }
-internal class EffectMotionPreview(file:File,composition:EffectSourceComposition?=null,maxEdge:Int=720,sourceFactory:(()->EffectMotionFrameSource)?=null):AutoCloseable {
+internal class EffectMotionPreview(file:File,composition:EffectSourceComposition?=null,maxEdge:Int=720,sourceFactory:(()->EffectMotionFrameSource)?=null,private val onClosed:()->Unit={}):AutoCloseable {
     private var source:EffectMotionFrameSource?=null
     private val createSource=sourceFactory?:{EffectMotionSource(file,composition,maxEdge,true)}
     private var decoderGeneration=-1
@@ -97,5 +97,5 @@ internal class EffectMotionPreview(file:File,composition:EffectSourceComposition
     }
     @Synchronized fun poll():EffectMotionFrame?=pending.also{pending=null}
     @Synchronized fun reset(){if(closed)return;generation++;wanted=null;pending?.close();pending=null;ready=false;staticFallback=false;request(0,false)}
-    @Synchronized override fun close(){if(closed)return;closed=true;wanted=null;pending?.close();pending=null;executor.execute{runCatching{source?.close()};source=null};executor.shutdown()}
+    @Synchronized override fun close(){if(closed)return;closed=true;wanted=null;pending?.close();pending=null;executor.execute{try{runCatching{source?.close()};source=null}finally{onClosed()}};executor.shutdown()}
 }

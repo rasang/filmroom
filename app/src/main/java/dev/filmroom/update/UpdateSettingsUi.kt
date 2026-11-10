@@ -41,6 +41,11 @@ class UpdateSettingsUi(private val activity:ComponentActivity,
         }
         block.addView(button,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8);bottomMargin=dp(8)})
         parent.addView(block,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+        if(activity.packageName=="dev.filmroom.homemotion") {
+            button.isEnabled=false
+            button.text=text("实验版不检测正式版更新","Experimental build: updates disabled","実験版：更新確認は無効","실험 버전: 업데이트 비활성화")
+            return
+        }
         button.setOnClickListener {
             if(closed||job?.isActive==true)return@setOnClickListener
             if(endpoint.isBlank()){message(text("更新地址尚未配置","Update address is not configured","更新先が未設定です","업데이트 주소가 설정되지 않았습니다"));return@setOnClickListener}
@@ -61,7 +66,7 @@ class UpdateSettingsUi(private val activity:ComponentActivity,
         }
     }
     fun checkOnColdStart() {
-        if(closed||endpoint.isBlank())return
+        if(activity.packageName=="dev.filmroom.homemotion" || closed||endpoint.isBlank())return
         val fetch=check;val address=endpoint
         val task=UpdateChecks.request(activity,true){fetch(address)} ?: return
         job=activity.lifecycleScope.launch {

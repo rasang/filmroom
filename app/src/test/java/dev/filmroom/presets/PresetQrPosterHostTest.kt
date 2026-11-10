@@ -39,7 +39,7 @@ class PresetQrPosterHostTest {
                 for(row in 0 until qr.height)for(col in 0 until qr.width)assertEquals(qr.getPixel(col,row),poster.getPixel(x+col,top+row))
                 val dir=File(app.cacheDir,"preset-qr-shares").apply{mkdirs()};val file=File(dir,"poster-$lang.png")
                 file.outputStream().use{poster.compress(Bitmap.CompressFormat.PNG,100,it)}
-                assertEquals(payload,PresetQrImage.read(app,FileProvider.getUriForFile(app,"dev.filmroom.presetqr",file)))
+                assertEquals(payload,PresetQrImage.read(app,FileProvider.getUriForFile(app,"${app.packageName}.presetqr",file)))
                 System.getProperty("filmroom.qr.artifacts")?.let{out->File(out).mkdirs();File(out,"poster-$lang.png").writeBytes(file.readBytes())}
             } finally {poster.recycle();qr.recycle()}
         }

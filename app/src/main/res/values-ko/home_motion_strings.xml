@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_motion_enabled">Live Photo가 켜져 있습니다. 사진을 길게 눌러 재생하세요.</string>
+    <string name="home_motion_error">이 기기에서 효과를 재생할 수 없습니다</string>
+    <string name="home_motion_finder">뷰파인더</string>
+    <string name="home_motion_label">Live Photo 효과</string>
+    <string name="home_motion_none">없음</string>
+    <string name="home_motion_table">라이트 테이블</string>
+</resources>

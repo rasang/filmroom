@@ -1,7 +1,7 @@
 package dev.filmroom.diagnostics
 
 /** No arbitrary messages, exceptions, filenames, URIs, or string key/value maps. */
-enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP, ARCHIVED_PHOTO_ACCESS, RECIPE, BACKUP }
+enum class Operation { SESSION, RESTORE, IMPORT, PREVIEW_RENDER, PREVIEW_PRESENTATION, ORIGINAL_SPOOL, EXPORT_PLAN, EXPORT_RENDER, EXPORT_ENCODE, SHARE_DIAGNOSTICS, CLEANUP, ARCHIVED_PHOTO_ACCESS, RECIPE, BACKUP, HOME_MOTION }
 enum class Stage { START, IMPORT_INPUT, DECODE_HEADER, DECODE_STRIPE, NATIVE_ENTER, NATIVE_PROGRESS, NATIVE_EXIT, ENCODE_START, ENCODE_PROGRESS, MEDIA_INSERTED, MEDIA_COMMITTED, CANCEL_REQUESTED, CLEANUP, ERROR, PREVIOUS_UNFINISHED, END }
 enum class NegativePreviewOutcome { SUCCESS, BUDGET_SKIP, FAILURE, CANCELLED, NOT_APPLICABLE }
 enum class Outcome { SUCCESS, CANCELLED, FAILED, ABANDONED }
@@ -239,6 +239,7 @@ data class SafeInfo(
     val effectExport: EffectExportDiagnosticInfo? = null,
     val motionPreview: MotionPreviewDiagnosticInfo? = null,
     val motionInput: MotionInputDiagnosticInfo? = null,
+    val homeMotion: HomeMotionDiagnosticInfo? = null,
 ) {
     internal fun fields(): Map<String, String> = typedFields().mapValues { it.value.toString() }
 
@@ -267,6 +268,7 @@ data class SafeInfo(
         effectExport?.fields()?.let { putAll(it) }
         motionPreview?.fields()?.let { putAll(it) }
         motionInput?.fields()?.let { putAll(it) }
+        homeMotion?.fields()?.let { putAll(it) }
         previewTiming?.fields()?.let { putAll(it) }
         detailTiming?.fields()?.let { putAll(it) }
         previewFailureStage?.let { put("previewFailureStage",it.name) }
@@ -469,6 +471,7 @@ data class SafeInfo(
             effectExport=EffectExportDiagnosticInfo.parse(fields),
             motionPreview=MotionPreviewDiagnosticInfo.parse(fields),
             motionInput=MotionInputDiagnosticInfo.parse(fields),
+            homeMotion=HomeMotionDiagnosticInfo.parse(fields),
             previewTiming=PreviewTimingSnapshot.parse(fields),
             detailTiming=DetailTimingSnapshot.parse(fields),
             previewFailureStage=PreviewFailureStage.entries.firstOrNull { it.name==fields["previewFailureStage"] },

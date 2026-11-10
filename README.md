@@ -1,3 +1,5 @@
+> 本分支为首页 Live exp6 **实验源码重建版**，基于已交付 APK 和 beta36 源码复原，并非找回原始提交。独立包名，不合入 dev；首页直接导出仍暂停。来源和验证范围见 [重建记录](docs/recovery/HOME-MOTION-EXP6.md)。
+
 <div align="center">
 
 # Filmroom

@@ -101,9 +101,9 @@ class EffectGlRenderer(private val kind:EffectKind,private val source:Bitmap,pri
             glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,ByteBuffer.allocateDirect(4))
         }
     }
-    fun draw(width:Int,height:Int,timeMs:Long,slow:Boolean=false,pageOffset:Float=0f,pageDirection:Int=0) {
+    fun draw(width:Int,height:Int,timeMs:Long,slow:Boolean=false,pageOffset:Float=0f,pageDirection:Int=0,viewportX:Int=0,viewportY:Int=0) {
         check(program!=0);if(width<=0||height<=0)return
-        glViewport(0,0,width,height);glDisable(GL_BLEND);glDisable(GL_DEPTH_TEST);glDisable(GL_SCISSOR_TEST)
+        glViewport(viewportX,viewportY,width,height);glDisable(GL_BLEND);glDisable(GL_DEPTH_TEST);glDisable(GL_SCISSOR_TEST)
         val finder=if(fitPreviewFinder)
             EffectGeometry.previewFinder(width,height,source.width.toFloat()/source.height) else null
         val finderWidth=finder?.rasterWidth ?: width

@@ -61,7 +61,7 @@ class PresetQrLogoHostTest {
     @Test fun frozenDensePerspectiveImageRemainsReadableFromAlbum() {
         val directory = File(app.cacheDir, "preset-qr-shares").apply { mkdirs() }
         val file = File(directory, "frozen-dense-perspective.png").apply { writeBytes(frozenPerspectiveBytes()) }
-        val uri = androidx.core.content.FileProvider.getUriForFile(app, "dev.filmroom.presetqr", file)
+        val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.presetqr", file)
         assertEquals(frozenPerspectiveText(), PresetQrImage.read(app, uri))
     }
     @Test fun realLogoCodesDecodeOriginalSmallJpegPerspectiveAndAlbum() {
@@ -78,7 +78,7 @@ class PresetQrLogoHostTest {
             // PNG export and the real album content-URI input path.
             val directory=File(app.cacheDir,"preset-qr-shares").apply { mkdirs() };val file=File(directory,"logo-$id.png")
             file.outputStream().use { code.compress(Bitmap.CompressFormat.PNG,100,it) }
-            val uri=androidx.core.content.FileProvider.getUriForFile(app,"dev.filmroom.presetqr",file)
+            val uri=androidx.core.content.FileProvider.getUriForFile(app,"${app.packageName}.presetqr",file)
             assertEquals(state,PresetQrCodec.decode(PresetQrImage.read(app,uri)).parameters)
             val screenSize=if(id==6) 360 else 260
             val small=Bitmap.createScaledBitmap(code,screenSize,screenSize,true)
