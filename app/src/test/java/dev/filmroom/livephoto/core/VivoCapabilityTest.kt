@@ -30,8 +30,17 @@ class VivoCapabilityTest {
     @Test fun whitelistUsesExactModelNotPrefixOrMarketingName() {
         assertEquals(36, VivoCapability.SDK_MODELS.size)
         VivoCapability.SDK_MODELS.forEach { assertEquals(SupportStatus.SUPPORTED, capability(null,it).status) }
-        for(model in listOf("PD2405A", "pd2405", "PD2405 ", "X200", "iQOO 15"))
+        for(model in listOf("PD2405A", "PD2405 ", "X200", "iQOO 15"))
             assertEquals(SupportStatus.UNKNOWN, capability(null,model).status)
+    }
+    @Test fun whitelistNormalizesCaseBeforeMatching() {
+        for (model in listOf("PD2405", "pd2405", "Pd2405", "pd2324ha", "Pd2339Fa")) {
+            val result = capability(null, model)
+            assertEquals(VivoCapability.Evidence.SDK_MODEL_MATCH, result.evidence)
+            assertEquals(SupportStatus.SUPPORTED, result.status)
+        }
+        // Explicit capability still wins over a case-normalized model match.
+        assertTrue(capability("2", "pd2405").blocksExport)
     }
     @Test fun deniedOrUnavailablePropertiesDoNotBecomeUnsupported() {
         for(error in listOf(SecurityException(), NoClassDefFoundError())) {

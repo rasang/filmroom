@@ -1,5 +1,7 @@
 package dev.filmroom.livephoto.core
 
+import java.util.Locale
+
 /** Device/SDK hints, never evidence that a specific Filmroom output played in a gallery. */
 data class VivoCapability(val status: SupportStatus, val evidence: Evidence, val readState: ReadState, val declaredValue: Int? = null) {
     enum class Evidence { DECLARED_SUPPORTED, DECLARED_UNSUPPORTED, SDK_MODEL_MATCH, UNKNOWN }
@@ -29,7 +31,7 @@ data class VivoCapability(val status: SupportStatus, val evidence: Evidence, val
               catch (_: LinkageError) { state = ReadState.UNREADABLE; null }
             if (value == 1) return VivoCapability(SupportStatus.SUPPORTED, Evidence.DECLARED_SUPPORTED, state, value)
             if (value == 2) return VivoCapability(SupportStatus.UNSUPPORTED, Evidence.DECLARED_UNSUPPORTED, state, value)
-            val matched = try { reader(MODEL_PROPERTY) in SDK_MODELS }
+            val matched = try { reader(MODEL_PROPERTY)?.uppercase(Locale.ROOT) in SDK_MODELS }
                 catch (_: Exception) { false } catch (_: LinkageError) { false }
             return if (matched) VivoCapability(SupportStatus.SUPPORTED, Evidence.SDK_MODEL_MATCH, state, value)
             else VivoCapability(SupportStatus.UNKNOWN, Evidence.UNKNOWN, state, value)

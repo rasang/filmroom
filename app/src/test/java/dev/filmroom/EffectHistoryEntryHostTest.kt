@@ -30,6 +30,8 @@ class EffectHistoryEntryHostTest {
             ExportQueueActivity::class.java.getDeclaredMethod("render",List::class.java).apply{isAccessible=true}.invoke(activity,listOf(job))
             val action=all(activity.window.decorView).single{it.tag=="history-effects:${job.id}"}
             assertEquals(View.VISIBLE,action.visibility);assertTrue(action.isEnabled)
+            assertTrue(action.foreground is dev.filmroom.ui.BetaBadgeDrawable)
+            assertTrue(action.contentDescription.toString().contains("Beta"))
             for((index,kind) in listOf("LIGHT_TABLE","OPTICAL_LEAK").withIndex()) {
                 action.performClick()
                 val dialog=ShadowAlertDialog.getLatestAlertDialog()

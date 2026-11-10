@@ -352,12 +352,14 @@ class ExportQueueActivity : ComponentActivity() {
             }.setOnDismissListener{if(!selected)entry.close()}.show()
         }}.apply {
             tag="history-effects:${this@JobCard.id}"
-            contentDescription=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效"else "Photo effects"
+            contentDescription=if(dev.filmroom.i18n.L10n.language(this@ExportQueueActivity).startsWith("zh"))"照片动效，Beta"else "Photo effects, Beta"
             minWidth=dp(48);minimumWidth=dp(48);minHeight=dp(48);minimumHeight=dp(48)
             setPadding(dp(13),dp(13),dp(13),dp(13))
             backgroundTintList=null
             background=android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x30ffffff),surface(FilmroomPalette.raised,14),null)
             setCompoundDrawablesRelative(dev.filmroom.effects.EffectControlIcon("play",FilmroomPalette.accent).apply{setBounds(0,0,dp(22),dp(22))},null,null,null)
+            foreground=dev.filmroom.ui.BetaBadgeDrawable(resources.displayMetrics.density)
+            foregroundGravity=android.view.Gravity.FILL
         }
         private lateinit var actions:WrappingActionLayout
         private var previewKey:String?=null
