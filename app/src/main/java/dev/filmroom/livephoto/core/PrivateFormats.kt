@@ -10,6 +10,22 @@ internal object Vivo {
     val uuidType = ascii("vivoMediaExtInfo")
     private val album = ascii("cameralbum!")
     private val signature = byteArrayOf(0x1b, 0x2a, 0x39, 0x48, 0x57, 0x66, 0x75, 0x84.toByte(), 0x93.toByte(), 0xa2.toByte(), 0xb3.toByte())
+    // Vivo SDK uses source=-1 for unregistered applications (including Filmroom), so omit source XMP.
+    val SINGLE_MARKER = "motionphoto0001".padEnd(28, '0')
+    fun singleExtension(): ByteArray = uuid(tail(linkedMapOf(ID_KEY to SINGLE_MARKER, "version" to 2014L)))
+    fun inspectSingleExtension(file: File, video: VideoRange): Long {
+        val boxes = Mp4.validate(file, video)
+        val last = boxes.last()
+        demand(last.type == "uuid" && last.header == 8 && last.size in 64..16408,
+            ErrorCode.INVALID_METADATA, "Missing vivo motion extension")
+        RandomAccessFile(file, "r").use { input ->
+            demand(input.readAt(last.start + 8, 16).contentEquals(uuidType), ErrorCode.INVALID_METADATA, "Wrong vivo motion UUID")
+            val binding = parse(input.readAt(last.start + 24, (last.size - 24).toInt()), motion = true)
+            demand(binding.fields.keys == setOf(ID_KEY, "version") && binding.fields["version"] == 2014L,
+                ErrorCode.INVALID_METADATA, "Wrong vivo motion schema")
+        }
+        return last.start - video.offset
+    }
     fun cleanCover(bytes: ByteArray): ByteArray {
         val end = Jpeg.inspect(bytes).end
         if (end == bytes.size) return bytes
@@ -23,7 +39,8 @@ internal object Vivo {
         for (box in boxes.asReversed()) {
             if (box.type != "uuid" || box.header != 8 || !source.readAt(box.start + 8, 16).contentEquals(uuidType)) break
             demand(box.size in 64..16408, ErrorCode.INVALID_METADATA, "Invalid old vivo extension size")
-            parse(source.readAt(box.start + 24, (box.size - 24).toInt()))
+            val oldTail = source.readAt(box.start + 24, (box.size - 24).toInt())
+            try { parse(oldTail) } catch (e: LivePhotoException) { parse(oldTail, motion = true) }
             end = box.start
         }
         // Non-terminal vivo UUIDs cannot be safely removed without rewriting MP4 chunk offsets.
@@ -60,7 +77,7 @@ internal object Vivo {
     fun uuid(tail: ByteArray): ByteArray = be32(tail.size + 24L) + ascii("uuid") + uuidType + tail
     data class Binding(val id: String, val fields: Map<String, Any>)
     /** Delimiter location comes from parsing JSON, never searching for cameralbum! inside arbitrary text. */
-    fun parse(tail: ByteArray): Binding {
+    fun parse(tail: ByteArray, motion: Boolean = false): Binding {
         demand(tail.size in 40..16384 && tail.startsAt(ascii("vivo{")) && tail.startsAt(signature, tail.size - signature.size), ErrorCode.INVALID_METADATA, "Invalid vivo tail framing")
         var p = 4; var inString = false; var escaped = false; var jsonEnd = -1
         while (p < tail.size) {
@@ -81,7 +98,7 @@ internal object Vivo {
         val idEnd = tail.size - 15
         demand(idEnd > p + 4 && tail.sliceArray(idEnd until idEnd + 4).all { it == 0xff.toByte() }, ErrorCode.INVALID_METADATA, "Missing binding separator")
         val id = tail.copyOfRange(p + 4, idEnd).toString(Charsets.US_ASCII)
-        demand(id.matches(Regex("[0-9a-f]{28}")) && fields[ID_KEY] == id, ErrorCode.INVALID_METADATA, "Pair ID malformed or conflicting")
+        demand((if (motion) id == SINGLE_MARKER else id.matches(Regex("[0-9a-f]{28}"))) && fields[ID_KEY] == id, ErrorCode.INVALID_METADATA, "Pair ID malformed or conflicting")
         return Binding(id, fields)
     }
 }
@@ -186,11 +203,12 @@ internal object Samsung {
 }
 
 internal object Honor {
-    fun tail(size: Long, cover: CoverInfo): ByteArray {
+    /** Mimo's Honor call sets only photo/video; LivePhoto defaults are frame 0/start 0/duration 1000. */
+    fun tail(size: Long): ByteArray {
         val b = ByteArray(60) { 32 }
         fun put(p: Int, width: Int, value: String) { val v = ascii(value); demand(v.size <= width, ErrorCode.UNSUPPORTED_PROFILE, "Honor candidate field too narrow; choose an earlier cover or a different profile"); v.copyInto(b,p) }
-        put(0,6,"v6_f${cover.frameIndex}")
-        put(20,8,"${cover.frameIndex}:${cover.frameCount}")
+        put(0,20,"v2_f00")
+        put(20,20,"0:1000")
         put(40,20,"LIVE_${size + 20}")
         return b
     }

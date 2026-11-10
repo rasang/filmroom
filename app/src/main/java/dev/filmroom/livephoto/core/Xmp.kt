@@ -10,9 +10,10 @@ internal object Xmp {
     const val I = "http://ns.google.com/photos/1.0/container/item/"
     const val O = "http://ns.oplus.com/photos/1.0/camera/"
     const val V = "http://ns.vivo.com/photos/1.0/camera/"
-    fun build(profile: LivePhotoProfile, videoLength: Long, extent: Long, padding: Int, pts: Long): String {
+    fun build(profile: LivePhotoProfile, videoLength: Long, extent: Long, padding: Int, pts: Long, ownerPackage: String = "dev.filmroom"): String {
+        if (profile == LivePhotoProfile.OPLUS) demand(ownerPackage.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")), ErrorCode.INVALID_REQUEST, "Invalid exporting package")
         val extra = when(profile) {
-            LivePhotoProfile.OPLUS -> """xmlns:OpCamera="$O" OpCamera:MotionPhotoOwner="oplus" OpCamera:OLivePhotoVersion="2" OpCamera:MotionPhotoFeatureFlag="1" OpCamera:VideoLength="$videoLength" OpCamera:MotionPhotoPrimaryPresentationTimestampUs="$pts" """
+            LivePhotoProfile.OPLUS -> """xmlns:OpCamera="$O" OpCamera:MotionPhotoOwner="$ownerPackage" OpCamera:OLivePhotoVersion="1" OpCamera:VideoLength="0" OpCamera:MotionPhotoPrimaryPresentationTimestampUs="$pts" """
             LivePhotoProfile.VIVO_SINGLE -> """xmlns:VCamera="$V" VCamera:VMotionPhotoVersion="1" """
             // Compatibility candidate, not Xiaomi's proprietary SDK and not a fake third-party owner ID.
             LivePhotoProfile.XIAOMI_COMPAT -> """GCamera:MicroVideo="1" GCamera:MicroVideoVersion="1" GCamera:MicroVideoOffset="$extent" GCamera:MicroVideoPresentationTimestampUs="$pts" """

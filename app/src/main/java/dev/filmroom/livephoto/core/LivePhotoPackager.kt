@@ -18,7 +18,7 @@ object LivePhotoPackager {
         val boxes = Mp4.validate(request.videoMp4)
         val profile=request.profile
         val sourceLength = request.videoMp4.length()
-        val v = if (profile == LivePhotoProfile.VIVO_PAIR_2014) Vivo.cleanVideoLength(request.videoMp4, boxes) else sourceLength
+        val v = if (profile == LivePhotoProfile.VIVO_PAIR_2014 || profile == LivePhotoProfile.VIVO_SINGLE) Vivo.cleanVideoLength(request.videoMp4, boxes) else sourceLength
         val sourceHash = FileDigests.range(request.videoMp4, VideoRange(0, v), checkActive)
         val id = if(profile.paired) request.bindingId ?:
             (if (profile == LivePhotoProfile.VIVO_PAIR_2014) randomDecimalBindingId() else randomBindingId()) else null
@@ -31,12 +31,13 @@ object LivePhotoPackager {
         val prefix = samsung?.prefix ?: byteArrayOf()
         val suffix = when {
             samsung != null -> samsung.suffix
-            profile == LivePhotoProfile.HONOR_LEGACY -> Honor.tail(v,request.cover)
+            profile == LivePhotoProfile.HONOR_LEGACY -> Honor.tail(v)
+            profile == LivePhotoProfile.VIVO_SINGLE -> Vivo.singleExtension()
             else -> byteArrayOf()
         }
         val noXmp = profile.paired || profile == LivePhotoProfile.HONOR_LEGACY
         val extent = v + suffix.size
-        val xmp = if(noXmp) byteArrayOf() else Jpeg.xmp(Xmp.build(profile,v,extent,prefix.size,request.cover.timestampUs))
+        val xmp = if(noXmp) byteArrayOf() else Jpeg.xmp(Xmp.build(profile,v,extent,prefix.size,request.cover.timestampUs,request.ownerPackage))
         val comment = when(profile) {
             LivePhotoProfile.OPLUS -> ascii("ASCII\u0000\u0000\u0000oplus_8388608")
             LivePhotoProfile.VIVO_SINGLE -> ascii("multi-frame: 1;\nispap:1;\nmodule: photo;\u0000")

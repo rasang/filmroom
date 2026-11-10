@@ -71,14 +71,14 @@ object LivePhotoVerifier {
             demand(video==null && packets.isEmpty(),ErrorCode.INVALID_METADATA,"Unexpected companion or XMP")
             val tail=RandomAccessFile(image,"r").use { it.readAt(it.length()-60,60) }
             fun value(p:Int,n:Int)=tail.copyOfRange(p,p+n).toString(Charsets.US_ASCII).trimEnd(' ')
-            demand(value(0,6)=="v6_f${cover.frameIndex}" && value(20,8)=="${cover.frameIndex}:${cover.frameCount}",ErrorCode.INVALID_METADATA,"Honor cover/frame fields changed")
+            demand(value(0,20)=="v2_f00" && value(20,20)=="0:1000",ErrorCode.INVALID_METADATA,"Honor v2 defaults changed")
             val live=value(40,20)
             demand(live.startsWith("LIVE_"),ErrorCode.INVALID_METADATA,"Missing LIVE_ marker")
             val l=live.substring(5).toLongOrNull() ?: throw LivePhotoException(ErrorCode.INVALID_METADATA,"Invalid LIVE_ length")
             demand(l>20 && l<=image.length()-40,ErrorCode.INVALID_METADATA,"LIVE_ range invalid")
             range=VideoRange(image.length()-l-40,l-20); extent=range.length
             demand(range.offset==jpeg.end.toLong(),ErrorCode.INVALID_METADATA,"LIVE_ does not start after JPEG")
-            warnings += "荣耀旧尾标为 frames 候选配置，不是官方 MediaData Kit；字段单位未作全机型确认。"
+            warnings += "荣耀尾标按已核实的 Mimo v2 默认值写入（v2_f00、0:1000）；不是官方 MediaData Kit，尚未经目标相册实机验证。"
         } else {
             demand(video==null && packets.size==1,ErrorCode.INVALID_METADATA,"Expected one XMP packet and no companion")
             val x=Xmp.inspect(packets.single())
@@ -93,7 +93,7 @@ object LivePhotoVerifier {
                 warnings += "三星 XMP 区域含 SEF 尾部；裸 MP4 与目录长度不同，不标为严格 Google MP4 容器。"
             } else {
                 demand(x.padding==0,ErrorCode.INVALID_METADATA,"Unexpected padding")
-                range=VideoRange(start,x.extent); extent=x.extent
+                range=VideoRange(start, if(profile == LivePhotoProfile.VIVO_SINGLE) Vivo.inspectSingleExtension(image, VideoRange(start,x.extent)) else x.extent); extent=x.extent
                 google=!x.secondaryPadding
                 if(x.secondaryPadding) warnings += "厂商候选在非主项写 Padding=0；不标为严格 Google 规范通过。"
             }
@@ -104,7 +104,7 @@ object LivePhotoVerifier {
                     warnings += "使用自写标准＋旧 MicroVideo 兼容字段，未集成小米授权 SDK。"
                 }
                 LivePhotoProfile.OPLUS -> {
-                    demand(x.fields[Xmp.O to "MotionPhotoOwner"]=="oplus" && x.fields[Xmp.O to "OLivePhotoVersion"]=="2" && x.fields[Xmp.O to "VideoLength"]==range.length.toString() && x.fields[Xmp.O to "MotionPhotoFeatureFlag"]=="1" && x.fields[Xmp.O to "MotionPhotoPrimaryPresentationTimestampUs"]==cover.timestampUs.toString(),ErrorCode.INVALID_METADATA,"Oplus fields conflict")
+                    demand(x.fields[Xmp.O to "MotionPhotoOwner"]?.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))==true && x.fields[Xmp.O to "OLivePhotoVersion"]=="1" && x.fields[Xmp.O to "VideoLength"]=="0" && x.fields[Xmp.O to "MotionPhotoFeatureFlag"]==null && x.fields[Xmp.O to "MotionPhotoPrimaryPresentationTimestampUs"]==cover.timestampUs.toString(),ErrorCode.INVALID_METADATA,"Oplus fields conflict")
                     checkMpf(imageBytes,jpeg)
                 }
                 LivePhotoProfile.VIVO_SINGLE -> demand(x.fields[Xmp.V to "VMotionPhotoVersion"]=="1",ErrorCode.INVALID_METADATA,"Missing vivo version")

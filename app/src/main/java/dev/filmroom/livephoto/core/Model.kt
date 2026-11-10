@@ -43,7 +43,9 @@ data class PackageRequest(
     /** Optional reproducible ID for integration tests. Production uses a random ID (28 decimal digits for 2014, 112-bit hex for older profiles). */
     val bindingId: String? = null,
     val captureDates: LivePhotoDates? = null,
-    val captureExif: List<LivePhotoCaptureExif> = emptyList()
+    val captureExif: List<LivePhotoCaptureExif> = emptyList(),
+    /** Identity of the exporting app, never a third-party SDK owner. */
+    val ownerPackage: String = "dev.filmroom"
 )
 
 data class VideoRange(val offset: Long, val length: Long)
