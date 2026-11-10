@@ -130,13 +130,14 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
             }
             return map(brand) ?: map(manufacturer) ?: TargetBrand.OTHER
         }
-        fun candidates(brand: TargetBrand, firstFrame: Boolean = true): List<LivePhotoProfile> {
+        fun candidates(brand: TargetBrand, firstFrame: Boolean = true, vivoVersion: VivoVersionObservation? = null): List<LivePhotoProfile> {
             val family = when (brand) {
                 TargetBrand.OPLUS -> listOf(LivePhotoProfile.OPLUS)
                 TargetBrand.XIAOMI -> listOf(LivePhotoProfile.XIAOMI_COMPAT)
                 TargetBrand.HONOR -> listOf(LivePhotoProfile.HONOR_LEGACY)
                 TargetBrand.SAMSUNG -> listOf(LivePhotoProfile.SAMSUNG_SEF_107, LivePhotoProfile.SAMSUNG_SEF_106)
-                TargetBrand.VIVO -> listOf(LivePhotoProfile.VIVO_SINGLE, LivePhotoProfile.VIVO_PAIR_2104) +
+                TargetBrand.VIVO -> (listOfNotNull(vivoVersion?.preferredProfile) +
+                    listOf(LivePhotoProfile.VIVO_SINGLE, LivePhotoProfile.VIVO_PAIR_2104, LivePhotoProfile.VIVO_PAIR_2014)).distinct() +
                     if (firstFrame) listOf(LivePhotoProfile.VIVO_PAIR_LEGACY) else emptyList()
                 TargetBrand.OTHER -> emptyList()
             }
@@ -148,7 +149,8 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
         environment: TargetEnvironment? = null,
         manual: LivePhotoProfile? = null,
         firstFrame: Boolean = true,
-        deviceHint: DeviceSupportHint? = null
+        deviceHint: DeviceSupportHint? = null,
+        vivoVersion: VivoVersionObservation? = null
     ): ProfileSelection {
         require(manual != LivePhotoProfile.VIVO_PAIR_LEGACY || firstFrame) { "Legacy vivo supports first-frame cover only" }
         val now = nowMs()
@@ -161,7 +163,7 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
             ProfileCapability(profile, record?.status ?: SupportStatus.UNKNOWN, record)
         }
         // A manually tested cross-brand profile may genuinely work in this gallery. Remember it too.
-        val profiles = (listOfNotNull(manual) + candidates(brand, firstFrame) +
+        val profiles = (listOfNotNull(manual) + candidates(brand, firstFrame, vivoVersion) +
             observed.filter { it.status == SupportStatus.SUPPORTED }.map { it.profile }).distinct()
         val states = profiles.map { profile -> observed.single { it.profile == profile } }
         val chosen = if (manual != null) states.first() else
@@ -173,7 +175,8 @@ class ProfileResolver(private val store: CompatibilityStore, private val nowMs: 
             chosen.status == SupportStatus.SUPPORTED -> SelectionReason.USER_CONFIRMED
             else -> SelectionReason.CANDIDATE
         }
-        val warnings = mutableListOf("品牌仅决定候选顺序；生成和保存成功不会被记为相册支持。")
+        val warnings = mutableListOf("品牌与设备格式线索仅决定候选顺序；生成和保存成功不会被记为相册支持。")
+        if (brand == TargetBrand.VIVO && vivoVersion != null) warnings += vivoVersion.diagnostic
         if (environment == null) warnings += "接收端环境未知；不使用本机相册测试记录。"
         else if (!environment.canRemember) warnings += "相册包或版本等信息不完整；不会保存或套用兼容记录。"
         if (chosen == null) warnings += "当前候选在此环境均有失败记录；不代表手机永远不支持实况。可手动重试或清除记录。"

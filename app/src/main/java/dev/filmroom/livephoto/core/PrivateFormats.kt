@@ -10,10 +10,34 @@ internal object Vivo {
     val uuidType = ascii("vivoMediaExtInfo")
     private val album = ascii("cameralbum!")
     private val signature = byteArrayOf(0x1b, 0x2a, 0x39, 0x48, 0x57, 0x66, 0x75, 0x84.toByte(), 0x93.toByte(), 0xa2.toByte(), 0xb3.toByte())
+    fun cleanCover(bytes: ByteArray): ByteArray {
+        val end = Jpeg.inspect(bytes).end
+        if (end == bytes.size) return bytes
+        // Reject unrelated appended payloads, including gain maps and embedded motion video.
+        parse(bytes.copyOfRange(end, bytes.size))
+        return bytes.copyOfRange(0, end)
+    }
+    /** Only remove well-framed terminal vendor boxes. Unknown/malformed metadata is never silently discarded. */
+    fun cleanVideoLength(file: File, boxes: List<Mp4.Box>): Long = RandomAccessFile(file, "r").use { source ->
+        var end = file.length()
+        for (box in boxes.asReversed()) {
+            if (box.type != "uuid" || box.header != 8 || !source.readAt(box.start + 8, 16).contentEquals(uuidType)) break
+            demand(box.size in 64..16408, ErrorCode.INVALID_METADATA, "Invalid old vivo extension size")
+            parse(source.readAt(box.start + 24, (box.size - 24).toInt()))
+            end = box.start
+        }
+        // Non-terminal vivo UUIDs cannot be safely removed without rewriting MP4 chunk offsets.
+        demand(boxes.filter { it.start < end }.none { it.type == "uuid" &&
+            source.readAt(it.data, 16).contentEquals(uuidType) }, ErrorCode.INVALID_METADATA, "Non-terminal vivo extension must be normalized first")
+        end
+    }
     fun metadata(id: String, profile: LivePhotoProfile, video: Boolean, frame: Int): LinkedHashMap<String, Any> {
         demand(id.matches(Regex("[0-9a-f]{28}")), ErrorCode.INVALID_REQUEST, "Generated vivo binding ID must be 28 lowercase hex characters")
         return linkedMapOf<String, Any>().apply {
-            if (profile == LivePhotoProfile.VIVO_PAIR_2104) {
+            if (profile == LivePhotoProfile.VIVO_PAIR_2014) {
+                // The inspected SDK V1 fresh-input encode does not write cover time/frame fields.
+                put(ID_KEY, id); put("version", 2014L)
+            } else if (profile == LivePhotoProfile.VIVO_PAIR_2104) {
                 if (video) put("com.android.camera.imageTime", frame.toLong())
                 put(ID_KEY, id); put("version", 2104L)
             } else {

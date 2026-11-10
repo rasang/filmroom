@@ -39,7 +39,7 @@ data class VideoToLiveRequest(
 enum class ConversionStage { PROBING, TRANSCODING, EXTRACTING_COVER, PACKAGING, VERIFYING, PUBLISHING, COMPLETE }
 data class ConversionProgress(val stage: ConversionStage, val percent: Int? = null)
 /** A returned Uri is a published media row. It does not certify vendor Gallery recognition. */
-data class ConversionResult(val asset: PackagedAsset, val publishedUris: List<Uri>, val galleryConfirmed: Boolean = false, val selection: ProfileSelection? = null)
+data class ConversionResult(val asset: PackagedAsset, val publishedUris: List<Uri>, val galleryConfirmed: Boolean = false, val selection: ProfileSelection? = null, val scanResults: List<MediaScanResult> = emptyList())
 
 /** Scope feedback to media settings; do not claim an SDR first-frame test covers HDR or other modes. */
 internal fun VideoToLiveRequest.compatibilitySettingsKey(): String =

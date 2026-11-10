@@ -13,11 +13,15 @@ object LivePhotoPackager {
         demand(!outputDirectory.exists(), ErrorCode.OUTPUT_EXISTS, "Output job directory must not already exist")
         demand(request.videoMp4.length() in 16..SdkLimits.MAX_VIDEO_BYTES, ErrorCode.RESOURCE_LIMIT, "Video is empty or larger than 256 MiB")
         if(request.profile == LivePhotoProfile.VIVO_PAIR_LEGACY) demand(request.cover.frameIndex == 0, ErrorCode.UNSUPPORTED_PROFILE, "Legacy vivo profile only supports the first frame; newCoverTime units have not been verified")
-        val clean = Jpeg.clean(readBounded(request.coverJpeg,SdkLimits.MAX_JPEG_BYTES))
-        Mp4.validate(request.videoMp4)
-        val sourceHash = FileDigests.sha256(request.videoMp4,checkActive)
-        val v = request.videoMp4.length(); val profile=request.profile
-        val id = if(profile.paired) request.bindingId ?: randomBindingId() else null
+        val coverBytes = readBounded(request.coverJpeg,SdkLimits.MAX_JPEG_BYTES)
+        val clean = Jpeg.clean(if (request.profile == LivePhotoProfile.VIVO_PAIR_2014) Vivo.cleanCover(coverBytes) else coverBytes)
+        val boxes = Mp4.validate(request.videoMp4)
+        val profile=request.profile
+        val sourceLength = request.videoMp4.length()
+        val v = if (profile == LivePhotoProfile.VIVO_PAIR_2014) Vivo.cleanVideoLength(request.videoMp4, boxes) else sourceLength
+        val sourceHash = FileDigests.range(request.videoMp4, VideoRange(0, v), checkActive)
+        val id = if(profile.paired) request.bindingId ?:
+            (if (profile == LivePhotoProfile.VIVO_PAIR_2014) randomDecimalBindingId() else randomBindingId()) else null
         if(id != null) demand(id.matches(Regex("[0-9a-f]{28}")),ErrorCode.INVALID_REQUEST,"Invalid vivo ID")
         val samsung = when(profile) {
             LivePhotoProfile.SAMSUNG_SEF_107 -> Samsung.plan(v,true)
@@ -45,7 +49,7 @@ object LivePhotoPackager {
         } else base
         demand(jpeg.size <= SdkLimits.MAX_JPEG_BYTES,ErrorCode.RESOURCE_LIMIT,"Final cover exceeds JPEG limit")
         val token = UUID.randomUUID().toString(); val stem="Filmroom_${token.replace("-", "")}_MP"
-        val imageFile=File(outputDirectory,"$stem.jpg")
+        val imageFile=File(outputDirectory, "$stem.${if (profile == LivePhotoProfile.VIVO_PAIR_2014) "jpeg" else "jpg"}")
         val videoFile=if(profile.paired) File(outputDirectory,"$stem.mp4") else null
         outputDirectory.parentFile?.let { Files.createDirectories(it.toPath()) }
         // Atomic creation means failure cleanup cannot remove a pre-existing output directory.
@@ -58,14 +62,14 @@ object LivePhotoPackager {
                     output.write(Vivo.tail(Vivo.metadata(id!!,profile,false,request.cover.frameIndex)))
                 } else {
                     output.write(prefix)
-                    FileInputStream(request.videoMp4).use { streamCopy(it,output,v,checkActive) }
+                    copyVideo(request.videoMp4, output, v, sourceLength, checkActive)
                     output.write(suffix)
                 }
                 output.fd.sync()
             }
             if(videoFile != null) {
                 FileOutputStream(videoFile).use { output ->
-                    FileInputStream(request.videoMp4).use { streamCopy(it,output,v,checkActive) }
+                    copyVideo(request.videoMp4, output, v, sourceLength, checkActive)
                     output.write(Vivo.uuid(Vivo.tail(Vivo.metadata(id!!,profile,true,request.cover.frameIndex))))
                     output.fd.sync()
                 }
@@ -82,6 +86,21 @@ object LivePhotoPackager {
             outputDirectory.deleteRecursively()
             throw t
         }
+    }
+    /** Copy only the validated media prefix; do not duplicate a recognized old terminal vivo extension. */
+    private fun copyVideo(input: File, output: OutputStream, length: Long, originalLength: Long, checkActive: () -> Unit) {
+        demand(input.length() == originalLength, ErrorCode.VERIFICATION_FAILED, "Video length changed")
+        FileInputStream(input).use { source ->
+            var remaining = length
+            val buffer = ByteArray(SdkLimits.BUFFER_BYTES)
+            while (remaining > 0) {
+                checkActive()
+                val count = source.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                if (count < 0) throw EOFException("Video shrank while copying")
+                output.write(buffer, 0, count); remaining -= count
+            }
+        }
+        demand(input.length() == originalLength, ErrorCode.VERIFICATION_FAILED, "Video length changed")
     }
 }
 

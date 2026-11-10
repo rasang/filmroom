@@ -53,10 +53,14 @@ object LivePhotoVerifier {
             }
             demand(img.id==id && vid.id==id,ErrorCode.INVALID_METADATA,"Cross-file ID mismatch")
             // Schema validation uses typed values; duplicated JSON keys fail in the parser.
-            val expectedImageVersion=if(profile==LivePhotoProfile.VIVO_PAIR_2104)2104L else 2200L
-            val expectedVideoVersion=if(profile==LivePhotoProfile.VIVO_PAIR_2104)2104L else 2016L
+            val expectedImageVersion=when(profile) { LivePhotoProfile.VIVO_PAIR_2014 -> 2014L; LivePhotoProfile.VIVO_PAIR_2104 -> 2104L; else -> 2200L }
+            val expectedVideoVersion=when(profile) { LivePhotoProfile.VIVO_PAIR_2014 -> 2014L; LivePhotoProfile.VIVO_PAIR_2104 -> 2104L; else -> 2016L }
             demand(img.fields["version"]==expectedImageVersion && vid.fields["version"]==expectedVideoVersion,ErrorCode.INVALID_METADATA,"Wrong vivo versions")
-            if(profile==LivePhotoProfile.VIVO_PAIR_2104) demand(vid.fields["com.android.camera.imageTime"]==cover.frameIndex.toLong(),ErrorCode.INVALID_METADATA,"Wrong vivo frame index")
+            if(profile==LivePhotoProfile.VIVO_PAIR_2014) {
+                val keys = setOf(Vivo.ID_KEY, "version")
+                demand(img.fields.keys==keys && vid.fields.keys==keys, ErrorCode.INVALID_METADATA, "Unexpected 2014 cover or source fields")
+                warnings += "2014 双文件不写封面时间；非首帧封面与播放衔接需真机验收。"
+            } else if(profile==LivePhotoProfile.VIVO_PAIR_2104) demand(vid.fields["com.android.camera.imageTime"]==cover.frameIndex.toLong(),ErrorCode.INVALID_METADATA,"Wrong vivo frame index")
             else {
                 demand(cover.frameIndex==0 && vid.fields["com.vivo.gallery.livePhoto.newCoverTime"]==0L,ErrorCode.INVALID_METADATA,"Legacy vivo supports first cover only")
                 demand(img.fields["com.vivo.gallery.livephoto.source"]==4L && img.fields["com.vivo.gallery.livePhoto.rotationOffset"]==0L && img.fields["com.vivo.gallery.livePhoto.rotationCheck"]==3L,ErrorCode.INVALID_METADATA,"Missing legacy image flags")

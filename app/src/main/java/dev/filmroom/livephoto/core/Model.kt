@@ -14,7 +14,8 @@ enum class LivePhotoProfile(val displayName: String, val paired: Boolean = false
     VIVO_PAIR_LEGACY("vivo · 双文件 2200/2016 候选", true),
     HONOR_LEGACY("荣耀 · 旧 LIVE_ 尾标候选"),
     SAMSUNG_SEF_107("三星 · JPEG SEF 107 / mpv3"),
-    SAMSUNG_SEF_106("三星 · JPEG SEF 106")
+    SAMSUNG_SEF_106("三星 · JPEG SEF 106"),
+    VIVO_PAIR_2014("vivo · 双文件 2014 候选", true)
 }
 
 enum class ErrorCode {
@@ -39,7 +40,7 @@ data class PackageRequest(
     val profile: LivePhotoProfile,
     val cover: CoverInfo,
     val allowExperimentalProfiles: Boolean = false,
-    /** Optional reproducible ID for integration tests. Production defaults to a random 112-bit ID. */
+    /** Optional reproducible ID for integration tests. Production uses a random ID (28 decimal digits for 2014, 112-bit hex for older profiles). */
     val bindingId: String? = null,
     val captureDates: LivePhotoDates? = null
 )
@@ -80,3 +81,6 @@ object SdkLimits {
 }
 internal fun randomBindingId(): String = ByteArray(14).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
 
+
+/** Decimal syntax matches V1 IDs without timestamp collisions or leaking creation time. */
+internal fun randomDecimalBindingId(): String = SecureRandom().let { rng -> buildString { repeat(28) { append(rng.nextInt(10)) } } }

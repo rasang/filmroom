@@ -49,10 +49,14 @@ class NormalizedLivePhotoSdk(context: Context) {
             packaged = true
             emit(ConversionStage.VERIFYING); LivePhotoVerifier.verify(asset, ::check)
             emit(ConversionStage.PUBLISHING)
-            val uris = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check).ids.map(Uri::parse)
+            val published = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check)
+            // Post-commit, bounded best effort. No cancellation check or suspend point here:
+            // a scan failure must not turn an already-saved pair into a failed/repeated export.
+            val scans = PairScanNotification.notify(asset, published, AndroidPublishedMediaScanner(app))
+            val uris = published.ids.map(Uri::parse)
             // Mark only after the journaled publisher returns successfully. The handoff must not
             // turn an already-saved asset into a cancelled result, nor publish it again.
-            val result=ConversionResult(asset, uris, selection = current)
+            val result=ConversionResult(asset, uris, selection = current, scanResults = scans)
             committed(result)
             emit(ConversionStage.COMPLETE)
             result

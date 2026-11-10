@@ -75,7 +75,14 @@ class LivePhotoCompatibility(
                 "仅为宿主接入的厂商设备能力结果，不能替代此 profile 的相册验收。")
         }
         currentCoroutineContext().ensureActive()
-        resolver.resolve(brand, env, request.profile, request.coverOffsetMs == 0L, hint)
+        // Hidden SystemProperties access can be blocked for ordinary apps. Preserve that uncertainty.
+        // Never borrow local properties when generating for an explicitly selected remote target.
+        val vivoVersion = if (local && brand == TargetBrand.VIVO) VivoVersionObservation.read { key ->
+            Class.forName("android.os.SystemProperties")
+                .getMethod("get", String::class.java, String::class.java)
+                .invoke(null, key, "") as? String
+        } else null
+        resolver.resolve(brand, env, request.profile, request.coverOffsetMs == 0L, hint, vivoVersion)
     }
 
     /**
