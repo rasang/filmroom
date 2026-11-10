@@ -83,8 +83,8 @@ internal object Jpeg {
             writeInt(0); writeInt(0x00030000); writeInt(imageSize.toInt()); writeInt(0); writeShort(0); writeShort(0)
         })
     }
-    fun exif(comment: ByteArray?, dates: LivePhotoDates? = null): ByteArray {
-        if (dates != null) return datedExif(comment, dates)
+    fun exif(comment: ByteArray?, dates: LivePhotoDates? = null, xiaomiLivePhoto: Boolean = false, captureExif: List<LivePhotoCaptureExif> = emptyList(), width:Int=0, height:Int=0): ByteArray {
+        if (dates != null || xiaomiLivePhoto || captureExif.isNotEmpty() || width>0) return datedExif(comment, dates, xiaomiLivePhoto, captureExif,width,height)
         val tiff = bytes {
             write(ascii("II")); write(byteArrayOf(42, 0)); write(le32(8))
             write(byteArrayOf(if (comment == null) 1 else 2, 0))
@@ -98,18 +98,41 @@ internal object Jpeg {
         return app(0xe1, ascii("Exif\u0000\u0000") + tiff)
     }
     private data class Entry(val tag:Int,val type:Int,val count:Int,val value:ByteArray)
-    private fun datedExif(comment:ByteArray?,dates:LivePhotoDates):ByteArray {
+    private fun datedExif(comment:ByteArray?,dates:LivePhotoDates?,xiaomiLivePhoto:Boolean,captureExif:List<LivePhotoCaptureExif>,width:Int,height:Int):ByteArray {
         fun text(tag:Int,value:String):Entry { val b=ascii(value)+byteArrayOf(0);return Entry(tag,2,b.size,b) }
-        val main=mutableListOf(Entry(0x112,3,1,byteArrayOf(1,0)),text(0x132,dates.modified))
-        val exif=mutableListOf(text(0x9010,dates.modifiedOffset))
-        dates.modifiedSubsec?.let{exif+=text(0x9290,it)}
-        dates.original?.let{exif+=text(0x9003,it)}
-        dates.originalOffset?.let{exif+=text(0x9011,it)}
-        dates.originalSubsec?.let{exif+=text(0x9291,it)}
+        val main=mutableListOf(Entry(0x112,3,1,byteArrayOf(1,0)))
+        val exif=mutableListOf<Entry>()
+        val gps=mutableListOf<Entry>()
+        require(captureExif.size<=96 && captureExif.sumOf { it.data.size }<=48*1024)
+        require(captureExif.map { it.group to it.tag }.distinct().size==captureExif.size)
+        for(field in captureExif) {
+            field.validate()
+            val unit=when(field.type){3->2;4->4;5,10->8;else->1}
+            val entry=Entry(field.tag,field.type,field.data.size/unit,field.data.copyOf())
+            when(field.group){0->main+=entry;1->exif+=entry;2->gps+=entry}
+        }
+        if(width>0 || height>0) {
+            require(width>0 && height>0)
+            main+=Entry(0x100,4,1,le32(width.toLong())); main+=Entry(0x101,4,1,le32(height.toLong()))
+            exif+=Entry(0xa002,4,1,le32(width.toLong())); exif+=Entry(0xa003,4,1,le32(height.toLong()))
+            exif+=Entry(0xa001,3,1,byteArrayOf(1,0)) // generated SDR cover is sRGB
+        }
+        dates?.let { d ->
+            main+=text(0x132,d.modified)
+            exif+=text(0x9010,d.modifiedOffset)
+            d.modifiedSubsec?.let{exif+=text(0x9290,it)}
+            d.original?.let{exif+=text(0x9003,it)}
+            d.originalOffset?.let{exif+=text(0x9011,it)}
+            d.originalSubsec?.let{exif+=text(0x9291,it)}
+        }
+        // Xiaomi SDK livePhoto flag: ExifIFD tag 0x9A01, BYTE, one value.
+        if(xiaomiLivePhoto)exif+=Entry(0x9a01,1,1,byteArrayOf(1))
         comment?.let{exif+=Entry(0x9286,7,it.size,it)}
-        val exifStart=8+2+(main.size+1)*12+4
+        val exifStart=8+2+(main.size+1+(if(gps.isEmpty())0 else 1))*12+4
         main+=Entry(0x8769,4,1,le32(exifStart.toLong()))
-        var offset=exifStart+2+exif.size*12+4
+        val gpsStart=exifStart+2+exif.size*12+4
+        if(gps.isNotEmpty())main+=Entry(0x8825,4,1,le32(gpsStart.toLong()))
+        var offset=gpsStart+(if(gps.isEmpty())0 else 2+gps.size*12+4)
         val payload=java.io.ByteArrayOutputStream()
         fun directory(entries:List<Entry>):ByteArray=bytes {
             val sorted=entries.sortedBy{it.tag}
@@ -125,7 +148,7 @@ internal object Jpeg {
             }
             write(le32(0))
         }
-        return app(0xe1,ascii("Exif\u0000\u0000")+ascii("II")+byteArrayOf(42,0)+le32(8)+directory(main)+directory(exif)+payload.toByteArray())
+        return app(0xe1,ascii("Exif\u0000\u0000")+ascii("II")+byteArrayOf(42,0)+le32(8)+directory(main)+directory(exif)+(if(gps.isEmpty())byteArrayOf() else directory(gps))+payload.toByteArray())
     }
 
 }

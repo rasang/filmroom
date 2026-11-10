@@ -38,11 +38,12 @@ object LivePhotoPackager {
         val extent = v + suffix.size
         val xmp = if(noXmp) byteArrayOf() else Jpeg.xmp(Xmp.build(profile,v,extent,prefix.size,request.cover.timestampUs))
         val comment = when(profile) {
-            LivePhotoProfile.OPLUS -> ascii("ASCII\u0000\u0000\u0000Oplus_8388608")
+            LivePhotoProfile.OPLUS -> ascii("ASCII\u0000\u0000\u0000oplus_8388608")
             LivePhotoProfile.VIVO_SINGLE -> ascii("multi-frame: 1;\nispap:1;\nmodule: photo;\u0000")
             else -> null
         }
-        val base = Jpeg.insert(clean,Jpeg.exif(comment, request.captureDates) + xmp)
+        val layout=Jpeg.inspect(clean)
+        val base = Jpeg.insert(clean,Jpeg.exif(comment, request.captureDates, profile == LivePhotoProfile.XIAOMI_COMPAT, request.captureExif, layout.width, layout.height) + xmp)
         val jpeg = if(profile == LivePhotoProfile.OPLUS) {
             val mpfSize = Jpeg.mpf(1).size
             Jpeg.insert(base,Jpeg.mpf(base.size.toLong() + mpfSize))

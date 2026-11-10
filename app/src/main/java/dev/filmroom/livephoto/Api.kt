@@ -23,7 +23,8 @@ data class VideoToLiveRequest(
     val targetGalleryPackage: String? = null,
     val requireConfirmedSupport: Boolean = false,
     val captureDates: LivePhotoDates? = null,
-    val captureTimeMillis: Long? = null
+    val captureTimeMillis: Long? = null,
+    val captureExif: List<LivePhotoCaptureExif> = emptyList()
 ) {
     init {
         require(input.scheme == "content" || input.scheme == "file") { "Only local content:// and file:// sources are allowed" }

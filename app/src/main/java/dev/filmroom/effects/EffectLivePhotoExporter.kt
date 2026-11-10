@@ -80,6 +80,7 @@ object EffectLivePhotoExporter {
             val actualRequest=request(Uri.fromFile(video), preflight.selection.environment?.galleryPackage,
                 preflight.selection.selectedProfile, requireNotNull(resolution).actual.longEdge).copy(
                 captureDates=captureDates,
+                captureExif=photoMetadata.livePhotoCaptureExif(),
                 captureTimeMillis=if(captureDates.original!=null)photoMetadata.mediaStoreCaptureTimeMillis() else null)
             // Evidence keys include dimensions. Resolve again for the actual encoded size, never
             // reuse the 1080 preflight key as proof of high-resolution gallery compatibility.

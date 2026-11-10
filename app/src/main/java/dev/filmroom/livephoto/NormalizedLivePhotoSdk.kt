@@ -46,7 +46,7 @@ class NormalizedLivePhotoSdk(context: Context) {
             emit(ConversionStage.EXTRACTING_COVER)
             MediaProbe.writeCover(file, cover, jpeg, request.jpegQuality, request.maxLongEdge, ::check)
             emit(ConversionStage.PACKAGING)
-            val asset = LivePhotoPackager.packageTo(PackageRequest(jpeg, file, profile, cover, request.allowExperimentalProfiles, captureDates=request.captureDates), target, ::check)
+            val asset = LivePhotoPackager.packageTo(PackageRequest(jpeg, file, profile, cover, request.allowExperimentalProfiles, captureDates=request.captureDates, captureExif=request.captureExif), target, ::check)
             packaged = true
             emit(ConversionStage.VERIFYING); LivePhotoVerifier.verify(asset, ::check)
             emit(ConversionStage.PUBLISHING)

@@ -36,6 +36,12 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
 
     fun toJson():String=JSONObject().put("version",1).put("attributes",JSONObject(attributes)).put("warning",warning).put("sourceCreateDate",sourceCreateDate).put("issues",MetadataIssues.encode(issues)).put("indexTimeZone",indexTimeZone).put("indexTimeMillis",indexTimeMillis).put("sourceOffsetPresent",sourceOffsetPresent).put("imprintFallback",imprintFallback).put("imprintFallbackKind",imprintFallbackKind).toString()
 
+    /** Preserve validated original camera/exposure/lens facts, never stale layout/vendor metadata. */
+    fun livePhotoCaptureExif():List<dev.filmroom.livephoto.core.LivePhotoCaptureExif> =
+        attributes.mapNotNull { (key,value) -> SCHEMA[key]?.takeIf {
+            dev.filmroom.livephoto.core.LivePhotoCaptureExif.accepts(it.group,it.tag)
+        }?.let { dev.filmroom.livephoto.core.LivePhotoCaptureExif(it.group,it.tag,it.type,encode(it,value)) } }
+
     fun livePhotoDates(exportMillis:Long):dev.filmroom.livephoto.core.LivePhotoDates {
         val original=attributes["DateTimeOriginal"]?.takeIf { parseImprintDate(it)!=null }
         val source=sourceCreateDate?.takeIf { validatedSourceInstant(attributes,it)!=null }?.let(OffsetDateTime::parse)

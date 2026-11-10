@@ -141,15 +141,21 @@ object LivePhotoVerifier {
         fun ifd(offset:Long):Map<Int,Int> {
             demand(offset in 8..(s.end-t-2).toLong(),ErrorCode.INVALID_METADATA,"Bad EXIF IFD offset")
             val p=t+offset.toInt(); val n=little16(p)
-            demand(n<=16 && p+2+12*n+4<=s.end,ErrorCode.INVALID_METADATA,"EXIF IFD out of range")
+            demand(n<=128 && p+2+12*n+4<=s.end,ErrorCode.INVALID_METADATA,"EXIF IFD out of range")
             return (0 until n).associate { val e=p+2+12*it; little16(e) to e }
         }
         val primary=ifd(u32(b,t+4,true)); val orientation=primary[0x112]
         demand(orientation!=null && little16(orientation+8)==1,ErrorCode.INVALID_METADATA,"Cover pixels must already be upright")
         val expected=when(profile) {
-            LivePhotoProfile.OPLUS -> ascii("ASCII\u0000\u0000\u0000Oplus_8388608")
+            LivePhotoProfile.OPLUS -> ascii("ASCII\u0000\u0000\u0000oplus_8388608")
             LivePhotoProfile.VIVO_SINGLE -> ascii("multi-frame: 1;\nispap:1;\nmodule: photo;\u0000")
             else -> null
+        }
+        if(profile==LivePhotoProfile.XIAOMI_COMPAT) {
+            val pointer=primary[0x8769] ?: throw LivePhotoException(ErrorCode.INVALID_METADATA,"No Xiaomi EXIF sub-IFD")
+            val flag=ifd(u32(b,pointer+8,true))[0x9a01] ?: throw LivePhotoException(ErrorCode.INVALID_METADATA,"Missing Xiaomi livePhoto flag")
+            demand(little16(flag+2)==1 && u32(b,flag+4,true)==1L && b[flag+8]==1.toByte(),
+                ErrorCode.INVALID_METADATA,"Invalid Xiaomi livePhoto flag")
         }
         if(expected!=null) {
             val pointer=primary[0x8769] ?: throw LivePhotoException(ErrorCode.INVALID_METADATA,"No EXIF sub-IFD")
