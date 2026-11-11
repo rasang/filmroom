@@ -1,7 +1,9 @@
 //! Optional partial GPU acceleration: density interpolation only. All spectral,
 //! spatial, grain and calibration algorithms remain the exact CPU implementations.
-//! Android Vulkan + Qualcomm Adreno only; errors and numerical mismatch disable
-//! GPU for the operation. Host production builds deliberately stay on CPU.
+//! Android Vulkan hardware adapters, without a vendor/model allowlist. Device
+//! limits, numerical self-checks and measured cost still gate partial acceleration.
+//! The module/feature and diagnostic IDs retain their legacy Adreno names for ABI
+//! compatibility. Host production builds deliberately stay on CPU.
 use serde::Serialize;
 use spektrafilm_gpu::{ComputeBackend, Lut3D, cpu_backend::CpuBackend};
 use spektrafilm_math::{image::ImageBuf, precision::from_f64};
@@ -147,8 +149,11 @@ impl AdrenoDensityBackend {
         s.reason = reason;
     }
 }
-pub fn eligible_adapter(vendor: u32, name: &str, backend_vulkan: bool, integrated: bool) -> bool {
-    backend_vulkan && integrated && vendor == 0x5143 && name.to_ascii_lowercase().contains("adreno")
+/// Identity is diagnostic only: Mali/Immortalis, PowerVR and future vendors use
+/// the same Vulkan capability checks as Adreno. Do not mistake a CPU software
+/// adapter for hardware acceleration. Device creation validates actual limits.
+pub fn eligible_adapter(_vendor: u32, _name: &str, backend_vulkan: bool, hardware_gpu: bool) -> bool {
+    backend_vulkan && hardware_gpu
 }
 fn valid_curves(axis: &[f64], curves: &[[f64; 3]], gamma: f64) -> bool {
     axis.len() >= 2
@@ -429,10 +434,10 @@ mod gpu {
                     info.vendor,
                     &info.name,
                     info.backend == wgpu::Backend::Vulkan,
-                    info.device_type == wgpu::DeviceType::IntegratedGpu,
+                    info.device_type != wgpu::DeviceType::Cpu,
                 )
             {
-                return Err("Not a supported Qualcomm Adreno Vulkan adapter".into());
+                return Err("Not a Vulkan hardware adapter".into());
             }
             let limits = adapter.limits();
             if limits.max_compute_workgroup_size_x < 64
@@ -665,14 +670,21 @@ mod gpu {
 mod tests {
     use super::*;
     #[test]
-    fn strict_adreno_vendor_gate() {
-        assert!(eligible_adapter(0x5143, "Adreno (TM) 830", true, true));
-        assert!(eligible_adapter(0x5143, "adreno (tm) 830", true, true));
-        assert!(!eligible_adapter(0x13b5, "Mali-G715", true, true));
-        assert!(!eligible_adapter(0x5143, "Adreno", false, true));
-        assert!(!eligible_adapter(0x10de, "Adreno", true, true));
-        assert!(!eligible_adapter(0x5143, "llvmpipe", true, true));
-        assert!(!eligible_adapter(0x5143, "Adreno", true, false));
+    fn vulkan_hardware_admission_is_vendor_neutral() {
+        for (vendor, name) in [
+            (0x5143, "Adreno (TM) 830"),
+            (0x13b5, "Mali-G715"),
+            (0x13b5, "Immortalis-G925"),
+            (0x1010, "PowerVR B-Series"),
+            (0x144d, "Samsung Xclipse 940"),
+            (0x10de, "NVIDIA"),
+            (0, "Unknown future hardware"),
+        ] {
+            assert!(eligible_adapter(vendor, name, true, true), "{name}");
+            assert!(!eligible_adapter(vendor, name, false, true), "non-Vulkan {name}");
+            assert!(!eligible_adapter(vendor, name, true, false), "software {name}");
+        }
+        assert!(!eligible_adapter(0x10005, "llvmpipe", true, false));
     }
     #[test]
     fn wgsl_validates() {

@@ -56,7 +56,7 @@ object GpuRuntimeInfo {
             "GPU disabled after prior device or numerical failure; CPU fallback"->GpuReason.PRIOR_FAILURE
             "GPU disabled after device or numerical failure; CPU fallback", "GPU device error"->GpuReason.DEVICE_FAILURE
             "No Vulkan adapter"->GpuReason.NO_ADAPTER
-            "Not a supported Qualcomm Adreno Vulkan adapter"->GpuReason.UNSUPPORTED_ADAPTER
+            "Not a supported Qualcomm Adreno Vulkan adapter", "Not a Vulkan hardware adapter"->GpuReason.UNSUPPORTED_ADAPTER
             "Adreno compute limits insufficient"->GpuReason.LIMITS_INSUFFICIENT
             "Density compute validation failed"->GpuReason.VALIDATION_FAILED
             "Adreno density startup self-check failed"->GpuReason.SELF_TEST_FAILED

@@ -579,7 +579,7 @@ pub(crate) fn full_chain_gpu() -> Option<&'static spektrafilm_gpu::wgpu_backend:
     FULL_CHAIN_GPU.get_or_init(||std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         #[cfg(target_os="android")]
         { spektrafilm_gpu::wgpu_backend::WgpuBackend::new_with_adapter_filter(|info| {
-            let eligible=crate::adreno::eligible_adapter(info.vendor,&info.name,info.backend==wgpu::Backend::Vulkan,info.device_type==wgpu::DeviceType::IntegratedGpu);
+            let eligible=crate::adreno::eligible_adapter(info.vendor,&info.name,info.backend==wgpu::Backend::Vulkan,info.device_type!=wgpu::DeviceType::Cpu);
             if !eligible { FULL_CHAIN_UNSUPPORTED.store(true,Ordering::Release); }
             eligible
         }) }
