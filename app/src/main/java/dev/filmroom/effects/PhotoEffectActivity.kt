@@ -49,6 +49,12 @@ class PhotoEffectActivity : ComponentActivity() {
     private lateinit var replayButton:Button
     private lateinit var livePhotoButton:Button
     private lateinit var qualityButton:Button
+    private var pairVideoButton:Button?=null
+    private var pairPickerSource:String?=null
+    private var pairAssociating=false
+    private var pairPermissionSource:String?=null
+    private val pairPermissionAttempts=linkedSetOf<String>()
+    private var pairAccessSnapshot:Int?=null
     @Volatile private var liveOriginalAudioEnabled=true
     private var liveOriginalAudioSwitch:android.widget.Switch?=null
     private var selectedQuality=EffectExportQuality.ORIGINAL
@@ -119,6 +125,83 @@ class PhotoEffectActivity : ComponentActivity() {
     private val resultPicker=activityResultRegistry.register(RESULT_PICKER_KEY,this,ActivityResultContracts.OpenDocument()){uri->
         if(uri!=null)selectPhoto(false,uri)
     }
+    private val pairVideoPermission=activityResultRegistry.register("effect-pair-permission",this,ActivityResultContracts.RequestMultiplePermissions()){
+        val image=pairPermissionSource
+        pairPermissionSource=null
+        pairAccessSnapshot=currentPairAccess()
+        if(image!=null && image==sourceUri && !working && !pageBusy) {
+            if(EffectMotionPairAccess.canQueryVideos(this)) {clearAdjacentPhotos();load(autoPlay=true)}
+            else Toast.makeText(this,t("未获得视频读取权限，可手动选择原 Live 视频。","Video access was not granted. You can select the original Live video manually."),Toast.LENGTH_LONG).show()
+        }
+    }
+    private fun currentPairAccess():Int = when {
+        EffectMotionPairAccess.hasFullVideoAccess(this)->2
+        EffectMotionPairAccess.canQueryVideos(this)->1
+        else->0
+    }
+    // Partial access may change its selected set without changing permission bits.
+    // Retry at most once per actual onResume, never from load/updatePairControl.
+    private fun refreshPairAccessOnResume(){
+        val access=currentPairAccess()
+        val changed=EffectPairPermissionPolicy.shouldReloadAfterAccessChange(pairAccessSnapshot,access,
+            EffectMotionInput.needsPair(sourceUri),sourceMotionFile!=null)
+        pairAccessSnapshot=access
+        if(changed && kind==EffectKind.OPTICAL_LEAK && source!=null && result!=null &&
+            !working && !liveChecking && !pageBusy && !pairAssociating && pairPermissionSource==null && loadJob?.isActive!=true) {
+            clearAdjacentPhotos();load(autoPlay=true)
+        }
+    }
+    private fun requestPairPermissionIfNeeded(){
+        val image=sourceUri ?: return
+        if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) || working || liveChecking || pageBusy || pairAssociating || loadJob?.isActive==true || source==null || result==null)return
+        if(!EffectPairPermissionPolicy.shouldRequest(kind==EffectKind.OPTICAL_LEAK,
+            EffectMotionInput.needsPair(image),sourceMotionFile!=null,
+            EffectMotionPairAccess.hasFullVideoAccess(this),pairPermissionAttempts.isNotEmpty(),pairPermissionSource!=null))return
+        pairPermissionAttempts.add(image)
+        pairPermissionSource=image
+        // An image grant alone never authorizes its sibling video. Let Android ask the user.
+        pairVideoPermission.launch(EffectMotionPairAccess.requiredPermissions())
+    }
+    private val pairVideoPicker=activityResultRegistry.register("effect-pair-video",this,ActivityResultContracts.OpenDocument()){uri->
+        val image=pairPickerSource
+        pairPickerSource=null
+        if(uri!=null && image!=null && image==sourceUri && !working && !pageBusy) {
+            selectionJob?.cancel()
+            selectionJob=lifecycleScope.launch {
+                pairAssociating=true
+                try {
+                pairVideoButton?.isEnabled=false
+                val matched=withContext(Dispatchers.IO){
+                    try { EffectMotionInput.associate(this@PhotoEffectActivity,image,uri){ensureActive()} }
+                    catch(e:CancellationException){throw e} catch(_:Exception){false}
+                }
+                pairVideoButton?.isEnabled=true
+                if(image!=sourceUri)return@launch
+                if(matched) {
+                    val persistent=runCatching{contentResolver.persistedUriPermissions.any{it.uri==uri && it.isReadPermission}}.getOrDefault(false)
+                    if(!persistent)Toast.makeText(this@PhotoEffectActivity,t("视频仅本次可用，重开后可能需要重新选择。","Video access is temporary. You may need to select it again after reopening."),Toast.LENGTH_LONG).show()
+                    clearAdjacentPhotos();load(autoPlay=true)
+                }
+                else Toast.makeText(this@PhotoEffectActivity,t("视频与原 Live 照片不匹配或无法读取，请选择原配套视频。","Video does not match this Live photo or cannot be read. Select its original video."),Toast.LENGTH_LONG).show()
+                } finally {pairAssociating=false;pairVideoButton?.isEnabled=true}
+            }
+        }
+    }
+    private fun selectPairVideo(){
+        if(working||liveChecking||pageBusy||pairAssociating||pairPermissionSource!=null||sourceUri==null)return
+        pairPickerSource=sourceUri
+        pairVideoPicker.launch(arrayOf("video/mp4"))
+    }
+    private fun updatePairControl(){
+        pairVideoButton?.visibility=if(kind==EffectKind.OPTICAL_LEAK && sourceMotionFile==null && EffectMotionInput.needsPair(sourceUri))android.view.View.VISIBLE else android.view.View.GONE
+        stage.post { requestPairPermissionIfNeeded() }
+    }
+    private fun missingPair():Boolean {
+        if(kind!=EffectKind.OPTICAL_LEAK || sourceMotionFile!=null || !EffectMotionInput.needsPair(sourceUri))return false
+        AlertDialog.Builder(this).setMessage(t("这张 Live 照片的视频是独立文件，请先选择配套视频，避免导出时丢失原片段。","This Live photo has a separate video. Select its original video before exporting."))
+            .setNegativeButton(t("取消","Cancel"),null).setPositiveButton(t("选择原 Live 视频","Select original Live video")){_,_->selectPairVideo()}.show()
+        return true
+    }
     private fun zh()=dev.filmroom.i18n.L10n.language(this).startsWith("zh")
     private fun t(cn:String,en:String):String {
         val language=dev.filmroom.i18n.L10n.language(this)
@@ -170,6 +253,10 @@ class PhotoEffectActivity : ComponentActivity() {
         kind=runCatching{EffectKind.valueOf(intent.getStringExtra(KIND).orEmpty())}.getOrDefault(EffectKind.LIGHT_TABLE)
         resultUri=state?.getString(RESULT_URI) ?: intent.getStringExtra(RESULT_URI)
         sourceUri=state?.getString(SOURCE_URI) ?: intent.getStringExtra(SOURCE_URI)
+        pairPickerSource=state?.getString("pair_picker_source")
+        pairPermissionSource=state?.getString("pair_permission_source")
+        pairAccessSnapshot=state?.takeIf{it.containsKey("pair_access_snapshot")}?.getInt("pair_access_snapshot")
+        pairPermissionAttempts.addAll(state?.getStringArrayList("pair_permission_attempts").orEmpty())
         jobId=state?.getString(JOB_ID) ?: intent.getStringExtra(JOB_ID)
         recordSourceUri=if(state?.containsKey("record_source_uri")==true)state.getString("record_source_uri")else sourceUri
         recordResultUri=if(state?.containsKey("record_result_uri")==true)state.getString("record_result_uri")else resultUri
@@ -231,6 +318,8 @@ class PhotoEffectActivity : ComponentActivity() {
                 }
             }
             options.addView(liveOriginalAudioSwitch)
+            pairVideoButton=EffectControls.button(this,t("选择原 Live 视频","Select original Live video"),"live",false){selectPairVideo()}.apply{visibility=android.view.View.GONE}
+            options.addView(pairVideoButton)
         }
         root.addView(options,LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(8)})
         val actions=EffectActionBar(this)
@@ -361,7 +450,7 @@ class PhotoEffectActivity : ComponentActivity() {
             return EffectPagePhoto(record,requireNotNull(input),requireNotNull(output),composition,readout,motionFile,correlationId).also{input=null;output=null;motionFile=null}
         }finally{motionFile?.delete();input?.takeUnless{it.isRecycled}?.recycle();if(output!==input)output?.takeUnless{it.isRecycled}?.recycle()}
     }
-    private fun canDragPage()=preview?.isFrameReady()==true && !pageCommitPending && !working && !liveChecking && pageAnimator==null && !pageRequested && loadJob?.isActive!=true && selectionJob?.isActive!=true
+    private fun canDragPage()=preview?.isFrameReady()==true && pairPermissionSource==null && !pageCommitPending && !working && !liveChecking && pageAnimator==null && !pageRequested && loadJob?.isActive!=true && selectionJob?.isActive!=true
     private fun setPageControls(enabled:Boolean){
         replayButton.isEnabled=enabled&&source!=null&&result!=null&&preview?.hasFailed()!=true
         livePhotoButton.isEnabled=replayButton.isEnabled;exportButton.isEnabled=replayButton.isEnabled
@@ -502,6 +591,7 @@ class PhotoEffectActivity : ComponentActivity() {
         currentRecord=photo.record
         source=photo.input;result=photo.output;sourceComposition=photo.composition;cameraReadout=photo.readout;sourceMotionFile=photo.motionFile
         jobId=photo.record.id;sourceUri=photo.record.originalUri;resultUri=photo.record.mediaUri
+        updatePairControl()
         recordSourceUri=sourceUri;recordResultUri=resultUri;sourceTemporary=false;resultTemporary=false
         preview=nextPreview;preview?.translationX=0f
         incomingPhoto=null;incomingPreview=null;incomingId=null;incomingReady=false;pageRequested=false;pageDrag=0f
@@ -578,7 +668,7 @@ class PhotoEffectActivity : ComponentActivity() {
                     ownedOutput=null;ownedInput=null;ownedMotion=null
                     preview=EffectPreview(requireNotNull(source),requireNotNull(result),cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))}
                     fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
-                    replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;preloadAdjacentPhotos()
+                    replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;updatePairControl();preloadAdjacentPhotos()
                     return@launch
                 }
                 prepared?.close()
@@ -606,7 +696,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 ensureActive()
                 clearPreview();this@PhotoEffectActivity.correlationId=correlationId;currentRecord=record;result=output;source=input;sourceMotionFile=ownedMotion;ownedOutput=null;ownedInput=null;ownedMotion=null
                 preview=EffectPreview(input,output,cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
-                replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;preloadAdjacentPhotos()
+                replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;updatePairControl();preloadAdjacentPhotos()
             } finally {
                 ownedMotion?.delete()
                 ownedInput?.takeUnless{it.isRecycled}?.recycle()
@@ -640,9 +730,11 @@ class PhotoEffectActivity : ComponentActivity() {
         }
     }
     private fun exportLivePhoto(){
+        if(pairAssociating||pairPermissionSource!=null||loadJob?.isActive==true)return
         if(working){if(liveExport)cancelled.set(true);return}
         if(liveChecking||pageBusy)return
         if(source==null||result==null)return
+        if(missingPair())return
         liveChecking=true
         val parentCorrelationId=correlationId
         val correlationId=EffectCorrelation.next()
@@ -694,8 +786,9 @@ class PhotoEffectActivity : ComponentActivity() {
         }
     }
     private fun export(){
-        if(working||liveChecking||pageBusy)return
+        if(working||liveChecking||pageBusy||pairAssociating||pairPermissionSource!=null||loadJob?.isActive==true)return
         if(source==null||result==null)return
+        if(missingPair())return
         val slow=selectedSlow
         val parentCorrelationId=correlationId
         val correlationId=EffectCorrelation.next()
@@ -727,8 +820,8 @@ class PhotoEffectActivity : ComponentActivity() {
         return try{EffectMotionSource(file,sourceComposition)}catch(e:Exception){throw EffectMotionExportException(e)}
     }
     private fun leave(){if(!working)finish()else AlertDialog.Builder(this).setMessage(t("取消导出并返回？","Cancel export and return?")).setNegativeButton(t("继续导出","Keep exporting"),null).setPositiveButton(t("返回","Leave")){_,_->cancelled.set(true);finish()}.show()}
-    override fun onSaveInstanceState(out:Bundle){out.putLong(CORRELATION_ID,correlationId);out.putString("record_source_uri",recordSourceUri);out.putString("record_result_uri",recordResultUri);out.putBoolean("source_temporary",sourceTemporary);out.putBoolean("result_temporary",resultTemporary);out.putString(JOB_ID,jobId);out.putBoolean("effect_slow",selectedSlow);out.putString("effect_quality",selectedQuality.name);out.putString(RESULT_URI,resultUri);out.putString(SOURCE_URI,sourceUri);super.onSaveInstanceState(out)}
-    override fun onResume(){super.onResume();preview?.onResume();if(source!=null)preloadAdjacentPhotos()}
+    override fun onSaveInstanceState(out:Bundle){pairAccessSnapshot?.let{out.putInt("pair_access_snapshot",it)};out.putString("pair_permission_source",pairPermissionSource);out.putStringArrayList("pair_permission_attempts",ArrayList(pairPermissionAttempts));out.putString("pair_picker_source",pairPickerSource);out.putLong(CORRELATION_ID,correlationId);out.putString("record_source_uri",recordSourceUri);out.putString("record_result_uri",recordResultUri);out.putBoolean("source_temporary",sourceTemporary);out.putBoolean("result_temporary",resultTemporary);out.putString(JOB_ID,jobId);out.putBoolean("effect_slow",selectedSlow);out.putString("effect_quality",selectedQuality.name);out.putString(RESULT_URI,resultUri);out.putString(SOURCE_URI,sourceUri);super.onSaveInstanceState(out)}
+    override fun onResume(){super.onResume();preview?.onResume();refreshPairAccessOnResume();requestPairPermissionIfNeeded();if(source!=null)preloadAdjacentPhotos()}
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)clearAdjacentPhotos()}
     override fun onPause(){cancelPageTransition();clearAdjacentPhotos();stopPreviewAudio();preview?.reset();preview?.onPause();super.onPause()}
     override fun onDestroy(){clearPreview();stopPreviewAudio();cancelled.set(true);super.onDestroy()}

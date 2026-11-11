@@ -6,6 +6,7 @@ import dev.filmroom.livephoto.core.VideoRange
 import dev.filmroom.livephoto.core.Vivo
 import java.io.File
 import java.io.RandomAccessFile
+import java.util.concurrent.CancellationException
 
 // Reconstructed from the beta27 DEX; original comments and tests were not retained.
 data class MotionPhotoSource(val file: File, val offset: Long, val length: Long, val kind: String)
@@ -60,7 +61,8 @@ object MotionPhotoExtractor {
                 it.groupValues[1].toLongOrNull()?.takeIf { n -> n > 0 && n <= image.length() }?.let { n -> image.length() - n }
             }.toSet()
             unique.filter { it.offset in offsets }.singleOrNull()
-        } catch (_: Exception) { null }
+        } catch (e: CancellationException) { throw e }
+          catch (_: Exception) { null }
     }
 
     private fun movieLength(f: RandomAccessFile, start: Long): Long? {
@@ -91,53 +93,76 @@ object MotionPhotoExtractor {
         return if (moov && mdat && count < 10000) p - start else null
     }
 
-    private fun inspectPair(image: File, jpegEnd: Long, video: File): MotionPhotoSource? = try {
-        if (!video.isFile || video.length() !in 16..MAX_INPUT_BYTES || image.length() - jpegEnd < 40) null
-        else {
-            val binding = RandomAccessFile(image, "r").use { f ->
-                val n = minOf(f.length() - jpegEnd, 16384).toInt()
-                f.seek(f.length() - n)
-                nativeBinding(ByteArray(n).also(f::readFully))
+    /** A structurally validated vendor pairing hint, never a filename-based association. */
+    data class PairBinding(val id: String, val version: Long)
+
+    /** Returns a binding only for a JPEG with a complete, terminal supported pair record. */
+    fun inspectPairImage(image: File, checkActive: () -> Unit = {}): PairBinding? {
+        checkActive()
+        return try {
+            if (!image.isFile || image.length() !in 4..MAX_INPUT_BYTES) return null
+            RandomAccessFile(image, "r").use { f ->
+                val bytes = ByteArray(minOf(f.length(), MAX_JPEG_BYTES.toLong()).toInt()).also(f::readFully)
+                checkActive()
+                pairImageBinding(f, Jpeg.inspect(bytes).end.toLong())
             }
-            val box = Mp4.validate(video).last()
-            if (box.type != "uuid" || box.header != 8 || box.size !in 64..16408) null
-            else RandomAccessFile(video, "r").use { f ->
-                f.seek(box.start + 8)
-                if (!ByteArray(16).also(f::readFully).contentEquals(Vivo.uuidType)) null
-                else {
-                    val videoBinding = nativeBinding(ByteArray((box.size - 24).toInt()).also(f::readFully))
-                    if (binding == videoBinding) MotionPhotoSource(video, 0, box.start, "vivo-paired") else null
+        } catch (e: CancellationException) { throw e }
+          catch (_: Exception) { null }
+    }
+
+    private fun pairImageBinding(file: RandomAccessFile, jpegEnd: Long): PairBinding? {
+        val length = file.length() - jpegEnd
+        if (length !in 64..16384) return null
+        file.seek(jpegEnd)
+        return nativeBinding(ByteArray(length.toInt()).also(file::readFully))
+            .takeIf { it.version in setOf(2014L, 2104L, 2200L) }
+    }
+
+    private fun inspectPair(image: File, jpegEnd: Long, video: File): MotionPhotoSource? = try {
+        if (!video.isFile || video.length() !in 16..MAX_INPUT_BYTES) null
+        else {
+            val binding = RandomAccessFile(image, "r").use { pairImageBinding(it, jpegEnd) }
+            if (binding == null) null else {
+                val boxes = Mp4.validate(video)
+                val box = boxes.last()
+                if (box.type != "uuid" || box.header != 8 || box.size !in 64..16408) null
+                else RandomAccessFile(video, "r").use { f ->
+                    // A previous vendor extension would make the returned media ambiguous.
+                    val hasEarlierBinding = boxes.dropLast(1).any { previous ->
+                        if (previous.type != "uuid" || previous.size - previous.header < 16) false
+                        else {
+                            f.seek(previous.start + previous.header)
+                            ByteArray(16).also(f::readFully).contentEquals(Vivo.uuidType)
+                        }
+                    }
+                    if (hasEarlierBinding) return@use null
+                    f.seek(box.start + 8)
+                    if (!ByteArray(16).also(f::readFully).contentEquals(Vivo.uuidType)) null
+                    else {
+                        val videoBinding = nativeBinding(ByteArray((box.size - 24).toInt()).also(f::readFully))
+                        val matchingVersions = when (binding.version) {
+                            2014L -> videoBinding.version == 2014L
+                            2104L -> videoBinding.version == 2104L
+                            2200L -> videoBinding.version == 2016L
+                            else -> false
+                        }
+                        if (binding.id != videoBinding.id || !matchingVersions) null
+                        else {
+                            // The extension is not media; validate the returned range independently.
+                            Mp4.validate(video, VideoRange(0, box.start))
+                            MotionPhotoSource(video, 0, box.start, "vivo-paired")
+                        }
+                    }
                 }
             }
         }
     } catch (_: Exception) { null }
 
-    private fun nativeBinding(tail: ByteArray): String {
-        require(tail.size in 64..16384)
-        require(tail.takeLast(11).toByteArray().contentEquals(byteArrayOf(27, 42, 57, 72, 87, 102, 117, -124, -109, -94, -77)))
-        require(tail.sliceArray(tail.size - 15 until tail.size - 11).all { it == (-1).toByte() })
-        val id = tail.copyOfRange(tail.size - 43, tail.size - 15).toString(Charsets.US_ASCII)
-        require(Regex("[0-9a-f]{28}").matches(id))
-        fun uint(p: Int): Long {
-            require(p >= 0 && p <= tail.size - 4)
-            var value = 0L
-            for (i in 0..3) value = (value shl 8) or (tail[p + i].toLong() and 255)
-            return value
-        }
-        require(uint(tail.size - 47) == 47L)
-        require(tail.copyOfRange(tail.size - 58, tail.size - 47).toString(Charsets.US_ASCII) == "cameralbum!")
-        val end = tail.size - 62
-        val length = uint(end)
-        require(length in 2..16000)
-        val start = end - length.toInt()
-        require(start >= 4 && tail.copyOfRange(start - 4, start).toString(Charsets.US_ASCII) == "vivo")
-        val json = tail.copyOfRange(start, end).toString(Charsets.UTF_8)
-        require(json.startsWith("{") && json.endsWith("}"))
-        val ids = Regex("\"com\\.android\\.camera\\.livephoto\"\\s*:\\s*\"([0-9a-f]{28})\"").findAll(json).toList()
-        require(ids.size == 1 && ids.single().groupValues[1] == id)
-        val versions = Regex("\"version\"\\s*:\\s*([0-9]+)").findAll(json).toList()
-        require(versions.size == 1 && versions.single().groupValues[1] in setOf("2104", "2200", "2016"))
-        return id
+    private fun nativeBinding(tail: ByteArray): PairBinding {
+        val parsed = Vivo.parse(tail)
+        val version = parsed.fields["version"] as? Long ?: error("Missing vivo version")
+        require(version in setOf(2014L, 2104L, 2200L, 2016L))
+        return PairBinding(parsed.id, version)
     }
 
     fun extract(source: MotionPhotoSource, output: File, checkActive: () -> Unit = {}): File {

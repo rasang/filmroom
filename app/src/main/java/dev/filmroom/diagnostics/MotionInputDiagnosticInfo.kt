@@ -3,7 +3,7 @@ package dev.filmroom.diagnostics
 /** Input-stage outcomes only. Never accepts URI, path, filename or exception text. */
 enum class MotionInputStatus {
     SOURCE_MISSING, READ_FAILED, NON_JPEG, INPUT_TOO_LARGE, NOT_RECOGNIZED,
-    EXTRACTION_FAILED, SUCCESS, CANCELLED, MEMORY_LIMIT
+    PAIR_REQUIRED, EXTRACTION_FAILED, SUCCESS, CANCELLED, MEMORY_LIMIT
 }
 data class MotionInputDiagnosticInfo(
     val status: MotionInputStatus,

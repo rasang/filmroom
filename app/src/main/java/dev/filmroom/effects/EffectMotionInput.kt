@@ -15,6 +15,22 @@ import java.util.concurrent.CancellationException
 /** Bounded original JPEG motion input; typed diagnostics never contain source identifiers. */
 internal object EffectMotionInput {
     private const val MAX_INPUT=134217728L
+    private val pairStates=java.util.concurrent.ConcurrentHashMap<String,Boolean>()
+    /** True means a paired source; the Activity separately owns its successfully extracted video. */
+    fun needsPair(uri:String?):Boolean = uri!=null && pairStates[uri]==true
+    /** Validate a user-authorized companion before remembering it. */
+    fun associate(context:Context,imageUri:String,videoUri:Uri,checkActive:()->Unit={}):Boolean {
+        if(videoUri.scheme!="content")return false
+        val progress=Progress()
+        val output=try {prepareChecked(context,imageUri,checkActive,progress,videoUri.toString())}
+            catch(e:CancellationException){throw e}
+            catch(_:Exception){null}
+            catch(_:OutOfMemoryError){null}
+            ?: return false
+        output.delete()
+        EffectMotionPairAccess.remember(context,imageUri,videoUri)
+        return true
+    }
     fun prepare(context:Context,uri:String?,correlationId:Long=EffectCorrelation.next(),checkActive:()->Unit={}):File? =
         prepareWithDiagnostics(context,uri,checkActive) { report ->
             val info=SafeInfo(motionInput=report.copy(correlationId=correlationId))
@@ -41,7 +57,7 @@ internal object EffectMotionInput {
         var copied=0L
         var videoBytes:Long?=null
     }
-    private fun prepareChecked(context:Context,uri:String?,checkActive:()->Unit,progress:Progress):File? {
+    private fun prepareChecked(context:Context,uri:String?,checkActive:()->Unit,progress:Progress,selectedVideo:String?=null):File? {
         if(uri==null) { progress.status=MotionInputStatus.SOURCE_MISSING;return null }
         val directory=File(context.cacheDir,"effect-motion").apply{mkdirs()}
         val input=File.createTempFile("input-",".jpg",directory)
@@ -61,14 +77,48 @@ internal object EffectMotionInput {
             }}
             checkActive()
             progress.status=MotionInputStatus.NOT_RECOGNIZED
-            val inspected=MotionPhotoExtractor.inspect(input,checkActive=checkActive) ?: return null
+            var inspected=MotionPhotoExtractor.inspect(input,checkActive=checkActive)
+            val paired=inspected==null && MotionPhotoExtractor.inspectPairImage(input,checkActive)!=null
+            // Do not evict a pending pair while its Activity can still export.
+            if(paired && inspected==null)pairStates[uri]=true else pairStates.remove(uri)
+            if(selectedVideo!=null) {if(!paired)return null;inspected=null}
+            var companion:File?=null
+            try {
+                if(inspected==null && paired) {
+                    progress.status=MotionInputStatus.PAIR_REQUIRED
+                    val candidates=selectedVideo?.let{listOf(it)} ?: EffectMotionPairAccess.candidates(context,uri)
+                    val matches=mutableListOf<Pair<File,dev.filmroom.livephoto.importer.MotionPhotoSource>>()
+                    try {
+                        for(candidate in candidates.take(8)) {
+                            checkActive()
+                            val copy=File.createTempFile("pair-",".mp4",directory)
+                            var matched=false
+                            try {
+                                context.contentResolver.openInputStream(Uri.parse(candidate))?.use { src ->
+                                    copy.outputStream().use { dst ->
+                                        val buffer=ByteArray(65536);var total=0L
+                                        while(true){checkActive();val n=src.read(buffer);if(n<0)break
+                                            total+=n;require(total<=MAX_INPUT);dst.write(buffer,0,n)}
+                                    }
+                                } ?: continue
+                                MotionPhotoExtractor.inspect(input,copy,checkActive)?.let { matches+=copy to it;matched=true }
+                            } catch(e:CancellationException){throw e}
+                              catch(_:Exception) {} finally {if(!matched)copy.delete()}
+                        }
+                        // Even multiple valid candidates are ambiguous: never choose by filename/order.
+                        if(matches.size!=1)return null
+                        companion=matches.single().first;inspected=matches.single().second
+                    } finally {matches.forEach{if(it.first!=companion)it.first.delete()}}
+                }
+                val source=inspected ?: return null
             progress.status=MotionInputStatus.EXTRACTION_FAILED
             val target=File.createTempFile("video-",".mp4",directory);video=target
             check(target.delete())
-            MotionPhotoExtractor.extract(inspected,target,checkActive)
+            MotionPhotoExtractor.extract(source,target,checkActive)
             checkActive();retained=true
             progress.videoBytes=target.length();progress.status=MotionInputStatus.SUCCESS
             return target
+            } finally {companion?.delete()}
         } finally {input.delete();if(!retained)video?.delete()}
     }
 }
