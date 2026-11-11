@@ -154,12 +154,65 @@ class EffectMotionPairAccessHostTest {
         EffectMotionPairAccess.candidates(context,image,report=report)
         assertEquals(dev.filmroom.diagnostics.PairLookupStatus.ACCESS_DENIED,reason)
     }
+    @Test fun nativeIdLookupUsesBoundArgumentWithoutReadingPickerName() {
+        val provider=installProvider()
+        shadowOf(context).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        val id="test' OR 1=1 --"
+        assertEquals(listOf("content://media/external/video/media/20"),EffectMotionPairAccess.candidates(context,image,pairId=id))
+        assertEquals(1,provider.queries)
+        assertNull(provider.imageUri)
+        assertEquals("live_photo =?",provider.videoSelection)
+        assertArrayEquals(arrayOf(id),provider.videoArgs)
+    }
+    @Test fun idFailureFallsBackAndOverflowDoesNot() {
+        shadowOf(context).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        for(mode in listOf("missing","denied","empty")) {
+            val provider=installProvider().apply { idMode=mode }
+            var reason:dev.filmroom.diagnostics.PairLookupStatus?=null
+            assertEquals(1,EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id",idReport={reason=it}).size)
+            assertEquals(3,provider.queries)
+            assertEquals(when(mode) {
+                "missing"->dev.filmroom.diagnostics.PairLookupStatus.QUERY_FAILED
+                "denied"->dev.filmroom.diagnostics.PairLookupStatus.ACCESS_DENIED
+                else->dev.filmroom.diagnostics.PairLookupStatus.NO_VISIBLE_ID
+            },reason)
+        }
+        val provider=installProvider().apply { count=9 }
+        assertTrue(EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id").isEmpty())
+        assertEquals(1,provider.queries)
+        provider.count=2;provider.duplicate=true
+        assertEquals(1,EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id").size)
+        provider.duplicate=false
+        assertEquals(2,EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id").size)
+    }
+    @Test @Config(sdk=[29,33,34]) fun idQueryRespectsVideoPermissions() {
+        val provider=installProvider()
+        assertTrue(EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id").isEmpty())
+        assertEquals(0,provider.queries)
+        val permission=if(android.os.Build.VERSION.SDK_INT>=34) Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            else if(android.os.Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+        shadowOf(context).grantPermissions(permission)
+        assertEquals(1,EffectMotionPairAccess.candidates(context,image,pairId="synthetic-id").size)
+        assertEquals(1,provider.queries)
+    }
+    @Test fun invalidIdsNeverReachVendorQuery() {
+        val provider=installProvider()
+        shadowOf(context).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        for(id in listOf("", "x".repeat(257), "bad\u0000id")) {
+            var reason:dev.filmroom.diagnostics.PairLookupStatus?=null
+            EffectMotionPairAccess.candidates(context,image,pairId=id,idReport={reason=it})
+            assertEquals(dev.filmroom.diagnostics.PairLookupStatus.INVALID_ID,reason)
+            assertFalse(provider.videoSelection!!.contains("live_photo"))
+        }
+    }
     private fun installProvider() = MediaProvider().also {
         it.attachInfo(context, android.content.pm.ProviderInfo().apply { authority = "media" })
         ShadowContentResolver.registerProviderInternal("media", it)
     }
     private class MediaProvider : ContentProvider() {
         var queries = 0
+        var idMode="normal"
+        var duplicate=false
         var count = 1
         var path: String? = "DCIM/Camera/"
         var denyImage = false
@@ -177,7 +230,12 @@ class EffectMotionPairAccessHostTest {
                 }
             } else {
                 videoArgs = args; videoSelection = selection
-                MatrixCursor(arrayOf("_id")).apply { repeat(this@MediaProvider.count) { addRow(arrayOf(20L + it)) } }
+                if(selection=="live_photo =?") when(idMode) {
+                    "missing" -> throw IllegalArgumentException("no such column")
+                    "denied" -> throw SecurityException("denied")
+                    "empty" -> return MatrixCursor(arrayOf("_id"))
+                }
+                MatrixCursor(arrayOf("_id")).apply { repeat(this@MediaProvider.count) { addRow(arrayOf(20L + if(duplicate) 0 else it)) } }
             }
         }
         override fun onCreate() = true

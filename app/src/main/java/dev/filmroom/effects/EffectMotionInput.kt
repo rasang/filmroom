@@ -53,13 +53,14 @@ internal object EffectMotionInput {
         } catch(e:CancellationException) { progress.status=MotionInputStatus.CANCELLED;throw e }
           catch(_:Exception) { null }
           catch(_:OutOfMemoryError) { progress.status=MotionInputStatus.MEMORY_LIMIT;null }
-          finally { runCatching { report(MotionInputDiagnosticInfo(progress.status,progress.copied,progress.videoBytes, pairLookup=progress.lookup, pairMatch=progress.match, pairPermission=progress.permission, pairCandidates=progress.candidates, pairReadFailures=progress.readFailures, pairRejected=progress.rejected, pairSavedFallback=progress.fallback)) } }
+          finally { runCatching { report(MotionInputDiagnosticInfo(progress.status,progress.copied,progress.videoBytes, pairLookup=progress.lookup, pairMatch=progress.match, pairPermission=progress.permission, pairCandidates=progress.candidates, pairReadFailures=progress.readFailures, pairRejected=progress.rejected, pairSavedFallback=progress.fallback, pairIdLookup=progress.idLookup)) } }
     }
     private class Progress {
         var status=MotionInputStatus.READ_FAILED
         var copied=0L
         var videoBytes:Long?=null
         var lookup:PairLookupStatus?=null
+        var idLookup:PairLookupStatus?=null
         var match:PairMatchStatus?=null
         var permission:PairPermission?=null
         var candidates=0
@@ -88,7 +89,8 @@ internal object EffectMotionInput {
             checkActive()
             progress.status=MotionInputStatus.NOT_RECOGNIZED
             var inspected=MotionPhotoExtractor.inspect(input,checkActive=checkActive)
-            val paired=inspected==null && MotionPhotoExtractor.inspectPairImage(input,checkActive)!=null
+            val binding=if(inspected==null) MotionPhotoExtractor.inspectPairImage(input,checkActive) else null
+            val paired=binding!=null
             // Do not evict a pending pair while its Activity can still export.
             if(paired && inspected==null)pairStates[uri]=true else pairStates.remove(uri)
             if(selectedVideo!=null) {if(!paired)return null;inspected=null}
@@ -97,18 +99,26 @@ internal object EffectMotionInput {
                 if(inspected==null && paired) {
                     progress.status=MotionInputStatus.PAIR_REQUIRED
                     progress.permission=when { EffectMotionPairAccess.hasFullVideoAccess(context)->PairPermission.FULL; EffectMotionPairAccess.canQueryVideos(context)->PairPermission.PARTIAL; else->PairPermission.NONE }
-                    val candidates=selectedVideo?.let{progress.lookup=PairLookupStatus.SAVED;listOf(it)} ?: EffectMotionPairAccess.candidates(context,uri,report={progress.lookup=it})
-                    val saved=selectedVideo==null && progress.lookup==PairLookupStatus.SAVED
+                    val candidates=selectedVideo?.let{progress.lookup=PairLookupStatus.SAVED;listOf(it)} ?: EffectMotionPairAccess.candidates(context,uri,pairId=binding?.id,idReport={progress.idLookup=it},report={progress.lookup=it})
                     progress.match=PairMatchStatus.NONE
                     val matches=mutableListOf<Pair<File,dev.filmroom.livephoto.importer.MotionPhotoSource>>()
                     try {
-                        // A valid explicit selection wins. Only failed remembered selections fall back.
-                        for (batch in 0..(if(saved) 1 else 0)) {
-                            val batchCandidates=if(batch==0) candidates else {
-                                if(matches.isNotEmpty())break
-                                progress.fallback=true
-                                EffectMotionPairAccess.candidates(context,uri,includeSaved=false,report={progress.lookup=it})
-                            }
+                        // Saved choice -> native-ID index -> authorized same-name fallback.
+                        // Fall back only on zero verified matches; never resolve ambiguity by order.
+                        val attempted=mutableSetOf<String>()
+                        for (batch in 0..2) {
+                            val batchCandidates=(if(batch==0) candidates else {
+                                if(matches.isNotEmpty() || selectedVideo!=null)break
+                                when(progress.lookup) {
+                                    PairLookupStatus.SAVED -> {
+                                        progress.fallback=true
+                                        EffectMotionPairAccess.candidates(context,uri,includeSaved=false,pairId=binding?.id,idReport={progress.idLookup=it},report={progress.lookup=it})
+                                    }
+                                    PairLookupStatus.ID_CANDIDATES ->
+                                        EffectMotionPairAccess.candidates(context,uri,includeSaved=false,report={progress.lookup=it})
+                                    else -> break
+                                }
+                            }).filter { attempted.add(it) }
                             progress.candidates+=batchCandidates.size
                             for(candidate in batchCandidates.take(8)) {
                                 checkActive()

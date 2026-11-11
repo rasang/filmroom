@@ -17,13 +17,13 @@ class MotionInputDiagnosticInfoTest {
     @Test fun pairDiagnosticsRejectUntrustedStringsAndBoundCounts() {
         val parsed=MotionInputDiagnosticInfo.parse(mapOf(
             "motionInputStatus" to "PAIR_REQUIRED", "pairLookup" to "content://private/image",
-            "pairMatch" to "/private/video.mp4", "pairPermission" to "PRIVATE",
+            "pairIdLookup" to "private-native-id", "pairMatch" to "/private/video.mp4", "pairPermission" to "PRIVATE",
             "pairCandidates" to "999", "pairReadFailures" to "-1", "pairRejected" to "999"))!!
-        assertNull(parsed.pairLookup); assertNull(parsed.pairMatch); assertNull(parsed.pairPermission)
-        assertEquals(9,parsed.pairCandidates); assertEquals(0,parsed.pairReadFailures); assertEquals(9,parsed.pairRejected)
+        assertNull(parsed.pairIdLookup); assertNull(parsed.pairLookup); assertNull(parsed.pairMatch); assertNull(parsed.pairPermission)
+        assertEquals(17,parsed.pairCandidates); assertEquals(0,parsed.pairReadFailures); assertEquals(17,parsed.pairRejected)
         assertFalse(parsed.fields().toString().contains("private"))
         val info=MotionInputDiagnosticInfo(MotionInputStatus.PAIR_REQUIRED, pairLookup=PairLookupStatus.NO_VISIBLE_SAME_NAME,
-            pairMatch=PairMatchStatus.INVALID_PAIR, pairPermission=PairPermission.PARTIAL, pairRejected=1, pairSavedFallback=true)
+            pairMatch=PairMatchStatus.INVALID_PAIR, pairPermission=PairPermission.PARTIAL, pairRejected=1, pairSavedFallback=true, pairIdLookup=PairLookupStatus.NO_VISIBLE_ID)
         assertEquals(info,SafeInfo.parse(SafeInfo(motionInput=info).fields()).motionInput)
     }
     @Test fun typedInputReportPersistsAcrossStoreReopen() {

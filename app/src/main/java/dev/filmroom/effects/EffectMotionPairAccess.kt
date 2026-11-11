@@ -60,6 +60,7 @@ internal object EffectMotionPairAccess {
     }
 
     fun candidates(context: Context, imageUri: String, includeSaved: Boolean = true,
+        pairId: String? = null, idReport: (PairLookupStatus) -> Unit = {},
         report: (PairLookupStatus) -> Unit = {}): List<String> {
         fun stop(status: PairLookupStatus): List<String> { report(status); return emptyList() }
         val saved = session[sessionKey(context, imageUri)] ?: context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -67,6 +68,19 @@ internal object EffectMotionPairAccess {
         // Explicit selections still require the caller to revalidate access and native pair IDs.
         if (includeSaved && saved != null) { report(PairLookupStatus.SAVED); return listOf(saved) }
         if (!canQueryVideos(context)) return stop(PairLookupStatus.NO_PERMISSION)
+        // The Photo Picker may synthesize DISPLAY_NAME. Vivo's index is keyed by the
+        // native JPEG association ID, not that display name. It is only discovery;
+        // EffectMotionInput still validates the MP4 structure, native ID and version.
+        if (pairId != null) {
+            var status = PairLookupStatus.QUERY_FAILED
+            val found = idCandidates(context, pairId) { status = it; idReport(it) }
+            if (found.isNotEmpty() || status == PairLookupStatus.TOO_MANY_CANDIDATES) {
+                report(status)
+                return found
+            }
+            // Stock MediaProvider may not expose the OEM column. Do not broaden access:
+            // retain the authorized name lookup and explicit user-selection fallback.
+        }
         val image = runCatching { Uri.parse(imageUri) }.getOrNull() ?: return stop(PairLookupStatus.IMAGE_METADATA_UNAVAILABLE)
         if (image.scheme != "content") return stop(PairLookupStatus.IMAGE_METADATA_UNAVAILABLE)
         val volume = directImageVolume(image)
@@ -106,6 +120,32 @@ internal object EffectMotionPairAccess {
             // Multiple same-name candidates are not resolved here: only strict native IDs can pair them.
             report(if(matches.isEmpty()) PairLookupStatus.NO_VISIBLE_SAME_NAME else PairLookupStatus.CANDIDATES)
             matches.distinct()
+        } catch (_: SecurityException) { stop(PairLookupStatus.ACCESS_DENIED) }
+          catch (_: Exception) { stop(PairLookupStatus.QUERY_FAILED) }
+    }
+
+    private fun idCandidates(context: Context, pairId: String, report: (PairLookupStatus) -> Unit): List<String> {
+        fun stop(status: PairLookupStatus): List<String> { report(status); return emptyList() }
+        // Bound externally supplied metadata; never interpolate it into SQL or logs.
+        if (pairId.isBlank() || pairId.length > 256 || pairId.any { it.code < 32 })
+            return stop(PairLookupStatus.INVALID_ID)
+        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        return try {
+            val matches = linkedSetOf<String>()
+            context.contentResolver.query(collection, arrayOf(MediaStore.MediaColumns._ID),
+                "live_photo =?", arrayOf(pairId), null)?.use { cursor ->
+                val column = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                var rows = 0
+                while (cursor.moveToNext()) {
+                    if (++rows > MAX_CANDIDATES) return stop(PairLookupStatus.TOO_MANY_CANDIDATES)
+                    if (cursor.isNull(column)) return stop(PairLookupStatus.QUERY_FAILED)
+                    val id = cursor.getLong(column)
+                    if (id < 0) return stop(PairLookupStatus.QUERY_FAILED)
+                    matches += ContentUris.withAppendedId(collection, id).toString()
+                }
+            } ?: return stop(PairLookupStatus.QUERY_FAILED)
+            report(if (matches.isEmpty()) PairLookupStatus.NO_VISIBLE_ID else PairLookupStatus.ID_CANDIDATES)
+            matches.toList()
         } catch (_: SecurityException) { stop(PairLookupStatus.ACCESS_DENIED) }
           catch (_: Exception) { stop(PairLookupStatus.QUERY_FAILED) }
     }

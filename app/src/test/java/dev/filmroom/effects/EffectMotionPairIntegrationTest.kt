@@ -120,6 +120,62 @@ class EffectMotionPairIntegrationTest {
         assertEquals(1,d.pairRejected)
         assertTrue(d.pairSavedFallback)
     }
+    @Test fun vendorIndexStillRequiresUniqueStructurallyValidMatchingNativePair()=fixture(2100L) { image,video,wrong->
+        var rows=1
+        var nameFallback=false
+        val provider=object:android.content.ContentProvider() {
+            override fun onCreate()=true
+            override fun query(uri:Uri, projection:Array<out String>?, selection:String?, args:Array<out String>?, order:String?):android.database.Cursor {
+                if(uri.authority=="fixture") return android.database.MatrixCursor(arrayOf("_display_name")).apply {addRow(arrayOf("synthetic.jpg"))}
+                if(selection!="live_photo =?") return android.database.MatrixCursor(arrayOf("_id")).apply { if(nameFallback) {addRow(arrayOf(70L));addRow(arrayOf(72L))} }
+                assertEquals("content://media/external/video/media",uri.toString())
+                assertEquals("live_photo =?",selection)
+                assertArrayEquals(arrayOf("1234567890123000000000000000"),args)
+                assertArrayEquals(arrayOf("_id"),projection)
+                return android.database.MatrixCursor(arrayOf("_id")).apply { repeat(rows) {addRow(arrayOf(70L+it))} }
+            }
+            override fun getType(uri:Uri):String?=null
+            override fun insert(uri:Uri, values:android.content.ContentValues?):Uri?=null
+            override fun delete(uri:Uri,selection:String?,args:Array<out String>?)=0
+            override fun update(uri:Uri,values:android.content.ContentValues?,selection:String?,args:Array<out String>?)=0
+        }
+        provider.attachInfo(context,android.content.pm.ProviderInfo().apply {authority="media"})
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("media",provider)
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("fixture",provider)
+        val good=context.contentResolver.openInputStream(video)!!.use {it.readBytes()}
+        val bad=context.contentResolver.openInputStream(wrong)!!.use {it.readBytes()}
+        val first=Uri.parse("content://media/external/video/media/70")
+        val second=Uri.parse("content://media/external/video/media/71")
+        shadowOf(context as Application).grantPermissions(android.Manifest.permission.READ_MEDIA_VIDEO)
+        var diagnostic:MotionInputDiagnosticInfo?=null
+        try {
+            val wrongVersion=movie()+Vivo.uuid(Vivo.tail(linkedMapOf(Vivo.ID_KEY to "1234567890123000000000000000", "version" to 2014L)))
+            for(bytes in listOf(bad, wrongVersion, byteArrayOf(1,2,3))) {
+                shadowOf(context.contentResolver).registerInputStreamSupplier(first){bytes.inputStream()}
+                assertNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+                assertEquals(PairMatchStatus.INVALID_PAIR,diagnostic!!.pairMatch)
+            }
+            nameFallback=true
+            shadowOf(context.contentResolver).registerInputStreamSupplier(Uri.parse("content://media/external/video/media/72")){good.inputStream()}
+            val recovered=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+            recovered.delete()
+            assertEquals(PairLookupStatus.CANDIDATES,diagnostic!!.pairLookup)
+            assertEquals(PairMatchStatus.MATCHED,diagnostic!!.pairMatch)
+            assertEquals(2,diagnostic!!.pairCandidates)
+            nameFallback=false
+            shadowOf(context.contentResolver).registerInputStreamSupplier(first){good.inputStream()}
+            val extracted=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+            try { assertArrayEquals(movie(),extracted.readBytes()) } finally {extracted.delete()}
+            assertFalse(EffectMotionInput.associate(context,image,wrong)) // Explicit wrong choice cannot auto-match another video.
+            assertEquals(PairLookupStatus.ID_CANDIDATES,diagnostic!!.pairIdLookup)
+            assertFalse(diagnostic!!.fields().toString().contains("1234567890123000000000000000"))
+            rows=2
+            shadowOf(context.contentResolver).registerInputStreamSupplier(second){good.inputStream()}
+            assertNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+            assertEquals(PairMatchStatus.AMBIGUOUS,diagnostic!!.pairMatch)
+            assertFalse(File(context.cacheDir,"effect-motion").listFiles().orEmpty().any{it.name.startsWith("input-")||it.name.startsWith("pair-")})
+        } finally { shadowOf(context as Application).denyPermissions(android.Manifest.permission.READ_MEDIA_VIDEO) }
+    }
     @Test fun activityCannotStartEitherExportDuringAssociation() {
         val activity=PhotoEffectActivity()
         fun set(name:String,value:Any)=PhotoEffectActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.set(activity,value)
