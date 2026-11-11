@@ -29,7 +29,7 @@ class VivoPairImportTest {
         try { block(dir, File(dir,"cover.jpg"), File(dir,"video.mp4")) } finally { dir.deleteRecursively() }
     }
     @Test fun allSupportedVersionPairsExtractOnlyOriginalMedia() = fixture { dir, image, video ->
-        for ((imageVersion, videoVersion) in listOf(2014L to 2014L,2104L to 2104L,2200L to 2016L)) {
+        for ((imageVersion, videoVersion) in listOf(2014L to 2014L,2100L to 2100L,2104L to 2104L,2200L to 2016L)) {
             image.writeBytes(jpeg() + tail(imageVersion)); video.writeBytes(movie() + videoTail(tail(videoVersion)))
             val hint = requireNotNull(MotionPhotoExtractor.inspectPairImage(image))
             assertEquals(id, hint.id); assertEquals(imageVersion, hint.version)
@@ -38,6 +38,38 @@ class VivoPairImportTest {
             val output = File(dir,"$imageVersion.mp4")
             MotionPhotoExtractor.extract(source,output)
             assertArrayEquals(movie(),output.readBytes())
+        }
+    }
+    @Test fun native2100WithGainmapAndRichMetadataExtractsOriginalMedia() = fixture { dir, image, video ->
+        // Synthetic HDR JPEG, no user media or identifiers in the fixture.
+        val gainmap = jpeg().dropLast(2).toByteArray() + ByteArray(250000) { 1 } + byteArrayOf(-1,-39)
+        val json = """{"com.android.camera.livephoto":"$id","version":2100,"optional":null,"enabled":false,"faceInfo":{"faces":[{},true,1.25,-2e3,"vivo}cameralbum!"]}}"""
+        image.writeBytes(jpeg() + gainmap + ByteArray(42000) { 2 } + tail(2100,jsonOverride=json))
+        video.writeBytes(movie() + videoTail(tail(2100,jsonOverride=json)))
+        assertEquals(2100L, requireNotNull(MotionPhotoExtractor.inspectPairImage(image)).version)
+        val source = requireNotNull(MotionPhotoExtractor.inspect(image,video))
+        val output = File(dir,"original.mp4")
+        MotionPhotoExtractor.extract(source,output)
+        assertArrayEquals(movie(),output.readBytes())
+        video.writeBytes(movie() + videoTail(tail(2104)))
+        assertNull(MotionPhotoExtractor.inspect(image,video))
+        video.writeBytes(movie() + videoTail(tail(2100,"ffffffffffffffffffffffffffff")))
+        assertNull(MotionPhotoExtractor.inspect(image,video))
+    }
+    @Test fun nativeMetadataRejectsMalformedNestedValuesAndLengths() = fixture { _, image, _ ->
+        val prefix = """{"com.android.camera.livephoto":"$id","version":2100,"extra":"""
+        for (value in listOf("{\"a\":1,\"a\":2}", "[1,]", "01", "tru", "[".repeat(18)+"0"+"]".repeat(18))) {
+            image.writeBytes(jpeg()+tail(2100,jsonOverride=prefix+value+"}"))
+            assertNull(value,MotionPhotoExtractor.inspectPairImage(image))
+        }
+        for (version in listOf("2100.0","2.1e3","\"2100\"","null","true")) {
+            image.writeBytes(jpeg()+tail(2100,jsonOverride="""{"com.android.camera.livephoto":"$id","version":$version}"""))
+            assertNull(MotionPhotoExtractor.inspectPairImage(image))
+        }
+        val valid = tail(2100)
+        for (offset in listOf(valid.size-62,valid.size-47,valid.size-15,valid.lastIndex)) {
+            image.writeBytes(jpeg()+valid.copyOf().also { it[offset] = 0x7f })
+            assertNull(MotionPhotoExtractor.inspectPairImage(image))
         }
     }
     @Test fun sameNameOrSameIdCannotOverrideInvalidVersionPair() = fixture { _, image, video ->

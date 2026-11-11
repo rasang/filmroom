@@ -23,14 +23,14 @@ class EffectMotionPairIntegrationTest {
     private fun box(t:String,b:ByteArray)=ByteBuffer.allocate(8+b.size).putInt(8+b.size).put(t.toByteArray()).put(b).array()
     private fun movie()=box("ftyp","isom0000".toByteArray())+box("moov",box("trak",box("mdia",box("hdlr",ByteArray(8)+"vide".toByteArray()))))+box("mdat",byteArrayOf(1,2,3))
     private fun jpeg()=byteArrayOf(-1,-40,-1,-64,0,11,8,0,1,0,1,1,1,17,0,-1,-38,0,8,1,1,0,0,63,0,1,2,3,-1,-39)
-    private fun fixture(block:(String,Uri,Uri)->Unit) {
+    private fun fixture(version: Long = 2014L, block:(String,Uri,Uri)->Unit) {
         val key=System.nanoTime().toString()
         val image=Uri.parse("content://fixture/$key/image")
         val video=Uri.parse("content://fixture/$key/video")
         val wrong=Uri.parse("content://fixture/$key/wrong")
         val id="1234567890123000000000000000"
-        fun tail(id:String)=Vivo.tail(linkedMapOf(Vivo.ID_KEY to id,"version" to 2014L))
-        shadowOf(context.contentResolver).registerInputStreamSupplier(image){(jpeg()+tail(id)).inputStream()}
+        fun tail(id:String)=Vivo.tail(linkedMapOf(Vivo.ID_KEY to id,"version" to version))
+        shadowOf(context.contentResolver).registerInputStreamSupplier(image){(jpeg()+(if(version == 2100L) jpeg() else byteArrayOf())+tail(id)).inputStream()}
         shadowOf(context.contentResolver).registerInputStreamSupplier(video){(movie()+Vivo.uuid(tail(id))).inputStream()}
         shadowOf(context.contentResolver).registerInputStreamSupplier(wrong){(movie()+Vivo.uuid(tail("ffffffffffffffffffffffffffff"))).inputStream()}
         block(image.toString(),video,wrong)
@@ -47,6 +47,17 @@ class EffectMotionPairIntegrationTest {
         val extracted=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){status=it.status})
         try {assertArrayEquals(movie(),extracted.readBytes());assertEquals(MotionInputStatus.SUCCESS,status);assertTrue(EffectMotionInput.needsPair(image))} finally {extracted.delete()}
         assertFalse(File(context.cacheDir,"effect-motion").listFiles().orEmpty().any{it.name.startsWith("input-")||it.name.startsWith("pair-")})
+    }
+    @Test fun native2100ImageEntersPairRequiredAndRecoversAfterVideoSelection()=fixture(2100L) { image,video,wrong->
+        var status:MotionInputStatus?=null
+        assertNull(EffectMotionInput.prepareWithDiagnostics(context,image){status=it.status})
+        assertEquals(MotionInputStatus.PAIR_REQUIRED,status)
+        assertTrue(EffectMotionInput.needsPair(image))
+        assertFalse(EffectMotionInput.associate(context,image,wrong))
+        assertTrue(EffectMotionInput.associate(context,image,video))
+        val extracted=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){status=it.status})
+        try { assertEquals(MotionInputStatus.SUCCESS,status); assertArrayEquals(movie(),extracted.readBytes()) }
+        finally { extracted.delete() }
     }
     @Test fun changedOrRevokedExplicitVideoDoesNotSilentlyUseStill()=fixture { image,video,wrong->
         EffectMotionPairAccess.rememberSelected(context,image,video){true}

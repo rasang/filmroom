@@ -111,11 +111,25 @@ object MotionPhotoExtractor {
     }
 
     private fun pairImageBinding(file: RandomAccessFile, jpegEnd: Long): PairBinding? {
-        val length = file.length() - jpegEnd
-        if (length !in 64..16384) return null
-        file.seek(jpegEnd)
-        return nativeBinding(ByteArray(length.toInt()).also(file::readFully))
-            .takeIf { it.version in setOf(2014L, 2104L, 2200L) }
+        if (file.length() - jpegEnd < 66) return null
+        file.seek(file.length() - 62)
+        val size = NativeVivoMetadata.tailSize(ByteArray(62).also(file::readFully))
+        val start = file.length() - size
+        if (start < jpegEnd) return null
+        // Native HDR captures append an auxiliary JPEG followed by camera-specific
+        // image/depth metadata. That opaque metadata is not the vivo pair record.
+        // Require the auxiliary image to be structurally valid, but do not apply our
+        // export schema to the following native metadata. Pairing is established only
+        // by the complete terminal record and the independently checked MP4 record.
+        val extra = start - jpegEnd
+        if (extra > MAX_JPEG_BYTES) return null
+        if (extra > 0) {
+            file.seek(jpegEnd)
+            Jpeg.inspect(ByteArray(extra.toInt()).also(file::readFully))
+        }
+        file.seek(start)
+        return nativeBinding(ByteArray(size).also(file::readFully))
+            .takeIf { it.version in setOf(2014L, 2100L, 2104L, 2200L) }
     }
 
     private fun inspectPair(image: File, jpegEnd: Long, video: File): MotionPhotoSource? = try {
@@ -142,6 +156,7 @@ object MotionPhotoExtractor {
                         val videoBinding = nativeBinding(ByteArray((box.size - 24).toInt()).also(f::readFully))
                         val matchingVersions = when (binding.version) {
                             2014L -> videoBinding.version == 2014L
+                            2100L -> videoBinding.version == 2100L
                             2104L -> videoBinding.version == 2104L
                             2200L -> videoBinding.version == 2016L
                             else -> false
@@ -158,12 +173,7 @@ object MotionPhotoExtractor {
         }
     } catch (_: Exception) { null }
 
-    private fun nativeBinding(tail: ByteArray): PairBinding {
-        val parsed = Vivo.parse(tail)
-        val version = parsed.fields["version"] as? Long ?: error("Missing vivo version")
-        require(version in setOf(2014L, 2104L, 2200L, 2016L))
-        return PairBinding(parsed.id, version)
-    }
+    private fun nativeBinding(tail: ByteArray): PairBinding = NativeVivoMetadata.parse(tail)
 
     fun extract(source: MotionPhotoSource, output: File, checkActive: () -> Unit = {}): File {
         require(source.offset >= 0 && source.length in 16..MAX_INPUT_BYTES && source.offset <= source.file.length() - source.length)
