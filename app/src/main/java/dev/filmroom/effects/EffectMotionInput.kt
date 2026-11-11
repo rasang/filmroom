@@ -2,6 +2,9 @@ package dev.filmroom.effects
 
 import android.content.Context
 import android.net.Uri
+import dev.filmroom.diagnostics.PairLookupStatus
+import dev.filmroom.diagnostics.PairMatchStatus
+import dev.filmroom.diagnostics.PairPermission
 import dev.filmroom.diagnostics.Diagnostics
 import dev.filmroom.diagnostics.MotionInputDiagnosticInfo
 import dev.filmroom.diagnostics.MotionInputStatus
@@ -50,12 +53,19 @@ internal object EffectMotionInput {
         } catch(e:CancellationException) { progress.status=MotionInputStatus.CANCELLED;throw e }
           catch(_:Exception) { null }
           catch(_:OutOfMemoryError) { progress.status=MotionInputStatus.MEMORY_LIMIT;null }
-          finally { runCatching { report(MotionInputDiagnosticInfo(progress.status,progress.copied,progress.videoBytes)) } }
+          finally { runCatching { report(MotionInputDiagnosticInfo(progress.status,progress.copied,progress.videoBytes, pairLookup=progress.lookup, pairMatch=progress.match, pairPermission=progress.permission, pairCandidates=progress.candidates, pairReadFailures=progress.readFailures, pairRejected=progress.rejected, pairSavedFallback=progress.fallback)) } }
     }
     private class Progress {
         var status=MotionInputStatus.READ_FAILED
         var copied=0L
         var videoBytes:Long?=null
+        var lookup:PairLookupStatus?=null
+        var match:PairMatchStatus?=null
+        var permission:PairPermission?=null
+        var candidates=0
+        var readFailures=0
+        var rejected=0
+        var fallback=false
     }
     private fun prepareChecked(context:Context,uri:String?,checkActive:()->Unit,progress:Progress,selectedVideo:String?=null):File? {
         if(uri==null) { progress.status=MotionInputStatus.SOURCE_MISSING;return null }
@@ -86,27 +96,42 @@ internal object EffectMotionInput {
             try {
                 if(inspected==null && paired) {
                     progress.status=MotionInputStatus.PAIR_REQUIRED
-                    val candidates=selectedVideo?.let{listOf(it)} ?: EffectMotionPairAccess.candidates(context,uri)
+                    progress.permission=when { EffectMotionPairAccess.hasFullVideoAccess(context)->PairPermission.FULL; EffectMotionPairAccess.canQueryVideos(context)->PairPermission.PARTIAL; else->PairPermission.NONE }
+                    val candidates=selectedVideo?.let{progress.lookup=PairLookupStatus.SAVED;listOf(it)} ?: EffectMotionPairAccess.candidates(context,uri,report={progress.lookup=it})
+                    val saved=selectedVideo==null && progress.lookup==PairLookupStatus.SAVED
+                    progress.match=PairMatchStatus.NONE
                     val matches=mutableListOf<Pair<File,dev.filmroom.livephoto.importer.MotionPhotoSource>>()
                     try {
-                        for(candidate in candidates.take(8)) {
-                            checkActive()
-                            val copy=File.createTempFile("pair-",".mp4",directory)
-                            var matched=false
-                            try {
-                                context.contentResolver.openInputStream(Uri.parse(candidate))?.use { src ->
-                                    copy.outputStream().use { dst ->
-                                        val buffer=ByteArray(65536);var total=0L
-                                        while(true){checkActive();val n=src.read(buffer);if(n<0)break
-                                            total+=n;require(total<=MAX_INPUT);dst.write(buffer,0,n)}
-                                    }
-                                } ?: continue
-                                MotionPhotoExtractor.inspect(input,copy,checkActive)?.let { matches+=copy to it;matched=true }
-                            } catch(e:CancellationException){throw e}
-                              catch(_:Exception) {} finally {if(!matched)copy.delete()}
+                        // A valid explicit selection wins. Only failed remembered selections fall back.
+                        for (batch in 0..(if(saved) 1 else 0)) {
+                            val batchCandidates=if(batch==0) candidates else {
+                                if(matches.isNotEmpty())break
+                                progress.fallback=true
+                                EffectMotionPairAccess.candidates(context,uri,includeSaved=false,report={progress.lookup=it})
+                            }
+                            progress.candidates+=batchCandidates.size
+                            for(candidate in batchCandidates.take(8)) {
+                                checkActive()
+                                val copy=File.createTempFile("pair-",".mp4",directory)
+                                var matched=false
+                                try {
+                                    context.contentResolver.openInputStream(Uri.parse(candidate))?.use { src ->
+                                        copy.outputStream().use { dst ->
+                                            val buffer=ByteArray(65536);var total=0L
+                                            while(true){checkActive();val n=src.read(buffer);if(n<0)break
+                                                total+=n;require(total<=MAX_INPUT);dst.write(buffer,0,n)}
+                                        }
+                                    } ?: throw java.io.IOException()
+                                    MotionPhotoExtractor.inspect(input,copy,checkActive)?.let { matches+=copy to it;matched=true }
+                                    if(!matched) {progress.rejected++;progress.match=PairMatchStatus.INVALID_PAIR}
+                                } catch(e:CancellationException){throw e}
+                                  catch(_:SecurityException) {progress.readFailures++;progress.match=PairMatchStatus.ACCESS_DENIED}
+                                  catch(_:Exception) {progress.readFailures++;progress.match=PairMatchStatus.UNREADABLE} finally {if(!matched)copy.delete()}
+                            }
                         }
                         // Even multiple valid candidates are ambiguous: never choose by filename/order.
-                        if(matches.size!=1)return null
+                        if(matches.size!=1) {if(matches.size>1)progress.match=PairMatchStatus.AMBIGUOUS;return null}
+                        progress.match=PairMatchStatus.MATCHED
                         companion=matches.single().first;inspected=matches.single().second
                     } finally {matches.forEach{if(it.first!=companion)it.first.delete()}}
                 }

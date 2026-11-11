@@ -138,6 +138,22 @@ class EffectMotionPairAccessHostTest {
         assertEquals(1, provider.queries)
         assertNull(provider.videoSelection)
     }
+    @Test fun lookupReasonsAreTypedAndDoNotExposeMetadata() {
+        var reason:dev.filmroom.diagnostics.PairLookupStatus?=null
+        val report:(dev.filmroom.diagnostics.PairLookupStatus)->Unit={reason=it}
+        EffectMotionPairAccess.candidates(context,image,report=report)
+        assertEquals(dev.filmroom.diagnostics.PairLookupStatus.NO_PERMISSION,reason)
+        shadowOf(context).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO)
+        val provider=installProvider().apply { count=0 }
+        EffectMotionPairAccess.candidates(context,image,report=report)
+        assertEquals(dev.filmroom.diagnostics.PairLookupStatus.NO_VISIBLE_SAME_NAME,reason)
+        provider.count=9
+        EffectMotionPairAccess.candidates(context,image,report=report)
+        assertEquals(dev.filmroom.diagnostics.PairLookupStatus.TOO_MANY_CANDIDATES,reason)
+        provider.denyImage=true
+        EffectMotionPairAccess.candidates(context,image,report=report)
+        assertEquals(dev.filmroom.diagnostics.PairLookupStatus.ACCESS_DENIED,reason)
+    }
     private fun installProvider() = MediaProvider().also {
         it.attachInfo(context, android.content.pm.ProviderInfo().apply { authority = "media" })
         ShadowContentResolver.registerProviderInternal("media", it)

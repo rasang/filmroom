@@ -269,13 +269,13 @@ class PhotoEffectActivity : ComponentActivity() {
         header.addView(EffectControls.button(this,"", "back"){leave()}.apply{contentDescription=t("返回","Back");setPadding(dp(13),dp(13),dp(13),dp(13))},LinearLayout.LayoutParams(dp(48),dp(48)))
         header.addView(TextView(this).apply{text=if(kind==EffectKind.LIGHT_TABLE)t("观片台","Light table")else t("取景器","Viewfinder");textSize=20f;setTextColor(Palette.ink)},LinearLayout.LayoutParams(0,-2,1f).apply{marginStart=dp(12)})
         root.addView(header)
-        stage=object:FrameLayout(this@PhotoEffectActivity){
+        stage=object:EffectPreviewStage(this@PhotoEffectActivity){
             private var downX=0f;private var downY=0f;private var tracking=false;private var horizontal=false
             private var velocity:VelocityTracker?=null
             private val maxFlingVelocity=ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat()
             private fun clearVelocity(){velocity?.recycle();velocity=null}
             override fun onDetachedFromWindow(){clearVelocity();super.onDetachedFromWindow()}
-            override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);if(w!=oldw&&oldw>0)cancelPageTransition();fitPreview();incomingPhoto?.let{incomingPreview?.layoutParams=pageLayout(it.output)}}
+            override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);if(w!=oldw&&oldw>0)cancelPageTransition()}
             override fun dispatchTouchEvent(event:MotionEvent):Boolean {
                 if(event.actionMasked==MotionEvent.ACTION_DOWN){clearVelocity();velocity=VelocityTracker.obtain()}
                 velocity?.addMovement(event)
@@ -666,7 +666,7 @@ class PhotoEffectActivity : ComponentActivity() {
                     sourceComposition=prepared.composition;cameraReadout=prepared.readout
                     clearPreview();this@PhotoEffectActivity.correlationId=correlationId;currentRecord=prepared.record;result=ownedOutput;source=ownedInput;sourceMotionFile=ownedMotion
                     ownedOutput=null;ownedInput=null;ownedMotion=null
-                    preview=EffectPreview(requireNotNull(source),requireNotNull(result),cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))}
+                    preview=EffectPreview(requireNotNull(source),requireNotNull(result),cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,pageLayout(requireNotNull(result)))}
                     fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
                     replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;updatePairControl();preloadAdjacentPhotos()
                     return@launch
@@ -695,7 +695,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){ownedMotion=EffectMotionInput.prepare(this@PhotoEffectActivity,sourceUri,correlationId){ensureActive()}}
                 ensureActive()
                 clearPreview();this@PhotoEffectActivity.correlationId=correlationId;currentRecord=record;result=output;source=input;sourceMotionFile=ownedMotion;ownedOutput=null;ownedInput=null;ownedMotion=null
-                preview=EffectPreview(input,output,cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
+                preview=EffectPreview(input,output,cameraReadout,autoPlay,sourceMotionFile,sourceComposition,correlationId).also{stage.addView(it,pageLayout(output))};fitPreview();if(!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))preview?.onPause()
                 replayButton.isEnabled=true;livePhotoButton.isEnabled=true;exportButton.isEnabled=true;status.text="";status.visibility=android.view.View.GONE;updatePairControl();preloadAdjacentPhotos()
             } finally {
                 ownedMotion?.delete()
@@ -705,9 +705,7 @@ class PhotoEffectActivity : ComponentActivity() {
         }
     }
     private fun pageLayout(photo:Bitmap):FrameLayout.LayoutParams {
-        val aspect=EffectGeometry.sceneAspect(kind,photo.width.toFloat()/photo.height)
-        val width=minOf(stage.width.toFloat().coerceAtLeast(1f),stage.height.coerceAtLeast(1)*aspect)
-        return FrameLayout.LayoutParams(width.toInt().coerceAtLeast(1),(width/aspect).toInt().coerceAtLeast(1),Gravity.CENTER)
+        return EffectPreviewStage.PageParams(EffectGeometry.sceneAspect(kind,photo.width.toFloat()/photo.height))
     }
     private fun fitPreview(){
         if(stage.width<=0||stage.height<=0)return

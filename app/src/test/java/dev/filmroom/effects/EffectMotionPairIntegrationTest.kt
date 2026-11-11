@@ -67,6 +67,59 @@ class EffectMotionPairIntegrationTest {
         assertEquals(MotionInputStatus.PAIR_REQUIRED,status);assertTrue(EffectMotionInput.needsPair(image))
         assertEquals(listOf(video.toString()),EffectMotionPairAccess.candidates(context,image))
     }
+    @Test fun failedSavedSelectionFallsBackToAuthorizedMediaStoreAndReportsNoIdentifiers()=fixture { image,video,wrong->
+        val provider=object:android.content.ContentProvider() {
+            override fun onCreate()=true
+            override fun query(uri:Uri, projection:Array<out String>?, selection:String?, args:Array<out String>?, order:String?):android.database.Cursor =
+                if(uri.authority=="fixture") android.database.MatrixCursor(arrayOf("_display_name")).apply {addRow(arrayOf("PRIVATE.jpg"))}
+                else android.database.MatrixCursor(arrayOf("_id")).apply {addRow(arrayOf(33L))}
+            override fun getType(uri:Uri):String?=null
+            override fun insert(uri:Uri, values:android.content.ContentValues?):Uri?=null
+            override fun delete(uri:Uri,selection:String?,args:Array<out String>?)=0
+            override fun update(uri:Uri,values:android.content.ContentValues?,selection:String?,args:Array<out String>?)=0
+        }
+        provider.attachInfo(context,android.content.pm.ProviderInfo().apply {authority="fixture"})
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("fixture",provider)
+        org.robolectric.shadows.ShadowContentResolver.registerProviderInternal("media",provider)
+        val automatic=Uri.parse("content://media/external/video/media/33")
+        val bytes=context.contentResolver.openInputStream(video)!!.use {it.readBytes()}
+        shadowOf(context.contentResolver).registerInputStreamSupplier(automatic){bytes.inputStream()}
+        shadowOf(context as Application).grantPermissions(android.Manifest.permission.READ_MEDIA_VIDEO)
+        EffectMotionPairAccess.rememberSelected(context,image,wrong){true}
+        var diagnostic:MotionInputDiagnosticInfo?=null
+        val extracted=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+        try {
+            assertArrayEquals(movie(),extracted.readBytes())
+            val d=requireNotNull(diagnostic)
+            assertEquals(PairMatchStatus.MATCHED,d.pairMatch)
+            assertEquals(PairPermission.FULL,d.pairPermission)
+            assertEquals(2,d.pairCandidates)
+            assertEquals(1,d.pairRejected)
+            assertTrue(d.pairSavedFallback)
+            assertFalse(d.fields().toString().contains("PRIVATE"))
+            assertFalse(d.fields().toString().contains("content://"))
+            assertEquals(d,MotionInputDiagnosticInfo.parse(d.fields().mapValues {it.value.toString()}))
+            shadowOf(context.contentResolver).registerInputStreamSupplier(wrong){throw SecurityException("private uri must not enter logs")}
+            val retry=requireNotNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+            retry.delete()
+            assertEquals(PairMatchStatus.MATCHED,diagnostic!!.pairMatch)
+            assertEquals(1,diagnostic!!.pairReadFailures)
+            assertTrue(diagnostic!!.pairSavedFallback)
+            assertFalse(diagnostic!!.fields().toString().contains("private uri"))
+        } finally { extracted.delete(); shadowOf(context as Application).denyPermissions(android.Manifest.permission.READ_MEDIA_VIDEO) }
+    }
+    @Test fun invalidSavedSelectionWithoutPermissionStaysPairRequiredAndExplainsFailure()=fixture { image,_,wrong->
+        shadowOf(context as Application).denyPermissions(android.Manifest.permission.READ_MEDIA_VIDEO,android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        EffectMotionPairAccess.rememberSelected(context,image,wrong){true}
+        var diagnostic:MotionInputDiagnosticInfo?=null
+        assertNull(EffectMotionInput.prepareWithDiagnostics(context,image){diagnostic=it})
+        val d=requireNotNull(diagnostic)
+        assertEquals(MotionInputStatus.PAIR_REQUIRED,d.status)
+        assertEquals(PairLookupStatus.NO_PERMISSION,d.pairLookup)
+        assertEquals(PairMatchStatus.INVALID_PAIR,d.pairMatch)
+        assertEquals(1,d.pairRejected)
+        assertTrue(d.pairSavedFallback)
+    }
     @Test fun activityCannotStartEitherExportDuringAssociation() {
         val activity=PhotoEffectActivity()
         fun set(name:String,value:Any)=PhotoEffectActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.set(activity,value)

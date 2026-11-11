@@ -14,6 +14,18 @@ class MotionInputDiagnosticInfoTest {
         val parsed=MotionInputDiagnosticInfo.parse(mapOf("motionInputStatus" to "SUCCESS","motionInputCopiedBytes" to "-1","motionInputVideoBytes" to "999999999999"))!!
         assertEquals(0L,parsed.copiedBytes);assertNull(parsed.videoBytes)
     }
+    @Test fun pairDiagnosticsRejectUntrustedStringsAndBoundCounts() {
+        val parsed=MotionInputDiagnosticInfo.parse(mapOf(
+            "motionInputStatus" to "PAIR_REQUIRED", "pairLookup" to "content://private/image",
+            "pairMatch" to "/private/video.mp4", "pairPermission" to "PRIVATE",
+            "pairCandidates" to "999", "pairReadFailures" to "-1", "pairRejected" to "999"))!!
+        assertNull(parsed.pairLookup); assertNull(parsed.pairMatch); assertNull(parsed.pairPermission)
+        assertEquals(9,parsed.pairCandidates); assertEquals(0,parsed.pairReadFailures); assertEquals(9,parsed.pairRejected)
+        assertFalse(parsed.fields().toString().contains("private"))
+        val info=MotionInputDiagnosticInfo(MotionInputStatus.PAIR_REQUIRED, pairLookup=PairLookupStatus.NO_VISIBLE_SAME_NAME,
+            pairMatch=PairMatchStatus.INVALID_PAIR, pairPermission=PairPermission.PARTIAL, pairRejected=1, pairSavedFallback=true)
+        assertEquals(info,SafeInfo.parse(SafeInfo(motionInput=info).fields()).motionInput)
+    }
     @Test fun typedInputReportPersistsAcrossStoreReopen() {
         val dir=Files.createTempDirectory("motion-input-diagnostics-").toFile()
         val clock=object:DiagnosticClock { override fun wallMs()=1800000000000L;override fun elapsedMs()=100L }

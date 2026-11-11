@@ -267,9 +267,10 @@ void main(){
   gl_FragColor=vec4(c,1.);return;
  }
  vec2 resultUv=contain(p,screenAspect,resultAspect);
- // Only encoder/pixel rounding can leave a subpixel seam now. Extend the edge
- // texel there, rather than exposing gray; interior sampling remains contain().
- vec3 color=texture2D(dst,clamp(resultUv,0.,1.)).rgb;
+ // Contain never stretches an edge texel across letterboxing if the surface
+ // temporarily has a different aspect (resize, multi-window, encoder rounding).
+ float resultInside=step(0.,resultUv.x)*step(resultUv.x,1.)*step(0.,resultUv.y)*step(resultUv.y,1.);
+ vec3 color=texture2D(dst,clamp(resultUv,0.,1.)).rgb*resultInside;
  if(showResult<.5){
   vec2 pad=opticalPad;
   vec2 q=(p-pad)/(1.-2.*pad);
