@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.AtomicFile
 import dev.filmroom.io.LinearSpool
+import dev.filmroom.io.decodeFile
 import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 import java.io.File
@@ -12,12 +13,13 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlin.coroutines.CoroutineContext
 
-/** App-private, display-encoded copy of the canonical RAW input, BEFORE crop/frame/effects.
+/** App-private, display-encoded copy of canonical photo input, BEFORE crop/frame/effects.
  * Lives with the export record, not in cache/MediaStore. Never used as scientific render input.
  * Backups deliberately do not carry this artifact; restored/legacy records use source fallback.
  */
 internal object RawSourcePreviewStore {
     const val MAX_EDGE = 2560
+    // Keep beta3 names so existing RAW records remain readable without migration.
     private const val IMAGE = "source-raw.preview"
     private const val META = "source-raw.meta"
     private const val MAX_BYTES = 16L * 1024 * 1024
@@ -25,10 +27,23 @@ internal object RawSourcePreviewStore {
         .digest("${job.id}\n${job.originalUri.orEmpty()}\n${job.sourceWidth}\n${job.sourceHeight}".toByteArray())
         .joinToString("") { "%02x".format(it) }
 
-    fun write(dir: File, job: ExportJob, linear: File, coroutine: CoroutineContext) {
+    /** Decode the immutable intake snapshot, never the editor thumbnail or external URI.
+     * RAW/HEIC native spools are already upright; raster ImageDecoder applies EXIF once,
+     * converts to sRGB and composites transparency on white exactly like normal import.
+     * Only the static image is retained here: original Live video access is unchanged.
+     */
+    fun writeSource(dir: File, job: ExportJob, snapshot: File, isLinear: Boolean, coroutine: CoroutineContext) {
         coroutine.ensureActive()
         clear(dir)
-        val bitmap = LinearSpool.preview(linear, job.sourceWidth, job.sourceHeight, MAX_EDGE, coroutine)
+        val bitmap = if (isLinear) LinearSpool.preview(snapshot, job.sourceWidth, job.sourceHeight, MAX_EDGE, coroutine)
+            else decodeFile(snapshot, MAX_EDGE, coroutine)
+        writeBitmap(dir, job, bitmap, coroutine)
+    }
+
+    fun write(dir: File, job: ExportJob, linear: File, coroutine: CoroutineContext) =
+        writeSource(dir, job, linear, true, coroutine)
+
+    private fun writeBitmap(dir: File, job: ExportJob, bitmap: Bitmap, coroutine: CoroutineContext) {
         try {
             val image = AtomicFile(File(dir, IMAGE))
             val output = image.startWrite()

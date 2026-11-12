@@ -107,14 +107,12 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     val scale=minOf(1.0,480.0/maxOf(bitmap.width,bitmap.height));val small=Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
                     try {FileOutputStream(File(dir,"original-preview.jpg")).use{check(small.compress(Bitmap.CompressFormat.JPEG,85,it));it.fd.sync()}}finally{if(small!==bitmap)small.recycle()}
                 }
-                // The linear spool is already display-oriented RAW, before any crop or film effects.
-                // Snapshot it while intake owns it; subsequent cleanup may remove the large spool.
-                if(source.linearFile!=null && dev.filmroom.codec.RawFormat.entries.any{it.mimeType==source.mimeType}) {
-                    try { RawSourcePreviewStore.write(dir,draft,snapshot,currentCoroutineContext()) }
-                    catch(c:CancellationException){throw c}
-                    catch(_:Exception){RawSourcePreviewStore.clear(dir)}
-                    catch(_:OutOfMemoryError){RawSourcePreviewStore.clear(dir)}
-                }
+                // Preserve every source format from our immutable input, not an edited thumbnail.
+                // A missing optional preview must not prevent the original photo export.
+                try { RawSourcePreviewStore.writeSource(dir,draft,snapshot,source.linearFile!=null,currentCoroutineContext()) }
+                catch(c:CancellationException){throw c}
+                catch(_:Exception){RawSourcePreviewStore.clear(dir)}
+                catch(_:OutOfMemoryError){RawSourcePreviewStore.clear(dir)}
                 val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
                 val paused=generation!=pauseGeneration.get() || startupBlocked
                 draft.copy(state=if(paused)ExportJobState.PAUSED else ExportJobState.PENDING,message=if(startupBlocked)STARTUP_BLOCKED_MESSAGE else if(paused)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bb72ee12ba8b)else null,messageUi=if(startupBlocked)UiMessage.of(R.string.text_31912f0eff0f)else if(paused)UiMessage.of(R.string.text_bb72ee12ba8b)else null,inputReady=true).also{ready->store.completeInput(ready);durable=true;runCatching{onEnqueued(ready)}}
