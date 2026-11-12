@@ -107,12 +107,20 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     val scale=minOf(1.0,480.0/maxOf(bitmap.width,bitmap.height));val small=Bitmap.createScaledBitmap(bitmap,(bitmap.width*scale).toInt().coerceAtLeast(1),(bitmap.height*scale).toInt().coerceAtLeast(1),true)
                     try {FileOutputStream(File(dir,"original-preview.jpg")).use{check(small.compress(Bitmap.CompressFormat.JPEG,85,it));it.fd.sync()}}finally{if(small!==bitmap)small.recycle()}
                 }
+                // The linear spool is already display-oriented RAW, before any crop or film effects.
+                // Snapshot it while intake owns it; subsequent cleanup may remove the large spool.
+                if(source.linearFile!=null && dev.filmroom.codec.RawFormat.entries.any{it.mimeType==source.mimeType}) {
+                    try { RawSourcePreviewStore.write(dir,draft,snapshot,currentCoroutineContext()) }
+                    catch(c:CancellationException){throw c}
+                    catch(_:Exception){RawSourcePreviewStore.clear(dir)}
+                    catch(_:OutOfMemoryError){RawSourcePreviewStore.clear(dir)}
+                }
                 val startupBlocked=startupGate?.state?.value is StartupRecoveryGate.State.Failed
                 val paused=generation!=pauseGeneration.get() || startupBlocked
                 draft.copy(state=if(paused)ExportJobState.PAUSED else ExportJobState.PENDING,message=if(startupBlocked)STARTUP_BLOCKED_MESSAGE else if(paused)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_bb72ee12ba8b)else null,messageUi=if(startupBlocked)UiMessage.of(R.string.text_31912f0eff0f)else if(paused)UiMessage.of(R.string.text_bb72ee12ba8b)else null,inputReady=true).also{ready->store.completeInput(ready);durable=true;runCatching{onEnqueued(ready)}}
             } catch(t:Throwable) {
                 if(!durable)withContext(NonCancellable) {
-                    if(accepted){snapshot.delete();runCatching{store.change(id){old->if(old.terminal)old else old.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e56de4bd4f96),messageUi=UiMessage.of(R.string.text_e56de4bd4f96))}}}
+                    if(accepted){snapshot.delete();RawSourcePreviewStore.clear(dir);runCatching{store.change(id){old->if(old.terminal)old else old.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e56de4bd4f96),messageUi=UiMessage.of(R.string.text_e56de4bd4f96))}}}
                     else dir.deleteRecursively()
                 }
                 throw t
@@ -464,7 +472,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
     private fun cleanup(id:String):Boolean {
         if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)
         val dir=store.directory(id)
-        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !NegativePreviewStore.retain(dir,it)}
+        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !(store.get(id)?.state!=ExportJobState.CANCELLED && RawSourcePreviewStore.retained(it.name)) && !NegativePreviewStore.retain(dir,it)}
             ?.map{if(it.isDirectory)it.deleteRecursively()else it.delete()}?.all{it} ?: false
     }
     class IntakeLease internal constructor(val generation:Long,private val release:()->Unit):java.io.Closeable {

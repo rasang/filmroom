@@ -17,12 +17,12 @@ internal class EffectExportImages : AutoCloseable {
     private val owned = mutableListOf<Bitmap>()
 
     suspend fun load(context:Context, kind:EffectKind, sourceUri:String?, resultUri:String,
-             quality:EffectExportQuality, live:Boolean=false, composition:EffectSourceComposition?=null, correlationId:Long=EffectCorrelation.next(), parentCorrelationId:Long?=null, cancelled:()->Boolean) = EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId,parentCorrelationId) { log ->
+             quality:EffectExportQuality, live:Boolean=false, composition:EffectSourceComposition?=null, correlationId:Long=EffectCorrelation.next(), parentCorrelationId:Long?=null, sourceRecord:dev.filmroom.export.ExportJob?=null, cancelled:()->Boolean) = EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId,parentCorrelationId) { log ->
         fun checkCancel(){if(cancelled())throw CancellationException("Image decode cancelled")}
         checkCancel()
         log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,parentCorrelationId=parentCorrelationId,inputFormat=dev.filmroom.io.formats.PhotoFormat.UNKNOWN))
         checkCancel()
-        val decoder=EffectImageDecoder(context,correlationId,cancelled)
+        val decoder=EffectImageDecoder(context,correlationId,cancelled,sourceRecord=sourceRecord,preferNativeRaw=true)
         try {
         suspend fun bounds(uri:String):EffectExportSize {
             checkCancel()
@@ -52,7 +52,7 @@ internal class EffectExportImages : AutoCloseable {
             budget.toDouble()/maxOf(input.longEdge,output.longEdge))
         suspend fun read(uri:String,size:EffectExportSize):Bitmap {
             checkCancel()
-            val edge=(size.longEdge*scale).toInt().coerceIn(1,6144)
+            val edge=decodeEdge(size.longEdge,scale,budget,decoder.usesPersistentPreview(uri))
             val bitmap=decoder.read(uri,edge,allowRawFallback=uri!=resultUri)
             owned.add(bitmap);checkCancel();return bitmap
         }
@@ -73,6 +73,11 @@ internal class EffectExportImages : AutoCloseable {
     }
     override fun close(){owned.forEach{if(!it.isRecycled)it.recycle()};owned.clear()}
     companion object {
+        /** A saved preview is already downsampled. Do not shrink it a second time by the
+         * full-size result's scale; retain available detail within the same decode budget. */
+        internal fun decodeEdge(availableEdge:Int, scale:Double, budget:Int, persistentPreview:Boolean):Int =
+            (if(persistentPreview)minOf(availableEdge,budget) else (availableEdge*scale).toInt()).coerceIn(1,6144)
+
         /** Live additionally reserves space for video frame extraction and an SDR cover copy. */
         internal fun decodeBudgetEdge(maxHeap:Long, remaining:Long, live:Boolean=false, composing:Boolean=false):Int {
             val safeBytes=(remaining/2).coerceAtLeast(0)

@@ -9,7 +9,7 @@ import dev.filmroom.model.CropMode
 import dev.filmroom.model.CropSettings
 
 /** The original photograph gets the saved presentation geometry, never the film treatment.
- * ImageDecoder has already applied EXIF orientation. Do not rotate it a second time.
+ * Source decoding/our RAW preview has already normalized orientation. Do not rotate it twice.
  * A border's composition describes its photo aperture, not the outer rail dimensions.
  */
 internal data class EffectSourceComposition(val canonicalWidth:Int,val canonicalHeight:Int,val settings:CropSettings) {

@@ -354,9 +354,9 @@ class PhotoEffectActivity : ComponentActivity() {
             else t("实际导出：$pixels","Exported at $pixels")
     }
     private fun button(label:String,action:()->Unit)=Button(this).apply{text=label;isAllCaps=false;textSize=14f;minWidth=dp(64);setPadding(dp(20),0,dp(20),0);setTextColor(Palette.ink);setOnClickListener{action()}}
-    private suspend fun decode(uri:String,maxEdge:Int=1600,diagnosticId:Long=correlationId,allowRawFallback:Boolean=true):Bitmap =
+    private suspend fun decode(uri:String,maxEdge:Int=1600,diagnosticId:Long=correlationId,allowRawFallback:Boolean=true,sourceRecord:dev.filmroom.export.ExportJob?=null):Bitmap =
         EffectInputFormat.decode(diagnosticId) { report ->
-            EffectImageDecoder(this,diagnosticId).use { it.read(uri,maxEdge,allowRawFallback=allowRawFallback,report=report) }
+            EffectImageDecoder(this,diagnosticId,sourceRecord=sourceRecord,preferNativeRaw=true).use { it.read(uri,maxEdge,allowRawFallback=allowRawFallback,report=report) }
         }
     private fun selectPhoto(original:Boolean,uri:Uri){
         selectionJob?.cancel();loadJob?.cancel()
@@ -441,7 +441,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 EffectCameraReadout.read(contentResolver,record.originalUri,record.photoMetadata)}
             withContext(Dispatchers.IO){output=decode(requireNotNull(record.mediaUri),edge,correlationId,allowRawFallback=false)}
             if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){
-                val raw=decode(requireNotNull(record.originalUri),edge,correlationId)
+                val raw=decode(requireNotNull(record.originalUri),edge,correlationId,sourceRecord=record)
                 try{input=composition?.apply(raw){ensureActive()} ?: raw;if(input!==raw)raw.recycle()}
                 catch(t:Throwable){raw.recycle();throw t}
             }else input=output
@@ -685,7 +685,7 @@ class PhotoEffectActivity : ComponentActivity() {
                 val output=ownedOutput
                 if(output==null){missing(false);return@launch}
                 if(kind==EffectKind.OPTICAL_LEAK)withContext(Dispatchers.IO){ownedInput=runCatching{
-                    val raw=decode(requireNotNull(sourceUri),diagnosticId=correlationId)
+                    val raw=decode(requireNotNull(sourceUri),diagnosticId=correlationId,sourceRecord=record)
                     try { (sourceComposition?.apply(raw){ensureActive()} ?: raw).also{if(it!==raw)raw.recycle()} }
                     catch(t:Throwable){raw.recycle();throw t}
                 }.getOrNull()}else ownedInput=output
@@ -767,7 +767,7 @@ class PhotoEffectActivity : ComponentActivity() {
             var report:EffectExportReport?=null
             var motion:EffectMotionSource?=null
             try{
-                withContext(Dispatchers.IO){images.load(this@PhotoEffectActivity,kind,sourceUri,requireNotNull(resultUri),quality,live=true,composition=sourceComposition,correlationId=correlationId,parentCorrelationId=parentCorrelationId){cancelled.get()||!isActive}}
+                withContext(Dispatchers.IO){images.load(this@PhotoEffectActivity,kind,sourceUri,requireNotNull(resultUri),quality,live=true,composition=sourceComposition,correlationId=correlationId,parentCorrelationId=parentCorrelationId,sourceRecord=currentRecord){cancelled.get()||!isActive}}
                 val captureMetadata=withContext(Dispatchers.IO){EffectCaptureMetadata.read(contentResolver,currentRecord?.photoMetadata,sourceUri,resultUri)}
                 withContext(Dispatchers.IO){motion=openExportMotion()}
                 val saved=EffectLivePhotoExporter.export(applicationContext,kind,images.source,images.result,check,slow=selectedSlow,cancelled={cancelled.get()},onProgress={p->runOnUiThread{if(!isDestroyed){status.text=t("导出中 ${(p*100).toInt()}%","Exporting ${(p*100).toInt()}%")}}},quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=motionAudio,photoMetadata=captureMetadata,correlationId=correlationId,parentCorrelationId=parentCorrelationId)
@@ -800,7 +800,7 @@ class PhotoEffectActivity : ComponentActivity() {
             var motion:EffectMotionSource?=null
             try{
                 val uri=withContext(Dispatchers.IO){
-                    images.load(this@PhotoEffectActivity,kind,sourceUri,requireNotNull(resultUri),quality,composition=sourceComposition,correlationId=correlationId,parentCorrelationId=parentCorrelationId){cancelled.get()||!isActive}
+                    images.load(this@PhotoEffectActivity,kind,sourceUri,requireNotNull(resultUri),quality,composition=sourceComposition,correlationId=correlationId,parentCorrelationId=parentCorrelationId,sourceRecord=currentRecord){cancelled.get()||!isActive}
                     motion=openExportMotion()
                     EffectVideoExporter.export(applicationContext,kind,images.source,images.result,{p->runOnUiThread{if(!isDestroyed){val percent=(p*100).toInt();status.visibility=android.view.View.VISIBLE;status.text=t("导出中 $percent%","Exporting $percent%")}}}, {cancelled.get()||!isActive},slow=slow,quality=quality,requestedSize=images.requested,onResolution={report=it},readout=cameraReadout,motionSource=motion,motionAudioFile=motionAudio,correlationId=correlationId,parentCorrelationId=parentCorrelationId)}
                 status.visibility=android.view.View.VISIBLE;status.text=t("视频已保存到相册","Video saved to gallery")+resolutionMessage(report)

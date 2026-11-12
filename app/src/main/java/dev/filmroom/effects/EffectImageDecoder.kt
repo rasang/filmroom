@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
 import android.net.Uri
+import dev.filmroom.export.ExportJob
+import dev.filmroom.export.RawSourcePreviewStore
 import dev.filmroom.io.PhotoRepository
 import dev.filmroom.io.PhotoSource
 import dev.filmroom.io.LoadedPhoto
@@ -20,7 +22,7 @@ import java.io.IOException
 /** Operation-local ownership. Export reuses the native spool between bounds and pixels;
  * callers own returned bitmaps and must close this decoder only after their reads finish.
  * A successful platform decode is not proof that a RAW's full-resolution image was used.
- * We deliberately do not classify a successful embedded preview as a decoder failure. */
+ * RAW source reads explicitly prefer our normalized source preview/native decoder. */
 internal class EffectImageDecoder(
     context: Context,
     private val correlationId:Long = EffectCorrelation.next(),
@@ -30,10 +32,15 @@ internal class EffectImageDecoder(
     private val decodeRaw: (suspend (PhotoSource, Int) -> Bitmap)? = null,
     private val discardRaw: ((PhotoSource) -> Unit)? = null,
     private val containerCheck: (suspend (String) -> Boolean)? = null,
+    private val sourceRecord: ExportJob? = null,
+    private val preferNativeRaw: Boolean = false,
+    private val sourcePreviewRead: ((ExportJob, Int, (Int, Int) -> Unit) -> Bitmap?)? = null,
 ) : AutoCloseable {
     private val app = context.applicationContext
     private val repository by lazy { PhotoRepository(app) }
     private val nativeSources = mutableMapOf<String, PhotoSource>()
+    private val previewSources = mutableSetOf<String>()
+    internal fun usesPersistentPreview(uri:String)=uri in previewSources
 
     suspend fun bounds(uri: String, allowRawFallback: Boolean = true,
                        report: (String) -> Unit = {}): EffectExportSize {
@@ -49,6 +56,41 @@ internal class EffectImageDecoder(
         require(maxEdge in 1..6144)
         currentCoroutineContext().ensureActive()
         nativeSources[uri]?.let { return withExportCancellation { readNative(it, maxEdge, onSize) } }
+        if (allowRawFallback) {
+            sourceRecord?.takeIf { it.originalUri == uri }?.let { record ->
+                val size: (Int, Int) -> Unit = { w, h -> onSize(EffectExportSize(w, h)) }
+                val cached = if (sourcePreviewRead != null) sourcePreviewRead.invoke(record, maxEdge, size)
+                    else RawSourcePreviewStore.read(app, record, maxEdge, size)
+                if (cached != null) {
+                    try {
+                        if (cancelled()) throw CancellationException("Image decode cancelled")
+                        currentCoroutineContext().ensureActive()
+                        previewSources.add(uri)
+                        report("image/jpeg")
+                        return cached
+                    } catch (error: Throwable) { cached.recycle(); throw error }
+                }
+            }
+            // Old records/missing previews must not accept a platform RAW thumbnail whose
+            // outer container orientation may have been ignored by the system codec.
+            if (preferNativeRaw) {
+                val format = containerCheck?.invoke(uri)?.let { if(it)PhotoFormat.TIFF else PhotoFormat.UNKNOWN }
+                    ?: containerFormat(uri)
+                if (isRawContainer(format)) {
+                    try { return importNative(uri, maxEdge, report, onSize) }
+                    catch (error: dev.filmroom.io.PhotoException) {
+                        // TIFF is only a routing hint. A content-validated NOT-RAW result may
+                        // still be a regular TIFF supported by ImageDecoder. Never hide
+                        // RAW camera/variant, resource, permission or cancellation failures.
+                        if (format != PhotoFormat.TIFF || error.codecCode != CodecErrorCode.UNSUPPORTED_FORMAT ||
+                            error.cleanupUncertain || !canRetry(error)) throw error
+                        val bitmap = systemRead?.invoke(uri,maxEdge,report,onSize) ?: readPlatform(uri,maxEdge,report,onSize)
+                        try { currentCoroutineContext().ensureActive(); return bitmap }
+                        catch (t:Throwable) { bitmap.recycle(); throw t }
+                    }
+                }
+            }
+        }
         try {
             val bitmap = systemRead?.invoke(uri,maxEdge,report,onSize) ?: readPlatform(uri,maxEdge,report,onSize)
             try { currentCoroutineContext().ensureActive(); return bitmap }
@@ -59,8 +101,14 @@ internal class EffectImageDecoder(
             if (!allowRawFallback || !canRetry(error)) throw error
             currentCoroutineContext().ensureActive()
             if (!(containerCheck?.invoke(uri) ?: hasRawContainer(uri))) throw error
-            // Adjacent-page preloads must not start several full native RAW imports together.
-            return withExportCancellation { EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId) { log ->
+            return importNative(uri, maxEdge, report, onSize)
+        }
+    }
+
+    private suspend fun importNative(uri:String, maxEdge:Int, report:(String)->Unit,
+                                     onSize:(EffectExportSize)->Unit):Bitmap {
+        // Adjacent-page preloads must not start several full native RAW imports together.
+        return withExportCancellation { EffectExportLog.trace(EffectExportScope.INPUT_DECODE,correlationId) { log ->
                 log.phase(EffectExportStep.DECODE_SOURCE)
                 log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.RAW_FALLBACK))
                 nativeImportLock.withLock {
@@ -83,7 +131,6 @@ internal class EffectImageDecoder(
                 }
                 }
             } }
-        }
     }
 
     private suspend fun withExportCancellation(block:suspend ()->Bitmap):Bitmap {
@@ -129,7 +176,9 @@ internal class EffectImageDecoder(
         return decodeRaw?.invoke(source, nativeEdge) ?: repository.decode(source, nativeEdge)
     }
 
-    private suspend fun hasRawContainer(uri: String): Boolean {
+    private suspend fun hasRawContainer(uri:String)=isRawContainer(containerFormat(uri))
+
+    private suspend fun containerFormat(uri: String): PhotoFormat {
         val prefix = ByteArray(PhotoHeaders.MAX_PREFIX_BYTES)
         var count = 0
         app.contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
@@ -141,12 +190,13 @@ internal class EffectImageDecoder(
                 count += n
             }
         } ?: throw FileNotFoundException("Photo provider returned no stream")
-        return isRawContainer(PhotoHeaders.sniff(prefix, count).format)
+        return PhotoHeaders.sniff(prefix, count).format
     }
 
     override fun close() {
         nativeSources.values.forEach { discard(it) }
         nativeSources.clear()
+        previewSources.clear()
     }
 
     companion object {

@@ -111,7 +111,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
                 log.phase(EffectExportStep.DECODE_RESULT)
                 output=decode(context,requireNotNull(record.mediaUri),log,allowRawFallback=false);ensureActive()
                 log.phase(EffectExportStep.DECODE_SOURCE)
-                val raw=decode(context,requireNotNull(record.originalUri),log)
+                val raw=decode(context,requireNotNull(record.originalUri),log,sourceRecord=record)
                 log.phase(EffectExportStep.COMPOSE_SOURCE)
                 try{input=composition?.apply(raw){ensureActive()}?:raw;if(input!==raw)raw.recycle()}
                 catch(t:Throwable){raw.recycle();throw t}
@@ -125,9 +125,9 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
                 return completed
             } catch(t:Throwable){completed?.close();throw t}
         }
-        private suspend fun decode(context:Context,uri:String,log:EffectExportLog,allowRawFallback:Boolean=true):Bitmap {
+        private suspend fun decode(context:Context,uri:String,log:EffectExportLog,allowRawFallback:Boolean=true,sourceRecord:ExportJob?=null):Bitmap {
             var format=dev.filmroom.io.formats.PhotoFormat.UNKNOWN
-            try { return EffectImageDecoder(context,log.correlationId).use { decoder ->
+            try { return EffectImageDecoder(context,log.correlationId,sourceRecord=sourceRecord,preferNativeRaw=true).use { decoder ->
                 decoder.read(uri,1600,allowRawFallback=allowRawFallback,report={format=EffectInputFormat.fromDecodedHeader(it)})
             } } finally {log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.INPUT_FORMAT,step=log.step,inputFormat=format))}
         }
