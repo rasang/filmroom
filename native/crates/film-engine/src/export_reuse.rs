@@ -150,7 +150,7 @@ fn encoded_size(fields:&DiffusionScatteredFields)->io::Result<u64> {
     let mut bytes=20u64; // magic, highlight-present/value, two field-present flags
     for field in [&fields.camera,&fields.enlarger].into_iter().flatten() {
         let n=u64::from(field.small_w).checked_mul(u64::from(field.small_h)).and_then(|v|v.checked_mul(3)).ok_or_else(invalid)?;
-        if field.crop.is_some()||field.small_w==0||field.small_h==0||field.d==0||!field.p_s.is_finite()||n!=field.field.len()as u64||field.field.iter().any(|v|!v.is_finite()){return Err(invalid());}
+        if field.disk.is_some()||field.crop.is_some()||field.small_w==0||field.small_h==0||field.d==0||!field.p_s.is_finite()||n!=field.field.len()as u64||field.field.iter().any(|v|!v.is_finite()){return Err(invalid());}
         bytes=bytes.checked_add(24).and_then(|v|n.checked_mul(4).and_then(|n|v.checked_add(n))).ok_or_else(invalid)?;
     }
     if bytes>MAX_DISK_BYTES{return Err(invalid());}Ok(bytes)
@@ -209,7 +209,7 @@ fn read_fields(path:&Path,bytes:u64,max_working_bytes:u64,c:&mut impl FnMut()->b
             check(c)?;let count=(n-values.len()).min(BUFFER/4);file.read_exact(&mut buffer[..count*4])?;
             for bytes in buffer[..count*4].chunks_exact(4) {let value=f32::from_le_bytes(bytes.try_into().unwrap());if !value.is_finite(){return Err(invalid());}values.push(value);}
         }
-        Ok(Some(DiffusionScattered{crop:None,field:values,small_w:w,small_h:h,d,p_s}))
+        Ok(Some(DiffusionScattered{disk:None,crop:None,field:values,small_w:w,small_h:h,d,p_s}))
     };
     let camera=read()?;let enlarger=read()?;
     if remaining!=0||file.read(&mut [0])?!=0 {return Err(invalid());}
@@ -234,7 +234,7 @@ mod tests {
     }
     impl Drop for Temp {fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
     fn fields()->DiffusionScatteredFields {
-        let one=DiffusionScattered{crop:None,field:vec![-2.,0.,f32::from_bits(0x80000000),1.,0.0001,4.],small_w:2,small_h:1,d:4,p_s:0.25};
+        let one=DiffusionScattered{disk:None,crop:None,field:vec![-2.,0.,f32::from_bits(0x80000000),1.,0.0001,4.],small_w:2,small_h:1,d:4,p_s:0.25};
         DiffusionScatteredFields{highlight_max_raw:Some(12.25),camera:Some(one.clone()),enlarger:Some(one)}
     }
     fn assert_fields(a:&DiffusionScatteredFields,b:&DiffusionScatteredFields) {

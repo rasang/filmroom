@@ -53,6 +53,8 @@ use crate::profile::Profile;
 use crate::stages;
 #[path = "pipeline_omitted.rs"]
 mod omitted;
+#[path = "pipeline_disk_diffusion.rs"]
+pub mod disk_diffusion;
 
 fn apply_film_specific_params(film: &Profile, params: &mut RuntimeParams) {
     if film.is_positive() {
@@ -448,12 +450,14 @@ pub struct BandContext {
 }
 
 /// Whole-frame diffusion scattered field (downsampled to 1/d and blurred),
-/// precomputed once so the *banded* GPU chain can apply a diffusion filter
-/// without banding the (non-bandable) large-radius blur: each band only
-/// bilinear-upsamples its row window and mixes `(1-p_s)·img + p_s·field`.
+/// precomputed once so the *banded* GPU chain can apply a diffusion filter.
+/// A resident or disk-backed field preserves global sampling coordinates;
+/// each band bilinear-upsamples its window and mixes `(1-p_s)·img + p_s·field`.
 /// Produced by [`Pipeline::diffusion_scattered_fields_gpu`].
 #[derive(Debug, Clone)]
 pub struct DiffusionScattered {
+    /// Immutable spool owned by the export job. Cloning this handle never copies pixels.
+    pub disk: Option<Arc<DiskDiffusionField>>,
     /// Optional [x, y, width, height] crop in global small-pixel coordinates.
     pub crop: Option<[u32; 4]>,
     /// `small_w*small_h*3` interleaved f32, row-major — the blurred scattered
@@ -467,7 +471,75 @@ pub struct DiffusionScattered {
     pub p_s: f32,
 }
 
+/// Read-only backing file. Its containing export job owns cleanup; this handle
+/// never deletes a path supplied by its caller. The file must not be modified
+/// while the field is in use. Every read rechecks length and finite values.
+#[derive(Debug)]
+pub struct DiskDiffusionField {
+    path: std::path::PathBuf,
+    pub max_window_pixels: u64,
+}
+
 impl DiffusionScattered {
+    pub fn from_disk(path: impl AsRef<Path>, small_w: u32, small_h: u32,
+        d: u32, p_s: f32) -> std::io::Result<Self> {
+        Self::from_disk_bounded(path, small_w, small_h, d, p_s,
+            u64::from(small_w) * u64::from(small_h))
+    }
+
+    pub fn from_disk_bounded(path: impl AsRef<Path>, small_w: u32, small_h: u32,
+        d: u32, p_s: f32, max_window_pixels: u64) -> std::io::Result<Self> {
+        let invalid = || std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid diffusion spool");
+        let pixels = u64::from(small_w).checked_mul(u64::from(small_h)).ok_or_else(invalid)?;
+        let bytes = pixels.checked_mul(12).ok_or_else(invalid)?;
+        let meta = std::fs::symlink_metadata(path.as_ref())?;
+        if small_w == 0 || small_h == 0 || d == 0 || !p_s.is_finite()
+            || max_window_pixels == 0 || !meta.is_file() || meta.len() != bytes { return Err(invalid()); }
+        Ok(Self { disk: Some(Arc::new(DiskDiffusionField { path: path.as_ref().to_owned(),
+            max_window_pixels: max_window_pixels.min(pixels) })), field: Vec::new(),
+            small_w, small_h, d, p_s, crop: None })
+    }
+
+    fn valid_for_tile(&self, x: u32, y: u32, width: u32, height: u32) -> bool {
+        let Some(disk) = &self.disk else { return self.to_gpu(x, y).valid_for(width, height); };
+        let Some([_, _, w, h]) = spektrafilm_gpu::DiffusionScatteredGpu::required_crop(
+            self.small_w, self.small_h, self.d, x, y, width, height) else { return false; };
+        self.field.is_empty() && self.crop.is_none() && self.p_s.is_finite()
+            && u64::from(w) * u64::from(h) <= disk.max_window_pixels
+    }
+
+    /// Materialize only the exact WGSL bilinear footprint; global dimensions
+    /// and coordinates remain unchanged. Resident fields are borrowed, not copied.
+    pub fn window_for_tile(&self, x: u32, y: u32, width: u32, height: u32,
+        checkpoint: &mut dyn FnMut() -> bool) -> Option<std::borrow::Cow<'_, Self>> {
+        use std::io::{Read, Seek, SeekFrom};
+        if !checkpoint() || !self.valid_for_tile(x, y, width, height) { return None; }
+        let Some(disk) = &self.disk else { return Some(std::borrow::Cow::Borrowed(self)); };
+        let crop = spektrafilm_gpu::DiffusionScatteredGpu::required_crop(
+            self.small_w, self.small_h, self.d, x, y, width, height)?;
+        let [cx, cy, cw, ch] = crop;
+        let len = (cw as usize).checked_mul(ch as usize)?.checked_mul(3)?;
+        let mut values = Vec::new(); values.try_reserve_exact(len).ok()?; values.resize(len, 0.0f32);
+        let mut file = std::fs::File::open(&disk.path).ok()?;
+        if file.metadata().ok()?.len() != u64::from(self.small_w) * u64::from(self.small_h) * 12 { return None; }
+        // One bounded row scratch, included in the conservative 36B/crop-pixel
+        // reservation (the GPU/staging allocations do not exist during this read).
+        let mut row = Vec::new(); row.try_reserve_exact(cw as usize * 12).ok()?;
+        row.resize(cw as usize * 12, 0u8);
+        for dy in 0..ch {
+            if !checkpoint() { return None; }
+            let offset = (u64::from(cy + dy) * u64::from(self.small_w) + u64::from(cx)) * 12;
+            file.seek(SeekFrom::Start(offset)).ok()?; file.read_exact(&mut row).ok()?;
+            let start = dy as usize * cw as usize * 3;
+            for (target, bytes) in values[start..start + cw as usize * 3].iter_mut().zip(row.chunks_exact(4)) {
+                *target = f32::from_le_bytes(bytes.try_into().ok()?);
+                if !target.is_finite() { return None; }
+            }
+        }
+        Some(std::borrow::Cow::Owned(Self { disk: None, field: values, crop: Some(crop),
+            small_w: self.small_w, small_h: self.small_h, d: self.d, p_s: self.p_s }))
+    }
+
     /// GPU view of the field for one band whose first row (halo included) is
     /// global row `band_y0`.
     fn to_gpu(&self, band_x0: u32, band_y0: u32) -> spektrafilm_gpu::DiffusionScatteredGpu<'_> {
@@ -495,19 +567,28 @@ pub struct DiffusionScatteredFields {
 }
 
 impl DiffusionScatteredFields {
+    pub fn has_disk_backing(&self) -> bool {
+        [&self.camera, &self.enlarger].into_iter().flatten().any(|f| f.disk.is_some())
+    }
     /// Main-pass field reservation after prepass temporaries have been dropped.
     /// Includes inline metadata, both host Vec capacities, and both GPU crop
     /// allocations plus upload staging, each conservatively bounded by its
     /// complete stored field. Crop upload borrows rows (no host crop Vec).
     /// GPU crops are charged here, independently of the tile bytes-per-pixel
     /// envelope. Allocator/driver overhead remains in the fixed export reserve.
+    /// Disk-backed fields instead reserve 36B per admitted crop pixel for its
+    /// bounded host window, GPU storage and upload staging. Their whole-field
+    /// files are never implicitly materialized. The job owns spool lifetime.
     /// This does not replace the larger prepass Gaussian working-set estimate.
     pub fn retained_working_bytes(&self) -> Option<u64> {
         let mut bytes = u64::try_from(std::mem::size_of::<Self>()).ok()?;
         for field in [&self.camera, &self.enlarger].into_iter().flatten() {
-            bytes = bytes.checked_add(Self::field_working_bytes(
+            let reservation = if let Some(disk) = &field.disk {
+                disk.max_window_pixels.checked_mul(36)?
+            } else { Self::field_working_bytes(
                 u64::try_from(field.field.capacity()).ok()?,
-                u64::try_from(field.field.len()).ok()?)?)?;
+                u64::try_from(field.field.len()).ok()?)? };
+            bytes = bytes.checked_add(reservation)?;
         }
         Some(bytes)
     }
@@ -1544,7 +1625,7 @@ impl Pipeline {
             let small = acc.finish();
             drop(acc); // release f64 sums before any Gaussian allocation
             let field = spektrafilm_model::diffusion::blur_scattered_field_controlled(backend, &small, plan, &mut checkpoint)?;
-            Some(DiffusionScattered { crop: None,
+            Some(DiffusionScattered { disk: None, crop: None,
                 field,
                 small_w: plan.small_w,
                 small_h: plan.small_h,
@@ -1981,7 +2062,7 @@ impl Pipeline {
             && fields.and_then(|f| f.enlarger.as_ref()).is_none() { return None; }
         if let Some(fields) = fields {
             for field in [&fields.camera, &fields.enlarger].into_iter().flatten() {
-                if !field.to_gpu(tile.x, tile.y).valid_for(width, height) { return None; }
+                if !field.valid_for_tile(tile.x, tile.y, width, height) { return None; }
             }
         }
         Some(())
@@ -2094,7 +2175,7 @@ impl Pipeline {
             drop(acc);
             let field = spektrafilm_model::diffusion::blur_scattered_field_controlled_progress(
                 backend, &small, plan, &mut checkpoint, || { completed += 1; progress(completed, total); })?;
-            Some(DiffusionScattered { field, small_w: plan.small_w, small_h: plan.small_h,
+            Some(DiffusionScattered { disk: None, field, small_w: plan.small_w, small_h: plan.small_h,
                 d: plan.d, p_s: plan.p_s, crop: None })
         };
         let camera = match cam_plan.as_ref() { Some(p) => Some(run(spektrafilm_gpu::ChainStop::Front, p, None)?), None => None };
@@ -2931,21 +3012,20 @@ impl Pipeline {
         // band's first (halo) row.
         let band_y0 = pixel_offset / full_width;
         let band_x0 = pixel_offset % full_width;
-        let diffusion_scattered = if chain_stop != spektrafilm_gpu::ChainStop::Front {
-            diffusion_fields
-                .and_then(|f| f.camera.as_ref())
-                .map(|s| s.to_gpu(band_x0, band_y0))
-        } else {
-            None
-        };
-        let enlarger_scattered =
-            if chain_stop == spektrafilm_gpu::ChainStop::Full && band.is_some() {
-                diffusion_fields
-                    .and_then(|f| f.enlarger.as_ref())
-                    .map(|s| s.to_gpu(band_x0, band_y0))
-            } else {
-                None
-            };
+        let camera_window = if chain_stop != spektrafilm_gpu::ChainStop::Front {
+            match diffusion_fields.and_then(|f| f.camera.as_ref()) {
+                Some(field) => Some(field.window_for_tile(band_x0, band_y0, image.width(), image.height(), checkpoint)?),
+                None => None,
+            }
+        } else { None };
+        let enlarger_window = if chain_stop == spektrafilm_gpu::ChainStop::Full && band.is_some() {
+            match diffusion_fields.and_then(|f| f.enlarger.as_ref()) {
+                Some(field) => Some(field.window_for_tile(band_x0, band_y0, image.width(), image.height(), checkpoint)?),
+                None => None,
+            }
+        } else { None };
+        let diffusion_scattered = camera_window.as_deref().map(|s| s.to_gpu(band_x0, band_y0));
+        let enlarger_scattered = enlarger_window.as_deref().map(|s| s.to_gpu(band_x0, band_y0));
 
         let mut params = spektrafilm_gpu::FilmChainParams {
             neutral_media,
@@ -3149,6 +3229,9 @@ mod resident_contract_tests {
         fn lut3d_interp(&self,i:&ImageBuf,_:&Lut3D)->ImageBuf{i.clone()}
         fn name(&self)->&str{"resident-contract-probe"}
         fn try_run_film_chain(&self,p:&FilmChainParams<'_>)->Option<ImageBuf>{
+            for f in [&p.diffusion_scattered, &p.enlarger_scattered].into_iter().flatten() {
+                assert!(f.valid_for(p.image.width(), p.image.height()));
+            }
             self.ranges.lock().unwrap().push((p.start_at,p.stop_after,p.halation.is_some()));
             self.deferred_gamut.lock().unwrap().push(p.defer_gamut_to_cpu);
             self.calls.lock().unwrap().push((p.grain.as_ref().map(|g|g.base_seed),p.highlight_boost.as_ref().and_then(|h|h.max_raw_override)));
@@ -3368,6 +3451,54 @@ mod resident_contract_tests {
     }
 
     #[test]
+    fn disk_diffusion_window_matches_resident_global_footprint() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!("filmroom-diffusion-window-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup { fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); } }
+        let _cleanup = Cleanup(path.clone());
+        let (sw, sh, d) = (17u32, 13u32, 3u32);
+        let data: Vec<f32> = (0..sw * sh * 3).map(|v| v as f32 / 13.0 - 2.0).collect();
+        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
+        std::fs::write(&path, &bytes).unwrap();
+        let disk = DiffusionScattered::from_disk_bounded(&path, sw, sh, d, 0.5, 100).unwrap();
+        let cloned = disk.clone();
+        assert!(Arc::ptr_eq(disk.disk.as_ref().unwrap(), cloned.disk.as_ref().unwrap()));
+        assert!(cloned.field.is_empty());
+        for (x, y, w, h) in [(0, 0, 1, 1), (2, 4, 15, 9), (35, 29, 16, 10), (1, 2, 7, 11)] {
+            let crop = spektrafilm_gpu::DiffusionScatteredGpu::required_crop(sw, sh, d, x, y, w, h).unwrap();
+            let window = disk.window_for_tile(x, y, w, h, &mut || true).unwrap();
+            assert_eq!(window.crop, Some(crop));
+            assert!(window.disk.is_none());
+            assert!(window.to_gpu(x, y).valid_for(w, h));
+            let [cx, cy, cw, ch] = crop;
+            let expected: Vec<f32> = (cy..cy + ch).flat_map(|row| {
+                let start = (row * sw + cx) as usize * 3;
+                data[start..start + cw as usize * 3].iter().copied()
+            }).collect();
+            assert_eq!(window.field, expected);
+        }
+        let fields = DiffusionScatteredFields { camera: Some(disk.clone()), ..Default::default() };
+        let p = pipe(); let backend = Probe::default();
+        let tile = TileContext { full_width: sw * d, full_height: sh * d, x: 2, y: 4 };
+        assert!(p.process_gpu_resident_tile_f32_controlled(&[0.5; 18], 3, 2, tile,
+            &backend, Some(&fields), || true).is_some());
+        assert!(!backend.calls.lock().unwrap().is_empty());
+        assert!(fields.has_disk_backing());
+        assert_eq!(fields.retained_working_bytes(), Some(std::mem::size_of::<DiffusionScatteredFields>() as u64 + 100 * 36));
+        assert!(disk.window_for_tile(0, 0, sw * d, sh * d, &mut || true).is_none());
+        assert!(disk.window_for_tile(0, 0, 1, 1, &mut || false).is_none());
+        std::fs::write(&path, &bytes[..bytes.len() - 1]).unwrap();
+        assert!(disk.window_for_tile(0, 0, 1, 1, &mut || true).is_none());
+        assert!(DiffusionScattered::from_disk(&path, sw, sh, d, 0.5).is_err());
+        let mut bad = bytes;
+        bad[..4].copy_from_slice(&f32::NAN.to_le_bytes());
+        std::fs::write(&path, bad).unwrap();
+        assert!(disk.window_for_tile(0, 0, 1, 1, &mut || true).is_none());
+    }
+
+    #[test]
     fn retained_field_reservation_counts_capacity_both_fields_and_gpu_crops() {
         assert_eq!(DiffusionScatteredFields::field_working_bytes(u64::MAX, 0), None);
         assert_eq!(DiffusionScatteredFields::field_working_bytes(0, u64::MAX), None);
@@ -3377,7 +3508,7 @@ mod resident_contract_tests {
         let make = |capacity, len| {
             let mut field = Vec::with_capacity(capacity);
             field.resize(len, 0.0);
-            DiffusionScattered { field, small_w: 3, small_h: 2, d: 4,
+            DiffusionScattered { disk: None, field, small_w: 3, small_h: 2, d: 4,
                 crop: None, p_s: 0.5 }
         };
         let camera = make(64, 18);
