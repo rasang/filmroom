@@ -3,7 +3,7 @@
 struct Params {
     n_pixels: u32,
     clear_first: u32,
-    _pad0: u32,
+    channel: u32,
     _pad1: u32,
     scale: vec4<f32>,
 }
@@ -14,9 +14,11 @@ struct Params {
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.n_pixels { return; }
     let base = gid.x * 3u;
-    for (var c = 0u; c < 3u; c++) {
-        let value = params.scale[c] * src[base + c];
-        if params.clear_first != 0u { dst[base + c] = value; }
-        else { dst[base + c] += value; }
+    if params.clear_first != 0u {
+        dst[base] = 0.0;
+        dst[base + 1u] = 0.0;
+        dst[base + 2u] = 0.0;
     }
+    let c = params.channel;
+    dst[base + c] += params.scale[c] * src[base + c];
 }

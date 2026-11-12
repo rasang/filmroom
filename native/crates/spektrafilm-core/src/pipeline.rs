@@ -1872,6 +1872,51 @@ impl Pipeline {
         Some(out)
     }
 
+    /// Bounded staged prefix endpoints. Intermediate samples retain their raw
+    /// exposure domain; no RGB decoding/exposure is applied when resuming.
+    pub fn process_gpu_spatial_endpoint_controlled(
+        &self, data: &[f32], width:u32, height:u32, tile:TileContext,
+        backend:&dyn ComputeBackend, fields:Option<&DiffusionScatteredFields>,
+        resume_post_halation:bool, mut checkpoint:impl FnMut()->bool,
+    )->Option<ImageBuf> {
+        use spektrafilm_gpu::{ChainStart,ChainStop};
+        backend.reset_thread_resident_progress();
+        let (start,stop)=if resume_post_halation {(ChainStart::PostHalationRaw,ChainStop::FilmLog)}
+            else {(ChainStart::Rgb,ChainStop::ScatteredRaw)};
+        self.validate_gpu_tile_range(data,width,height,tile,fields,stop,start)?;
+        if !checkpoint(){return None;}
+        let mut params=self.params.clone();
+        params.camera.pixel_size_um_override=Some(self.full_image_pitch(tile.full_width,tile.full_height));
+        let pipe=self.clone().with_params(params);
+        let color_ref=crate::color_reference::ColorReference::compute(&pipe.film,&pipe.print,
+            &pipe.params,&pipe.print_illuminant,pipe.print_exposure_factor);
+        let out=pipe.try_gpu_resident_range_controlled(spektrafilm_gpu::ChainImage::F32(data,width,height),
+            backend,&color_ref,true,Some(BandContext{full_width:tile.full_width,
+                pixel_offset:tile.y.checked_mul(tile.full_width)?.checked_add(tile.x)?,ae_ev:None}),
+            stop,start,fields,None,&mut checkpoint)?;
+        if !checkpoint()||out.width!=width||out.height!=height||out.data.len()!=data.len()
+            ||out.data.iter().any(|v|!v.is_finite()){return None;}
+        Some(out)
+    }
+
+    /// Only camera-lens and scatter supports are needed by ScatteredRaw.
+    pub fn gpu_scattered_raw_halo(&self,width:u32,height:u32)->u32 {
+        let mut params=self.params.clone();
+        params.film_render.halation.back_reflection=false;
+        params.film_render.halation.halation_first_sigma_um=[0.;3];
+        self.clone().with_params(params).gpu_split_halo_pixels(self.full_image_pitch(width,height)).0
+    }
+
+    pub fn gpu_physical_components(&self,width:u32,height:u32)
+        ->Option<([spektrafilm_gpu::HalationComponentGpu;4],[f32;3],bool)> {
+        let h=&self.params.film_render.halation;
+        if !h.active||!h.back_reflection||h.halation_amount<=0.||h.base_thickness_um<=0. {return None;}
+        let components=spektrafilm_math::halation::back_reflection_components(
+            h.base_thickness_um,h.halation_spatial_scale,h.halation_amount,self.full_image_pitch(width,height) as f64)
+            .map(|c|spektrafilm_gpu::HalationComponentGpu{weight:c.weight.map(|v|v as f32),sigma_px:c.sigma_px.map(|v|v as f32)});
+        Some((components,h.halation_strength.map(|v|(v*h.halation_amount) as f32),h.halation_renormalize))
+    }
+
     /// Controlled prepass tap. Front stops before camera optics; PrintLinear
     /// stops before enlarger diffusion. Neither performs final scan/gamut.
     pub fn tap_gpu_resident_tile_f32_controlled(
@@ -2949,7 +2994,8 @@ impl Pipeline {
         };
         if chain_start != spektrafilm_gpu::ChainStart::Rgb {
             if chain_stop != spektrafilm_gpu::ChainStop::Full
-                && !(chain_start == spektrafilm_gpu::ChainStart::FilmLog && chain_stop == spektrafilm_gpu::ChainStop::CorrectedDensity) { return None; }
+                && !(chain_start == spektrafilm_gpu::ChainStart::FilmLog && chain_stop == spektrafilm_gpu::ChainStop::CorrectedDensity)
+                && !(chain_start == spektrafilm_gpu::ChainStart::PostHalationRaw && chain_stop == spektrafilm_gpu::ChainStop::FilmLog) { return None; }
             params.halation = None;
             params.camera_lens_blur_px = None;
             params.highlight_boost = None;
@@ -2961,7 +3007,7 @@ impl Pipeline {
             params.grain = None; params.glare = None;
             params.enlarger_diffusion = None; params.enlarger_scattered = None;
         }
-        if chain_stop == spektrafilm_gpu::ChainStop::FilmLog {
+        if matches!(chain_stop, spektrafilm_gpu::ChainStop::FilmLog | spektrafilm_gpu::ChainStop::ScatteredRaw) {
             params.dir_couplers = None;
             params.grain = None;
             params.glare = None;
@@ -3093,7 +3139,7 @@ mod resident_contract_tests {
     use spektrafilm_math::precision::from_f64;
     use std::sync::Mutex;
     #[derive(Default)]
-    struct Probe { deferred_gamut: Mutex<Vec<bool>>, calls: Mutex<Vec<(Option<u32>, Option<f32>)>>, blurs: std::sync::atomic::AtomicUsize, fronts: Mutex<Vec<[[f64;3];3]>> }
+    struct Probe { ranges: Mutex<Vec<(spektrafilm_gpu::ChainStart, spektrafilm_gpu::ChainStop, bool)>>, deferred_gamut: Mutex<Vec<bool>>, calls: Mutex<Vec<(Option<u32>, Option<f32>)>>, blurs: std::sync::atomic::AtomicUsize, fronts: Mutex<Vec<[[f64;3];3]>> }
     impl ComputeBackend for Probe {
         fn colorspace_convert(&self,i:&ImageBuf,_:&[[f32;3];3])->ImageBuf{i.clone()}
         fn cctf_encode_srgb(&self,i:&ImageBuf)->ImageBuf{i.clone()}
@@ -3103,6 +3149,7 @@ mod resident_contract_tests {
         fn lut3d_interp(&self,i:&ImageBuf,_:&Lut3D)->ImageBuf{i.clone()}
         fn name(&self)->&str{"resident-contract-probe"}
         fn try_run_film_chain(&self,p:&FilmChainParams<'_>)->Option<ImageBuf>{
+            self.ranges.lock().unwrap().push((p.start_at,p.stop_after,p.halation.is_some()));
             self.deferred_gamut.lock().unwrap().push(p.defer_gamut_to_cpu);
             self.calls.lock().unwrap().push((p.grain.as_ref().map(|g|g.base_seed),p.highlight_boost.as_ref().and_then(|h|h.max_raw_override)));
             self.fronts.lock().unwrap().push(match &p.front {
@@ -3122,6 +3169,23 @@ mod resident_contract_tests {
         let mut p=RuntimeParams::default();p.camera.auto_exposure=false;p.camera.pixel_size_um_override=Some(5.);
         p.camera.diffusion_filter.active=false;p.enlarger.diffusion_filter.active=false;p.scanner.unsharp_mask=[0.,0.];
         Pipeline::new_with_spectral(film,paper,p,&data).unwrap()
+    }
+    #[test]
+    fn spatial_endpoints_preserve_domains_and_validate_cancel_geometry() {
+        use spektrafilm_gpu::{ChainStart,ChainStop};
+        let p=pipe();let b=Probe::default();
+        let t=TileContext{full_width:17,full_height:13,x:2,y:3};
+        let input=[0.2;18];
+        for resume in [false,true] {
+            assert!(p.process_gpu_spatial_endpoint_controlled(&input,3,2,t,&b,None,resume,||false).is_none());
+            assert!(p.process_gpu_spatial_endpoint_controlled(&[f32::NAN;18],3,2,t,&b,None,resume,||true).is_none());
+            assert!(p.process_gpu_spatial_endpoint_controlled(&input,3,2,TileContext{x:16,..t},&b,None,resume,||true).is_none());
+            assert!(p.process_gpu_spatial_endpoint_controlled(&input,3,2,t,&b,None,resume,||true).is_some());
+        }
+        let ranges=b.ranges.lock().unwrap();
+        assert_eq!(ranges.len(),2);
+        assert_eq!((ranges[0].0,ranges[0].1),(ChainStart::Rgb,ChainStop::ScatteredRaw));
+        assert_eq!(ranges[1],(ChainStart::PostHalationRaw,ChainStop::FilmLog,false));
     }
     #[test]
     fn preview_tile_keeps_gpu_gamut_and_rejects_missing_ae_or_cancel() {

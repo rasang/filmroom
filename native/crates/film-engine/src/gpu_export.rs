@@ -6,7 +6,7 @@ use crate::{mobile::{EngineError,Result},streamed::{StreamedMetrics,StageMetrics
 
 // Export ownership semantics are independent of the preview/detail protocol.
 // Every export checkpoint, global-field/FilmLog reuse key, and reuse probe uses this ID.
-pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1-donor-portra-v1-front-prepass-v2";
+pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1-donor-portra-v1-front-prepass-v2-spatial-psf-v1";
 const FIXED_BYTES:u64=96*1024*1024;
 // Includes 12 B/pixel saved log RGB for no-film donor grain, rounded up.
 const BAND_BYTES_PER_PIXEL:u64=272;
@@ -81,6 +81,38 @@ pub(crate) fn tile_plan(width:u32,height:u32,halo:u32,budget_mib:u32,binding:u64
 }
 struct OutputGuard {path:PathBuf,keep:bool}
 impl Drop for OutputGuard {fn drop(&mut self){if !self.keep {let _=fs::remove_file(&self.path);if let Some(path)=crate::scan_preview::path(&self.path){let _=fs::remove_file(&path);let _=fs::remove_file(path.with_extension("png.tmp"));}}}}
+/// Restore into an exclusively owned directory, then atomically create the
+/// destination link. A failed restore or destination collision never owns the
+/// caller's path; partial copies are cleaned with their private directory.
+fn restore_output(checkpoint:&crate::checkpoint::Checkpoints,output:&Path,cancelled:&mut impl FnMut()->bool)->Result<()> {
+    use std::sync::atomic::{AtomicU64,Ordering};
+    static NEXT:AtomicU64=AtomicU64::new(0);
+    struct Directory(PathBuf);
+    impl Drop for Directory {fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
+    let parent=output.parent().ok_or_else(||err("IO_ERROR"))?;
+    let directory=loop {
+        cancel(cancelled)?;
+        let path=parent.join(format!(".gpu-restore-{}-{}",std::process::id(),NEXT.fetch_add(1,Ordering::Relaxed)));
+        match fs::create_dir(&path) {
+            Ok(())=>break Directory(path),
+            Err(e) if e.kind()==std::io::ErrorKind::AlreadyExists=>continue,
+            Err(e)=>return Err(io(e)),
+        }
+    };
+    let temporary=directory.0.join("output");
+    checkpoint.restore(&[temporary.clone()],cancelled).map_err(io)?;
+    cancel(cancelled)?;
+    fs::hard_link(&temporary,output).map_err(io)?;
+    Ok(())
+}
+/// Optional work must not make the authoritative cold render more expensive.
+/// This is geometric work, not a latency claim; require no increase in expanded
+/// pixels, row IO, or dispatches rather than a tolerance that hides tiny tiles.
+fn optional_plan_admitted(width:u32,height:u32,halo:u32,base:TilePlan,candidate:TilePlan)->bool {
+    let a=tile_cost(width,height,halo,base.width,base.rows);
+    let b=tile_cost(width,height,halo,candidate.width,candidate.rows);
+    b.expanded_pixels<=a.expanded_pixels && b.row_io<=a.row_io && b.tiles<=a.tiles
+}
 /// Explicit source row stride; only the requested rectangle is materialized.
 fn read_rect(path:&Path,full_width:u32,full_height:u32,x:u32,y:u32,width:u32,height:u32)->Result<Vec<f32>> {
     if width==0||height==0||x.checked_add(width).is_none_or(|n|n>full_width)||y.checked_add(height).is_none_or(|n|n>full_height){return Err(err("INVALID_OUTPUT_SHAPE"));}
@@ -156,7 +188,7 @@ fn film_log_configuration(pipe:&Pipeline,fields:Option<&spektrafilm_core::pipeli
 }
 
 #[derive(Clone,Copy,PartialEq,Eq)]
-enum TilePhase { Full, FilmLog, FromFilmLog }
+enum TilePhase { Full, FilmLog, FromFilmLog, ScatteredRaw, PostHalationRaw }
 fn tile_count(width:u32,height:u32,plan:TilePlan)->u32 {width.div_ceil(plan.width)*height.div_ceil(plan.rows)}
 // Every attempt owns its own spool. A crashed attempt must not poison a later
 // retry, and create_new remains the final no-clobber authority.
@@ -195,6 +227,15 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
     tile_index:&mut u32,tile_total:u32,main_fraction:&mut u64,submits_before:u64,start:Instant,
     cancelled:&mut impl FnMut()->bool,progress:&mut impl ProgressSink,negative:&mut Option<crate::negative_preview::GpuDensityAssembly>,exact_unavailable:&mut &'static str,mut log_cache:Option<&mut crate::film_log_reuse::Lease<'_>>)->Result<(u64,u64)> {
     let stage=if plan.whole{"gpu_full_chain"}else{"gpu_tiled_chain"};
+    let cost=tile_cost(width,height,halo,plan.width,plan.rows);
+    let geometry=GpuWorkProgress {
+        tile_phase:Some(match phase{TilePhase::Full=>"full",TilePhase::FilmLog=>"film_log",TilePhase::FromFilmLog=>"from_film_log",TilePhase::ScatteredRaw=>"scattered_raw",TilePhase::PostHalationRaw=>"post_halation_raw"}),
+        core_width:plan.width,core_height:plan.rows,expanded_width:plan.expanded_width,expanded_height:plan.expanded_rows,halo,
+        expanded_ratio:cost.expanded_pixels as f64/(u64::from(width)*u64::from(height))as f64,
+        plan_bytes:plan.estimated_bytes,
+        reserved_bytes:plan.estimated_bytes.saturating_sub(FIXED_BYTES).saturating_sub(u64::from(plan.expanded_width)*u64::from(plan.expanded_rows)*BAND_BYTES_PER_PIXEL),
+        ..GpuWorkProgress::default()
+    };
     // RESOURCE_PROBE_BEGIN
     #[cfg(feature="resource-audit")]
     if let Some(fields)=fields {
@@ -219,7 +260,7 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
             let (ew,eh)=(outer_right-left,bottom-top);
             if ew>plan.expanded_width||eh>plan.expanded_rows{return Err(err("GPU_MEMORY_BUDGET"));}
             *tile_index+=1;
-            progress.gpu_event(GpuWorkProgress{tile_index:*tile_index,tile_total,completed_submits:gpu.thread_submits().saturating_sub(submits_before),..GpuWorkProgress::default()});
+            progress.gpu_event(GpuWorkProgress{tile_index:*tile_index,tile_total,completed_submits:gpu.thread_submits().saturating_sub(submits_before),..geometry});
             let cached=phase==TilePhase::FromFilmLog&&log_cache.as_ref().is_some_and(|cache|cache.is_hit());
             let values=if cached {
                 log_cache.as_deref_mut().unwrap().read_rect(left,top,ew,eh,cancelled)
@@ -232,7 +273,7 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
             let mut checkpoint=||{
                 if gpu.thread_submits()>tile_submits {if let Some(batch)=gpu.thread_resident_progress(){
                     if batch.completed_batches>reported_batch {reported_batch=batch.completed_batches;
-                        progress.gpu_event(GpuWorkProgress{phase:Some(batch.stage.as_str()),tile_index:*tile_index,tile_total,batch_index:batch.completed_batches,batch_elapsed_ms:batch.batch_elapsed_ms,chain_wait_ms:batch.chain_gpu_wait_ms,completed_submits:gpu.thread_submits().saturating_sub(submits_before),..GpuWorkProgress::default()});
+                        progress.gpu_event(GpuWorkProgress{phase:Some(batch.stage.as_str()),tile_index:*tile_index,tile_total,batch_index:batch.completed_batches,batch_elapsed_ms:batch.batch_elapsed_ms,chain_wait_ms:batch.chain_gpu_wait_ms,completed_submits:gpu.thread_submits().saturating_sub(submits_before),..geometry});
                     }
                 }}
                 !cancelled()
@@ -241,6 +282,8 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
             let request=negative.as_ref().filter(|_|phase!=TilePhase::FilmLog).map(|a|a.samples_for_core(left,top,x,y,right,end)).unwrap_or_default();
             let mut capture=(!request.is_empty()).then(||spektrafilm_gpu::FilmDensityCapture{samples:request,result:None});
             let rendered=match (phase,capture.as_mut()) {
+                (TilePhase::ScatteredRaw,_)=>pipe.process_gpu_spatial_endpoint_controlled(&values,ew,eh,tile,gpu,fields,false,&mut checkpoint),
+                (TilePhase::PostHalationRaw,_)=>pipe.process_gpu_spatial_endpoint_controlled(&values,ew,eh,tile,gpu,fields,true,&mut checkpoint),
                 (TilePhase::FilmLog,_)=>pipe.tap_gpu_film_log_tile_f32_controlled(&values,ew,eh,tile,gpu,fields,&mut checkpoint),
                 (TilePhase::FromFilmLog,Some(c))=>pipe.process_gpu_from_film_log_tile_f32_capture_controlled(&values,ew,eh,tile,gpu,fields,c,&mut checkpoint),
                 (TilePhase::FromFilmLog,None)=>pipe.process_gpu_from_film_log_tile_f32_controlled(&values,ew,eh,tile,gpu,fields,&mut checkpoint),
@@ -260,7 +303,7 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
             if rendered.data.iter().any(|v|!v.is_finite()){return Err(err("NONFINITE_OUTPUT"));}
             #[cfg(test)]
             if std::env::var("FILMROOM_LARGE_GPU_SMOKE").as_deref()==Ok("1"){eprintln!("GPU_TILE_COMPLETE x={x} y={y} completedSubmits={} elapsedSeconds={}",gpu.thread_submits(),start.elapsed().as_secs_f64());}
-            written+=write_core(&mut out,&rendered,width,left,top,x,y,right,end,exposure,cancelled,if phase==TilePhase::FilmLog{log_cache.as_deref_mut()}else{None})?;
+            written+=write_core(&mut out,&rendered,width,left,top,x,y,right,end,exposure,cancelled,if matches!(phase,TilePhase::FilmLog|TilePhase::PostHalationRaw){log_cache.as_deref_mut()}else{None})?;
             report_main_tile(progress,stage,y as u64*width as u64+(end-y)as u64*right as u64,height as u64*width as u64,*tile_index,tile_total,main_fraction);
             x=right;
         }
@@ -270,6 +313,62 @@ fn render_tiles(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
     if fs::metadata(output).map_err(io)?.len()!=width as u64*height as u64*12{return Err(err("INVALID_OUTPUT_SHAPE"));}
     owned.keep=true;
     Ok((bytes_read,written))
+}
+
+fn spatial_tiles(pipe:&Pipeline,width:u32,height:u32,plan:TilePlan)->Result<u32>{
+ let (components,_,_)=pipe.gpu_physical_components(width,height).ok_or_else(||err("INVALID_PARAMETERS"))?;
+ let pixels=u64::from(plan.expanded_width)*u64::from(plan.expanded_rows);let mut total=0u64;
+ for c in components {for sigma in c.sigma_px {let radius=spektrafilm_gpu::back_reflection_fir_radius(sigma).ok_or_else(||err("INVALID_PARAMETERS"))?;
+  for axis in [crate::gpu_spatial::Axis::Horizontal,crate::gpu_spatial::Axis::Vertical] {total=total.checked_add(crate::gpu_spatial::plan(width,height,radius,axis,crate::gpu_spatial::directional_pixel_cap(radius,pixels)).map_err(io)?.tiles).ok_or_else(||err("INVALID_PARAMETERS"))?;}
+ }}u32::try_from(total).map_err(|_|err("INVALID_PARAMETERS"))
+}
+#[allow(clippy::too_many_arguments)]
+fn render_prefix(pipe:&Pipeline,gpu:&spektrafilm_gpu::wgpu_backend::WgpuBackend,
+ fields:Option<&spektrafilm_core::pipeline::DiffusionScatteredFields>,input:&Path,output:&Path,
+ width:u32,height:u32,halo:u32,plan:TilePlan,spatial:bool,index:&mut u32,total:u32,fraction:&mut u64,
+ submits:u64,start:Instant,cancelled:&mut impl FnMut()->bool,progress:&mut impl ProgressSink,
+ cache:Option<&mut crate::film_log_reuse::Lease<'_>>)->Result<(u64,u64)> {
+ if !spatial{return render_tiles(pipe,gpu,fields,input,output,width,height,halo,plan,TilePhase::FilmLog,1.,index,total,fraction,submits,start,cancelled,progress,&mut None,&mut "not_applicable",cache);}
+ let (components,scale,renormalize)=pipe.gpu_physical_components(width,height).ok_or_else(||err("INVALID_PARAMETERS"))?;
+ // Includes scatter RGB, post-halation RGB, four scalar files and FilmLog.
+ // A free-space preflight is advisory; every subsequent IO error still aborts.
+ #[cfg(unix)] {
+  use std::os::unix::ffi::OsStrExt;
+  let parent=output.parent().ok_or_else(||err("IO_ERROR"))?;
+  let path=std::ffi::CString::new(parent.as_os_str().as_bytes()).map_err(|_|err("IO_ERROR"))?;
+  let mut stat=std::mem::MaybeUninit::<libc::statvfs>::uninit();
+  if unsafe{libc::statvfs(path.as_ptr(),stat.as_mut_ptr())}!=0{return Err(io(std::io::Error::last_os_error()));}
+  let stat=unsafe{stat.assume_init()};
+  let available=(stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
+  if available<u64::from(width)*u64::from(height)*52+64*1024*1024{return Err(err("INSUFFICIENT_STORAGE"));}
+ }
+ let scattered=film_log_attempt_path(output);let physical=film_log_attempt_path(output);
+ let (r1,w1)=render_tiles(pipe,gpu,fields,input,&scattered,width,height,halo,plan,TilePhase::ScatteredRaw,1.,index,total,fraction,submits,start,cancelled,progress,&mut None,&mut "not_applicable",None)?;
+ let _scattered=OutputGuard{path:scattered.clone(),keep:false};
+ // The RGB chain's conservative 272 B/expanded pixel covers scalar backend
+ // 48 B/px, caller's 8 B/px, row/chunk scratch and live kernels/fields.
+ let max_pixels=u64::from(plan.expanded_width)*u64::from(plan.expanded_rows);
+ let mut directional_plans=std::collections::BTreeMap::new();
+ for component in components {for sigma in component.sigma_px {let radius=spektrafilm_gpu::back_reflection_fir_radius(sigma).ok_or_else(||err("INVALID_PARAMETERS"))?;
+  for axis in [crate::gpu_spatial::Axis::Horizontal,crate::gpu_spatial::Axis::Vertical] {directional_plans.insert((radius,axis==crate::gpu_spatial::Axis::Horizontal),crate::gpu_spatial::plan(width,height,radius,axis,crate::gpu_spatial::directional_pixel_cap(radius,max_pixels)).map_err(io)?);}
+ }}
+ let cancellation=std::cell::RefCell::new(&mut *cancelled);
+ let spatial_metrics=crate::gpu_spatial::physical(&scattered,&physical,width,height,&components,scale,renormalize,max_pixels,
+  &mut||(*cancellation.borrow_mut())(),&mut|v,w,h,sigma,axis,component,channel|{
+   *index+=1;
+   let stage=if axis==crate::gpu_spatial::Axis::Horizontal{"physical_halation_h"}else{"physical_halation_v"};
+   let radius=spektrafilm_gpu::back_reflection_fir_radius(sigma).unwrap_or(0);
+   let directional=directional_plans.get(&(radius,axis==crate::gpu_spatial::Axis::Horizontal)).ok_or_else(||std::io::Error::new(std::io::ErrorKind::Other,"Missing directional plan"))?;
+   progress.gpu_event(GpuWorkProgress{tile_phase:Some(stage),tile_index:*index,tile_total:total,core_width:directional.core_width,core_height:directional.core_height,expanded_width:w,expanded_height:h,halo:radius,expanded_ratio:directional.expanded_pixels as f64/(u64::from(width)*u64::from(height))as f64,plan_bytes:plan.estimated_bytes,reserved_bytes:plan.estimated_bytes.saturating_sub(FIXED_BYTES).saturating_sub(max_pixels*BAND_BYTES_PER_PIXEL),completed_submits:gpu.thread_submits().saturating_sub(submits),..GpuWorkProgress::default()});
+   let out=gpu.physical_blur_axis_with_context(v,w,h,sigma,axis==crate::gpu_spatial::Axis::Horizontal,max_pixels*64+1024*1024,
+    &mut||!(*cancellation.borrow_mut())(),Some((component,channel))).ok_or_else(||std::io::Error::new(if (*cancellation.borrow_mut())(){std::io::ErrorKind::Interrupted}else{std::io::ErrorKind::Other},"GPU physical pass failed"))?;
+   report_main_tile(progress,"gpu_tiled_chain",u64::from(*index),u64::from(total),*index,total,fraction);
+   Ok(out)
+  }).map_err(io)?;
+ let _physical=OutputGuard{path:physical.clone(),keep:false};
+ drop(cancellation);
+ let (r2,w2)=render_tiles(pipe,gpu,fields,&physical,output,width,height,0,plan,TilePhase::PostHalationRaw,1.,index,total,fraction,submits,start,cancelled,progress,&mut None,&mut "not_applicable",cache)?;
+ Ok((r1+r2+spatial_metrics.bytes_read,w1+w2+spatial_metrics.bytes_written))
 }
 
 /// A completed prepass releases construction scratch, not the physical PSF
@@ -298,7 +397,8 @@ fn export_with_split(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film
 #[allow(clippy::too_many_arguments)]
 fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Profile,paper:&Profile,data_dir:&Path,input:&Path,output:&Path,checkpoint_dir:Option<&Path>,width:u32,height:u32,budget:u32,brightness:f64,cancelled:&mut impl FnMut()->bool,progress:&mut impl ProgressSink,force_split:Option<bool>,early_preview:&mut Option<crate::early_negative_preview::PreviewHandle>)->Result<StreamedMetrics> {
     let start=Instant::now();cancel(cancelled)?;
-    let mut output_guard=OutputGuard{path:output.to_owned(),keep:false};
+    // Disarmed until this invocation successfully creates the final output.
+    let mut output_guard=OutputGuard{path:output.to_owned(),keep:true};
     // Checkpoint configuration explicitly includes the algorithm. CPU manifests
     // live one level above and are selected before this entry is called.
     let mut current_identity=None;
@@ -312,7 +412,8 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     }else{None};
     if let Some(c)=checkpoints.as_ref().filter(|c|c.stage()==6) {
         progress.begin_stage(6,1,"output");progress.begin_work("output");
-        c.restore(&[output.to_owned()],cancelled).map_err(io)?;
+        restore_output(c,output,cancelled)?;
+        output_guard.keep=false;
         cancel(cancelled)?;progress.end_work();progress.finish_stage();
         let mut gpu=crate::adreno::AdrenoDensityBackend::with_enabled(false).diagnostics();gpu.requested=true;gpu.reason="gpu_checkpoint_restored".into();gpu.accelerated_stage="tiled-chain";
         if let Err(e)=crate::scan_preview::publish_restored(output,width,height,&params.io.output_color_space,cancelled){if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}
@@ -348,7 +449,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     // Admit the background worker only when both GPU prepass and a possible
     // CPU fallback can retain its full allowance without waiting for it.
     let candidate_fields=fields_bytes.checked_add(preview_bytes);
-    let early_admitted=!film.is_omitted() && preview_mib.is_some_and(|m|m<=u64::from(budget.saturating_sub(128))) && checkpoint_dir.and_then(Path::parent).is_some() && candidate_fields.is_some_and(|f|tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),f).is_ok());
+    let early_admitted=!film.is_omitted() && preview_mib.is_some_and(|m|m<=u64::from(budget.saturating_sub(128))) && checkpoint_dir.and_then(Path::parent).is_some() && candidate_fields.is_some_and(|f|tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),fields_bytes).ok().zip(tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),f).ok()).is_some_and(|(a,b)|optional_plan_admitted(width,height,halo,a,b)));
     if early_admitted {
         if let Some(dir)=checkpoint_dir.and_then(Path::parent) {
             *early_preview=crate::early_negative_preview::spawn(input,dir,std::sync::Arc::clone(&pipe),width,height,preview_bytes).ok().flatten();
@@ -415,17 +516,19 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         .ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let full_plan=tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),main_fields);
     let split=choose_main_split(width,height,halo,&full_plan,force_split)?;
+    let spatial=split && pipe.gpu_physical_components(width,height).is_some();
     // For split rendering this is a real prefix plan, not a dummy full plan.
     // Both phases are checked again below with exact optional reservations.
     let mut plan=if split {
-        let (prefix_halo,_)=pipe.gpu_split_halo_pixels(pitch);
+        let (legacy_halo,_)=pipe.gpu_split_halo_pixels(pitch);
+        let prefix_halo=if spatial{pipe.gpu_scattered_raw_halo(width,height)}else{legacy_halo};
         tile_plan(width,height,prefix_halo,budget,gpu.max_storage_buffer_binding_size(),main_fields)?
     }else{full_plan?};
     if fields.is_some(){plan.whole=false;}
     let mut negative=if !pipe.film.is_omitted() && pipe.film.info.film_type=="negative" && checkpoint_dir.and_then(Path::parent).is_some() {
         crate::negative_preview::GpuDensityAssembly::new(width,height)
     }else{None};
-    let mut exact_unavailable=if pipe.film.is_omitted(){"not_applicable"}else if pipe.film.info.film_type=="negative" {"skipped_budget"}else{"failed"};
+    let mut exact_unavailable=if pipe.film.is_omitted(){"not_applicable"}else if pipe.film.info.film_type=="negative" {"skipped_budget"}else{"not_applicable"};
     if let Some(assembly)=negative.as_ref().filter(|_|!split) {
         let mut reserve=assembly.peak_reservation(plan.width,plan.rows).unwrap_or(u64::MAX);
         let mut chosen=None;
@@ -437,7 +540,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
             if global_effect && !prepass && !candidate.whole {break;}
             if fields.is_some(){candidate.whole=false;}
             let Some(actual)=assembly.peak_reservation(candidate.width,candidate.rows) else {break};
-            if actual<=reserve {chosen=Some(candidate);break;}
+            if actual<=reserve {if optional_plan_admitted(width,height,halo,plan,candidate){chosen=Some(candidate);}break;}
             reserve=actual;
         }
         if let Some(candidate)=chosen {
@@ -454,7 +557,8 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     let mut film_log_cache=None;
     let mut film_log_guard=None;
     if split {
-        let (prefix_halo,suffix_halo)=pipe.gpu_split_halo_pixels(pitch);
+        let (legacy_halo,suffix_halo)=pipe.gpu_split_halo_pixels(pitch);
+        let prefix_halo=if spatial{pipe.gpu_scattered_raw_halo(width,height)}else{legacy_halo};
         let retained=match fields.as_ref(){Some(f)=>f.retained_working_bytes().ok_or_else(||err("GPU_MEMORY_BUDGET"))?,None=>0};
 
         // Compute the future suffix reservation without cloning its global fields.
@@ -472,13 +576,16 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
             tests::FILMLOG_TEST_CORE_ROWS.with(|rows|{if let Some(rows)=rows.get(){a.rows=a.rows.min(rows);b.rows=b.rows.min(rows);}});
             Ok((a,b))
         };
+        let baseline=make_plans(0)?;
+        let physical_capacity=|a:TilePlan,b:TilePlan|!spatial || u64::from(b.expanded_width)*u64::from(b.expanded_rows)>=u64::from(a.expanded_width)*u64::from(a.expanded_rows);
+        let affordable=|a,b|physical_capacity(baseline.0,a)&&optional_plan_admitted(width,height,prefix_halo,baseline.0,a)&&optional_plan_admitted(width,height,suffix_halo,baseline.1,b);
         let mut chosen=None;
         if let Some(assembly)=negative.as_ref() {
             let mut reserve=assembly.peak_reservation(plan.width,plan.rows).unwrap_or(u64::MAX);
             for _ in 0..8 {
                 let Ok((a,b))=make_plans(reserve) else{break};
                 let Some(actual)=assembly.peak_reservation(a.width,a.rows).zip(assembly.peak_reservation(b.width,b.rows)).map(|(a,b)|a.max(b)) else{break};
-                if actual<=reserve {chosen=Some((a,b));exact_unavailable="failed";break;}
+                if actual<=reserve {if affordable(a,b){chosen=Some((a,b));exact_unavailable="failed";}break;}
                 reserve=actual;
             }
             if chosen.is_none(){negative=None;}
@@ -499,7 +606,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
                     assembly.peak_reservation(a.width,a.rows).zip(assembly.peak_reservation(b.width,b.rows)).and_then(|(a,b)|a.max(b).checked_add(extra))
                 }else{Some(extra)};
                 let Some(actual)=actual else{break};
-                if actual<=reserve{prefix=a;suffix=b;cache_prepaid=true;break;}reserve=actual;
+                if actual<=reserve{if physical_capacity(cold_prefix,a)&&optional_plan_admitted(width,height,prefix_halo,cold_prefix,a)&&optional_plan_admitted(width,height,suffix_halo,cold_suffix,b){prefix=a;suffix=b;cache_prepaid=true;}break;}reserve=actual;
             }
         }
         if cache_prepaid {
@@ -522,16 +629,16 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         let at=Instant::now();
         let hit=film_log_cache.as_mut().is_some_and(|cache|cache.load(cancelled));cancel(cancelled)?;
         stages.push(StageMetrics{stage:if hit{"gpu_film_log_cache_hit"}else if film_log_cache.is_some(){"gpu_film_log_cache_miss"}else{"gpu_film_log_cache_unavailable"},elapsed_ms:at.elapsed().as_secs_f64()*1000.});
-        let total=tile_count(width,height,suffix)+if hit{0}else{tile_count(width,height,prefix)};
+        let total=tile_count(width,height,suffix)+if hit{0}else{tile_count(width,height,prefix)*if spatial{2}else{1}+if spatial{spatial_tiles(&pipe,width,height,prefix)?}else{0}};
         let log_path=if hit{film_log_cache.as_ref().unwrap().path()}else{film_log_attempt_path(output)};
         if hit{progress.begin_work("gpu_tiled_chain");}
         if !hit {
             if let Some(cache)=film_log_cache.as_mut(){cache.begin_prefix(cancelled);}
             progress.begin_work("gpu_tiled_chain");let at=Instant::now();
-            let (r,w)=render_tiles(&pipe,gpu,fields.as_ref(),input,&log_path,width,height,prefix_halo,prefix,TilePhase::FilmLog,1.,&mut tile_index,total,&mut main_fraction,submits_before,start,cancelled,progress,&mut None,&mut exact_unavailable,film_log_cache.as_mut())?;
+            let (r,w)=render_prefix(&pipe,gpu,fields.as_ref(),input,&log_path,width,height,prefix_halo,prefix,spatial,&mut tile_index,total,&mut main_fraction,submits_before,start,cancelled,progress,film_log_cache.as_mut())?;
             film_log_guard=Some(OutputGuard{path:log_path.clone(),keep:false});
             if let Some(cache)=film_log_cache.as_mut(){cache.finish_prefix(cancelled);}
-            bytes_read+=r;written+=w;scratch_peak=w;
+            bytes_read+=r;written+=w;scratch_peak=if spatial{u64::from(width)*u64::from(height)*52}else{w};
             stages.push(StageMetrics{stage:"gpu_film_log",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
         }
         // A hit retains its already-prepaid camera fields only for corruption
@@ -550,9 +657,9 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
                 let cache=film_log_cache.as_mut().unwrap();cache.invalidate();cache.begin_prefix(cancelled);
                 stages.push(StageMetrics{stage:"gpu_film_log_cache_corrupt_replayed",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
                 let fresh=film_log_attempt_path(output);
-                let total=tile_index+tile_count(width,height,prefix)+tile_count(width,height,suffix);
-                let(r,w)=render_tiles(&pipe,gpu,fields.as_ref(),input,&fresh,width,height,prefix_halo,prefix,TilePhase::FilmLog,1.,&mut tile_index,total,&mut main_fraction,submits_before,start,cancelled,progress,&mut None,&mut exact_unavailable,Some(&mut *cache))?;
-                film_log_guard=Some(OutputGuard{path:fresh.clone(),keep:false});cache.finish_prefix(cancelled);bytes_read+=r;written+=w;scratch_peak=w;
+                let total=tile_index+tile_count(width,height,prefix)*if spatial{2}else{1}+tile_count(width,height,suffix)+if spatial{spatial_tiles(&pipe,width,height,prefix)?}else{0};
+                let(r,w)=render_prefix(&pipe,gpu,fields.as_ref(),input,&fresh,width,height,prefix_halo,prefix,spatial,&mut tile_index,total,&mut main_fraction,submits_before,start,cancelled,progress,Some(&mut *cache))?;
+                film_log_guard=Some(OutputGuard{path:fresh.clone(),keep:false});cache.finish_prefix(cancelled);bytes_read+=r;written+=w;scratch_peak=if spatial{u64::from(width)*u64::from(height)*52}else{w};
                 if let Some(ref mut f)=fields{f.camera=None;f.highlight_max_raw=None;}
                 render_tiles(&pipe,gpu,fields.as_ref(),&fresh,output,width,height,suffix_halo,suffix,TilePhase::FromFilmLog,2f64.powf(brightness),&mut tile_index,total,&mut main_fraction,submits_before,start,cancelled,progress,&mut negative,&mut exact_unavailable,Some(&mut *cache))?
             },other=>other?,
@@ -568,6 +675,8 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         bytes_read+=r;written+=w;
         progress.end_work();stages.push(StageMetrics{stage,elapsed_ms:at.elapsed().as_secs_f64()*1000.});
     }
+    // render_tiles transferred its successfully created output to this scope.
+    output_guard.keep=false;
     reported_plan.estimated_bytes=reported_plan.estimated_bytes.max(prepass_peak);
     let batches=gpu.thread_submits().saturating_sub(submits_before);
     if batches==0||!gpu.is_healthy(){return Err(err("GPU_EXECUTION_FAILED"));}
@@ -579,11 +688,14 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     cancel(cancelled)?;progress.end_work();progress.finish_stage();
     if let Some(job_dir)=checkpoint_dir.and_then(Path::parent) {
         if let Some((preview_width,preview_height,samples))=negative.and_then(|a|a.complete()) {
-            // The worker never owns export state or waits on it. UUID-scoped output
-            // cannot be reused by a canceled or retried queue attempt.
-            if crate::negative_preview::publish_sampled_negative_async(job_dir,pipe.film.clone(),preview_width,preview_height,samples).is_err() {
-                let _=crate::negative_preview::mark_current_status(job_dir,"failed",false);
-            }
+            // Keep encoding inside the export permit and the capture reservation.
+            // No detached worker can outlive this export's memory accounting.
+            progress.begin_work("negative_preview");let at=Instant::now();
+            let preview=crate::negative_preview::publish_sampled_negative(job_dir,&pipe.film,preview_width,preview_height,&samples,cancelled);
+            progress.end_work();
+            stages.push(StageMetrics{stage:"negative_preview",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
+            if let Err(e)=preview {if e.kind()==std::io::ErrorKind::Interrupted{return Err(io(e));}}
+
         }else{
             let _=crate::negative_preview::mark_current_status(job_dir,exact_unavailable,false);
         }
@@ -617,6 +729,39 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
 
 #[cfg(test)]mod tests {
  use super::*;
+ #[test]
+ fn optional_reservations_never_amplify_authoritative_work() {
+  for (w,h,halo) in [(2000,3000,297),(3072,4096,405),(4000,6000,591),(6000,8000,787)] {
+   let base=tile_plan(w,h,halo,512,128*1024*1024,13_500_136+70_896);
+   for extra in [0,4_188_144,18_742_880] {
+    let candidate=tile_plan(w,h,halo,512,128*1024*1024,13_500_136+70_896+extra);
+    if let (Ok(a),Ok(b))=(&base,&candidate) {
+     let admitted=optional_plan_admitted(w,h,halo,*a,*b);
+     let a=tile_cost(w,h,halo,a.width,a.rows);let b=tile_cost(w,h,halo,b.width,b.rows);
+     assert_eq!(admitted,b.expanded_pixels<=a.expanded_pixels&&b.row_io<=a.row_io&&b.tiles<=a.tiles);
+     if w==4000&&extra>0 {assert!(!admitted,"24 MP optional reservation must not multiply overlap");}
+    }
+   }
+  }
+ }
+ #[test]
+ fn restore_collision_and_cancel_never_delete_foreign_output() {
+  let root=std::env::temp_dir().join(format!("gpu-restore-test-{}",std::process::id()));fs::create_dir(&root).unwrap();
+  struct Cleanup(PathBuf);impl Drop for Cleanup{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _cleanup=Cleanup(root.clone());
+  let data=root.join("data");fs::create_dir(&data).unwrap();
+  let input=root.join("input");fs::write(&input,[0u8;12]).unwrap();
+  let identity=crate::checkpoint::Identity::new(&data,&input,1,1,"test".into(),&mut||false).unwrap();
+  let mut checkpoint=crate::checkpoint::Checkpoints::open(&root.join("checkpoint"),identity,&mut||false).unwrap();
+  checkpoint.commit(6,&[input],None,&mut||false).unwrap();
+  let output=root.join("output");fs::write(&output,b"foreign").unwrap();
+  assert!(restore_output(&checkpoint,&output,&mut||false).is_err());assert_eq!(fs::read(&output).unwrap(),b"foreign");
+  fs::remove_file(&output).unwrap();
+  let mut calls=0;
+  assert_eq!(restore_output(&checkpoint,&output,&mut||{calls+=1;calls>=2}).unwrap_err().code,"CANCELLED");
+  assert!(!output.exists());
+  assert!(!fs::read_dir(&root).unwrap().any(|e|e.unwrap().file_name().to_string_lossy().starts_with(".gpu-restore-")));
+  restore_output(&checkpoint,&output,&mut||false).unwrap();assert_eq!(fs::read(&output).unwrap(),[0u8;12]);
+ }
  #[test]
  fn cinestill_non_split_tiled_prepass_reserves_physical_kernels() {
   let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
@@ -917,7 +1062,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
    let metrics=export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&output,None,w,h,128,0.,&mut||false,&mut reporter,Some(split)).unwrap();
    assert!(metrics.gpu.active);assert!(metrics.gpu.gpu_batches>0);assert_eq!(fs::metadata(&output).unwrap().len(),w as u64*h as u64*12);
    assert!(!output.with_extension("gpu-film-log.rgb").exists());
-   assert_eq!(metrics.peak_logical_scratch_bytes,if split {w as u64*h as u64*12}else{0});
+   assert_eq!(metrics.peak_logical_scratch_bytes,if split {w as u64*h as u64*if Pipeline::new(film.clone(),paper.clone(),params.clone()).gpu_physical_components(w,h).is_some(){52}else{12}}else{0});
    outputs.push(fs::read(&output).unwrap().chunks_exact(4).map(|b|f32::from_le_bytes(b.try_into().unwrap())).collect::<Vec<_>>());
   }
   let max=outputs[0].iter().zip(&outputs[1]).map(|(a,b)|(a-b).abs()).fold(0f32,f32::max);
@@ -935,6 +1080,65 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
   assert_eq!(fs::read(&log).unwrap(),b"foreign fixture");assert!(output.exists());
   assert_ne!(film_log_attempt_path(&output),film_log_attempt_path(&output));
   assert!(!fs::read_dir(&root).unwrap().any(|e|e.unwrap().file_name().to_string_lossy().contains("gpu-film-log-")),"owned attempt spools must be cleaned");
+  let foreign=root.join("foreign-output.rgb");fs::write(&foreign,b"foreign-output").unwrap();
+  let mut reporter=crate::streamed_progress::Reporter::new(|_|{});
+  assert!(export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&foreign,None,w,h,128,0.,&mut||false,&mut reporter,Some(true)).is_err());
+  assert_eq!(fs::read(&foreign).unwrap(),b"foreign-output");
+  eprintln!("GPU_FILMLOG_SPOOL_PASS max={max} fullsize={w}x{h} dualfilters cancellation cleanup collision_preserved");
+ } #[test]fn staged_cinestill_main_plans_fit_representative_megapixels(){
+  let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+  let mut m=crate::mobile::MobileParams::default();m.film_stock="cinestill_800t".into();m.paper_stock="kodak_2383".into();m.diffusion_filter="black_pro_mist".into();m.diffusion_strength=2.;
+  let film=spektrafilm_core::profile::load_profile_by_name(&data,&m.film_stock).unwrap();let paper=spektrafilm_core::profile::load_profile_by_name(&data,&m.paper_stock).unwrap();
+  let pipe=Pipeline::new(film.clone(),paper,m.runtime_for_film(&film));
+  // Deliberately conservative fixed retained reservation, not measured RSS.
+  for (w,h) in [(2000,3000),(3072,4096),(4000,6000),(6000,8000)] {
+   let halo=pipe.gpu_scattered_raw_halo(w,h);let p=tile_plan(w,h,halo,512,128*1024*1024,160*1024*1024).unwrap();
+   assert!(p.estimated_bytes<=512*1024*1024);assert!(p.width>0&&p.rows>0);assert!(pipe.gpu_physical_components(w,h).is_some());
+   let tasks=spatial_tiles(&pipe,w,h,p).unwrap();assert!(tasks>0);
+   eprintln!("STAGED_MAIN_PLAN {w}x{h} halo={halo} core={}x{} bytes={} physicalTiles={tasks}",p.width,p.rows,p.estimated_bytes);
+  }
+ }
+ #[test]fn cinestill_staged_prefix_matches_resident_and_cleans_up(){
+  let Some(gpu)=crate::mobile::full_chain_gpu() else {
+   assert_ne!(std::env::var("FILMROOM_REQUIRE_GPU_SMOKE").as_deref(),Ok("1"));return;
+  };assert!(gpu.is_healthy());
+  let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+  let mut m=crate::mobile::MobileParams::default();m.mode="export".into();m.film_stock="cinestill_800t".into();m.paper_stock="kodak_2383".into();m.grain_amount=0.;m.diffusion_filter="black_pro_mist".into();m.print_diffusion_filter="glimmerglass".into();
+  let film=spektrafilm_core::profile::load_profile_by_name(&data,&m.film_stock).unwrap();let paper=spektrafilm_core::profile::load_profile_by_name(&data,&m.paper_stock).unwrap();
+  let mut params=m.runtime_for_film(&film);params.camera.pixel_size_um_override=Some(35_000./6000.);let(w,h)=(257u32,263u32);
+  assert!(Pipeline::new(film.clone(),paper.clone(),params.clone()).gpu_physical_components(w,h).is_some());
+  let root=std::env::temp_dir().join(format!("gpu-cinestill-staged-{}",std::process::id()));fs::create_dir(&root).unwrap();
+  struct Cleanup(PathBuf);impl Drop for Cleanup{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _cleanup=Cleanup(root.clone());
+  let input=root.join("input.rgb");fs::write(&input,(0..w*h*3).flat_map(|i|(0.01f32+(i%251)as f32/300.).to_le_bytes()).collect::<Vec<_>>()).unwrap();
+  let mut outputs=Vec::new();
+  for split in [false,true] {
+   let output=root.join(format!("out-{split}.rgb"));
+   let mut reporter=crate::streamed_progress::Reporter::new(|_|{});
+   let metrics=export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&output,None,w,h,128,0.,&mut||false,&mut reporter,Some(split)).unwrap();
+   assert!(metrics.gpu.active);assert!(metrics.gpu.gpu_batches>0);assert_eq!(fs::metadata(&output).unwrap().len(),w as u64*h as u64*12);
+   assert!(!output.with_extension("gpu-film-log.rgb").exists());
+   assert_eq!(metrics.peak_logical_scratch_bytes,if split {w as u64*h as u64*if Pipeline::new(film.clone(),paper.clone(),params.clone()).gpu_physical_components(w,h).is_some(){52}else{12}}else{0});
+   outputs.push(fs::read(&output).unwrap().chunks_exact(4).map(|b|f32::from_le_bytes(b.try_into().unwrap())).collect::<Vec<_>>());
+  }
+  let max=outputs[0].iter().zip(&outputs[1]).map(|(a,b)|(a-b).abs()).fold(0f32,f32::max);
+  // Same GPU pipeline, but whole diffusion and external-field reduction order
+  // can differ by float rounding. This is a numerical regression bound, not a
+  // perceptual-quality or CPU-equality claim.
+  assert!(max<0.00002,"split vs whole max={max}");
+  let output=root.join("cancel.rgb");let cancel_flag=std::cell::Cell::new(false);
+  let mut reporter=crate::streamed_progress::Reporter::new(|e|{if e.gpu.and_then(|g|g.phase)==Some("dir"){cancel_flag.set(true);}});
+  let error=export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&output,None,w,h,128,0.,&mut||cancel_flag.get(),&mut reporter,Some(true)).unwrap_err();
+  assert_eq!(error.code,"CANCELLED");assert!(!output.exists());assert!(!output.with_extension("gpu-film-log.rgb").exists());assert!(gpu.is_healthy());
+  let output=root.join("collision.rgb");let log=output.with_extension("gpu-film-log.rgb");fs::write(&log,b"foreign fixture").unwrap();
+  let mut reporter=crate::streamed_progress::Reporter::new(|_|{});
+  assert!(export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&output,None,w,h,128,0.,&mut||false,&mut reporter,Some(true)).is_ok());
+  assert_eq!(fs::read(&log).unwrap(),b"foreign fixture");assert!(output.exists());
+  assert_ne!(film_log_attempt_path(&output),film_log_attempt_path(&output));
+  assert!(!fs::read_dir(&root).unwrap().any(|e|e.unwrap().file_name().to_string_lossy().contains("gpu-film-log-")),"owned attempt spools must be cleaned");
+  let foreign=root.join("foreign-output.rgb");fs::write(&foreign,b"foreign-output").unwrap();
+  let mut reporter=crate::streamed_progress::Reporter::new(|_|{});
+  assert!(export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&foreign,None,w,h,128,0.,&mut||false,&mut reporter,Some(true)).is_err());
+  assert_eq!(fs::read(&foreign).unwrap(),b"foreign-output");
   eprintln!("GPU_FILMLOG_SPOOL_PASS max={max} fullsize={w}x{h} dualfilters cancellation cleanup collision_preserved");
  }
  #[test]fn actual_device_shapes_complete_on_gpu_when_large_validation_enabled(){

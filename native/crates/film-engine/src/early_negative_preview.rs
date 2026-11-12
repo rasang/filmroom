@@ -193,9 +193,9 @@ fn spawn_for_attempt(input: &Path, dir: &Path, pipe: Arc<Pipeline>, width: u32, 
         crate::negative_preview::write_early_attempt_status(dir, &attempt, "skipped_budget")?;
         return Ok(None);
     }
-    if pipe.film.info.film_type != "negative" || (pipe.params.camera.auto_exposure && !pipe.params.camera.preview_metered_ev.is_some_and(|ev|ev.is_finite() && 2.0f32.powf(ev).is_finite())) || (pipe.params.film_render.halation.boost_ev != 0. || pipe.params.film_render.halation.headroom_active())
-        || candidate.is_none() {
-        crate::negative_preview::write_early_attempt_status(dir, &attempt, "failed")?;
+    let not_applicable=pipe.film.info.film_type != "negative" || (pipe.params.camera.auto_exposure && !pipe.params.camera.preview_metered_ev.is_some_and(|ev|ev.is_finite() && 2.0f32.powf(ev).is_finite())) || (pipe.params.film_render.halation.boost_ev != 0. || pipe.params.film_render.halation.headroom_active());
+    if not_applicable || candidate.is_none() {
+        crate::negative_preview::write_early_attempt_status(dir, &attempt, if not_applicable{"not_applicable"}else{"skipped_budget"})?;
         return Ok(None);
     }
     let (cap, _, _) = candidate.unwrap();

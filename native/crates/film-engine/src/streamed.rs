@@ -271,11 +271,11 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
    else {
      let (attempt,failure)=spektrafilm_gpu::wgpu_backend::observe_resident_attempt(||crate::gpu_export::export(&params,film_stock,paper_stock,&film,&paper,data_dir,input_path,output_path,checkpoint_dir,width,height,memory_budget_mib,brightness_ev,&mut cancelled,&mut progress,&mut early_preview));
      if !matches!(&attempt,Ok(Ok(_))) {if let Some(ref preview)=early_preview {preview.cancel.store(true,std::sync::atomic::Ordering::Release);}}
-     if let Some(failure)=failure {progress.gpu_failure(failure.stage.as_str(),failure.elapsed_ms);progress.gpu_failure_detail(failure.detail.kind.as_str(),failure.detail.submit_ms,failure.detail.poll_ms,failure.detail.map_wait_ms);}
+     if let Some(failure)=failure {progress.gpu_failure(failure.stage.as_str(),failure.elapsed_ms);progress.gpu_failure_detail(failure.detail.kind.as_str(),failure.detail.submit_ms,failure.detail.poll_ms,failure.detail.map_wait_ms);if let Some(wait)=failure.wait{progress.gpu_map_snapshot(wait);}}
      crate::mobile::gpu_completion_guard()?;
      match attempt {
        Ok(Ok(metrics))=>return Ok(metrics),
-       Ok(Err(e)) if matches!(e.code,"CANCELLED"|"INVALID_PIXELS"|"NONFINITE_OUTPUT"|"INVALID_OUTPUT_SHAPE"|"CHECKPOINT_INVALID"|"IO_ERROR")=>return Err(e),
+       Ok(Err(e)) if matches!(e.code,"CANCELLED"|"INVALID_PIXELS"|"NONFINITE_OUTPUT"|"INVALID_OUTPUT_SHAPE"|"CHECKPOINT_INVALID"|"IO_ERROR"|"INSUFFICIENT_STORAGE")=>return Err(e),
        Ok(Err(e))=>resident_fallback=Some(match e.code {"GPU_MEMORY_BUDGET"=>"gpu_memory_budget_fallback","GPU_BINDING_LIMIT"=>"gpu_binding_limit_fallback","GPU_UNAVAILABLE"=>"gpu_unavailable_fallback","GPU_UNSUPPORTED_ADAPTER"=>"unsupported_adapter",_=>"gpu_execution_fallback"}),
        Err(_)=>resident_fallback=Some("gpu_execution_fallback"),
      }

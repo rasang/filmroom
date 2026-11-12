@@ -111,11 +111,11 @@ pub fn write_negative_preview(
         Err(e) if e.kind() == io::ErrorKind::NotFound => (),
         Err(e) => return Err(e),
     }
-    let _guard = TempGuard(temp.clone());
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temp)?;
+    let _guard = TempGuard(temp.clone());
     file.write_all(&png)?;
     file.sync_all()?;
     drop(file);
@@ -337,8 +337,8 @@ fn publish_for_attempt(dir:&Path,attempt:&str,profile:&Profile,width:u32,height:
         .ok_or_else(||invalid("Negative unavailable for this film"))?;
     let prefix=if early {"negative-preview-early-"}else{"negative-preview-"};
     let temp=dir.join(format!("{prefix}{attempt}.png.part"));
-    let _guard=TempGuard(temp.clone());
     let mut file=OpenOptions::new().write(true).create_new(true).open(&temp)?;
+    let _guard=TempGuard(temp.clone());
     file.write_all(&png)?; drop(file);
     active_publish(&mut cancelled)?;
     fs::rename(temp,dir.join(format!("{prefix}{attempt}.png")))?;
@@ -352,24 +352,24 @@ pub(crate) fn publish_early_negative_for_attempt(dir:&Path,attempt:&str,profile:
     publish_for_attempt(dir,attempt,profile,width,height,samples,true,cancel)
 }
 
-/// A detached best-effort visual artifact; it neither holds the export permit
-/// nor changes rendering, saving, or terminal state. UUID-scoped names ensure
-/// a canceled/retried attempt can never be selected by a newer attempt.
-pub(crate) fn publish_sampled_negative_async(
-    dir:&Path, profile:Profile, width:u32, height:u32, samples:Vec<[f32;3]>,
+/// Best-effort visual artifact, encoded synchronously under the caller's export
+/// permit and sample/encoding reservation. Cancellation drains before returning;
+/// there is no detached allocation overlapping a later export.
+pub(crate) fn publish_sampled_negative(
+    dir:&Path, profile:&Profile, width:u32, height:u32, samples:&[[f32;3]],
+    cancel:&mut impl FnMut()->bool,
 ) -> io::Result<()> {
     let attempt=fs::read_to_string(dir.join("scan-preview-attempt"))?;
     if !valid_attempt(&attempt) {return Err(invalid("Invalid preview attempt"));}
+    active_publish(cancel)?;
     write_attempt_status(dir,&attempt,"pending")?;
-    let dir=dir.to_path_buf();
-    let thread_dir=dir.clone(); let thread_attempt=attempt.clone();
-    let started=std::thread::Builder::new().name("film-negative-preview".into()).spawn(move || {
-        let result=publish_for_attempt(&thread_dir,&thread_attempt,&profile,width,height,&samples,false,&mut ||false);
-        if result.is_err() && same_attempt(&thread_dir,&thread_attempt) {
-            let _=write_attempt_status(&thread_dir,&thread_attempt,"failed");
+    let result=publish_for_attempt(dir,&attempt,profile,width,height,samples,false,cancel);
+    if let Err(e)=&result {
+        if same_attempt(dir,&attempt) {
+            let _=write_attempt_status(dir,&attempt,if e.kind()==io::ErrorKind::Interrupted{"cancelled"}else{"failed"});
         }
-    });
-    match started {Ok(_) => Ok(()), Err(e) => {let _=write_attempt_status(&dir,&attempt,"failed");Err(e)}}
+    }
+    result
 }
 struct LightTable {
     dye: Vec<[f64; 3]>,
@@ -708,16 +708,37 @@ mod tests {
         assert_eq!(fs::read(&target).unwrap(),b"old-valid-publication");
     }
     #[test]
-    fn async_preview_is_attempt_scoped_and_real_density() {
+    fn synchronous_preview_cancels_and_preserves_foreign_part() {
         let f=Fixture::new(1,1,|_,_|1.0);
         let id="12345678-1234-1234-1234-123456789abc";
         fs::write(f.dir.join("scan-preview-attempt"),id).unwrap();
-        publish_sampled_negative_async(&f.dir,profile(),1,1,vec![[1.;3];4]).unwrap();
+        let part=f.dir.join(format!("negative-preview-{id}.png.part"));
+        fs::write(&part,b"another owner").unwrap();
+        assert!(publish_sampled_negative(&f.dir,&profile(),1,1,&[[1.;3];4],&mut||false).is_err());
+        assert_eq!(fs::read(&part).unwrap(),b"another owner");
+        let mut calls=0;
+        let e=publish_sampled_negative(&f.dir,&profile(),1,1,&[[1.;3];4],&mut||{calls+=1;calls>1}).unwrap_err();
+        assert_eq!(e.kind(),io::ErrorKind::Interrupted);
+        assert_eq!(fs::read_to_string(f.dir.join(format!("negative-preview-{id}.status"))).unwrap(),"cancelled");
+        assert!(!f.dir.join(format!("negative-preview-{id}.png")).exists());
+    }
+    #[test]
+    fn encoding_workspace_fits_capture_reservation() {
+        // Live RGB + PNG raw/filter bytes + DEFLATE + PNG output, plus
+        // spectral LightTable and fixed allocator headroom, without profile clone.
+        let pixels=u64::from(MAX_EDGE)*u64::from(MAX_EDGE);
+        let raw=pixels*3+u64::from(MAX_EDGE);
+        let z=6+raw+raw.div_ceil(65535)*5;
+        let peak=pixels*3+raw+z+(z+70)+64*1024;
+        assert!(peak<2*1024*1024,"peak {peak}");
+    }
+    #[test]
+    fn synchronous_preview_is_attempt_scoped_and_real_density() {
+        let f=Fixture::new(1,1,|_,_|1.0);
+        let id="12345678-1234-1234-1234-123456789abc";
+        fs::write(f.dir.join("scan-preview-attempt"),id).unwrap();
+        publish_sampled_negative(&f.dir,&profile(),1,1,&[[1.;3];4],&mut||false).unwrap();
         let status=f.dir.join(format!("negative-preview-{id}.status"));
-        let deadline=std::time::Instant::now()+std::time::Duration::from_secs(10);
-        while fs::read_to_string(&status).ok().as_deref()!=Some("ready") && std::time::Instant::now()<deadline {
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
         assert_eq!(fs::read_to_string(status).unwrap(),"ready");
         let image=fs::read(f.dir.join(format!("negative-preview-{id}.png"))).unwrap();
         let (_,_,rgb)=pixels(&image);

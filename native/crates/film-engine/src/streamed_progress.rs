@@ -4,8 +4,14 @@ const UNIT: u64 = 1_000_000;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GpuWorkProgress {
     pub phase:Option<&'static str>, pub tile_index:u32, pub tile_total:u32,
+    pub tile_phase:Option<&'static str>,pub core_width:u32,pub core_height:u32,
+    pub expanded_width:u32,pub expanded_height:u32,pub halo:u32,
+    pub expanded_ratio:f64,pub plan_bytes:u64,pub reserved_bytes:u64,
     pub batch_index:u32, pub batch_elapsed_ms:f64, pub chain_wait_ms:f64,
     pub failure_kind:Option<&'static str>,pub submit_ms:Option<f64>,pub poll_ms:Option<f64>,pub map_wait_ms:Option<f64>,
+    pub map_timeout_elapsed_ms:Option<f64>,pub map_poll_count:Option<u64>,pub map_max_poll_ms:Option<f64>,pub map_max_sleep_ms:Option<f64>,
+    pub map_completed_maps:Option<u64>,pub map_expected_maps:Option<u64>,
+    pub halation_component:Option<u32>,pub halation_channel:Option<u32>,pub halation_radius:Option<u32>,pub halation_tile_width:Option<u32>,pub halation_tile_height:Option<u32>,
     pub completed_submits:u64, pub failed_phase:Option<&'static str>, pub failed_elapsed_ms:Option<f64>,
 }
 #[derive(Clone, Copy, Debug)]
@@ -92,6 +98,16 @@ impl<F: FnMut(ExportProgress)> Reporter<F> {
     }
     pub fn gpu_failure_detail(&mut self, kind:&'static str, submit:f64, poll:f64, wait:f64) {
         let mut value=self.state.gpu.unwrap_or_default();value.failure_kind=Some(kind);value.submit_ms=Some(submit);value.poll_ms=Some(poll);value.map_wait_ms=Some(wait);self.gpu_event(value);
+    }
+    #[cfg(feature="adreno-gpu")]
+    pub fn gpu_map_snapshot(&mut self,snapshot:spektrafilm_gpu::wgpu_backend::MapWaitSnapshot) {
+        let mut value=self.state.gpu.unwrap_or_default();
+        value.map_timeout_elapsed_ms=Some(snapshot.elapsed_ms);value.map_poll_count=Some(snapshot.poll_count);
+        value.map_max_poll_ms=Some(snapshot.max_poll_ms);value.map_max_sleep_ms=Some(snapshot.max_sleep_ms);
+        value.map_completed_maps=Some(snapshot.completed_maps as u64);value.map_expected_maps=Some(snapshot.expected_maps as u64);
+        value.halation_component=snapshot.blur.map(|b|b.component);value.halation_channel=snapshot.blur.map(|b|b.channel);
+        value.halation_radius=snapshot.blur.map(|b|b.radius);value.halation_tile_width=snapshot.blur.map(|b|b.width);value.halation_tile_height=snapshot.blur.map(|b|b.height);
+        self.gpu_event(value);
     }
     pub fn finish_stage(&mut self) {
         self.state.pass_updated = false;

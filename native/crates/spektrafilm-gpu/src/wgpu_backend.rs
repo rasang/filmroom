@@ -103,6 +103,8 @@ use crate::{ComputeBackend, Lut3D};
 thread_local! {
     static THREAD_SUBMITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static THREAD_RESIDENT_PROGRESS: std::cell::Cell<Option<ResidentBatchProgress>> = const { std::cell::Cell::new(None) };
+    static THREAD_BLUR_CONTEXT: std::cell::Cell<Option<BlurWaitContext>> = const { std::cell::Cell::new(None) };
+    static THREAD_WAIT_SNAPSHOT: std::cell::Cell<Option<MapWaitSnapshot>> = const { std::cell::Cell::new(None) };
     static THREAD_RESIDENT_FAILURE: std::cell::Cell<Option<ResidentBatchFailure>> = const { std::cell::Cell::new(None) };
 }
 
@@ -151,7 +153,20 @@ pub struct ResidentBatchProgress {
     pub chain_gpu_wait_ms: f64,
 }
 #[derive(Debug, Clone, Copy)]
-pub struct ResidentBatchFailure { pub stage: ResidentStage, pub elapsed_ms: f64, pub detail: failure_trace::Snapshot }
+pub struct ResidentBatchFailure { pub stage: ResidentStage, pub elapsed_ms: f64, pub detail: failure_trace::Snapshot, pub wait: Option<MapWaitSnapshot> }
+/// Captured before panic hooks/unwinding, not GPU execution duration.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BlurWaitContext { pub component: u32, pub channel: u32, pub radius: u32, pub width: u32, pub height: u32, pub horizontal: Option<bool> }
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MapWaitSnapshot {
+    pub blur: Option<BlurWaitContext>,
+    pub elapsed_ms: f64,
+    pub poll_count: u64,
+    pub max_poll_ms: f64,
+    pub max_sleep_ms: f64,
+    pub completed_maps: usize,
+    pub expected_maps: usize,
+}
 #[path = "failure_trace.rs"]
 pub mod failure_trace;
 #[cfg(feature = "wgpu-backend")]
@@ -161,7 +176,7 @@ impl Drop for ResidentBatchAttempt {
     fn drop(&mut self) {
         if !self.completed {
             THREAD_RESIDENT_FAILURE.with(|v| v.set(Some(ResidentBatchFailure {
-                stage: self.stage, detail: failure_trace::snapshot(), elapsed_ms: self.start.elapsed().as_secs_f64() * 1000.0 })));
+                stage: self.stage, detail: failure_trace::snapshot(), wait: THREAD_WAIT_SNAPSHOT.with(std::cell::Cell::get), elapsed_ms: self.start.elapsed().as_secs_f64() * 1000.0 })));
         }
     }
 }
@@ -175,6 +190,8 @@ pub fn observe_resident_attempt<T>(attempt: impl FnOnce() -> T)
     -> (std::thread::Result<T>, Option<ResidentBatchFailure>)
 {
     THREAD_RESIDENT_FAILURE.with(|v| v.set(None));
+    THREAD_WAIT_SNAPSHOT.with(|v| v.set(None));
+    THREAD_BLUR_CONTEXT.with(|v| v.set(None));
     failure_trace::reset();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(attempt));
     let failure = THREAD_RESIDENT_FAILURE.with(|v| v.replace(None));
@@ -538,12 +555,18 @@ impl WgpuBackend {
 
     fn await_maps(&self, rx: &std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>, count: usize) {
         let _wait = failure_trace::Span::new(failure_trace::Step::Wait);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        THREAD_WAIT_SNAPSHOT.with(|v| v.set(None));
+        let start = std::time::Instant::now();
+        let deadline = start + std::time::Duration::from_secs(5);
+        let mut metrics = MapWaitSnapshot { expected_maps: count, ..Default::default() };
         let mut completed = 0;
         while completed < count {
             if !self.is_healthy() { panic!("GPU_DEVICE_RETIRED"); }
+            let poll_start = std::time::Instant::now();
             { let _span = failure_trace::Span::new(failure_trace::Step::Poll);
             self.device.poll(wgpu::Maintain::Poll); }
+            metrics.poll_count += 1;
+            metrics.max_poll_ms = metrics.max_poll_ms.max(poll_start.elapsed().as_secs_f64() * 1000.0);
             match rx.try_recv() {
                 Ok(Ok(())) => { completed += 1; }
                 Ok(Err(_)) | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -556,10 +579,19 @@ impl WgpuBackend {
                     if std::time::Instant::now() >= deadline {
                         self.completion_uncertain.store(true, std::sync::atomic::Ordering::Release);
                         self.healthy.store(false, std::sync::atomic::Ordering::Release);
+                        metrics.blur = THREAD_BLUR_CONTEXT.with(std::cell::Cell::get);
+                        metrics.elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+                        metrics.completed_maps = completed;
+                        THREAD_WAIT_SNAPSHOT.with(|v| v.set(Some(metrics)));
+                        tracing::warn!(elapsed_ms=metrics.elapsed_ms, polls=metrics.poll_count,
+                            max_poll_ms=metrics.max_poll_ms, max_sleep_ms=metrics.max_sleep_ms,
+                            completed_maps=completed, expected_maps=count, blur=?metrics.blur, "gpu_map_timeout_snapshot");
                         failure_trace::fail(failure_trace::Kind::MapTimeout);
                         panic!("GPU_MAP_TIMEOUT");
                     }
+                    let sleep_start = std::time::Instant::now();
                     std::thread::sleep(std::time::Duration::from_millis(2));
+                    metrics.max_sleep_ms = metrics.max_sleep_ms.max(sleep_start.elapsed().as_secs_f64() * 1000.0);
                 }
             }
         }
@@ -747,6 +779,61 @@ impl WgpuBackend {
         let _t_total = t_start.elapsed();
         let _ = t_compile;
         result
+    }
+
+    /// One physical PSF pass over a packed scalar plane. Caller supplies halo
+    /// and crops the core; only true image edges may use shader boundaries.
+    /// Budget is the remaining budget after caller-owned images/spools.
+    pub fn physical_blur_axis(&self, data: &[f32], width: u32, height: u32,
+        sigma: f32, horizontal: bool, budget_bytes: u64,
+        checkpoint: &mut dyn FnMut() -> bool) -> Option<Vec<f32>> {
+        self.physical_blur_axis_with_context(data, width, height, sigma, horizontal,
+            budget_bytes, checkpoint, None)
+    }
+
+    /// Context-bearing variant used by staged physical PSF exports. Unknown
+    /// component/channel are represented by u32::MAX, never guessed from a batch.
+    pub fn physical_blur_axis_with_context(&self, data: &[f32], width: u32, height: u32,
+        sigma: f32, horizontal: bool, budget_bytes: u64,
+        checkpoint: &mut dyn FnMut() -> bool, component_channel: Option<(u32, u32)>) -> Option<Vec<f32>> {
+        if !checkpoint() || !self.is_healthy() { return None; }
+        let pixels = u64::from(width).checked_mul(u64::from(height))?;
+        if pixels == 0 || pixels != data.len() as u64 || data.iter().any(|v| !v.is_finite()) { return None; }
+        if !sigma.is_finite() || sigma < 0.0 { return None; }
+        let sigma = sigma.max(0.01);
+        let radius = crate::back_reflection_fir_radius(sigma)?;
+        let kernel_bytes = u64::from(radius).checked_mul(2)?.checked_add(1)?.checked_mul(4)?;
+        // Input binding copy, CPU zero/output copies, GPU input/output/map,
+        // mapped copy and returned vector, initialization upload staging,
+        // plus four kernel copies and uniform/slack. Driver-internal memory
+        // is not measured by this conservative application-owned estimate.
+        let reserved = pixels.checked_mul(48)?.checked_add(kernel_bytes.checked_mul(4)?)?.checked_add(4096)?;
+        if reserved > budget_bytes || pixels.checked_mul(4)? > self.max_storage_buffer_binding_size()
+            || point_dispatch_groups(pixels, self.device.limits().max_compute_workgroups_per_dimension).is_none() { return None; }
+        let kernel = physical_fir_kernel(sigma, radius);
+        let params = [width, height, radius, u32::from(horizontal), u32::from(sigma < 3.0), 0, 0, 0];
+        let zeros = vec![0u8; (pixels * 4) as usize];
+        struct ContextGuard(Option<BlurWaitContext>);
+        impl Drop for ContextGuard {
+            fn drop(&mut self) { THREAD_BLUR_CONTEXT.with(|v| v.set(self.0)); }
+        }
+        let (component, channel) = component_channel.unwrap_or((u32::MAX, u32::MAX));
+        let _context = ContextGuard(THREAD_BLUR_CONTEXT.with(|v| v.replace(Some(BlurWaitContext {
+            component, channel, radius, width, height, horizontal: Some(horizontal),
+        }))));
+        failure_trace::reset();
+        THREAD_WAIT_SNAPSHOT.with(|v| v.set(None));
+        let mut attempt = ResidentBatchAttempt { stage: ResidentStage::Halation,
+            start: std::time::Instant::now(), completed: false };
+        let output = self.dispatch_compute(
+            include_str!("../../spektrafilm-shaders/wgsl/halation_axis.wgsl"),
+            &[GpuBuffer::uniform(bytemuck::cast_slice(&params)),
+              GpuBuffer::storage_ro(bytemuck::cast_slice(data)),
+              GpuBuffer::storage_ro(bytemuck::cast_slice(&kernel)), GpuBuffer::storage_rw(&zeros)],
+            pixels as u32, 3);
+        attempt.completed = true;
+        if !checkpoint() { return None; }
+        Some(output)
     }
 
     /// GPU separable Gaussian blur via two FIR passes (horizontal then vertical).
@@ -1275,6 +1362,7 @@ impl WgpuBackend {
         // RESOURCE_AUDIT_END
         THREAD_RESIDENT_PROGRESS.with(|v| v.set(None));
         THREAD_RESIDENT_FAILURE.with(|v| v.set(None));
+    THREAD_WAIT_SNAPSHOT.with(|v| v.set(None));
         if !checkpoint() { return None; }
         if p.start_at == crate::ChainStart::Rgb && p.highlight_boost.as_ref()
             .is_some_and(|h|h.headroom_ev>0. && h.boost_ev<0.) {return None;}
@@ -1400,11 +1488,11 @@ impl WgpuBackend {
         // stages downstream of the enlarger-diffusion point.
         let stop = p.stop_after;
         let runs_front = p.start_at == crate::ChainStart::Rgb;
-        assert!(runs_front || stop == crate::ChainStop::Full || (p.start_at == crate::ChainStart::FilmLog && stop == crate::ChainStop::CorrectedDensity), "GPU_INVALID_CHAIN_RANGE");
+        assert!(runs_front || (p.start_at == crate::ChainStart::PostHalationRaw && stop == crate::ChainStop::FilmLog) || stop == crate::ChainStop::Full || (p.start_at == crate::ChainStart::FilmLog && stop == crate::ChainStop::CorrectedDensity), "GPU_INVALID_CHAIN_RANGE");
         let past_front = stop != crate::ChainStop::Front;
-        let runs_density = past_front && stop != crate::ChainStop::FilmLog
+        let runs_density = past_front && stop != crate::ChainStop::ScatteredRaw && stop != crate::ChainStop::FilmLog
             && p.start_at != crate::ChainStart::CorrectedDensity;
-        let runs_finish = past_front && !matches!(stop, crate::ChainStop::FilmLog | crate::ChainStop::CorrectedDensity);
+        let runs_finish = past_front && !matches!(stop, crate::ChainStop::ScatteredRaw | crate::ChainStop::FilmLog | crate::ChainStop::CorrectedDensity);
         let past_print = stop == crate::ChainStop::Full;
         let neutral_grain_reference = p.neutral_media.as_ref().and_then(|m| m.grain_reference);
         if runs_finish && neutral_grain_reference.is_some() && p.grain.is_none() { return None; }
@@ -2374,13 +2462,19 @@ impl WgpuBackend {
         //     scatter outputs and halation accumulator.
         if let Some(hs) = halation_state.as_ref() {
             let wg_xy = (image.width.div_ceil(16), image.height.div_ceil(16));
-            if !hs.encode_passes_batched(&mut encoder, n_pixels, workgroup_size, wg_xy,
+            if !hs.encode_passes_batched(&mut encoder, n_pixels, workgroup_size, wg_xy, stop == crate::ChainStop::ScatteredRaw,
                 &mut |enc| finish_batch(enc, ResidentStage::Halation)) { return None; }
         }
         // 2. log10 in-place on buf_b: raw → log_raw (3 channels per thread).
-        let (log10_pipe, log10_bg, _keepalive) = &bg_log10;
-        dispatch(&mut encoder, &log10_pipe.pipeline, log10_bg, n_pixels);
+        if stop != crate::ChainStop::ScatteredRaw {
+            let (log10_pipe, log10_bg, _keepalive) = &bg_log10;
+            dispatch(&mut encoder, &log10_pipe.pipeline, log10_bg, n_pixels);
         }
+        }
+        } else if p.start_at == crate::ChainStart::PostHalationRaw {
+            encoder.copy_buffer_to_buffer(&buf_a, 0, &buf_b, 0, img_bytes as u64);
+            let (log10_pipe, log10_bg, _keepalive) = &bg_log10;
+            dispatch(&mut encoder, &log10_pipe.pipeline, log10_bg, n_pixels);
         } else if p.start_at == crate::ChainStart::FilmLog {
             // FilmLog input is already logarithmic; preserve its exact f32 bits.
             encoder.copy_buffer_to_buffer(&buf_a, 0, &buf_b, 0, img_bytes as u64);
@@ -2554,7 +2648,7 @@ impl WgpuBackend {
         let before_readback_ms = t_start.elapsed().as_secs_f32() * 1000.0;
         let cpu_setup_ms = before_readback_ms - batch_wait_ms;
         let final_stage = match p.stop_after { crate::ChainStop::CorrectedDensity=>ResidentStage::Dir, crate::ChainStop::Front=>ResidentStage::Front,
-            crate::ChainStop::FilmLog=>ResidentStage::FilmLog,
+            crate::ChainStop::FilmLog=>ResidentStage::FilmLog, crate::ChainStop::ScatteredRaw=>ResidentStage::Halation,
             crate::ChainStop::PrintLinear=>ResidentStage::Print, crate::ChainStop::Full=>ResidentStage::Output };
         failure_trace::reset();
         let mut attempt = ResidentBatchAttempt { stage: final_stage, start: std::time::Instant::now(), completed: false };
@@ -3241,6 +3335,7 @@ impl ComputeBackend for WgpuBackend {
     fn reset_thread_resident_progress(&self) {
         THREAD_RESIDENT_PROGRESS.with(|v| v.set(None));
         THREAD_RESIDENT_FAILURE.with(|v| v.set(None));
+    THREAD_WAIT_SNAPSHOT.with(|v| v.set(None));
     }
 
     fn try_run_film_chain_controlled(&self, params: &crate::FilmChainParams<'_>,
@@ -3284,6 +3379,7 @@ struct HalationState {
     buf_d: AuditBuffer,
     scatter_blurs: Vec<BlurJob>, // [core, tail]
     scatter_mix: DispatchJob,
+    physical_contexts: Vec<BlurWaitContext>,
     halation_blurs: Vec<BlurJob>,          // one per bounce
     halation_accumulate: Vec<DispatchJob>, // one add_scaled per bounce
     halation_final_add: DispatchJob,
@@ -3379,6 +3475,18 @@ struct DispatchJob {
     bg: AuditBindGroup,
 }
 
+/// Same f64 construction and f32 rounding for resident and directional PSFs.
+#[cfg(feature = "wgpu-backend")]
+fn physical_fir_kernel(sigma: f32, radius: u32) -> Vec<f32> {
+    let sigma = sigma.max(0.01) as f64;
+    let weights: Vec<f64> = (0..2 * radius + 1).map(|k| {
+        let x = k as f64 - radius as f64;
+        (-x * x / (2.0 * sigma * sigma)).exp()
+    }).collect();
+    let sum: f64 = weights.iter().sum();
+    weights.into_iter().map(|v| (v / sum) as f32).collect()
+}
+
 #[cfg(feature = "wgpu-backend")]
 fn build_halation_state(
     device: &wgpu::Device,
@@ -3427,22 +3535,12 @@ fn build_halation_state(
     let physical_blur_pipe_v = hp.back_reflection.as_ref().map(|_| backend.cached_pipeline(
         include_str!("../../spektrafilm-shaders/wgsl/halation_blur_v.wgsl"), blur_layout));
     let make_blur_job =
-        |sigma: f32, src: &AuditBuffer, out: &AuditBuffer, label: &str, full_support: bool| -> BlurJob {
+        |sigma: f32, src: &AuditBuffer, out: &AuditBuffer, label: &str, full_support: bool, channel: u32| -> BlurJob {
             let blur_pipe_h = if full_support { physical_blur_pipe_h.as_ref().unwrap() } else { &blur_pipe_h };
             let blur_pipe_v = if full_support { physical_blur_pipe_v.as_ref().unwrap() } else { &blur_pipe_v };
             let sigma = sigma.max(0.01);
             let radius = if full_support { crate::back_reflection_fir_radius(sigma).expect("validated physical PSF") } else { fir_blur_radius(sigma) };
-            let kernel_size = (2 * radius + 1) as usize;
-            let sigma_f64 = sigma as f64;
-            let two_sigma_sq = 2.0 * sigma_f64 * sigma_f64;
-            let r_i32 = radius as i32;
-            let mut kernel = Vec::with_capacity(kernel_size);
-            for k in 0..kernel_size {
-                let x = (k as i32 - r_i32) as f64;
-                kernel.push((-x * x / two_sigma_sq).exp());
-            }
-            let sum: f64 = kernel.iter().sum();
-            let kernel_f32: Vec<f32> = kernel.into_iter().map(|v| (v / sum) as f32).collect();
+            let kernel_f32 = physical_fir_kernel(sigma, radius);
 
             let kernel_buf = device.census_create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(&format!("halation_blur_kernel_{label}")),
@@ -3461,7 +3559,7 @@ fn build_halation_state(
                 width,
                 height,
                 radius,
-                _pad: u32::from(full_support && sigma < 3.0),
+                _pad: u32::from(full_support && sigma < 3.0) | (channel << 1),
             };
             let params_buf = device.census_create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(&format!("halation_blur_params_{label}")),
@@ -3522,8 +3620,8 @@ fn build_halation_state(
 
     // ── Scatter blurs (core → buf_c, tail → buf_d) ─────────────────────
     let scatter_blurs = vec![
-        make_blur_job(hp.scatter_core_px, buf_b, &buf_c, "scatter_core", false),
-        make_blur_job(hp.scatter_tail_px, buf_b, &buf_d, "scatter_tail", false),
+        make_blur_job(hp.scatter_core_px, buf_b, &buf_c, "scatter_core", false, 0),
+        make_blur_job(hp.scatter_tail_px, buf_b, &buf_d, "scatter_tail", false, 0),
     ];
 
     // ── Scatter mix: result = (1-sa)*result + sa*((1-atw)*core + atw*tail)
@@ -3604,6 +3702,7 @@ fn build_halation_state(
         }
     }
 
+    let mut physical_contexts = Vec::new();
     let mut halation_blurs = Vec::new();
     let mut halation_accumulate = Vec::new();
     if let Some(components) = &hp.back_reflection {
@@ -3620,14 +3719,15 @@ fn build_halation_state(
         struct ComponentParams { n_pixels: u32, clear_first: u32, _pad: [u32; 2], scale: [f32; 4] }
         for (k, component) in components.iter().enumerate() {
             for c in 0..3 {
+                physical_contexts.push(BlurWaitContext { component: k as u32, channel: c as u32, radius: crate::back_reflection_fir_radius(component.sigma_px[c].max(0.01)).expect("validated physical PSF"), width, height, horizontal: None });
                 let mut scale = [0.0; 4];
                 scale[c] = component.weight[c];
                 halation_blurs.push(make_blur_job(component.sigma_px[c], buf_b, &buf_c,
-                    &format!("back_reflection_{k}_{c}"), true));
+                    &format!("back_reflection_{k}_{c}"), true, c as u32));
                 let params = device.census_create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("halation_component_params"),
                     contents: bytemuck::bytes_of(&ComponentParams {
-                        n_pixels: n_pixels as u32, clear_first: u32::from(k == 0 && c == 0), _pad: [0; 2], scale,
+                        n_pixels: n_pixels as u32, clear_first: u32::from(k == 0 && c == 0), _pad: [c as u32, 0], scale,
                     }), usage: wgpu::BufferUsages::UNIFORM,
                 });
                 let bg = device.audit_create_bind_group(&AuditBindGroupDescriptor {
@@ -3668,7 +3768,7 @@ fn build_halation_state(
             sigma_k,
             buf_b,
             &buf_c,
-            &format!("bounce_{k}"), false,
+            &format!("bounce_{k}"), false, 0,
         ));
 
         let acc_params = device.census_create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -3835,6 +3935,7 @@ fn build_halation_state(
         buf_d,
         scatter_blurs,
         scatter_mix: scatter_mix_job,
+        physical_contexts,
         halation_blurs,
         halation_accumulate,
         halation_final_add,
@@ -3854,6 +3955,7 @@ impl HalationState {
         n_pixels: u32,
         workgroup_size: u32,
         wg_xy: (u32, u32),
+        scatter_only: bool,
         finish_batch: &mut dyn FnMut(&mut AuditCommandEncoder) -> bool,
     ) -> bool {
         let _ = (&self.buf_c, &self.buf_d); // owned, just keepalive
@@ -3898,15 +4000,20 @@ impl HalationState {
             dispatch_linear(encoder, &self.scatter_mix);
         }
 
+        if scatter_only { return true; }
+
         // Halation bounces
-        for (blur_job, acc_job) in self
+        for (index, (blur_job, acc_job)) in self
             .halation_blurs
             .iter()
-            .zip(self.halation_accumulate.iter())
+            .zip(self.halation_accumulate.iter()).enumerate()
         {
+            THREAD_BLUR_CONTEXT.with(|v| v.set(self.physical_contexts.get(index).copied()));
             dispatch_blur(encoder, blur_job, true);
             dispatch_linear(encoder, acc_job);
-            if !finish_batch(encoder) { return false; }
+            let completed = finish_batch(encoder);
+            THREAD_BLUR_CONTEXT.with(|v| v.set(None));
+            if !completed { return false; }
         }
         if !self.halation_blurs.is_empty() {
             dispatch_linear(encoder, &self.halation_final_add);
@@ -7029,7 +7136,8 @@ mod resident_dispatch_tests {
             wgpu::naga::valid::Validator::new(wgpu::naga::valid::ValidationFlags::all(),wgpu::naga::valid::Capabilities::all())
                 .validate(&module).unwrap_or_else(|e|panic!("{}: {}",path.display(),e.emit_to_string(&source)));
         }
-        assert_eq!((points,spatial,reductions,gathers),(29,5,1,1));
+        // Includes physical H/V, physical accumulator and packed axis PSF.
+        assert_eq!((points,spatial,reductions,gathers),(34,7,1,1));
     }
 }
 
@@ -7232,5 +7340,79 @@ mod adapter_filter_contract_tests {
         assert_eq!(calls.get(),0);
         assert_eq!(only_when_adapter_allowed(true, || { calls.set(calls.get()+1); Some(7) }),Some(7));
         assert_eq!(calls.get(),1);
+    }
+}
+
+#[cfg(all(test, feature="wgpu-backend"))]
+mod physical_channel_tests {
+    use super::*;
+    fn one_dimensional(source: &str) -> String {
+        source.replace("@workgroup_size(16, 16)", "@workgroup_size(256)")
+            .replace("let x = gid.x;", "let x = gid.x % params.width;")
+            .replace("let y = gid.y;", "let y = gid.x / params.width;")
+    }
+    // Exact former RGB convolution, retained as the GPU-to-GPU reference.
+    fn former_rgb(source: &str) -> String {
+        one_dimensional(source).replace("var sum = 0.0;", "var sum = vec3<f32>(0.0);")
+            .replace("sum += w * input[idx + channel];", "sum.x += w * input[idx]; sum.y += w * input[idx+1u]; sum.z += w * input[idx+2u];")
+            .replace("output[out_idx + channel] = sum;", "output[out_idx]=sum.x; output[out_idx+1u]=sum.y; output[out_idx+2u]=sum.z;")
+    }
+    #[test]
+    #[ignore="requires explicit Vulkan device (software adapter is acceptable but not a phone benchmark)"]
+    fn selected_channel_matches_former_rgb_all_components() {
+        let gpu=WgpuBackend::new().expect("Vulkan device required, no silent skip");
+        let hs=include_str!("../../spektrafilm-shaders/wgsl/halation_blur_h.wgsl");
+        let vs=include_str!("../../spektrafilm-shaders/wgsl/halation_blur_v.wgsl");
+        let new:Vec<&'static str>=[hs,vs].map(|s|Box::leak(one_dimensional(s).into_boxed_str()) as &'static str).into();
+        let old:Vec<&'static str>=[hs,vs].map(|s|Box::leak(former_rgb(s).into_boxed_str()) as &'static str).into();
+        let (w,h)=(13u32,11u32); let n=(w*h) as usize;
+        for fixture in 0..4 {
+            let input:Vec<f32>=(0..n*3).map(|i|match fixture {
+                0=>0.37, 1=>if i/3==n/2 {1.0}else{0.0},
+                2=>if i/3%w as usize==0 {2.0}else{-0.1},
+                _=>((i*7919%997) as f32)/997.0,
+            }).collect();
+            for (component,sigma) in [0.1f32,0.7,2.99,3.0,4.3,10.,20.,30.,40.,80.,133.,194.5].into_iter().enumerate() {
+                let c=component%3; let r=crate::back_reflection_fir_radius(sigma).unwrap();
+                let kernel=physical_fir_kernel(sigma,r);
+                let params=[w,h,r,u32::from(sigma<3.)|((c as u32)<<1)];
+                let mut a=input.clone();let mut b=input.clone();
+                for axis in 0..2 {
+                    let dispatch=|shader, data:&[f32]|gpu.dispatch_compute(shader,&[
+                        GpuBuffer::uniform(bytemuck::cast_slice(&params)),
+                        GpuBuffer::storage_ro(bytemuck::cast_slice(data)),
+                        GpuBuffer::storage_ro(bytemuck::cast_slice(&kernel)),
+                        GpuBuffer::storage_rw(bytemuck::cast_slice(&vec![123f32;n*3]))],w*h,3);
+                    a=dispatch(new[axis],&a); b=dispatch(old[axis],&b);
+                    for i in 0..n { assert_eq!(a[i*3+c].to_bits(),b[i*3+c].to_bits(),"fixture={fixture} component={component} axis={axis} pixel={i}"); }
+                }
+                let plane:Vec<f32>=input.chunks_exact(3).map(|p|p[c]).collect();
+                let a=gpu.physical_blur_axis(&plane,w,h,sigma,true,1<<20,&mut||true).unwrap();
+                let a=gpu.physical_blur_axis(&a,w,h,sigma,false,1<<20,&mut||true).unwrap();
+                for i in 0..n {assert_eq!(a[i].to_bits(),b[i*3+c].to_bits(),"packed plane mismatch {fixture}/{component}/{i}");}
+            }
+        }
+        // Signed PSF weights must accumulate without intermediate clamping.
+        // Poison untouched channels: the optimized consumer must not read them.
+        let mut accumulated=vec![99f32;3]; let mut expected=[0f32;3];
+        for k in 0..12 {
+            let c=k%3; let weight=if k>=9 {-0.25f32}else{0.5f32};
+            let mut bytes=bytemuck::cast_slice(&[1u32,u32::from(k==0),c as u32,0]).to_vec();
+            let mut scale=[0f32;4];scale[c]=weight;bytes.extend_from_slice(bytemuck::cast_slice(&scale));
+            let mut src=[f32::NAN;3];src[c]=(k+1) as f32;
+            accumulated=gpu.dispatch_compute(include_str!("../../spektrafilm-shaders/wgsl/halation_accumulate.wgsl"),&[
+                GpuBuffer::uniform(&bytes),GpuBuffer::storage_ro(bytemuck::cast_slice(&src)),
+                GpuBuffer::storage_rw(bytemuck::cast_slice(&accumulated))],1,2);
+            expected[c]+=weight*src[c];
+            assert_eq!(accumulated,expected);
+        }
+        let mut checkpoints = 0;
+        let (cancelled, failure) = observe_resident_attempt(|| gpu.physical_blur_axis_with_context(
+            &[1.], 1, 1, 1., true, 1 << 20, &mut || { checkpoints += 1; checkpoints == 1 }, Some((3, 2))));
+        assert!(cancelled.unwrap().is_none());
+        assert!(failure.is_none(), "completed work followed by cancellation is not a GPU failure");
+        assert!(THREAD_BLUR_CONTEXT.with(std::cell::Cell::get).is_none());
+        assert!(gpu.physical_blur_axis(&[1.],1,1,1.,true,0,&mut||true).is_none());
+        assert!(gpu.physical_blur_axis(&[1.],1,1,1.,true,1<<20,&mut||false).is_none());
     }
 }

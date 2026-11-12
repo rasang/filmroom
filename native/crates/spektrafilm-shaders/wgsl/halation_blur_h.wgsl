@@ -11,7 +11,7 @@ struct Params {
     width: u32,
     height: u32,
     radius: u32,
-    reflect_edges: u32,
+    flags: u32, // bit 0: reflect; bits 1..2: selected RGB channel
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -35,23 +35,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    var sum = vec3<f32>(0.0, 0.0, 0.0);
+    let channel = params.flags >> 1u;
+    var sum = 0.0;
     let kernel_size = 2u * params.radius + 1u;
     let w_i32 = i32(params.width);
     for (var k = 0u; k < kernel_size; k++) {
         let dx = i32(k) - i32(params.radius);
         let sx_signed = i32(x) + dx;
         var sx = u32(clamp(sx_signed, 0i, w_i32 - 1i));
-        if params.reflect_edges != 0u { sx = reflect_index(sx_signed, w_i32); }
+        if (params.flags & 1u) != 0u { sx = reflect_index(sx_signed, w_i32); }
         let idx = (y * params.width + sx) * 3u;
         let w = kernel_buf[k];
-        sum.x += w * input[idx];
-        sum.y += w * input[idx + 1u];
-        sum.z += w * input[idx + 2u];
+        sum += w * input[idx + channel];
     }
 
     let out_idx = (y * params.width + x) * 3u;
-    output[out_idx] = sum.x;
-    output[out_idx + 1u] = sum.y;
-    output[out_idx + 2u] = sum.z;
+    // Other channels are intentionally untouched; consumers select this channel.
+    output[out_idx + channel] = sum;
 }

@@ -362,11 +362,26 @@ pub fn progress_finish(engine:&Engine,job_id:u64,code:Option<&str>)->Option<&'st
 }
 pub fn progress_json(engine:&Engine)->Result<String> {
     let p=engine.progress.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Progress unavailable"))?;
-    Ok(serde_json::json!({"ok":true,"schemaVersion":1,"preparedSpectral":engine.prepared_spectral_cache.stats(),"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running","gpuFallbackReason":p.gpu_fallback_reason,
+    let mut json=serde_json::json!({"ok":true,"schemaVersion":1,"preparedSpectral":engine.prepared_spectral_cache.stats(),"jobId":p.job_id,"operation":p.operation,"stage":p.stage,"status":p.status,"done":p.done,"total":p.total,"elapsedMs":p.finished_ms.unwrap_or_else(||p.started.map_or(0.,|t|t.elapsed().as_secs_f64()*1000.)),"passId":p.pass_id,"counterScope":"current-pass","displayStage":p.display_stage,"stageDone":p.stage_done,"stageTotal":p.stage_total,"stageCounterScope":"stage-work","active":p.status=="running","gpuFallbackReason":p.gpu_fallback_reason});
+    let geometry=serde_json::json!({
+        "gpuTilePhase":p.gpu_work.and_then(|g|g.tile_phase),
+        "gpuCoreWidth":p.gpu_work.map(|g|g.core_width),"gpuCoreHeight":p.gpu_work.map(|g|g.core_height),
+        "gpuExpandedWidth":p.gpu_work.map(|g|g.expanded_width),"gpuExpandedHeight":p.gpu_work.map(|g|g.expanded_height),
+        "gpuHalo":p.gpu_work.map(|g|g.halo),"gpuExpandedRatio":p.gpu_work.map(|g|g.expanded_ratio),
+        "gpuPlanBytes":p.gpu_work.map(|g|g.plan_bytes),"gpuReservedBytes":p.gpu_work.map(|g|g.reserved_bytes),
         "gpuPhase":p.gpu_work.and_then(|g|g.phase),"gpuTileIndex":p.gpu_work.map(|g|g.tile_index),"gpuTileTotal":p.gpu_work.map(|g|g.tile_total),
-        "gpuBatchIndex":p.gpu_work.map(|g|g.batch_index),"gpuBatchElapsedMs":p.gpu_work.map(|g|g.batch_elapsed_ms),"gpuChainWaitMs":p.gpu_work.map(|g|g.chain_wait_ms),"gpuCompletedSubmits":p.gpu_work.map(|g|g.completed_submits),
+        "gpuBatchIndex":p.gpu_work.map(|g|g.batch_index),"gpuBatchElapsedMs":p.gpu_work.map(|g|g.batch_elapsed_ms),"gpuChainWaitMs":p.gpu_work.map(|g|g.chain_wait_ms),"gpuCompletedSubmits":p.gpu_work.map(|g|g.completed_submits)});
+    let failure=serde_json::json!({
+        "gpuMapTimeoutElapsedMs":p.gpu_work.and_then(|g|g.map_timeout_elapsed_ms),"gpuMapPollCount":p.gpu_work.and_then(|g|g.map_poll_count),
+        "gpuMapMaxPollMs":p.gpu_work.and_then(|g|g.map_max_poll_ms),"gpuMapMaxSleepMs":p.gpu_work.and_then(|g|g.map_max_sleep_ms),
+        "gpuMapCompletedMaps":p.gpu_work.and_then(|g|g.map_completed_maps),"gpuMapExpectedMaps":p.gpu_work.and_then(|g|g.map_expected_maps),
+        "gpuHalationComponent":p.gpu_work.and_then(|g|g.halation_component),"gpuHalationChannel":p.gpu_work.and_then(|g|g.halation_channel),"gpuHalationRadius":p.gpu_work.and_then(|g|g.halation_radius),
+        "gpuHalationTileWidth":p.gpu_work.and_then(|g|g.halation_tile_width),"gpuHalationTileHeight":p.gpu_work.and_then(|g|g.halation_tile_height),
         "gpuFailureKind":p.gpu_work.and_then(|g|g.failure_kind),"gpuSubmitMs":p.gpu_work.and_then(|g|g.submit_ms),"gpuPollMs":p.gpu_work.and_then(|g|g.poll_ms),"gpuMapWaitMs":p.gpu_work.and_then(|g|g.map_wait_ms),
-        "gpuFailedPhase":p.gpu_work.and_then(|g|g.failed_phase),"gpuFailedElapsedMs":p.gpu_work.and_then(|g|g.failed_elapsed_ms)}).to_string())
+        "gpuFailedPhase":p.gpu_work.and_then(|g|g.failed_phase),"gpuFailedElapsedMs":p.gpu_work.and_then(|g|g.failed_elapsed_ms)});
+    json.as_object_mut().unwrap().extend(geometry.as_object().unwrap().clone());
+    json.as_object_mut().unwrap().extend(failure.as_object().unwrap().clone());
+    Ok(json.to_string())
 }
 #[derive(Debug,Serialize)]
 #[serde(rename_all="camelCase")]
@@ -1286,8 +1301,8 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
     }
     #[test] fn large_export_plan_is_checked_and_distinguishes_extra_scratch() {
         let p=MobileParams::default();let plan=plan_export(4000,3000,&p).unwrap();
-        assert_eq!(plan.pixels,12_000_000);assert_eq!(plan.input_bytes,144_000_000);assert_eq!(plan.estimated_scratch_bytes,1_603_108_864);assert_eq!(plan.estimated_total_local_bytes,1_891_108_864);
-        let large=plan_export(10000,5000,&p).unwrap();assert_eq!(large.estimated_scratch_bytes,6_467_108_864);assert_eq!(large.estimated_total_local_bytes,7_667_108_864);
+        assert_eq!(plan.pixels,12_000_000);assert_eq!(plan.input_bytes,144_000_000);assert_eq!(plan.estimated_scratch_bytes,12_000_000*152+64*1024*1024);assert_eq!(plan.estimated_total_local_bytes,12_000_000*(152+24)+64*1024*1024);
+        let large=plan_export(10000,5000,&p).unwrap();assert_eq!(large.estimated_scratch_bytes,50_000_000*152+64*1024*1024);assert_eq!(large.estimated_total_local_bytes,50_000_000*(152+24)+64*1024*1024);
         assert!(plan_export(i32::MAX,2,&p).is_err());assert!(plan_export(0,3000,&p).is_err());
     }
     #[test] fn export_progress_snapshot_is_coherent_under_concurrent_polling() {
@@ -1307,6 +1322,14 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         let job=progress_begin(&e,"exportFile");let mut reporter=crate::streamed_progress::Reporter::new(|event|progress_update_export(&e,event));
         use crate::streamed_progress::{ProgressSink,GpuWorkProgress};reporter.begin_stage(6,2,"gpu_tiled_chain");reporter.begin_work("gpu_tiled_chain");reporter.pass("gpu_tiled_chain",50,100);
         reporter.gpu_event(GpuWorkProgress{phase:Some("grain"),tile_index:2,tile_total:4,batch_index:6,batch_elapsed_ms:1.25,chain_wait_ms:4.5,completed_submits:10,..GpuWorkProgress::default()});
+        #[cfg(feature="adreno-gpu")]
+        reporter.gpu_map_snapshot(spektrafilm_gpu::wgpu_backend::MapWaitSnapshot {
+            elapsed_ms:5010.,poll_count:8,max_poll_ms:2.,max_sleep_ms:300.,completed_maps:0,expected_maps:1,
+            blur:Some(spektrafilm_gpu::wgpu_backend::BlurWaitContext{component:3,channel:1,radius:399,width:810,height:810,horizontal:None}),
+        });
+        #[cfg(feature="adreno-gpu")]
+        {let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["gpuMapTimeoutElapsedMs"],5010.);assert_eq!(json["gpuHalationRadius"],399);assert_eq!(json["gpuMapExpectedMaps"],1);}
+
         let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["done"],50);assert_eq!(json["total"],100);assert_eq!(json["gpuTileIndex"],2);assert_eq!(json["gpuTileTotal"],4);assert_eq!(json["gpuPhase"],"grain");assert_eq!(json["gpuCompletedSubmits"],10);
         reporter.gpu_failure("print",5000.);drop(reporter);let _=progress_finish(&e,job,Some("GPU_COMPLETION_UNCERTAIN"));let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert_eq!(json["gpuFailedPhase"],"print");assert_eq!(json["gpuFailedElapsedMs"],5000.);assert_eq!(json["gpuCompletedSubmits"],10);
         progress_begin(&e,"preview");let json:serde_json::Value=serde_json::from_str(&progress_json(&e).unwrap()).unwrap();assert!(json["gpuPhase"].is_null());assert!(json["gpuFailedPhase"].is_null());

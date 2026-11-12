@@ -199,6 +199,8 @@ data class SafeInfo(
     val gpuBatches: Long? = null,
     val gpuTileCoreWidth:Long?=null, val gpuTileCoreHeight:Long?=null,
     val gpuTileExpandedWidth:Long?=null, val gpuTileExpandedHeight:Long?=null,
+    val gpuTilePhase:GpuTilePhase?=null, val gpuHalo:Long?=null, val gpuExpandedRatio:Double?=null, val gpuPlanBytes:Long?=null, val gpuReservedBytes:Long?=null,
+    val gpuMapTimeoutElapsedMs:Double?=null, val gpuMapPollCount:Long?=null, val gpuMapMaxPollMs:Double?=null, val gpuMapMaxSleepMs:Double?=null, val gpuMapCompletedMaps:Long?=null, val gpuMapExpectedMaps:Long?=null, val gpuHalationComponent:Long?=null, val gpuHalationChannel:Long?=null, val gpuHalationRadius:Long?=null, val gpuHalationTileWidth:Long?=null, val gpuHalationTileHeight:Long?=null,
     val gpuFallbacks: Long? = null,
     val gpuReason: GpuReason? = null,
     val gpuSelfTest: Boolean? = null,
@@ -407,6 +409,22 @@ data class SafeInfo(
         integer("gpuTileCoreHeight",gpuTileCoreHeight,40000,1)
         integer("gpuTileExpandedWidth",gpuTileExpandedWidth,40000,1)
         integer("gpuTileExpandedHeight",gpuTileExpandedHeight,40000,1)
+        gpuTilePhase?.let{put("gpuTilePhase",it.id)}
+        integer("gpuHalo",gpuHalo,40000L)
+        decimal("gpuExpandedRatio",gpuExpandedRatio,1.0,1600000000.0)
+        integer("gpuPlanBytes",gpuPlanBytes,68719476736L)
+        integer("gpuReservedBytes",gpuReservedBytes,68719476736L)
+        decimal("gpuMapTimeoutElapsedMs",gpuMapTimeoutElapsedMs,0.0,604800000.0)
+        integer("gpuMapPollCount",gpuMapPollCount,1800000000L)
+        decimal("gpuMapMaxPollMs",gpuMapMaxPollMs,0.0,604800000.0)
+        decimal("gpuMapMaxSleepMs",gpuMapMaxSleepMs,0.0,604800000.0)
+        integer("gpuMapCompletedMaps",gpuMapCompletedMaps,1000L)
+        integer("gpuMapExpectedMaps",gpuMapExpectedMaps,1000L)
+        integer("gpuHalationComponent",gpuHalationComponent,3L)
+        integer("gpuHalationChannel",gpuHalationChannel,2L)
+        integer("gpuHalationRadius",gpuHalationRadius,40000L)
+        integer("gpuHalationTileWidth",gpuHalationTileWidth,40000L)
+        integer("gpuHalationTileHeight",gpuHalationTileHeight,40000L)
         integer("gpuFallbacks",gpuFallbacks,1_800_000_000)
         gpuReason?.let{put("gpuReason",it.id)}
         gpuSelfTest?.let{put("gpuSelfTest",it)}
@@ -608,6 +626,22 @@ data class SafeInfo(
             gpuTileCoreHeight=fields["gpuTileCoreHeight"]?.toLongOrNull(),
             gpuTileExpandedWidth=fields["gpuTileExpandedWidth"]?.toLongOrNull(),
             gpuTileExpandedHeight=fields["gpuTileExpandedHeight"]?.toLongOrNull(),
+            gpuTilePhase=GpuTilePhase.fromId(fields["gpuTilePhase"]),
+            gpuHalo=fields["gpuHalo"]?.toLongOrNull(),
+            gpuExpandedRatio=fields["gpuExpandedRatio"]?.toDoubleOrNull(),
+            gpuPlanBytes=fields["gpuPlanBytes"]?.toLongOrNull(),
+            gpuReservedBytes=fields["gpuReservedBytes"]?.toLongOrNull(),
+            gpuMapTimeoutElapsedMs=fields["gpuMapTimeoutElapsedMs"]?.toDoubleOrNull(),
+            gpuMapPollCount=fields["gpuMapPollCount"]?.toLongOrNull(),
+            gpuMapMaxPollMs=fields["gpuMapMaxPollMs"]?.toDoubleOrNull(),
+            gpuMapMaxSleepMs=fields["gpuMapMaxSleepMs"]?.toDoubleOrNull(),
+            gpuMapCompletedMaps=fields["gpuMapCompletedMaps"]?.toLongOrNull(),
+            gpuMapExpectedMaps=fields["gpuMapExpectedMaps"]?.toLongOrNull(),
+            gpuHalationComponent=fields["gpuHalationComponent"]?.toLongOrNull(),
+            gpuHalationChannel=fields["gpuHalationChannel"]?.toLongOrNull(),
+            gpuHalationRadius=fields["gpuHalationRadius"]?.toLongOrNull(),
+            gpuHalationTileWidth=fields["gpuHalationTileWidth"]?.toLongOrNull(),
+            gpuHalationTileHeight=fields["gpuHalationTileHeight"]?.toLongOrNull(),
             gpuFallbacks=fields["gpuFallbacks"]?.toLongOrNull(),
             gpuReason=fields["gpuReason"]?.let{id->GpuReason.entries.firstOrNull{it.id==id}},
             gpuSelfTest=fields["gpuSelfTest"]?.toBooleanStrictOrNull(),

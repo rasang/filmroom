@@ -457,7 +457,7 @@ pub struct DiffusionGpuPlan {
 
 /// Input color domain of the resident chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChainStart { Rgb, FilmLog, CorrectedDensity }
+pub enum ChainStart { Rgb, FilmLog, CorrectedDensity, PostHalationRaw }
 
 /// Where the resident film chain should stop, and what it returns. The
 /// default is [`ChainStop::Full`]; the other variants exist for the banded
@@ -466,6 +466,8 @@ pub enum ChainStart { Rgb, FilmLog, CorrectedDensity }
 /// whole frame instead of per band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChainStop {
+    /// Raw film exposure after camera optics and scatter, before physical PSF.
+    ScatteredRaw,
     /// Exact f32 density after DIR, before grain.
     CorrectedDensity,
     /// Camera optics completed; returns unclamped f32 film log exposure.

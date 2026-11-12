@@ -56,3 +56,6 @@ mod cache_root_owner;
 #[cfg(test)] #[path="../tests/gpu_resident_chain.rs"] mod gpu_resident_chain_tests;
 
 #[cfg(test)] mod gpu_ae_ownership_tests;
+
+#[cfg(feature="adreno-gpu")]
+pub(crate) mod gpu_spatial;

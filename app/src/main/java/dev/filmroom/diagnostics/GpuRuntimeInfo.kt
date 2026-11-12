@@ -30,6 +30,14 @@ enum class GpuWorkPhase(val id:String,private val nativePhase:NativePhase) {
     companion object {fun fromId(id:String?):GpuWorkPhase?=entries.firstOrNull{it.id==id}}
 }
 
+/** Fixed pipeline endpoints only, never arbitrary native text. */
+enum class GpuTilePhase(val id:String) {
+    FULL("full"), FILM_LOG("film_log"), FROM_FILM_LOG("from_film_log"),
+    SCATTERED_RAW("scattered_raw"), POST_HALATION_RAW("post_halation_raw"),
+    PHYSICAL_HALATION_H("physical_halation_h"), PHYSICAL_HALATION_V("physical_halation_v");
+    companion object { fun fromId(id:String?)=entries.firstOrNull{it.id==id} }
+}
+
 object GpuRuntimeInfo {
     private const val MAX_COUNT=1_800_000_000L
     private val adapterPattern=Regex("(?:Qualcomm\\s+)?Adreno(?:\\s*\\(TM\\))?\\s+([0-9]{3,4})",RegexOption.IGNORE_CASE)
@@ -94,7 +102,9 @@ object GpuRuntimeInfo {
         val work=dev.filmroom.engine.GpuWorkProgress.fromJson(data)?:return null
         return SafeInfo(gpuWorkPhase=work.phase,gpuFailedPhase=work.failedPhase,gpuTileIndex=work.tileIndex,
             gpuTileTotal=work.tileTotal,gpuBatchIndex=work.batchIndex,gpuCompletedSubmits=work.completedSubmits,
-            gpuBatchElapsedMs=work.batchElapsedMs,gpuChainWaitMs=work.chainWaitMs,gpuFailedElapsedMs=work.failedElapsedMs,gpuFailureKind=work.failureKind,gpuSubmitMs=work.submitMs,gpuPollMs=work.pollMs,gpuMapWaitMs=work.mapWaitMs)
+            gpuBatchElapsedMs=work.batchElapsedMs,gpuChainWaitMs=work.chainWaitMs,gpuFailedElapsedMs=work.failedElapsedMs,gpuFailureKind=work.failureKind,gpuSubmitMs=work.submitMs,gpuPollMs=work.pollMs,gpuMapWaitMs=work.mapWaitMs,
+            gpuTilePhase=work.tilePhase, gpuTileCoreWidth=work.coreWidth, gpuTileCoreHeight=work.coreHeight, gpuTileExpandedWidth=work.expandedWidth, gpuTileExpandedHeight=work.expandedHeight, gpuHalo=work.halo, gpuExpandedRatio=work.expandedRatio, gpuPlanBytes=work.planBytes, gpuReservedBytes=work.reservedBytes,
+            gpuMapTimeoutElapsedMs=work.mapTimeoutElapsedMs, gpuMapPollCount=work.mapPollCount, gpuMapMaxPollMs=work.mapMaxPollMs, gpuMapMaxSleepMs=work.mapMaxSleepMs, gpuMapCompletedMaps=work.mapCompletedMaps, gpuMapExpectedMaps=work.mapExpectedMaps, gpuHalationComponent=work.halationComponent, gpuHalationChannel=work.halationChannel, gpuHalationRadius=work.halationRadius, gpuHalationTileWidth=work.halationTileWidth, gpuHalationTileHeight=work.halationTileHeight)
     }
 
     fun withPreviewCache(result:JSONObject,info:SafeInfo):SafeInfo {
