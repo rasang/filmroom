@@ -1098,10 +1098,19 @@ pub fn blur_scattered_field(
 /// Bounded prepass accumulation: releases each component before dispatching
 /// the next and honors cooperative cancellation at every safe boundary.
 pub fn blur_scattered_field_controlled(
+    backend: &dyn ComputeBackend, small: &ImageBuf,
+    plan: &spektrafilm_gpu::DiffusionGpuPlan, checkpoint: impl FnMut() -> bool,
+) -> Option<Vec<f32>> {
+    blur_scattered_field_controlled_progress(backend, small, plan, checkpoint, || {})
+}
+
+/// Reports fully accumulated Gaussian components, never scheduled work.
+pub fn blur_scattered_field_controlled_progress(
     backend: &dyn ComputeBackend,
     small: &ImageBuf,
     plan: &spektrafilm_gpu::DiffusionGpuPlan,
     mut checkpoint: impl FnMut() -> bool,
+    mut component_complete: impl FnMut(),
 ) -> Option<Vec<f32>> {
     use rayon::prelude::*;
     if plan.sigmas.len() != plan.coeffs.len() || !checkpoint() { return None; }
@@ -1116,6 +1125,7 @@ pub fn blur_scattered_field_controlled(
                 a[1] += cf[1] as f64 * (b[1] as f64);
                 a[2] += cf[2] as f64 * (b[2] as f64);
             });
+        component_complete();
     }
     if !checkpoint() { return None; }
     Some(acc.iter().map(|&v| v as f32).collect())
@@ -1285,6 +1295,13 @@ mod resident_prepass_tests {
         let out=blur_scattered_field_controlled(&CpuBackend,&small,&plan,||true).unwrap();
         assert_eq!(out.len(),18);
         assert!(out.iter().all(|v|(*v-0.5).abs()<1e-6));
+        let completed=std::cell::Cell::new(0);
+        assert!(blur_scattered_field_controlled_progress(&CpuBackend,&small,&plan,
+            ||completed.get()<1,||completed.set(completed.get()+1)).is_none());
+        assert_eq!(completed.get(),1);completed.set(0);
+        let actual=blur_scattered_field_controlled_progress(&CpuBackend,&small,&plan,
+            ||true,||completed.set(completed.get()+1)).unwrap();
+        assert_eq!(completed.get(),2);assert_eq!(actual,out);
     }
 }
 

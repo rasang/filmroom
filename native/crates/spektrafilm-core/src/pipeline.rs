@@ -1960,15 +1960,34 @@ impl Pipeline {
     /// admitted by gpu_diffusion_working_bytes; only full-resolution taps tile.
     pub fn diffusion_scattered_fields_gpu_tiled_controlled(
         &self, width: u32, height: u32, core_width: u32, core_height: u32,
+        read_rect: impl FnMut(u32, u32, u32, u32) -> Option<Vec<f32>>,
+        checkpoint: impl FnMut() -> bool, backend: &dyn ComputeBackend,
+    ) -> Option<DiffusionScatteredFields> {
+        self.diffusion_scattered_fields_gpu_tiled_progress(width, height, core_width, core_height,
+            core_width, core_height, read_rect, checkpoint, backend, |_, _| {})
+    }
+
+    /// Front is pointwise and uses its own cores; PrintLinear retains spatial halo.
+    pub fn diffusion_scattered_fields_gpu_tiled_progress(
+        &self, width: u32, height: u32, core_width: u32, core_height: u32,
+        front_width: u32, front_height: u32,
         mut read_rect: impl FnMut(u32, u32, u32, u32) -> Option<Vec<f32>>,
         mut checkpoint: impl FnMut() -> bool, backend: &dyn ComputeBackend,
+        mut progress: impl FnMut(u64, u64),
     ) -> Option<DiffusionScatteredFields> {
         backend.reset_thread_resident_progress();
         if width == 0 || height == 0 || core_width == 0 || core_height == 0
+            || front_width == 0 || front_height == 0
             || width.checked_mul(height).is_none() || !checkpoint() { return None; }
         let (cam_plan, enl_plan) = self.gpu_diffusion_plans(width, height);
         let highlight = (self.params.film_render.halation.boost_ev != 0.0 || self.params.film_render.halation.headroom_active());
         let halo = self.banded_halo_pixels(self.full_image_pitch(width, height));
+        let tiles = |w: u32, h: u32| u64::from(width.div_ceil(w)) * u64::from(height.div_ceil(h));
+        let total = if highlight { tiles(front_width, front_height) } else { 0 }
+            + cam_plan.as_ref().map_or(0, |p| tiles(front_width, front_height) + p.sigmas.len() as u64)
+            + enl_plan.as_ref().map_or(0, |p| tiles(core_width, core_height) + p.sigmas.len() as u64);
+        let mut completed = 0u64;
+        progress(0, total);
         let highlight_max_raw = if highlight {
             let mut params = self.params.clone();
             params.film_render.halation.boost_ev = 0.0;
@@ -1977,16 +1996,17 @@ impl Pipeline {
             let mut maximum = 0.0f32;
             let mut y = 0;
             while y < height {
-                let h = core_height.min(height - y);
+                let h = front_height.min(height - y);
                 let mut x = 0;
                 while x < width {
                     if !checkpoint() { return None; }
-                    let w = core_width.min(width - x);
+                    let w = front_width.min(width - x);
                     let data = read_rect(x, y, w, h)?;
                     let tap = unboosted.tap_gpu_resident_tile_f32_controlled(&data, w, h,
                         TileContext { full_width: width, full_height: height, x, y }, backend,
                         None, spektrafilm_gpu::ChainStop::Front, &mut checkpoint)?;
                     for &v in &tap.data { maximum = maximum.max(v as f32); }
+                    completed += 1; progress(completed, total);
                     x += w;
                 }
                 y += h;
@@ -1999,13 +2019,16 @@ impl Pipeline {
                 width as usize, height as usize, plan.d as usize);
             let fields = DiffusionScatteredFields { camera: camera.cloned(), enlarger: None, highlight_max_raw };
             let margin = if stop == spektrafilm_gpu::ChainStop::Front { 0 } else { halo };
+            let (tap_width, tap_height) = if stop == spektrafilm_gpu::ChainStop::Front {
+                (front_width, front_height)
+            } else { (core_width, core_height) };
             let mut y = 0;
             while y < height {
-                let y1 = y + core_height.min(height - y);
+                let y1 = y + tap_height.min(height - y);
                 let mut x = 0;
                 while x < width {
                     if !checkpoint() { return None; }
-                    let x1 = x + core_width.min(width - x);
+                    let x1 = x + tap_width.min(width - x);
                     let tx = x.saturating_sub(margin);
                     let ty = y.saturating_sub(margin);
                     let tw = x1.saturating_add(margin).min(width) - tx;
@@ -2016,6 +2039,7 @@ impl Pipeline {
                         backend, Some(&fields), stop, &mut checkpoint)?;
                     acc.add_tile(&tap, tx as usize, ty as usize,
                         [x as usize, y as usize, x1 as usize, y1 as usize])?;
+                    completed += 1; progress(completed, total);
                     x = x1;
                 }
                 y = y1;
@@ -2023,8 +2047,8 @@ impl Pipeline {
             drop(fields);
             let small = acc.finish();
             drop(acc);
-            let field = spektrafilm_model::diffusion::blur_scattered_field_controlled(
-                backend, &small, plan, &mut checkpoint)?;
+            let field = spektrafilm_model::diffusion::blur_scattered_field_controlled_progress(
+                backend, &small, plan, &mut checkpoint, || { completed += 1; progress(completed, total); })?;
             Some(DiffusionScattered { field, small_w: plan.small_w, small_h: plan.small_h,
                 d: plan.d, p_s: plan.p_s, crop: None })
         };

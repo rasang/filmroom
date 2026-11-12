@@ -533,3 +533,41 @@ fn refined_preview_tiles_match_ordinary_whole_gpu_preview() {
             "ordinary preview floating-point envelope max={maximum} rms={rms} direct={direct_error} tails={counts:?}");
     }
 }
+
+#[test]
+fn independent_front_cores_preserve_fields_pixels_seams_and_cancellation() {
+    let Some(gpu)=WgpuBackend::new() else {assert_ne!(std::env::var("FILMROOM_REQUIRE_GPU_SMOKE").as_deref(),Ok("1"));return;};
+    let (w,h)=(97u32,109u32);
+    for grain in [false,true] {
+        let mut pipe=pipeline(true);pipe.params.film_render.grain.active=grain;
+        let values:Vec<f32>=(0..w*h*3).map(|i|0.01+((i*13+i/(w*3)*7)%251)as f32/180.).collect();
+        let old=pipe.diffusion_scattered_fields_gpu_tiled_controlled(w,h,13,17,|x,y,tw,th|Some(rect(&values,w,x,y,tw,th)),||true,&gpu).unwrap();
+        let mut events=vec![];
+        let new=pipe.diffusion_scattered_fields_gpu_tiled_progress(w,h,13,17,w,37,|x,y,tw,th|Some(rect(&values,w,x,y,tw,th)),||true,&gpu,|d,t|events.push((d,t))).unwrap();
+        assert_eq!(old.highlight_max_raw,new.highlight_max_raw);
+        for (a,b) in [(&old.camera,&new.camera),(&old.enlarger,&new.enlarger)] {
+            let(a,b)=(a.as_ref().unwrap(),b.as_ref().unwrap());assert_eq!((a.small_w,a.small_h,a.d),(b.small_w,b.small_h,b.d));
+            assert!(a.field.iter().zip(&b.field).all(|(a,b)|(a-b).abs()<1e-5));
+        }
+        assert_eq!(events.first().unwrap().0,0);let &(done,total)=events.last().unwrap();assert_eq!(done,total);assert!(done>0);
+        assert!(events.windows(2).all(|v|v[0].1==v[1].1&&v[0].0+1==v[1].0));
+        let tile=TileContext{full_width:w,full_height:h,x:0,y:0};
+        let a=pipe.process_gpu_resident_tile_f32_controlled(&values,w,h,tile,&gpu,Some(&old),||true).unwrap();
+        let b=pipe.process_gpu_resident_tile_f32_controlled(&values,w,h,tile,&gpu,Some(&new),||true).unwrap();
+        let max=a.data.iter().zip(&b.data).map(|(a,b)|(a-b).abs()).fold(0f64,f64::max);assert!(max<1e-5);
+        let mut stitched=vec![0.;b.data.len()];let halo=pipe.banded_halo_pixels(50.);
+        for y in (0..h).step_by(37) {for x in (0..w).step_by(31) {
+            let x1=(x+31).min(w);let y1=(y+37).min(h);let tx=x.saturating_sub(halo);let ty=y.saturating_sub(halo);
+            let tw=(x1+halo).min(w)-tx;let th=(y1+halo).min(h)-ty;let tile=TileContext{full_width:w,full_height:h,x:tx,y:ty};
+            let field=crop_fields(&new,tile,tw,th);let input=rect(&values,w,tx,ty,tw,th);
+            let rendered=pipe.process_gpu_resident_tile_f32_controlled(&input,tw,th,tile,&gpu,Some(&field),||true).unwrap();
+            for yy in y..y1 {for xx in x..x1 {for c in 0..3 {stitched[((yy*w+xx)*3+c)as usize]=rendered.data[(((yy-ty)*tw+xx-tx)*3+c)as usize];}}}
+        }}
+        let seam=b.data.iter().zip(&stitched).map(|(a,b)|(a-b).abs()).fold(0f64,f64::max);assert!(seam<1e-5);
+        eprintln!("RECOVERED_FRONT_PARITY grain={grain} max={max} seam={seam} units={total}");
+        let completed=std::cell::Cell::new(0);let mut reads=0;
+        assert!(pipe.diffusion_scattered_fields_gpu_tiled_progress(w,h,13,17,w,37,|x,y,tw,th|{reads+=1;Some(rect(&values,w,x,y,tw,th))},||completed.get()<1,&gpu,|d,_|completed.set(d)).is_none());
+        assert_eq!(completed.get(),1);assert_eq!(reads,1);
+        let mut failed=vec![];assert!(pipe.diffusion_scattered_fields_gpu_tiled_progress(w,h,13,17,w,37,|_,_,_,_|None,||true,&gpu,|d,t|failed.push((d,t))).is_none());assert_eq!(failed.len(),1);assert_eq!(failed[0].0,0);
+    }
+}
