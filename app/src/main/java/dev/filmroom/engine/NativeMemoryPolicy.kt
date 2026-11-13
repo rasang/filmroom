@@ -3,14 +3,9 @@ package dev.filmroom.engine
 /** Conservative admission estimate, NOT an allocator hard limit or device-performance promise. */
 object NativeMemoryPolicy {
     const val MIB=1024L*1024
-    fun chooseBudgetMiB(availableBytes:Long,thresholdBytes:Long,lowMemory:Boolean):Int? =
-        chooseBudgetMiB(availableBytes,thresholdBytes,lowMemory,512,4)
-    /** Export-only beta: admit one third of system headroom, retaining the ceiling and low-memory refusal. */
-    fun chooseExportBudgetMiB(availableBytes:Long,thresholdBytes:Long,lowMemory:Boolean):Int? =
-        chooseBudgetMiB(availableBytes,thresholdBytes,lowMemory,1024,3)
-    private fun chooseBudgetMiB(availableBytes:Long,thresholdBytes:Long,lowMemory:Boolean,ceilingMiB:Int,headroomDivisor:Int):Int? {
+    fun chooseBudgetMiB(availableBytes:Long,thresholdBytes:Long,lowMemory:Boolean):Int? {
         if(lowMemory||availableBytes<=thresholdBytes||thresholdBytes<0)return null
-        val budget=((availableBytes-thresholdBytes)/headroomDivisor/MIB).coerceAtMost(ceilingMiB.toLong())
+        val budget=((availableBytes-thresholdBytes)/4/MIB).coerceAtMost(512)
         return if(budget>=128)budget.toInt()else null
     }
     /** Preview-only reduction. Original-size exports are NEVER silently resized. */

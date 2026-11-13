@@ -183,9 +183,7 @@ impl MobileParams {
                 return Err(EngineError::new("INVALID_PARAMS","Preview metering belongs to another source"));
             }
         }
-        // Export-only beta budget expansion; preview admission remains unchanged.
-        let max_budget=if self.mode=="export"{1024}else{512};
-        if !(128..=max_budget).contains(&self.memory_budget_mi_b) {return Err(EngineError::new("INVALID_BUDGET","memoryBudgetMiB must be 128..512 for preview or 128..1024 for export"));}
+        if !(128..=512).contains(&self.memory_budget_mi_b) {return Err(EngineError::new("INVALID_BUDGET","memoryBudgetMiB must be an integer in 128..512"));}
         if self.schema_version!=1 {return Err(EngineError::new("UNSUPPORTED_SCHEMA","Only schemaVersion 1 is supported"));}
         if !crate::profile_catalog::valid_route(&self.film_stock,&self.paper_stock,&self.output_route) {return Err(EngineError::new("UNSUPPORTED_PROFILE","Profile/route not in the bundled supported catalog"));}
         if !["preview","export"].contains(&self.mode.as_str()) {return Err(EngineError::new("INVALID_PARAMS","mode must be preview or export"));}
@@ -1931,29 +1929,5 @@ mod spektralab_halation_render_tests {
         let a=render("cinestill_800t",1.);let b=render("kodak_vision3_500t",1.);
         assert!(a.data.iter().zip(&b.data).all(|(x,y)|x.is_finite()&&y.is_finite()));
         assert!(a.data.iter().zip(&b.data).any(|(x,y)|(x-y).abs()>1e-5));
-    }
-}
-
-#[cfg(test)]
-mod export_budget_tests {
-    use super::*;
-    #[test]
-    fn export_budget_expansion_preserves_preview_limit() {
-        for budget in [128,512,768,1024] {
-            let mut p=MobileParams::default();p.mode="export".into();p.memory_budget_mi_b=budget;
-            assert!(p.validate().is_ok(),"export {budget}");
-        }
-        let mut p=MobileParams::default();p.mode="export".into();p.memory_budget_mi_b=1024;
-        let plan=plan_export(7347,6767,&p).unwrap();
-        assert_eq!(plan.memory_budget_mi_b,1024);
-        assert!(plan.estimated_native_working_bytes>=1024*1024*1024);
-        assert_eq!(plan.estimated_native_working_bytes,1024*1024*1024+plan.background_preview_lease_bytes);
-        for budget in [127,1025,u32::MAX] {
-            let mut p=MobileParams::default();p.mode="export".into();p.memory_budget_mi_b=budget;
-            assert_eq!(p.validate().unwrap_err().code,"INVALID_BUDGET");
-        }
-        let mut p=MobileParams::default();p.mode="preview".into();p.memory_budget_mi_b=512;
-        assert!(p.validate().is_ok());
-        for budget in [513,768,1024] {p.memory_budget_mi_b=budget;assert_eq!(p.validate().unwrap_err().code,"INVALID_BUDGET");}
     }
 }

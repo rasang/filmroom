@@ -472,7 +472,7 @@ class FilmEngine(private val context: Context) {
         cancelPrewarm()
         renderMutex.withLock { withContext(Dispatchers.IO) {
             if(unavailable!=null)throw EngineException(EngineFailure.UNAVAILABLE)
-            val job=currentCoroutineContext();val budget=memoryBudgetMiB(export=true);val data=copyData();job.ensureActive()
+            val job=currentCoroutineContext();val budget=memoryBudgetMiB();val data=copyData();job.ensureActive()
             val created=ensureHandle(data)
             try {
                 job.ensureActive();val plan=planForHandle(created,width,height,parameters,budget,preImaging)
@@ -580,7 +580,7 @@ class FilmEngine(private val context: Context) {
                 }
             }
             source.recycle()
-            val data=copyData();job.ensureActive();val budget=memoryBudgetMiB(export=true)
+            val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
             trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget))
             val created=ensureHandle(data)
             val result:String
@@ -624,7 +624,7 @@ class FilmEngine(private val context: Context) {
                 check(input.length()==count*12){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ed2785856a9e)}
                 val output=File(workspace?:context.cacheDir,"film-result-${java.util.UUID.randomUUID()}.rgb")
                 produced=output
-                val data=copyData();job.ensureActive();val budget=memoryBudgetMiB(export=true)
+                val data=copyData();job.ensureActive();val budget=memoryBudgetMiB()
                 trace.mark(Stage.NATIVE_ENTER,SafeInfo(width=width,height=height,memoryBudgetMiB=budget))
                 val created=ensureHandle(data)
                 val raw:String
@@ -674,11 +674,10 @@ class FilmEngine(private val context: Context) {
     private suspend fun <T> withNativeReservation(bytes:Long,work:suspend ()->T):T =
         try {NativeWorkReservations.run(bytes,{NativeWorkReservations.snapshot(context)},work)}
         catch(_:NativeWorkUnavailable){throw EngineException(EngineFailure.BUDGET)}
-    private fun memoryBudgetMiB(export:Boolean=false):Int {
+    private fun memoryBudgetMiB():Int {
         val manager=context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val info=android.app.ActivityManager.MemoryInfo();manager.getMemoryInfo(info)
-        return (if(export) NativeMemoryPolicy.chooseExportBudgetMiB(info.availMem,info.threshold,info.lowMemory)
-            else NativeMemoryPolicy.chooseBudgetMiB(info.availMem,info.threshold,info.lowMemory)) ?: throw EngineException(EngineFailure.BUDGET)
+        return NativeMemoryPolicy.chooseBudgetMiB(info.availMem,info.threshold,info.lowMemory) ?: throw EngineException(EngineFailure.BUDGET)
     }
     private fun exportParameters(parameters:EditorState,budget:Int,preImaging:JSONObject?):String {
         require(parameters.preImagingBorder==(preImaging!=null)){"Export border stage and composite contract must agree"}

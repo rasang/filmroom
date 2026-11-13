@@ -315,7 +315,7 @@ data class SafeInfo(
         integer("nativeAllocatedBytes", nativeAllocatedBytes, 1L shl 40)
         integer("completedUnits", completedUnits, 1_800_000_000L); integer("totalUnits", totalUnits, 1_800_000_000L)
         integer("cleanupRemoved", cleanupRemoved, 1_000_000); integer("cleanupUnresolved", cleanupUnresolved, 1_000_000)
-        integer("memoryBudgetMiB", memoryBudgetMiB?.toLong(), 1024, 128)
+        integer("memoryBudgetMiB", memoryBudgetMiB?.toLong(), 512, 128)
         integer("estimatedWorkingBytes", estimatedWorkingBytes, 1L shl 40)
         film?.let { put("film", it.id) }; paper?.let { put("paper", it.id) }
         decimal("meteredEv", meteredEv, -64.0, 64.0)

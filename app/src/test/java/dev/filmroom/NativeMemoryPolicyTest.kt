@@ -3,31 +3,6 @@ import dev.filmroom.engine.NativeMemoryPolicy as P
 import org.junit.Assert.*
 import org.junit.Test
 class NativeMemoryPolicyTest {
- @Test fun exportUsesOneThirdWhilePreviewAndImportRetainOneQuarter(){
-  // Same net headroom as the reported device: 594 MiB previously, 792 MiB now.
-  assertEquals(792,P.chooseExportBudgetMiB(2632*P.MIB,256*P.MIB,false))
-  assertEquals(512,P.chooseBudgetMiB(2632*P.MIB,256*P.MIB,false))
-  assertEquals(200,P.chooseExportBudgetMiB(856*P.MIB,256*P.MIB,false))
-  assertEquals(150,P.chooseBudgetMiB(856*P.MIB,256*P.MIB,false))
- }
- @Test fun exportRetainsCeilingAndExactAdmissionBoundaries(){
-  assertEquals(1024,P.chooseExportBudgetMiB(8192*P.MIB,256*P.MIB,false))
-  assertEquals(1023,P.chooseExportBudgetMiB(3328*P.MIB-1,256*P.MIB,false))
-  assertEquals(1024,P.chooseExportBudgetMiB(3328*P.MIB,256*P.MIB,false))
-  assertEquals(128,P.chooseExportBudgetMiB(640*P.MIB,256*P.MIB,false))
-  assertNull(P.chooseExportBudgetMiB(640*P.MIB-1,256*P.MIB,false))
-  assertEquals(1024,P.chooseExportBudgetMiB(Long.MAX_VALUE,0,false))
-  assertEquals("1024",dev.filmroom.diagnostics.SafeInfo(memoryBudgetMiB=1024).fields()["memoryBudgetMiB"])
-  assertFalse(dev.filmroom.diagnostics.SafeInfo(memoryBudgetMiB=1025).fields().containsKey("memoryBudgetMiB"))
- }
- @Test fun exportStillRefusesLowMemoryAndInvalidHeadroom(){
-  assertNull(P.chooseExportBudgetMiB(8192*P.MIB,256*P.MIB,true))
-  assertNull(P.chooseExportBudgetMiB(8192*P.MIB,-1,false))
-  assertNull(P.chooseExportBudgetMiB(256*P.MIB,256*P.MIB,false))
-  assertNull(P.chooseExportBudgetMiB(128*P.MIB,256*P.MIB,false))
-  assertNull(P.chooseExportBudgetMiB(-1,0,false))
- }
-
  @Test fun refusesLowOrInsufficientMemoryRatherThanClampingUp(){assertNull(P.chooseBudgetMiB(4096*P.MIB,256*P.MIB,true));assertNull(P.chooseBudgetMiB(767*P.MIB,256*P.MIB,false));assertNull(P.chooseBudgetMiB(128*P.MIB,256*P.MIB,false))}
  @Test fun budgetBoundaryAndCeiling(){assertEquals(128,P.chooseBudgetMiB(768*P.MIB,256*P.MIB,false));assertEquals(512,P.chooseBudgetMiB(8192*P.MIB,256*P.MIB,false));assertEquals(512,P.previewEdge(128));assertEquals(512,P.previewEdge(223));assertEquals(512,P.previewEdge(224))}
  @Test fun detailIsConditionalAndInteractiveRemainsSmall(){
