@@ -1,0 +1,23 @@
+name: Finishing performance branch checks
+on:
+  push:
+    branches: [feat/finishing-preview-export-perf]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: finishing-performance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare reproducible source snapshot
+        run: git archive --format=tar.gz --output="$RUNNER_TEMP/filmroom-source.tar.gz" HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: filmroom-source-${{ github.sha }}
+          path: ${{ runner.temp }}/filmroom-source.tar.gz
+          retention-days: 3
