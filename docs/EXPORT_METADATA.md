@@ -25,3 +25,9 @@ Live 导出补日期时不再用仅含日期的快照替换现有 GPS / 相机�
 本次验证：42 项专项测试通过（包含可选媒体位置授权/拒绝/恢复、URI 隔离、Live 元数据合并、EXIF 容器及真实照片往返）。真实样片为公开 `ianare/exif-samples/jpg/gps/DSCN0010.jpg`，通过 `FILMROOM_GPS_JPEG` 指定本地路径，不提交照片。JPEG/PNG 导出后经纬度一致，10 个 GPS 标签无缺失；AndroidX 对 GPS 时间的小数秒及无效空方向标记有规范化，因此不是字节级无损复制。
 
 真实照片测试运行于 Robolectric，MediaStore 为模拟提供方；验证了应用实际导入、快照和元数据写入路径，但不是手机相册端到端验收。宿主区域解码器不提供真实像素，PNG 测试使用实际 ImageDecoder 像素经生产 bitmap-to-linear 适配器进入行编码器；未覆盖区域解码和胶片渲染引擎。JPEG/PNG 输出均有非空真实图像。设备系统的授权 UI、旧选择器和厂商相册仍需真机验证。
+
+### Expanded GPS matrix (host validation)
+
+`GpsMatrixHostTest` takes an opt-in `FILMROOM_GPS_CASES` directory of public JPEG fixtures (not committed). The verified set contains Nikon P6000 ×2, iPhone 6 ×2, Nokia 8.3 ×1 and a Samsung image without GPS. Eight additional controlled JPEG/PNG inputs cover N/E, N/W, S/E, S/W, positive/negative altitude and leap-day capture dates; a generated no-GPS image is also checked. All 15 inputs passed repository import, frozen/Live metadata and JPEG/PNG output readback (30 outputs). Coordinates, altitude and capture dates are checked; both no-GPS cases remain without invented coordinates. Together with permission/redaction regressions, 43 selected host tests passed.
+
+An independent Pillow comparison found no missing/added GPS tags in the real photos. Nokia matched exactly; iPhone retained all values except existing AndroidX fractional GPS-time normalization; Nikon additionally normalized its invalid direction-reference value. This is not a byte-exact EXIF guarantee. Tests use actual image decode and production import/publication/metadata paths with a simulated provider; they do not validate vendor galleries, RAW/native codecs, full film processing or Live video/container packaging. No real device run was available.

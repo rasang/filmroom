@@ -64,7 +64,7 @@ class GpsPhotoRoundTripHostTest {
             // Robolectric has no real BitmapRegionDecoder pixels; use the production
             // bitmap-to-linear adapter from the real ImageDecoder output instead.
             LinearSpool.fromBitmap(loaded.preview,rgb,kotlinx.coroutines.currentCoroutineContext())
-            val png=repo.exportLinearRgbPng(rgb,loaded.source.originalWidth,loaded.source.originalHeight,photoMetadata=frozen)
+            val png=repo.exportLinearRgbPng(rgb,loaded.preview.width,loaded.preview.height,photoMetadata=frozen)
             val jpeg=File(app.cacheDir,"gps-encoded.jpg")
             jpeg.outputStream().use{assertTrue(loaded.preview.compress(Bitmap.CompressFormat.JPEG,95,it))}
             val jpg=repo.exportEncodedPayload(jpeg,loaded.preview.width,loaded.preview.height,ExportFormat.JPEG,"sRGB",frozen,0)
