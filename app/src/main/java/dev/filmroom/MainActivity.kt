@@ -1,6 +1,13 @@
 package dev.filmroom
 
 import dev.filmroom.ui.FilmroomPalette
+import dev.filmroom.effects.*
+import dev.filmroom.diagnostics.HomeMotionEvent
+import dev.filmroom.diagnostics.HomeMotionReason
+import dev.filmroom.diagnostics.HomeMotionLog
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.os.SystemClock
 
 import android.app.AlertDialog
 import android.content.Intent
@@ -72,6 +79,32 @@ class MainActivity:ComponentActivity() {
     private var presetDialog:AlertDialog?=null
     private val savedPresetDialogs: dev.filmroom.presets.SavedPresetDialogs by lazy { dev.filmroom.presets.SavedPresetDialogs(this,{model.state.value},model::applySavedPreset,{it.showReadable()},{recipeScanner.launch(Intent(this,dev.filmroom.presets.RecipeScannerActivity::class.java))}) }
     private var pendingSavedPreset:Bundle?=null
+    private lateinit var homeMotionButton:Button
+    private lateinit var homeMotionFrame:FrameLayout
+    private var homeMotionKind:EffectKind?=null
+    private var homeMotionMissingPair=false
+    private var homeLiveChecking=false
+    private val homePairAccess=HomeMotionPairAccess(this,{model.state.value.photo?.originalUri},{homeMotionKind==EffectKind.OPTICAL_LEAK}){
+        stopHomeMotion();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null
+        homeMotionKind?.let{playHomeMotion(it)}
+    }
+    private var homeMotion:HomeMotionPreview?=null
+    private var homeMotionStage:View?=null
+    private var homeMotionState:EditorUiState?=null
+    private var homeMotionPreparingState:EditorUiState?=null
+    private var homeMotionPrepare:Job?=null
+    private var homeMotionInputOwner:HomeMotionInputOwner?=null
+    private var homeMotionInputKey:String?=null
+    private var homeMotionPhotoKey:String?=null
+    private var homeMotionAutoSource:String?=null
+    private var homeMotionRequestedAutoplay=false
+    private var homeMotionRefreshPosted=false
+    private var homeMotionChooser:PopupWindow?=null
+    private var homeMotionHold:Runnable?=null
+    private var homeMotionHeld=false
+    private var homeMotionDownX=0f
+    private var homeMotionDownY=0f
+    private var homeMotionEpoch=0L
     private lateinit var recipeButton:Button
     private var languageDialog:AlertDialog?=null
     private lateinit var resetPresetButton:Button
@@ -131,6 +164,10 @@ class MainActivity:ComponentActivity() {
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         photoLocationPermission.restore(savedInstanceState)
+        homePairAccess.restore(savedInstanceState)
+        homeMotionKind=savedInstanceState?.getString("homeMotionKind")?.let{runCatching{EffectKind.valueOf(it)}.getOrNull()}
+        homeMotionAutoSource=savedInstanceState?.getString("homeMotionAutoSource")
+
         recipeImport // Register restoration before STARTED; scanner results return to this editor.
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         compositionReturnTool=savedInstanceState?.getString("compositionReturnTool");compositionReturnGroup=savedInstanceState?.getString("compositionReturnGroup")
@@ -175,11 +212,11 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){zoomFrames?.releaseForPressure();dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true);if(::histogram.isInitialized)histogram.setForeground(true)}
-    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus)}
+    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus);refreshHomeMotion()}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
-    override fun onPause(){zoomFrames?.foreground(false);model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
-    override fun onDestroy(){startupUpdateUi?.close();startupUpdateUi=null;zoomFrames?.close();zoomFrames=null;imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
+    override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;stopHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
+    override fun onDestroy(){stopHomeMotion();homeMotionInputOwner?.close();homeMotionInputOwner=null;startupUpdateUi?.close();startupUpdateUi=null;zoomFrames?.close();zoomFrames=null;imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
         if(::histogram.isInitialized)histogram.setForeground(false)
@@ -195,6 +232,8 @@ class MainActivity:ComponentActivity() {
     }
     override fun onSaveInstanceState(outState:Bundle){
         photoLocationPermission.save(outState)
+        homePairAccess.save(outState)
+        outState.putString("homeMotionKind",homeMotionKind?.name);outState.putString("homeMotionAutoSource",homeMotionAutoSource)
         outState.putString("filmFilterCategory",filmFilterCategory.name);outState.putString("filmFilterBrand",filmFilterBrand);outState.putInt("filmFilterScrollX",filmFilterScrollX)
         (savedPresetDialogs.capture() ?: pendingSavedPreset)?.let{outState.putBundle("savedPresetDialog",it)}
         imprintDialog?.takeIf{it.isShowing}?.let{outState.putBundle("imprintDraft",dev.filmroom.imprint.ImprintDialog.capture(it));outState.putString("imprintSource",imprintDialogSource)}
@@ -316,8 +355,8 @@ class MainActivity:ComponentActivity() {
         root.addView(body,LinearLayout.LayoutParams(-1,0,1f))
         val imageColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         body.addView(imageColumn,if(body.orientation==LinearLayout.HORIZONTAL)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,0,1f))
-        val frame=dev.filmroom.ui.PhotoPreviewFrame(this);imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
-        photo=PhotoView(this);model.detailInvalidator=invalidateDetail;if(model.localDetailEnabled)photo.configureDetail(model.detailProviderFactory());frame.addView(photo,FrameLayout.LayoutParams(-1,-1))
+        val frame=dev.filmroom.ui.PhotoPreviewFrame(this);homeMotionFrame=frame;imageColumn.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
+        photo=PhotoView(this);photo.setOnTouchListener{_,event->handleHomeMotionTouch(event)};model.detailInvalidator=invalidateDetail;if(model.localDetailEnabled)photo.configureDetail(model.detailProviderFactory());frame.addView(photo,FrameLayout.LayoutParams(-1,-1))
         welcome=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12),dp(if(wideLayout)20 else 28),dp(if(wideLayout)8 else 12))}
         welcome.addView(ImageView(this).apply{setImageResource(R.drawable.welcome_cplift)},LinearLayout.LayoutParams(dp(if(wideLayout)40 else 76),dp(if(wideLayout)40 else 76)))
         welcome.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1f14f4b50d0b),if(wideLayout)18f else 25f).apply{gravity=Gravity.CENTER;setPadding(0,dp(if(wideLayout)6 else 20),0,dp(if(wideLayout)4 else 10))})
@@ -364,8 +403,11 @@ class MainActivity:ComponentActivity() {
         frame.addView(loading,FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply{leftMargin=dp(12);rightMargin=dp(12);bottomMargin=dp(12)})
         compare=iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_36c69988127e),R.drawable.ic_compare){photo.finishCompositionGesture();model.compare()}
         frame.addView(compare,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.END).apply{rightMargin=dp(12);bottomMargin=dp(8)})
-        recipeButton=iconButton(dev.filmroom.i18n.L10n.text(R.string.saved_preset_import),R.drawable.ic_recipe_bottle){photo.finishCompositionGesture();savedPresetDialogs.open()}.apply{tag="saved-recipes"}
-        frame.addView(recipeButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.END).apply{rightMargin=dp(68);bottomMargin=dp(8)})
+        recipeButton=iconButton(dev.filmroom.i18n.L10n.text(R.string.saved_preset_import),R.drawable.ic_recipe_bottle){settleHomeMotion();photo.finishCompositionGesture();savedPresetDialogs.open()}.apply{tag="saved-recipes"}
+        frame.addView(recipeButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.END).apply{rightMargin=dp(124);bottomMargin=dp(8)})
+        homeMotionButton=iconButton(dev.filmroom.i18n.L10n.text(R.string.home_motion_label),R.drawable.ic_home_motion){chooseHomeMotion()}.apply{tag="home-live-photo"}
+        frame.addView(homeMotionButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.END).apply{rightMargin=dp(68);bottomMargin=dp(8)})
+        updateHomeMotionButton()
         // A reusable film-tool action, never an image overlay or a parameter selection.
         compositionButton=toolButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08),R.drawable.ic_composition,false){
             val current=model.state.value
@@ -378,9 +420,9 @@ class MainActivity:ComponentActivity() {
                 photo.finishCompositionGesture();model.beginComposition()
             }
         }.apply{tag="composition";contentDescription=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f02806d5dc08)}
-        infoButton=iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c3154414c11),R.drawable.ic_info){photoInfo()}
+        infoButton=iconButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7c3154414c11),R.drawable.ic_info){settleHomeMotion();photoInfo()}
         frame.addView(infoButton,FrameLayout.LayoutParams(dp(48),dp(48),Gravity.BOTTOM or Gravity.START).apply{leftMargin=dp(12);bottomMargin=dp(8)})
-        frame.avoidControls(photo,infoButton,recipeButton,compare)
+        frame.avoidControls(photo,infoButton,recipeButton,homeMotionButton,compare)
         val toolColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(surface);setPadding(dp(12),dp(8),dp(12),dp(8))}
         body.addView(toolColumn,if(wideLayout)LinearLayout.LayoutParams(dp((resources.configuration.screenWidthDp*0.45f).roundToInt().coerceAtLeast(240)),-1)else LinearLayout.LayoutParams(-1,-2))
         // The current tool is measured at its natural height: never a vertically scrolling slot.
@@ -396,7 +438,150 @@ class MainActivity:ComponentActivity() {
         }
         buildTools()
     }
-    private fun enabled(view:View,value:Boolean){view.isEnabled=value;view.alpha=if(value)1f else 0.38f}
+    private fun enabled(view:View,value:Boolean){if(!value && ::homeMotionButton.isInitialized && view===homeMotionButton)HomeLiveIconPulse.reset(view);view.isEnabled=value;view.alpha=if(value)1f else 0.38f}
+    private fun toast(message:String){Toast.makeText(this,message,Toast.LENGTH_SHORT).show()}
+    /** Home preview mode also determines the queued export target. */
+    private fun updateHomeMotionButton(){
+        if(!::homeMotionButton.isInitialized)return
+        val selected=homeMotionKind!=null
+        homeMotionButton.isSelected=selected
+        homeMotionButton.background=shape(Color.TRANSPARENT)
+        homeMotionButton.compoundDrawables.filterNotNull().forEach{it.setTint(if(selected)accent else Color.WHITE)}
+        homeMotionButton.contentDescription=dev.filmroom.i18n.L10n.text(if(selected)R.string.home_motion_enabled else R.string.home_motion_label)
+    }
+    private fun chooseHomeMotion(){
+        if(!HomeMotionSnapshot.ready(model.state.value))return
+        homeMotionChooser?.dismiss()
+        val choices=listOf(null,EffectKind.LIGHT_TABLE,EffectKind.OPTICAL_LEAK)
+        val names=listOf(R.string.home_motion_none,R.string.home_motion_table,R.string.home_motion_finder)
+        val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=shape(raised);setPadding(dp(4),dp(4),dp(4),dp(4))}
+        val popup=PopupWindow(content,dp(184),dp(152),true).apply{setBackgroundDrawable(shape(raised));elevation=dp(8).toFloat();isOutsideTouchable=true}
+        choices.forEachIndexed{i,kind->content.addView(button(dev.filmroom.i18n.L10n.text(names[i])){
+            val enabledChanged=(homeMotionKind!=null)!=(kind!=null)
+            popup.dismiss();if(homeMotionKind!=kind || kind==null)stopHomeMotion()
+            homeMotionKind=kind;updateHomeMotionButton()
+            if(enabledChanged)HomeLiveIconPulse.play(homeMotionButton)
+            if(kind!=null)playHomeMotion(kind)
+        }.apply{gravity=Gravity.START or Gravity.CENTER_VERTICAL;setTextColor(if(kind==homeMotionKind)accent else ink);background=shape(Color.TRANSPARENT)},LinearLayout.LayoutParams(-1,dp(48)))}
+        popup.setOnDismissListener{if(homeMotionChooser===popup)homeMotionChooser=null}
+        homeMotionChooser=popup;popup.showAsDropDown(homeMotionButton,-dp(68),-homeMotionButton.height-dp(156))
+    }
+    private fun cancelHomeMotionHold(){homeMotionHold?.let{if(::photo.isInitialized)photo.removeCallbacks(it)};homeMotionHold=null}
+    private fun handleHomeMotionTouch(event:MotionEvent):Boolean {
+        when(event.actionMasked){
+            MotionEvent.ACTION_DOWN->{
+                homeMotionRequestedAutoplay=false;homeMotion?.showCover();cancelHomeMotionHold();homeMotionHeld=false
+                homeMotionDownX=event.x;homeMotionDownY=event.y
+                if(homeMotionKind!=null && !HomeMotionSnapshot.ready(model.state.value))HomeMotionLog.record(HomeMotionEvent.REJECT,homeMotionKind,HomeMotionReason.NOT_READY)
+                if(homeMotionKind!=null && HomeMotionSnapshot.ready(model.state.value)){
+                    val hold=Runnable{
+                        homeMotionHold=null
+                        val kind=homeMotionKind?:return@Runnable
+                        if(!HomeMotionSnapshot.ready(model.state.value))return@Runnable
+                        HomeMotionLog.record(HomeMotionEvent.HOLD_TRIGGER,kind)
+                        homeMotionHeld=true
+                        MotionEvent.obtain(0,SystemClock.uptimeMillis(),MotionEvent.ACTION_CANCEL,0f,0f,0).also{photo.onTouchEvent(it);it.recycle()}
+                        playHomeMotion(kind)
+                    }
+                    homeMotionHold=hold;HomeMotionLog.record(HomeMotionEvent.HOLD_PENDING,homeMotionKind);photo.postDelayed(hold,350)
+                }
+            }
+            MotionEvent.ACTION_MOVE->{val slop=ViewConfiguration.get(this).scaledTouchSlop
+                if(kotlin.math.abs(event.x-homeMotionDownX)>slop || kotlin.math.abs(event.y-homeMotionDownY)>slop){if(homeMotionHold!=null)HomeMotionLog.record(HomeMotionEvent.REJECT,homeMotionKind,HomeMotionReason.MOVED);cancelHomeMotionHold()}}
+            MotionEvent.ACTION_POINTER_DOWN->{if(homeMotionHold!=null)HomeMotionLog.record(HomeMotionEvent.REJECT,homeMotionKind,HomeMotionReason.MULTITOUCH);cancelHomeMotionHold();if(homeMotionHeld){homeMotionHeld=false;homeMotionRequestedAutoplay=false;homeMotion?.showCover()}}
+            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{
+                cancelHomeMotionHold();val held=homeMotionHeld;homeMotionHeld=false
+                if(held){homeMotionRequestedAutoplay=false;homeMotion?.showCover();refreshHomeMotion();return true}
+            }
+        }
+        // While a Live cover owns the picture, never pan/zoom an invisible ordinary preview.
+        return homeMotionHeld || (homeMotionKind!=null && homeMotion!=null)
+    }
+    private fun settleHomeMotion(){homeMotionRequestedAutoplay=false;homeMotion?.showCover();refreshHomeMotion()}
+    private fun refreshHomeMotion(){
+        if(homeMotionRefreshPosted || homeMotionKind==null || !detailForeground || !::photo.isInitialized)return
+        homeMotionRefreshPosted=true
+        photo.post{
+            homeMotionRefreshPosted=false
+            val s=model.state.value;val kind=homeMotionKind?:return@post
+            if(!detailForeground || HomeMotionSnapshot.matches(homeMotionState,s) || HomeMotionSnapshot.matches(homeMotionPreparingState,s) || !HomeMotionSnapshot.ready(s))return@post
+            playHomeMotion(kind,homeMotionAutoSource!=s.photo?.cacheKey)
+        }
+    }
+    private fun cancelHomeMotionPreparation(){
+        if(homeMotionPreparingState!=null && homeMotion!=null)homeMotionState=null
+        homeMotionEpoch++
+        homeMotionPrepare?.cancel();homeMotionPrepare=null;homeMotionPreparingState=null;homeMotion?.cancelReplacement()
+    }
+    private fun playHomeMotion(kind:EffectKind,autoplay:Boolean=true){
+        val s=model.state.value
+        if(homeMotionKind==kind && HomeMotionSnapshot.matches(homeMotionPreparingState,s)){homeMotionRequestedAutoplay=autoplay;return}
+        val retained=homeMotion
+        if(retained!=null && homeMotionKind==kind && HomeMotionSnapshot.matches(homeMotionState,s)){
+            if(autoplay)retained.replay()else retained.showCover();return
+        }
+        cancelHomeMotionPreparation();retained?.showCover()
+        if(!HomeMotionSnapshot.ready(s))return
+        HomeMotionLog.record(HomeMotionEvent.PREPARE,kind)
+        val snapshot=try{HomeMotionSnapshot.capture(s,kind,false)}catch(_:Exception){toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error));return}catch(_:OutOfMemoryError){toast(dev.filmroom.i18n.L10n.text(R.string.toast_memory));return}
+        val motionOwner=if(kind==EffectKind.OPTICAL_LEAK && s.photo!=null){
+            if(homeMotionInputKey!=s.photo.cacheKey){homeMotionMissingPair=false;homeMotionInputOwner?.close();homeMotionInputOwner=HomeMotionInputOwner(this,s.photo);homeMotionInputKey=s.photo.cacheKey}
+            homeMotionInputOwner
+        }else null
+        homeMotionPreparingState=s;homeMotionRequestedAutoplay=autoplay;homeMotionAutoSource=s.photo?.cacheKey
+        val epoch=homeMotionEpoch
+        homeMotionPrepare=lifecycleScope.launch{
+            var transferred=false
+            try {
+                val job=currentCoroutineContext()
+                withContext(Dispatchers.Default){snapshot.prepare{job.ensureActive()};snapshot.motionInput=motionOwner?.acquire{job.ensureActive()}}
+                ensureActive()
+                if(epoch==homeMotionEpoch && HomeMotionSnapshot.matches(s,model.state.value)){
+                    homeMotionMissingPair=kind==EffectKind.OPTICAL_LEAK && snapshot.motionInput?.file==null && EffectMotionInput.needsPair(s.photo?.originalUri)
+                    homeMotionFrame.post{homePairAccess.requestIfNeeded(homeMotionMissingPair)}
+                }
+                if(epoch!=homeMotionEpoch || homeMotionKind!=kind || !HomeMotionSnapshot.matches(s,model.state.value))return@launch
+                if(retained!=null && homeMotion===retained){
+                    retained.replaceSnapshot(snapshot){applied->
+                        if(epoch==homeMotionEpoch && homeMotion===retained){
+                            homeMotionPreparingState=null
+                            if(applied){homeMotionState=s;if(homeMotionRequestedAutoplay)retained.replay()}
+                            else toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error))
+                        }
+                    }
+                    transferred=true
+                }else {
+                    lateinit var player:HomeMotionPreview
+                    player=HomeMotionPreview(this@MainActivity,kind,snapshot,homeMotionRequestedAutoplay){ok->
+                        if(!ok && homeMotion===player){stopHomeMotion();toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error))}
+                    }
+                    transferred=true;homeMotion=player;homeMotionState=s;homeMotionPreparingState=null;homeMotionPhotoKey=s.photo?.cacheKey
+                    photo.setForeground(false);zoomFrames?.foreground(false);model.setPrewarmForeground(false)
+                    val stage=HomeMotionStage(this@MainActivity,kind,snapshot.result.width,snapshot.result.height,player)
+                    homeMotionStage=stage
+                    homeMotionFrame.addView(stage,1,FrameLayout.LayoutParams(-1,-1).apply{bottomMargin=(photo.layoutParams as FrameLayout.LayoutParams).bottomMargin})
+                    player.isClickable=false
+                }
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){ensureActive();HomeMotionLog.record(HomeMotionEvent.FAIL,kind,HomeMotionReason.UNKNOWN);if(retained==null)stopHomeMotion();toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error))}
+            catch(_:OutOfMemoryError){HomeMotionLog.record(HomeMotionEvent.FAIL,kind,HomeMotionReason.MEMORY);if(retained==null)stopHomeMotion();toast(dev.filmroom.i18n.L10n.text(R.string.toast_memory))}
+            finally{if(!transferred){
+                snapshot.close()
+                if(epoch==homeMotionEpoch){homeMotionPreparingState=null;homeMotionPrepare=null}
+            }}
+        }
+    }
+    private fun stopHomeMotion(){
+        if(homeMotion!=null || homeMotionPrepare?.isActive==true)HomeMotionLog.record(HomeMotionEvent.STOP,homeMotionKind)
+        cancelHomeMotionHold();homeMotionHeld=false;homeMotionRequestedAutoplay=false
+        cancelHomeMotionPreparation();homeMotionState=null;homeMotionPhotoKey=null
+        val old=homeMotion;homeMotion=null;old?.close()
+        homeMotionStage?.let{(it.parent as? ViewGroup)?.removeView(it)};homeMotionStage=null
+        updateHomeMotionButton()
+        if(::photo.isInitialized)photo.setForeground(detailForeground)
+        zoomFrames?.foreground(detailForeground);model.setPrewarmForeground(detailForeground)
+    }
+
     private fun bindZoomFrame(s:EditorUiState) {
         val allowed=model.localDetailEnabled && s.startupReady && s.busy==null && !s.updating && !s.previewRefining &&
             !s.compositionEditing && s.rendered!=null && s.parameters==s.renderedParameters
@@ -418,6 +603,14 @@ class MainActivity:ComponentActivity() {
         }
     }
     private fun bind(s:EditorUiState){
+        if(homeMotionInputKey!=s.photo?.cacheKey){homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null}
+        if(homeMotion!=null && (homeMotionPhotoKey!=s.photo?.cacheKey || s.compare || s.compositionEditing || s.exporting))stopHomeMotion()
+        homeMotionState?.let{old->
+            if(!HomeMotionSnapshot.canRetain(old,s))stopHomeMotion()
+            else if(!HomeMotionSnapshot.matches(old,s))homeMotion?.showCover()
+        }
+        homeMotionPreparingState?.let{if(!HomeMotionSnapshot.matches(it,s))cancelHomeMotionPreparation()}
+        refreshHomeMotion()
         if(s.exporting)window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val hasPhoto=s.photo!=null
         val sourceChanged=hasPhoto && shownSource!=s.photo?.cacheKey
@@ -474,6 +667,7 @@ class MainActivity:ComponentActivity() {
         compare.visibility=if(s.photo==null || loading.visibility==View.VISIBLE)View.GONE else View.VISIBLE
         infoButton.visibility=if(s.photo!=null)compare.visibility else View.GONE
         recipeButton.visibility=compare.visibility
+        homeMotionButton.visibility=compare.visibility;enabled(homeMotionButton,HomeMotionSnapshot.ready(s))
         enabled(compositionButton,s.editable && s.rendered!=null && presentationReady && !s.compare)
         if(landscapeEditor)tools.findViewWithTag<View>("crop-adjust")?.let{enabled(it,compositionButton.isEnabled)}
         if(!s.compositionEditing && selected=="composition")restoreCompositionTool()
@@ -1340,8 +1534,32 @@ class MainActivity:ComponentActivity() {
                 else photoLocationPermission.pickFiles()
             }.setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
     }
-    private fun exportDialog(){if(model.state.value.canExport)exportBackgroundGuidance.offer()}
+    private fun exportDialog(){if(!homeLiveChecking && model.state.value.canExport)exportBackgroundGuidance.offer()}
     private fun exportOptionsDialog(){
+        homeMotionKind?.let { kind ->
+            // Snapshot the chosen effect in the job; later UI changes must not change this export.
+            if(homePairAccess.busy){exportBackgroundGuidance.finish();return}
+            if(kind==EffectKind.OPTICAL_LEAK && homePairAccess.requireCompanion(homeMotionMissingPair)){exportBackgroundGuidance.finish();return}
+            if(homeLiveChecking){exportBackgroundGuidance.finish();return}
+            val snapshot=model.state.value
+            if(!snapshot.canExport){exportBackgroundGuidance.finish();return}
+            homeLiveChecking=true
+            lifecycleScope.launch {
+                try {
+                    val support=EffectLivePhotoExporter.preflight(this@MainActivity)
+                    ensureActive()
+                    if(support.unsupported){toast(getString(R.string.home_live_unsupported));return@launch}
+                    val current=model.state.value
+                    if(current.photo!==snapshot.photo || current.parameters!=snapshot.parameters || !current.canExport){
+                        toast(getString(R.string.home_live_changed));return@launch
+                    }
+                    model.exportLive(kind)
+                } catch(e:CancellationException){throw e}
+                catch(_:Exception){toast(getString(R.string.home_live_check_failed))}
+                finally{homeLiveChecking=false;exportBackgroundGuidance.finish()}
+            }
+            return
+        }
         val s=model.state.value;val p=s.photo
         if(p==null || !s.canExport){exportBackgroundGuidance.finish();return}
         var edge=2560

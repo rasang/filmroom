@@ -82,7 +82,7 @@ class PublicationCoordinator(private val directory: File, private val sink: Medi
         } else { r.state="ROLLBACK_FAILED"; save(r) }
         return failed
     }
-    fun publish(asset:PackagedAsset,relativePath:String="DCIM/Filmroom/",checkActive:()->Unit={}):PublishedAsset = locked(asset.id) {
+    fun publish(asset:PackagedAsset,relativePath:String="DCIM/Filmroom/",checkActive:()->Unit={},onPrepared:(List<String>)->Unit={}):PublishedAsset = locked(asset.id) {
         validatePath(relativePath); checkActive()
         var old=load(asset.id)
         if(old!=null && old.state=="COMMITTED") {
@@ -102,6 +102,7 @@ class PublicationCoordinator(private val directory: File, private val sink: Medi
                 sink.copyAndVerify(r.rows[i],part.file,part.sha256,checkActive)
             }
             r.state="READY"; save(r)
+            onPrepared(r.rows.toList())
             for(id in r.rows) { checkActive(); sink.publish(id) }
             checkActive(); r.state="COMMITTED"; save(r)
             PublishedAsset(asset.id,r.rows.toList())

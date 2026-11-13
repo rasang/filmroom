@@ -206,4 +206,33 @@ class ExportMediaDeletionCoordinatorHostTest {
         assertTrue(p.rows.containsKey(Uri.parse(output)))
     }
 
+    @Test fun livePairImageAndVideoDeleteOnlyExactStoredMembers() = runBlocking {
+        val (p,c,_) = setup()
+        val image=Uri.parse(output);val video=Uri.parse("content://media/external_primary/video/media/77")
+        val stem="Filmroom_0123456789abcdef0123456789abcdef_MP"
+        p.rows[image]!!.put("relative_path","DCIM/Filmroom/");p.rows[image]!!.put("_display_name","$stem.jpeg")
+        p.rows[video]=ContentValues(p.rows[image]).apply{put("_id",77);put("_display_name","$stem.mp4")}
+        assertEquals(ExportMediaDeletionResult.Deleted,c.delete(image.toString(),null,"$stem.jpeg",true))
+        assertEquals(ExportMediaDeletionResult.Deleted,c.delete(video.toString(),null,"$stem.mp4",true))
+        assertEquals(listOf(image,video),p.deleted)
+    }
+    @Test fun liveVideoRequiresExplicitLiveScopeAndExactIdentity() = runBlocking {
+        val (p,c,_) = setup()
+        val video=Uri.parse("content://media/external_primary/video/media/77")
+        val name="Filmroom_0123456789abcdef0123456789abcdef_MP.mp4"
+        p.rows[video]=ContentValues(p.rows[Uri.parse(output)]).apply{put("_id",77);put("_display_name",name);put("relative_path","DCIM/Filmroom/")}
+        assertTrue(c.delete(video.toString(),stamp,name) is ExportMediaDeletionResult.Failed)
+        assertTrue(c.delete(video.toString(),null,name.replace("01234567","aaaaaaaa"),true) is ExportMediaDeletionResult.Failed)
+        p.rows[video]!!.put("relative_path","DCIM/Camera/")
+        assertTrue(c.delete(video.toString(),null,name,true) is ExportMediaDeletionResult.Failed)
+        assertTrue(p.deleted.isEmpty())
+    }
+    @Test fun liveConsentResumeUsesVideoUriWithoutDeletingAgain() = runBlocking {
+        val (p,c,_) = setup(30)
+        val video="content://media/external_primary/video/media/77"
+        val name="Filmroom_0123456789abcdef0123456789abcdef_MP.mp4"
+        assertEquals(ExportMediaDeletionResult.Deleted,c.resume(video,null,name,ExportMediaDeletionConsentKind.DELETE_REQUEST,true,true))
+        assertTrue(p.deleted.isEmpty())
+    }
+
 }

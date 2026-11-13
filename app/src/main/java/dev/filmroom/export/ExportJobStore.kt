@@ -32,6 +32,10 @@ data class ExportJob(
     val archivedHistory:Boolean=false,
     val archivedSourceState:String?=null,
     val originalUri:String?=null,
+    /** Frozen direct-Live choice; null means an ordinary/legacy still export. */
+    val liveEffect:String?=null,
+    val livePublishedUris:List<String> = emptyList(),
+    val livePublishedNames:List<String> = emptyList(),
 ) {
     /** Render app-owned messages in the current language; legacy prose is diagnostics only. */
     val localizedMessage:String? get() {
@@ -56,6 +60,12 @@ data class ExportJob(
     val outputWidth get()=border?.outputWidth ?: crop?.outputWidth ?: width
     val outputHeight get()=border?.outputHeight ?: crop?.outputHeight ?: height
     init {
+        require(liveEffect == null || liveEffect in setOf("LIGHT_TABLE", "OPTICAL_LEAK"))
+        require(livePublishedUris.size <= 2 && livePublishedUris.distinct().size == livePublishedUris.size)
+        require(livePublishedUris.isEmpty() || liveEffect != null)
+        require(livePublishedUris.all { it.startsWith("content://media/") })
+        require(livePublishedNames.isEmpty() || livePublishedNames.size == livePublishedUris.size)
+        require(livePublishedNames.all { it.isNotBlank() && it.length <= 255 && !it.contains('/') && !it.contains('\\') })
         require(!parameters.imprint.enabled || border!=null || crop!=null){"Imprint requires frozen output geometry"}
         val frozen2302=border?.let{dev.filmroom.border.BorderCatalog.isFrozen2302Frame(it,parameters.filmStock,parameters.paperStock,parameters.outputRoute)}==true
         require(crop==null || (border==null && !parameters.filmBorder && crop.sourceWidth==width && crop.sourceHeight==height &&
@@ -86,7 +96,7 @@ class ExportJobStore(val root:File) {
     private val historyJournal=ExportHistoryJournal(File(root,".history-operations"))
     private val historyStates=setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED)
     private fun fingerprint(job:ExportJob)=java.security.MessageDigest.getInstance("SHA-256").digest(encode(job.copy(completionViewed=false)).toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it)}
-    @Synchronized fun historySnapshot(ids:Set<String>):List<ExportHistorySnapshot> = mutable.value.filter{it.id in ids && it.state in historyStates}.map{ExportHistorySnapshot(it.id,fingerprint(it),it.state,it.mediaUri,it.exportMillis,it.outputName)}
+    @Synchronized fun historySnapshot(ids:Set<String>):List<ExportHistorySnapshot> = mutable.value.filter{it.id in ids && it.state in historyStates}.map{ExportHistorySnapshot(it.id,fingerprint(it),it.state,it.mediaUri,it.exportMillis,it.outputName,livePublishedUris=it.livePublishedUris,livePublishedNames=it.livePublishedNames)}
     @Synchronized fun historyReserved(id:String)=id in historyReservations
     @Synchronized fun historyMatches(snapshot:ExportHistorySnapshot):Boolean=get(snapshot.id)?.let{it.state in historyStates && fingerprint(it)==snapshot.fingerprint}==true
     @Synchronized fun beginHistory(targets:List<ExportHistorySnapshot>,deletePhotos:Boolean):ExportHistoryOperation {
@@ -265,7 +275,9 @@ class ExportJobStore(val root:File) {
         private fun validId(id:String)=runCatching{UUID.fromString(id).toString()==id}.getOrDefault(false)
         private fun encode(j:ExportJob)=JSONObject().apply {
             put("originalUri",j.originalUri);put("outputName",j.outputName);put("border",j.border?.json());put("crop",j.crop?.json());put("photoMetadata",j.photoMetadata);put("exportMillis",j.exportMillis);put("metadataWarning",j.metadataWarning);
-            put("completionViewed",j.completionViewed);put("version",if(j.parameters.imprint.enabled)7 else if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3});put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
+            put("liveEffect",j.liveEffect);if(j.livePublishedUris.isNotEmpty())put("livePublishedUris",org.json.JSONArray(j.livePublishedUris));if(j.livePublishedNames.isNotEmpty())put("livePublishedNames",org.json.JSONArray(j.livePublishedNames))
+            val geometrySchema=if(j.parameters.imprint.enabled)7 else if(j.border?.geometryVersion==5)6 else if(j.border?.appearance!=null)5 else if(j.crop!=null || j.border?.geometryVersion==3)4 else when(j.border?.geometryVersion){null->1;1->2;else->3}
+            put("completionViewed",j.completionViewed);put("version",if(j.liveEffect!=null)8 else geometrySchema);if(j.liveEffect!=null)put("geometrySchema",geometrySchema);put("id",j.id);put("createdAt",j.createdAt);put("parameters",j.parameters.json("export"));put("width",j.width);put("height",j.height)
             put("format",j.format.name);put("quality",j.quality);put("state",j.state.name);put("stage",j.progress.stage);put("done",j.progress.done);put("total",j.progress.total);put("measuredProgress",j.progress.measured);put("gpuProgress",j.progress.gpu?.toJson());put("visualProgress",j.progress.visual?.let{JSONObject().put("stage",it.stage).put("percent",it.percent)})
             put("mediaUri",j.mediaUri);put("message",j.message);put("messageUi",j.messageUi?.toJson());put("inputReady",j.inputReady);put("inputKind",j.inputKind);put("sourceWidth",j.sourceWidth);put("sourceHeight",j.sourceHeight);put("maxEdge",j.maxEdge);put("requestGeneration",j.requestGeneration);put("failure",j.failure.name)
         }.toString()
@@ -276,8 +288,12 @@ class ExportJobStore(val root:File) {
             return if(stage in 1..6 && (percent==null || percent in 0..100))dev.filmroom.engine.ExportVisualProgress(stage,percent)else null
         }
         private fun decode(text:String)=JSONObject(text).let { j ->
-            val version=j.getInt("version")
+            val storedVersion=j.getInt("version")
+            require(storedVersion in 1..8)
+            val version=if(storedVersion==8)j.getInt("geometrySchema")else storedVersion
             require(version in 1..7)
+            val liveEffect=j.optString("liveEffect").takeIf{it.isNotEmpty()}
+            require((storedVersion==8)==(liveEffect!=null))
             // A legacy app must reject framed jobs rather than silently export without their border.
             val border=j.optString("border").takeIf{it.isNotEmpty()}?.let(BorderSnapshot::fromJson)
             val crop=j.optString("crop").takeIf{it.isNotEmpty()}?.let(CropSnapshot::fromJson)
@@ -299,7 +315,7 @@ class ExportJobStore(val root:File) {
                 j.optString("photoMetadata").takeIf{it.isNotEmpty()}?.let{dev.filmroom.io.PhotoMetadata.fromJson(it).toJson()},
                 if(j.has("exportMillis"))j.getLong("exportMillis").takeIf{it>0}else null,
                 j.optString("metadataWarning").takeIf{it.isNotEmpty()}?.take(256),
-                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")),j.optString("outputName").takeIf{it.isNotEmpty()},originalUri=dev.filmroom.io.OriginalPhotoUri.sanitize(j.optString("originalUri").takeIf{it.isNotEmpty()}))
+                border,crop,UiMessage.fromJson(j.optJSONObject("messageUi")),j.optString("outputName").takeIf{it.isNotEmpty()},originalUri=dev.filmroom.io.OriginalPhotoUri.sanitize(j.optString("originalUri").takeIf{it.isNotEmpty()}),liveEffect=liveEffect,livePublishedUris=j.optJSONArray("livePublishedUris")?.let{a->(0 until a.length()).map{a.getString(it)}} ?: emptyList(),livePublishedNames=j.optJSONArray("livePublishedNames")?.let{a->(0 until a.length()).map{a.getString(it)}} ?: emptyList())
         }
     }
 }

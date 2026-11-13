@@ -52,10 +52,10 @@ class ExportMediaDeletionCoordinator internal constructor(
         },
     )
 
-    suspend fun delete(outputUri: String, expectedExportMillis: Long?, expectedDisplayName: String?): ExportMediaDeletionResult = withContext(Dispatchers.IO) {
+    suspend fun delete(outputUri: String, expectedExportMillis: Long?, expectedDisplayName: String?, liveAsset:Boolean=false): ExportMediaDeletionResult = withContext(Dispatchers.IO) {
         coroutineContext.ensureActive()
-        val uri = exactOutputUri(outputUri) ?: return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
-        deleteChecked(uri, expectedExportMillis, expectedDisplayName, allowConsent = true)
+        val uri = exactOutputUri(outputUri,liveAsset) ?: return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
+        deleteChecked(uri, expectedExportMillis, expectedDisplayName, allowConsent = true,liveAsset=liveAsset)
     }
 
     /**
@@ -63,16 +63,16 @@ class ExportMediaDeletionCoordinator internal constructor(
      * A cancelled prompt never triggers a query or deletion. A lost callback must not be inferred
      * as approval after restart: leave the record and require a fresh user action.
      */
-    suspend fun resume(outputUri: String, expectedExportMillis: Long?, expectedDisplayName: String?, consentKind: ExportMediaDeletionConsentKind, granted: Boolean): ExportMediaDeletionResult =
+    suspend fun resume(outputUri: String, expectedExportMillis: Long?, expectedDisplayName: String?, consentKind: ExportMediaDeletionConsentKind, granted: Boolean, liveAsset:Boolean=false): ExportMediaDeletionResult =
         withContext(Dispatchers.IO) {
             coroutineContext.ensureActive()
             if (!granted) return@withContext failed(ExportMediaDeletionFailure.CANCELLED)
-            val uri = exactOutputUri(outputUri) ?: return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
+            val uri = exactOutputUri(outputUri,liveAsset) ?: return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
             when (consentKind) {
                 ExportMediaDeletionConsentKind.DELETE_REQUEST -> {
                     if (sdk < 30) return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
                     // Android completes the delete before RESULT_OK. Never issue another delete here.
-                    when (inspect(uri, expectedExportMillis, expectedDisplayName)) {
+                    when (inspect(uri, expectedExportMillis, expectedDisplayName,liveAsset)) {
                         Inspection.Missing -> ExportMediaDeletionResult.Deleted
                         is Inspection.Owned -> failed(ExportMediaDeletionFailure.DELETE_FAILED)
                         is Inspection.Failure -> failed(ExportMediaDeletionFailure.INACCESSIBLE)
@@ -80,13 +80,13 @@ class ExportMediaDeletionCoordinator internal constructor(
                 }
                 ExportMediaDeletionConsentKind.RECOVERABLE_WRITE -> {
                     if (sdk != 29) return@withContext failed(ExportMediaDeletionFailure.INVALID_URI)
-                    deleteChecked(uri, expectedExportMillis, expectedDisplayName, allowConsent = false)
+                    deleteChecked(uri, expectedExportMillis, expectedDisplayName, allowConsent = false,liveAsset=liveAsset)
                 }
             }
         }
 
-    private suspend fun deleteChecked(uri: Uri, expectedExportMillis: Long?, expectedDisplayName: String?, allowConsent: Boolean): ExportMediaDeletionResult {
-        val identity = when (val inspection = inspect(uri, expectedExportMillis, expectedDisplayName)) {
+    private suspend fun deleteChecked(uri: Uri, expectedExportMillis: Long?, expectedDisplayName: String?, allowConsent: Boolean,liveAsset:Boolean=false): ExportMediaDeletionResult {
+        val identity = when (val inspection = inspect(uri, expectedExportMillis, expectedDisplayName,liveAsset)) {
             Inspection.Missing -> return ExportMediaDeletionResult.Missing
             is Inspection.Failure -> return failed(inspection.reason)
             is Inspection.Owned -> inspection
@@ -99,7 +99,7 @@ class ExportMediaDeletionCoordinator internal constructor(
                 "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
                 arrayOf(packageName, identity.name, identity.path))
             if (count == 1) ExportMediaDeletionResult.Deleted
-            else if (count == 0 && inspect(uri, expectedExportMillis, expectedDisplayName) == Inspection.Missing) ExportMediaDeletionResult.Missing
+            else if (count == 0 && inspect(uri, expectedExportMillis, expectedDisplayName,liveAsset) == Inspection.Missing) ExportMediaDeletionResult.Missing
             else failed(ExportMediaDeletionFailure.DELETE_FAILED)
         } catch (error: SecurityException) {
             if (!allowConsent) return failed(ExportMediaDeletionFailure.INACCESSIBLE)
@@ -108,7 +108,7 @@ class ExportMediaDeletionCoordinator internal constructor(
                     sdk >= 30 -> {
                         // Recheck immediately before handing the exact URI to the OS. The OS owns
                         // the consent UI/deletion; its request API has no identity-predicate parameter.
-                        if (inspect(uri, expectedExportMillis, expectedDisplayName) != identity)
+                        if (inspect(uri, expectedExportMillis, expectedDisplayName,liveAsset) != identity)
                             failed(ExportMediaDeletionFailure.UNVERIFIED_IDENTITY)
                         else ExportMediaDeletionResult.NeedsConsent(requestDelete(uri), ExportMediaDeletionConsentKind.DELETE_REQUEST)
                     }
@@ -136,7 +136,7 @@ class ExportMediaDeletionCoordinator internal constructor(
         data class Failure(val reason: ExportMediaDeletionFailure) : Inspection
     }
 
-    private fun inspect(uri: Uri, expectedExportMillis: Long?, expectedDisplayName: String?): Inspection = try {
+    private fun inspect(uri: Uri, expectedExportMillis: Long?, expectedDisplayName: String?,liveAsset:Boolean=false): Inspection = try {
         if (sdk < 29) Inspection.Failure(ExportMediaDeletionFailure.UNVERIFIED_IDENTITY)
         else resolver.query(uri, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.OWNER_PACKAGE_NAME,
             MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -147,11 +147,11 @@ class ExportMediaDeletionCoordinator internal constructor(
             val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH))
             val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME))
             val downloads = uri.pathSegments[1] == "downloads"
-            val expectedPath = if (downloads) "Download/暗房" else "Pictures/暗房"
-            val namePattern = if (downloads) DOWNLOAD_NAME else IMAGE_NAME
+            val expectedPath = if(liveAsset) "DCIM/Filmroom" else if (downloads) "Download/暗房" else "Pictures/暗房"
+            val namePattern = if(liveAsset) { if(uri.pathSegments[1]=="video") LIVE_VIDEO_NAME else LIVE_IMAGE_NAME } else if (downloads) DOWNLOAD_NAME else IMAGE_NAME
             if (cursor.count != 1 || id.toString() != uri.lastPathSegment || owner != packageName ||
                 path?.trimEnd('/') != expectedPath || name == null || name != expectedDisplayName || !namePattern.matches(name) ||
-                expectedExportMillis == null || expectedExportMillis <= 0 || !name.matches(Regex(".+_${expectedExportMillis}_[0-9a-f]{6}\\.[a-z0-9]+")))
+                (!liveAsset && (expectedExportMillis == null || expectedExportMillis <= 0 || !name.matches(Regex(".+_${expectedExportMillis}_[0-9a-f]{6}\\.[a-z0-9]+")))))
                 Inspection.Failure(ExportMediaDeletionFailure.UNVERIFIED_IDENTITY)
             else Inspection.Owned(name, checkNotNull(path))
         } ?: Inspection.Failure(ExportMediaDeletionFailure.INACCESSIBLE)
@@ -162,19 +162,22 @@ class ExportMediaDeletionCoordinator internal constructor(
     }
 
     companion object {
+        private val LIVE_IMAGE_NAME = Regex("Filmroom_[0-9a-f]{32}_MP\\.(jpg|jpeg)")
+        private val LIVE_VIDEO_NAME = Regex("Filmroom_[0-9a-f]{32}_MP\\.mp4")
         private val IMAGE_NAME = Regex(".+_[0-9]+_[0-9a-f]{6}\\.(jpg|png)")
         private val DOWNLOAD_NAME = Regex(".+_[0-9]+_[0-9a-f]{6}\\.tif")
         private fun failed(reason: ExportMediaDeletionFailure) = ExportMediaDeletionResult.Failed(reason)
 
-        /** Explicitly support only the two collections actually written by PhotoRepository. */
-        internal fun exactOutputUri(raw: String): Uri? {
+        /** Only app-written collections: static images/downloads, plus videos for explicit Live assets. */
+        internal fun exactOutputUri(raw: String,liveAsset:Boolean=false): Uri? {
             val uri = Uri.parse(raw)
             if (uri.scheme != "content" || uri.encodedAuthority != MediaStore.AUTHORITY ||
                 uri.query != null || uri.fragment != null) return null
             val parts = uri.pathSegments
             if (parts.firstOrNull() != MediaStore.VOLUME_EXTERNAL_PRIMARY) return null
             val item = (parts.size == 4 && parts[1] == "images" && parts[2] == "media") ||
-                (parts.size == 3 && parts[1] == "downloads")
+                (!liveAsset && parts.size == 3 && parts[1] == "downloads") ||
+                (liveAsset && parts.size == 4 && parts[1] == "video" && parts[2] == "media")
             if (!item || parts.last().toLongOrNull()?.let { it > 0 && it.toString() == parts.last() } != true) return null
             // Reject encoded separators, duplicate/trailing slashes and alternate spellings.
             if (uri.encodedPath != "/" + parts.joinToString("/")) return null

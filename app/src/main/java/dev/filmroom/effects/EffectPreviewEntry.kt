@@ -23,7 +23,7 @@ import java.util.UUID
 internal class PreparedEffectPhoto(val record:ExportJob,val input:Bitmap,val output:Bitmap,
     val composition:EffectSourceComposition?,val readout:EffectCameraReadout,val motionFile:File?):AutoCloseable {
     fun matches(other:ExportJob?)=other!=null && record.id==other.id && record.originalUri==other.originalUri &&
-        record.mediaUri==other.mediaUri && record.crop==other.crop && record.border==other.border && record.photoMetadata==other.photoMetadata &&
+        record.mediaUri==other.mediaUri && record.liveEffect==other.liveEffect && record.livePublishedUris==other.livePublishedUris && record.crop==other.crop && record.border==other.border && record.photoMetadata==other.photoMetadata &&
         record.parameters==other.parameters && record.width==other.width && record.height==other.height &&
         record.sourceWidth==other.sourceWidth && record.sourceHeight==other.sourceHeight && record.state==other.state
     override fun close(){motionFile?.delete();if(!input.isRecycled)input.recycle();if(output!==input&&!output.isRecycled)output.recycle()}
@@ -109,7 +109,7 @@ class EffectPreviewEntry(private val activity:ComponentActivity,private val job:
             var input:Bitmap?=null;var output:Bitmap?=null;var motion:File?=null
             try {
                 log.phase(EffectExportStep.DECODE_RESULT)
-                output=decode(context,requireNotNull(record.mediaUri),log,allowRawFallback=false);ensureActive()
+                output=decode(context,requireNotNull(record.mediaUri),log,allowRawFallback=false,sourceRecord=record);ensureActive()
                 log.phase(EffectExportStep.DECODE_SOURCE)
                 val raw=decode(context,requireNotNull(record.originalUri),log,sourceRecord=record)
                 log.phase(EffectExportStep.COMPOSE_SOURCE)

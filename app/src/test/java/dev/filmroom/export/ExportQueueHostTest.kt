@@ -123,6 +123,115 @@ class ExportQueueHostTest {
         val raw=File(app.cacheDir,"queue-source.rgb").apply{writeBytes(ByteArray(48))}
         return PhotoSource(original,"private","image/dng",2,2,6,linearFile=raw)
     }
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun directLiveFreezesIntentPersistsCleanAndNeverPublishesAnOrdinaryPhoto()=runBlocking {
+        val app=preparedContext();val processor=Processor().apply{release.complete(Unit)}
+        var published=0
+        val fake=object:DirectLiveProcessing {
+            override suspend fun recover(context:android.content.Context) {}
+            override suspend fun saveClean(context:android.content.Context,dir:File,job:ExportJob,linear:File,onProgress:(Long,Long)->Unit)=DirectLiveExport.saveClean(context,dir,job,linear,onProgress)
+            override suspend fun publish(context:android.content.Context,job:ExportJob,onProgress:(Float)->Unit,onPrepared:(List<android.net.Uri>,List<String>)->Unit,onCommitted:(dev.filmroom.livephoto.ConversionResult)->Unit) {
+                assertEquals("LIGHT_TABLE",job.liveEffect)
+                assertEquals(1.25f,job.parameters.filmExposure)
+                assertNotNull(CleanResultStore.resolve(context,job))
+                // No ordinary output existed before entering the Live publisher.
+                assertNull(job.mediaUri)
+                published++
+                onPrepared(listOf(android.net.Uri.parse("content://media/external/images/media/501")),listOf("Filmroom_01234567890123456789012345678901_MP.jpg"))
+                onProgress(1f)
+            }
+        }
+        val queue=ExportQueue(app,processor,liveProcessing=fake)
+        val item=queue.enqueue(source(app),EditorState().copy(filmExposure=1.25f),ExportFormat.PNG,null,100,liveEffect=dev.filmroom.effects.EffectKind.LIGHT_TABLE)
+        assertEquals("LIGHT_TABLE",ExportJobStore(File(app.filesDir,"export-jobs")).get(item.id)!!.liveEffect)
+        queue.runPending{}
+        val done=queue.store.get(item.id)!!
+        assertEquals(ExportJobState.COMPLETED,done.state);assertEquals(1,published)
+        assertEquals("content://media/external/images/media/501",done.mediaUri)
+        assertNotNull(CleanResultStore.resolve(app,done))
+        assertNotNull(CleanResultStore.resolve(app,ExportJobStore(File(app.filesDir,"export-jobs")).get(item.id)!!))
+        queue.retry(item.id);queue.runPending{};assertEquals(1,published)
+    }
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun directLivePublicationFailureDoesNotReportSavedPhoto()=runBlocking {
+        val app=preparedContext();val processor=Processor().apply{release.complete(Unit)}
+        val fake=object:DirectLiveProcessing {
+            override suspend fun recover(context:android.content.Context) {}
+            override suspend fun saveClean(context:android.content.Context,dir:File,job:ExportJob,linear:File,onProgress:(Long,Long)->Unit)=DirectLiveExport.saveClean(context,dir,job,linear,onProgress)
+            override suspend fun publish(context:android.content.Context,job:ExportJob,onProgress:(Float)->Unit,onPrepared:(List<android.net.Uri>,List<String>)->Unit,onCommitted:(dev.filmroom.livephoto.ConversionResult)->Unit) { error("codec failed") }
+        }
+        val queue=ExportQueue(app,processor,liveProcessing=fake)
+        val item=queue.enqueue(source(app),EditorState(),ExportFormat.PNG,null,100,liveEffect=dev.filmroom.effects.EffectKind.OPTICAL_LEAK)
+        queue.runPending{}
+        val failed=queue.store.get(item.id)!!
+        assertEquals(ExportJobState.FAILED,failed.state);assertNull(failed.mediaUri)
+        assertNotNull(CleanResultStore.resolve(app,failed))
+        queue.cancel(item.id)
+        assertNull(CleanResultStore.resolve(app,queue.store.get(item.id)!!))
+    }
+    private class CancelledLivePublisher(private val partial:Boolean,private val cancelAfterPublish:Boolean=true):DirectLiveProcessing {
+        var calls=0
+        var beforeCancel:()->Unit={}
+        override suspend fun recover(context:android.content.Context) {}
+        override suspend fun saveClean(context:android.content.Context,dir:File,job:ExportJob,linear:File,onProgress:(Long,Long)->Unit)=DirectLiveExport.saveClean(context,dir,job,linear,onProgress)
+        override suspend fun publish(context:android.content.Context,job:ExportJob,onProgress:(Float)->Unit,onPrepared:(List<android.net.Uri>,List<String>)->Unit,onCommitted:(dev.filmroom.livephoto.ConversionResult)->Unit) {
+            calls++
+            val names=listOf("Filmroom_01234567890123456789012345678901_MP.jpg","Filmroom_01234567890123456789012345678901_MP.mp4")
+            val uris=names.mapIndexed { index,name ->
+                requireNotNull(context.contentResolver.insert(if(index==0)MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    android.content.ContentValues().apply{put(MediaStore.MediaColumns.IS_PENDING,0);put(MediaStore.MediaColumns.DISPLAY_NAME,name)}))
+            }
+            onPrepared(uris,names)
+            if(partial)context.contentResolver.delete(uris.last(),null,null)
+            beforeCancel()
+            if(cancelAfterPublish)throw CancellationException("after publication")
+        }
+    }
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun cancellationAfterDurableLivePairKeepsSuccessAndCleanStill()=runBlocking {
+        val app=preparedContext();val fake=CancelledLivePublisher(false)
+        val queue=ExportQueue(app,Processor().apply{release.complete(Unit)},liveProcessing=fake)
+        val item=queue.enqueue(source(app),EditorState(),ExportFormat.PNG,null,100,liveEffect=dev.filmroom.effects.EffectKind.LIGHT_TABLE)
+        fake.beforeCancel={queue.store.change(item.id){it.copy(state=ExportJobState.CANCELLED)}}
+        queue.runPending{}
+        val done=queue.store.get(item.id)!!
+        assertEquals(ExportJobState.COMPLETED,done.state);assertEquals(2,done.livePublishedUris.size)
+        assertNotNull(CleanResultStore.resolve(app,done));queue.retry(item.id);queue.runPending{};assertEquals(1,fake.calls)
+    }
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun partialLivePairIsNotSuccessAndCannotRetryIntoDuplicate()=runBlocking {
+        val app=preparedContext();val fake=CancelledLivePublisher(true)
+        val queue=ExportQueue(app,Processor().apply{release.complete(Unit)},liveProcessing=fake)
+        val item=queue.enqueue(source(app),EditorState(),ExportFormat.PNG,null,100,liveEffect=dev.filmroom.effects.EffectKind.LIGHT_TABLE)
+        queue.runPending{}
+        val stopped=queue.store.get(item.id)!!
+        assertEquals(ExportJobState.PAUSED,stopped.state);assertEquals(ExportJobFailure.RECOVERY_INVALID,stopped.failure)
+        assertFalse(stopped.canRetry);assertNotNull(CleanResultStore.resolve(app,stopped))
+        queue.retry(item.id);queue.runPending{};assertEquals(1,fake.calls)
+    }
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun cancellationDuringFinalThumbnailCannotDeleteCommittedLiveCleanStill()=runBlocking {
+        val app=preparedContext();val fake=CancelledLivePublisher(false,false)
+        lateinit var queue:ExportQueue
+        var thumbnailCalls=0
+        var stateAtThumbnail:ExportJobState?=null
+        var cancelReturned=false
+        queue=ExportQueue(app,Processor().apply{release.complete(Unit)},liveProcessing=fake,finalThumbnailWriter={_,dir->
+            thumbnailCalls++
+            stateAtThumbnail=queue.store.get(dir.name)!!.state
+            runBlocking{queue.cancel(dir.name)}
+            cancelReturned=true
+        })
+        val item=queue.enqueue(source(app),EditorState(),ExportFormat.PNG,null,100,liveEffect=dev.filmroom.effects.EffectKind.LIGHT_TABLE)
+        queue.runPending{}
+        assertEquals(1,thumbnailCalls)
+        assertEquals(ExportJobState.COMPLETED,stateAtThumbnail)
+        assertTrue(cancelReturned)
+        val done=queue.store.get(item.id)!!
+        assertEquals(ExportJobState.COMPLETED,done.state)
+        assertNotNull(CleanResultStore.resolve(app,done))
+        assertNotNull(CleanResultStore.resolve(app,ExportJobStore(File(app.filesDir,"export-jobs")).get(item.id)!!))
+    }
     @Test fun linearSourceMetadataSurvivesDeletionRestartAndRetry()=runBlocking {
         val app=preparedContext();val original=source(app)
         val metadata=PhotoMetadata.fromAttributes(mapOf("Make" to "RAW camera","LensModel" to "Lens","DateTimeOriginal" to "2001:02:03 04:05:06","OffsetTimeOriginal" to "+05:30","GPSLatitude" to "30/1,20/1,1/2"))

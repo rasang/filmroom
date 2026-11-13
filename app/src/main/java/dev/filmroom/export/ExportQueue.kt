@@ -53,7 +53,7 @@ private class NativeExportProcessing(context:Context):ExportProcessing {
     override fun cancel()=engine.cancel()
 }
 enum class ExportRunOutcome { DRAINED, BLOCKED_STARTUP_RECOVERY }
-class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog,private val repository:PhotoRepository=PhotoRepository(context),private val sourceHashNanoTime:()->Long=System::nanoTime) {
+class ExportQueue internal constructor(private val context:Context,private val processing:ExportProcessing=NativeExportProcessing(context),private val startupGate:StartupRecoveryGate?=(context.applicationContext as? FilmroomApplication)?.recoveryGate,private val beforeCapture:suspend (ExportJob)->Unit={},private val borderProvider:BorderProvider=BorderCatalog,private val repository:PhotoRepository=PhotoRepository(context),private val sourceHashNanoTime:()->Long=System::nanoTime,private val liveProcessing:DirectLiveProcessing=DirectLiveExport,private val finalThumbnailWriter:((String,File)->Unit)?=null) {
     val store=ExportJobStore(File(context.filesDir,"export-jobs"))
     val jobs=store.jobs
     val startupRecoveryReady get()=startupGate==null || startupGate.state.value is StartupRecoveryGate.State.Ready
@@ -69,7 +69,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
 
     private val captures=java.util.concurrent.ConcurrentHashMap<String,Deferred<ExportJob>>()
     private val captureScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
-    suspend fun enqueue(source:PhotoSource,parameters:EditorState,format:ExportFormat,maxEdge:Int?,quality:Int,thumbnail:Bitmap?=null,onAccepted:(ExportJob)->Unit={},onEnqueued:(ExportJob)->Unit={}):ExportJob=withContext(Dispatchers.IO) {
+    suspend fun enqueue(source:PhotoSource,parameters:EditorState,format:ExportFormat,maxEdge:Int?,quality:Int,thumbnail:Bitmap?=null,onAccepted:(ExportJob)->Unit={},onEnqueued:(ExportJob)->Unit={},liveEffect:dev.filmroom.effects.EffectKind?=null):ExportJob=withContext(Dispatchers.IO) {
         require(quality in 1..100)
         val size=if(maxEdge==null)PhotoLimits.Dimensions(source.originalWidth,source.originalHeight)else source.outputSize(maxEdge)
         val border=if(parameters.filmBorder)borderProvider.snapshot(dev.filmroom.border.BorderCatalog.frameStock(parameters.filmStock,parameters.paperStock,parameters.outputRoute),size.width,size.height,source.originalWidth,source.originalHeight,parameters.composition,parameters.negativeWhiteHoles,parameters.outputRoute,parameters.effectiveMediumFormat,parameters.effectiveMediumPortrait)else null
@@ -91,7 +91,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
             val dir=store.directory(id);check(dir.mkdirs())
             val snapshot=File(dir,when(kind){"LINEAR"->"input.rgb";"LINEAR_SOURCE"->"source.rgb";else->"source.image"})
             var durable=false;var accepted=false
-            val draft=ExportJob(id,maxOf(System.currentTimeMillis(),(jobs.value.maxOfOrNull{it.createdAt} ?: 0L)+1),parameters.copy(),size.width,size.height,format,quality,state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_544c342feaf0),messageUi=UiMessage.of(R.string.text_544c342feaf0),inputReady=false,inputKind=kind,sourceWidth=source.originalWidth,sourceHeight=source.originalHeight,maxEdge=maxEdge,requestGeneration=generation,photoMetadata=source.photoMetadata.toJson(),metadataWarning=source.photoMetadata.warning,border=border,crop=crop,originalUri=source.originalUri)
+            val draft=ExportJob(id,maxOf(System.currentTimeMillis(),(jobs.value.maxOfOrNull{it.createdAt} ?: 0L)+1),parameters.copy(),size.width,size.height,format,quality,state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_544c342feaf0),messageUi=UiMessage.of(R.string.text_544c342feaf0),inputReady=false,inputKind=kind,sourceWidth=source.originalWidth,sourceHeight=source.originalHeight,maxEdge=maxEdge,requestGeneration=generation,photoMetadata=source.photoMetadata.toJson(),metadataWarning=source.photoMetadata.warning,border=border,crop=crop,originalUri=source.originalUri,liveEffect=liveEffect?.name)
             try {
                 store.update(draft);accepted=true;runCatching{onAccepted(draft)};beforeCapture(draft)
                 val bytes=opened.channel.size()
@@ -242,8 +242,12 @@ class ExportQueue internal constructor(private val context:Context,private val p
             }
             if(!accepted)return
             previewAttempt?.let{negativeDiagnostics=NegativePreviewDiagnostics(dir,it)}
-            val existing=initial.mediaUri?.let{repository.committedExport(it,initial.outputWidth,initial.outputHeight,initial.format)}
+            if(initial.liveEffect!=null) {
+                liveProcessing.recover(context)
+            }
+            val existing=committedOutput(initial)
             if(existing==null) {
+                if(initial.liveEffect!=null)update{it.copy(mediaUri=null,livePublishedUris=emptyList(),livePublishedNames=emptyList())}
                 val input=File(dir,"input.rgb")
                 // No framed result is ever a resume checkpoint or a source for another border.
                 for(name in listOf("border-output.rgb","border-output.rgb.part")) {
@@ -257,7 +261,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 val sourceHasher=EncodedSourceHash(initial.inputKind,
                     if(initial.inputKind=="LINEAR")initial.width else initial.sourceWidth,
                     if(initial.inputKind=="LINEAR")initial.height else initial.sourceHeight,sourceHashNanoTime)
-                val sourceDigest=optionalCache { if(EncodedExportIdentity.supported(initial))sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()} else null }
+                val sourceDigest=optionalCache { if(initial.liveEffect==null && EncodedExportIdentity.supported(initial))sourceHasher.hash(sourceSnapshot){cacheJob.ensureActive()} else null }
                 val lookupIdentity=if(sourceDigest!=null && !initial.parameters.preImagingBorder)optionalCache {processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)}else null
                 if(lookupIdentity!=null)optionalCache {
                     val key=EncodedExportIdentity.key(initial,checkNotNull(sourceDigest),lookupIdentity,captureMetadata)
@@ -407,7 +411,16 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         pngCompletion=completion
                     }
                 }
-                repository.exportLinear(encodingInput,initial.outputWidth,initial.outputHeight,initial.format,initial.quality,
+                if(initial.liveEffect!=null) {
+                    liveProcessing.saveClean(context,dir,exportRecord,encodingInput){d,t->tailWork?.report("encode",d,t)}
+                    tailWork?.finish("encode")
+                    liveProcessing.publish(context,exportRecord,{p->tailWork?.report("publish",(p*1000).toLong(),1000)},onPrepared={uris,names->
+                        update{it.copy(mediaUri=requireNotNull(uris.firstOrNull()).toString(),outputName=names.first(),livePublishedUris=uris.map{u->u.toString()},livePublishedNames=names)}
+                    }){saved->
+                        val uri=requireNotNull(saved.publishedUris.firstOrNull())
+                        update{it.copy(mediaUri=uri.toString(),outputName=saved.asset.image.file.name,livePublishedUris=saved.publishedUris.map{u->u.toString()},livePublishedNames=saved.asset.parts.map{it.file.name})}
+                    }
+                } else repository.exportLinear(encodingInput,initial.outputWidth,initial.outputHeight,initial.format,initial.quality,
                     onPrepared={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName)}},
                     onCommitted={result->update{it.copy(mediaUri=result.uri.toString(),outputName=result.displayName,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e0cc395f6b84),messageUi=UiMessage.of(R.string.text_e0cc395f6b84))}},
                     outputColorSpace=initial.parameters.outputColorSpace,
@@ -444,19 +457,31 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 }
                 }
             }
-            tailWork?.finish("publish")
-            store.get(id)?.mediaUri?.let { uri->runCatching{saveFinalThumbnail(uri,dir)} }
-            // Keep measured tail progress visible until cleanup really finishes.
-            output?.delete();output=null
-            val clean=cleanup(id)
-            update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1,measured=tailWork!=null),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
+            // Publication has returned a durable success. Claim completion under the same
+            // lock as cancel before thumbnail/cleanup can observe a CANCELLED record and
+            // delete its retained source and clean still. Cosmetic tail work is not cancellable.
+            withContext(NonCancellable+Dispatchers.IO) {
+                synchronized(activeLock) { update{it.copy(state=ExportJobState.COMPLETED)} }
+                tailWork?.finish("publish")
+                store.get(id)?.mediaUri?.let { uri->runCatching{finalThumbnailWriter?.invoke(uri,dir) ?: saveFinalThumbnail(uri,dir)} }
+                output?.delete();output=null
+                val clean=cleanup(id)
+                update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1,measured=tailWork!=null),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
+            }
         } catch(c:CancellationException) {
             negativeDiagnostics?.cancel()
             ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id)
             withContext(NonCancellable+Dispatchers.IO) {
                 val current=store.get(id)!!
-                val committed=current.mediaUri?.let{runCatching{repository.committedExport(it,current.outputWidth,current.outputHeight,current.format)}.getOrNull()}
-                if(committed!=null){cleanup(id);update{it.copy(state=ExportJobState.COMPLETED,message=listOfNotNull(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(R.string.text_1bd91a7d0c53))}}
+                val verification=runCatching {
+                    if(current.liveEffect!=null)liveProcessing.recover(context)
+                    committedOutput(current)
+                }
+                val committed=verification.getOrNull()
+                if(current.liveEffect!=null && verification.isFailure) {
+                    update{it.copy(state=ExportJobState.PAUSED,failure=ExportJobFailure.RECOVERY_INVALID,message=dev.filmroom.i18n.L10n.text(R.string.text_801eccbf436d),messageUi=UiMessage.of(R.string.text_801eccbf436d))}
+                }
+                else if(committed!=null){update{it.copy(state=ExportJobState.COMPLETED,message=listOfNotNull(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(R.string.text_1bd91a7d0c53))};cleanup(id)}
                 else if(current.state==ExportJobState.CANCELLED){cleanup(id);update{it.copy(message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a37778f17c5f),messageUi=UiMessage.of(R.string.text_a37778f17c5f))}}
                 else update{it.copy(state=ExportJobState.PAUSED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3df4e91da12d),messageUi=UiMessage.of(R.string.text_3df4e91da12d))}
             }
@@ -468,6 +493,18 @@ class ExportQueue internal constructor(private val context:Context,private val p
         })}}
         catch(t:OutOfMemoryError){negativeDiagnostics?.jobTerminal();ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id);update{it.copy(state=ExportJobState.FAILED,message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_84d1e185592a),messageUi=UiMessage.of(R.string.text_84d1e185592a))}}
         finally {negativeDiagnostics?.jobTerminal();reservedBytes.set(0);store.interruptedInMemory(id);withContext(NonCancellable+Dispatchers.IO){output?.delete();framedOutput?.delete();preImagingInput?.delete();reusedPayload?.delete();cacheTicket?.close();pngCacheStream?.close()}}
+    }
+    /** A Live pair is successful only when every linked row is owned and published.
+     * Never turn a half-published pair into success or retry into a duplicate. */
+    private suspend fun committedOutput(job:ExportJob):ExportResult? {
+        val uri=job.mediaUri ?: return null
+        if(job.liveEffect==null)return repository.committedExport(uri,job.outputWidth,job.outputHeight,job.format)
+        val uris=job.livePublishedUris
+        if(uris.isEmpty() || uris.first()!=uri)throw EngineException(EngineFailure.INCOMPLETE)
+        val results=uris.map{repository.committedExport(it,job.outputWidth,job.outputHeight,ExportFormat.JPEG)}
+        if(results.all{it==null})return null
+        if(results.any{it==null} || CleanResultStore.resolve(context,job)==null)throw EngineException(EngineFailure.INCOMPLETE)
+        return results.first()
     }
     /** Cache IO/identity/optional ABI failures cannot turn a valid cold export into a failure. */
     private suspend fun <T> optionalCache(work:suspend ()->T?):T? = try {work()}catch(c:CancellationException){throw c}catch(_:Exception){null}catch(_:LinkageError){null}catch(_:OutOfMemoryError){null}
@@ -489,7 +526,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
     private fun cleanup(id:String):Boolean {
         if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)
         val dir=store.directory(id)
-        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !(store.get(id)?.state!=ExportJobState.CANCELLED && RawSourcePreviewStore.retained(it.name)) && !NegativePreviewStore.retain(dir,it)}
+        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !(store.get(id)?.state!=ExportJobState.CANCELLED && RawSourcePreviewStore.retained(it.name)) && !(store.get(id)?.state!=ExportJobState.CANCELLED && CleanResultStore.retained(it.name)) && !NegativePreviewStore.retain(dir,it)}
             ?.map{if(it.isDirectory)it.deleteRecursively()else it.delete()}?.all{it} ?: false
     }
     class IntakeLease internal constructor(val generation:Long,private val release:()->Unit):java.io.Closeable {

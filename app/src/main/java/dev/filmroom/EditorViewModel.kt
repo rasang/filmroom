@@ -641,6 +641,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
     fun retry() { if(mutable.value.busy==null)scheduleRender() }
     fun export(format:ExportFormat,maxEdge:Int?=null,quality:Int=95,outputColorSpace:String="sRGB")=startExport(format,maxEdge,quality,outputColorSpace)
     fun exportOriginal(format:ExportFormat,quality:Int=95,outputColorSpace:String="sRGB")=startExport(format,null,quality,outputColorSpace)
+    fun exportLive(kind:dev.filmroom.effects.EffectKind)=startExport(ExportFormat.PNG,null,100,"sRGB",kind)
     fun exportOriginalPng()=exportOriginal(ExportFormat.PNG)
     // Capturing is the only editor-owned part. A queued job never belongs to this ViewModel.
     internal var beginExportIntake:()->java.io.Closeable = {dev.filmroom.export.ExportQueue.beginIntake(getApplication<Application>())}
@@ -649,7 +650,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         queue.enqueue(source,params,format,edge,quality,thumbnail,
             onAccepted={job->onAccepted{queue.requestCancel(job.id)}},onEnqueued={onDurable()})
     }
-    private fun startExport(format:ExportFormat,maxEdge:Int?,quality:Int,outputColorSpace:String) {
+    private fun startExport(format:ExportFormat,maxEdge:Int?,quality:Int,outputColorSpace:String,liveEffect:dev.filmroom.effects.EffectKind?=null) {
         val snapshot=mutable.value
         if(!snapshot.canExport || format !in availableExportFormats)return
         if(outputColorSpace !in setOf("sRGB","Display P3","Adobe RGB (1998)"))return
@@ -671,7 +672,12 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                 intake=beginExportIntake()
                 val generation=(intake as? dev.filmroom.export.ExportQueue.IntakeLease)?.generation ?: dev.filmroom.export.ExportQueue.currentGeneration()
                 withContext(dev.filmroom.export.ExportIntakeGeneration(generation)){
-                    submitExport(checkNotNull(snapshot.photo),exportParameters,format,maxEdge,quality,snapshot.original,cancellation::accepted){durable.set(true)}
+                    if(liveEffect==null)submitExport(checkNotNull(snapshot.photo),exportParameters,format,maxEdge,quality,snapshot.original,cancellation::accepted){durable.set(true)}
+                    else {
+                        val queue=withContext(Dispatchers.IO){dev.filmroom.export.ExportQueue.get(getApplication<Application>())}
+                        queue.enqueue(checkNotNull(snapshot.photo),exportParameters,format,null,quality,snapshot.original,
+                            onAccepted={job->cancellation.accepted{queue.requestCancel(job.id)}},onEnqueued={durable.set(true)},liveEffect=liveEffect)
+                    }
                 }
                 resultUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_bb8990972dce);result=resultUi.render()
             } catch(c:CancellationException) {

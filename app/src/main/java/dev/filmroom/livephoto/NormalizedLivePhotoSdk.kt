@@ -17,7 +17,7 @@ class NormalizedLivePhotoSdk(context: Context) {
     suspend fun resolve(request: VideoToLiveRequest) = compatibility.resolve(request)
     suspend fun recover() = withContext(Dispatchers.IO) { publisher.recoverInterrupted() }
 
-    suspend fun convert(request: VideoToLiveRequest, accepted: ProfileSelection, cancelled: () -> Boolean = { false }, onProgress: (ConversionProgress) -> Unit = {}): ConversionResult = CommittedResultHandoff.run { committed ->
+    suspend fun convert(request: VideoToLiveRequest, accepted: ProfileSelection, cancelled: () -> Boolean = { false }, onPrepared: (List<Uri>,List<String>) -> Unit = {_,_->}, onProgress: (ConversionProgress) -> Unit = {}): ConversionResult = CommittedResultHandoff.run { committed ->
         require(request.startMs == 0L && request.durationMs == 3000L && request.keepAudio && request.saveToGallery)
         require(request.input.scheme == "file")
         val file = File(requireNotNull(request.input.path))
@@ -50,7 +50,7 @@ class NormalizedLivePhotoSdk(context: Context) {
             packaged = true
             emit(ConversionStage.VERIFYING); LivePhotoVerifier.verify(asset, ::check)
             emit(ConversionStage.PUBLISHING)
-            val published = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check)
+            val published = PublicationCoordinator(File(app.noBackupFilesDir, "livephoto-sdk/publications"), AndroidMediaSink(app, request.captureTimeMillis)).publish(asset, request.relativePath, ::check){ids->onPrepared(ids.map(Uri::parse),asset.parts.map{it.file.name})}
             // Post-commit, bounded best effort. No cancellation check or suspend point here:
             // a scan failure must not turn an already-saved pair into a failed/repeated export.
             val scans = PairScanNotification.notify(asset, published, AndroidPublishedMediaScanner(app))

@@ -12,13 +12,14 @@ import java.util.UUID
 /** Allowlisted record metadata and explicitly requested content URIs; never private paths, bytes or diagnostics. */
 internal object ExportHistoryBackup {
     const val MAX_ROWS = 10000
-    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis", "mediaUri", "outputName", "originalUri", "crop", "border", "photoMetadata", "effectParameters")
+    private val keys = setOf("id", "createdAt", "width", "height", "format", "state", "filmStock", "outputColorSpace", "exportMillis", "mediaUri", "outputName", "originalUri", "crop", "border", "photoMetadata", "effectParameters", "liveEffect")
     fun exportRows(jobs: List<ExportJob>): JSONArray = JSONArray().apply {
         require(jobs.size <= MAX_ROWS)
         jobs.forEach { job -> put(JSONObject().apply {
             put("id",job.id); put("createdAt",job.createdAt)
             put("width",job.outputWidth); put("height",job.outputHeight)
             put("format",job.format.name); put("state",job.archivedSourceState ?: job.state.name)
+            job.liveEffect?.let { put("liveEffect", it) }
             put("filmStock",job.parameters.filmStock); put("outputColorSpace",job.parameters.outputColorSpace)
             job.exportMillis?.let { put("exportMillis",it) }
             if (job.state == ExportJobState.COMPLETED && BackupMediaLink.validOutput(job.mediaUri) && !job.outputName.isNullOrBlank()) {
@@ -58,6 +59,7 @@ internal object ExportHistoryBackup {
             val film=string("filmStock");val color=string("outputColorSpace")
             require(film.matches(Regex("[A-Za-z0-9_-]{1,100}")))
             require(dev.filmroom.io.OutputColorSpace.entries.any{it.id==color}) { "Unsupported output color space; upgrade required" }
+            val liveEffect=if(row.has("liveEffect"))string("liveEffect").also { require(it in setOf("LIGHT_TABLE", "OPTICAL_LEAK")) }else null
             val sourceState=ExportJobState.valueOf(string("state"))
             val state=if(sourceState in setOf(ExportJobState.COMPLETED,ExportJobState.FAILED,ExportJobState.CANCELLED))sourceState else ExportJobState.CANCELLED
             val millis=if(row.has("exportMillis"))integer("exportMillis").also { require(it>=0) }else null
@@ -80,7 +82,7 @@ internal object ExportHistoryBackup {
                 ExportFormat.valueOf(string("format")),95,state,ExportDisplayProgress(if(state==ExportJobState.COMPLETED)8 else 1),
                 inputReady=false,completionViewed=true,exportMillis=millis,archivedHistory=true,archivedSourceState=sourceState.name,mediaUri=uri,outputName=name,originalUri=original,crop=crop,border=border,photoMetadata=metadata,
                 sourceWidth=border?.canonicalWidth ?: crop?.canonicalWidth ?: sourceW,
-                sourceHeight=border?.canonicalHeight ?: crop?.canonicalHeight ?: sourceH)
+                sourceHeight=border?.canonicalHeight ?: crop?.canonicalHeight ?: sourceH,liveEffect=liveEffect)
         }
         require(result.map { it.id }.distinct().size==result.size) { "Duplicate history identifiers" }
         return result

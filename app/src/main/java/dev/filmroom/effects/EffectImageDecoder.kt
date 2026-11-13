@@ -40,6 +40,12 @@ internal class EffectImageDecoder(
     private val repository by lazy { PhotoRepository(app) }
     private val nativeSources = mutableMapOf<String, PhotoSource>()
     private val previewSources = mutableSetOf<String>()
+    // One decoder owns a single export operation. The clean artifact is immutable after
+    // publication; reuse its verified handle for bounds -> pixels without hashing twice.
+    private data class VerifiedClean(val file:java.io.File,val length:Long,val modified:Long) {
+        fun unchanged()=file.isFile && file.length()==length && file.lastModified()==modified
+    }
+    private var verifiedClean:VerifiedClean?=null
     internal fun usesPersistentPreview(uri:String)=uri in previewSources
 
     suspend fun bounds(uri: String, allowRawFallback: Boolean = true,
@@ -55,6 +61,19 @@ internal class EffectImageDecoder(
                      report: (String) -> Unit = {}, onSize: (EffectExportSize) -> Unit = {}): Bitmap {
         require(maxEdge in 1..6144)
         currentCoroutineContext().ensureActive()
+        // A direct Live cover can contain a light-table scene. Never treat it as the
+        // clean processed image for a different effect, even if the gallery URI decodes.
+        if (!allowRawFallback && sourceRecord?.liveEffect != null && sourceRecord.mediaUri == uri) {
+            val clean = verifiedClean?.takeIf { it.unchanged() }?.file
+                ?: dev.filmroom.export.CleanResultStore.resolve(app, sourceRecord)?.also {
+                    verifiedClean=VerifiedClean(it,it.length(),it.lastModified())
+                }
+                ?: throw FileNotFoundException("Clean processed still unavailable; re-export the original photo")
+            val cleanUri = Uri.fromFile(clean).toString()
+            val bitmap = systemRead?.invoke(cleanUri,maxEdge,report,onSize) ?: readPlatform(cleanUri,maxEdge,report,onSize)
+            try { currentCoroutineContext().ensureActive(); return bitmap }
+            catch(t:Throwable) { bitmap.recycle(); throw t }
+        }
         nativeSources[uri]?.let { return withExportCancellation { readNative(it, maxEdge, onSize) } }
         if (allowRawFallback) {
             sourceRecord?.takeIf { it.originalUri == uri }?.let { record ->
@@ -197,6 +216,7 @@ internal class EffectImageDecoder(
         nativeSources.values.forEach { discard(it) }
         nativeSources.clear()
         previewSources.clear()
+        verifiedClean=null
     }
 
     companion object {

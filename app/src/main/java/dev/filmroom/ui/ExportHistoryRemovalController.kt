@@ -98,24 +98,37 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
                 if(q.removeHistoryRecord(op,snapshot))outcome(snapshot,"record-removed")else{failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed")}
                 continue
             }
-            val uri=snapshot.mediaUri
+            val uris=snapshot.outputUris
+            if(snapshot.livePublishedUris.isNotEmpty() && !snapshot.validLiveAssets()) {
+                failures=true;toast(HistoryText.MISSING);outcome(snapshot,"invalid-live-assets");continue
+            }
+            val uri=uris.firstOrNull{it !in op.deletedUris}
+            if(uri==null && uris.isNotEmpty()) {
+                completeDeletedRecord(snapshot);continue
+            }
             if(uri==null){
                 failures=true;toast(HistoryText.MISSING);outcome(snapshot,"missing-uri");continue
             }
-            val result=media.delete(uri,snapshot.exportMillis,snapshot.outputName)
-            if(!handle(snapshot,result))return
+            val result=media.delete(uri,snapshot.exportMillis,snapshot.outputNameFor(uri),snapshot.livePublishedUris.isNotEmpty())
+            if(!handle(snapshot,uri,result))return
         }
         finish()
     }
-    private suspend fun handle(snapshot:ExportHistorySnapshot,result:ExportMediaDeletionResult):Boolean {
-        val q=queue ?: return false;val op=operation ?: return false
+    private suspend fun handle(snapshot:ExportHistorySnapshot,uri:String,result:ExportMediaDeletionResult):Boolean {
+        if(queue==null)return false;val op=operation ?: return false
         when(result){
             ExportMediaDeletionResult.Deleted->{
-                // External success is durable first. Failure here retains the manifest for a safe manual retry.
-                write(op.copy(status="photo-deleted:${snapshot.id}",consentUri=null,consentKind=null))
-                if(q.removeHistoryRecord(operation!!,snapshot))outcome(snapshot,"photo-and-record-removed")else{failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed")}
+                // Persist each member before continuing; a pair is complete only after both assets.
+                write(op.copy(deletedUris=(op.deletedUris+uri).distinct(),status="running",consentUri=null,consentKind=null))
+                if(snapshot.outputUris.all{it in operation!!.deletedUris})completeDeletedRecord(snapshot)
             }
-            ExportMediaDeletionResult.Missing->{failures=true;toast(HistoryText.MISSING);outcome(snapshot,"missing")}
+            ExportMediaDeletionResult.Missing->{
+                if(snapshot.livePublishedUris.isNotEmpty()) {
+                    // A previously removed pair member is already absent. Never search for a replacement.
+                    write(op.copy(deletedUris=(op.deletedUris+uri).distinct(),status="running",consentUri=null,consentKind=null))
+                    if(snapshot.outputUris.all{it in operation!!.deletedUris})completeDeletedRecord(snapshot)
+                }else{failures=true;toast(HistoryText.MISSING);outcome(snapshot,"missing")}
+            }
             is ExportMediaDeletionResult.Failed->{
                 failures=true
                 toast(when(result.reason){ExportMediaDeletionFailure.CANCELLED->HistoryText.DENIED;ExportMediaDeletionFailure.INVALID_URI,ExportMediaDeletionFailure.UNVERIFIED_IDENTITY->HistoryText.MISSING;else->HistoryText.FAILED})
@@ -123,11 +136,17 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
                 if(result.reason==ExportMediaDeletionFailure.CANCELLED){finish();return false}
             }
             is ExportMediaDeletionResult.NeedsConsent->{
-                write(op.copy(status="awaiting-consent",consentUri=snapshot.mediaUri,consentKind=result.kind.name))
+                write(op.copy(status="awaiting-consent",consentUri=uri,consentKind=result.kind.name))
                 registerConsent(op.id);launcher!!.launch(IntentSenderRequest.Builder(result.sender).build());return false
             }
         }
         return true
+    }
+    private suspend fun completeDeletedRecord(snapshot:ExportHistorySnapshot) {
+        val q=queue ?: return
+        write(operation!!.copy(status="photo-deleted:${snapshot.id}",consentUri=null,consentKind=null))
+        if(q.removeHistoryRecord(operation!!,snapshot))outcome(snapshot,"photo-and-record-removed")
+        else{failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed")}
     }
     private fun resumeConsent(){
         if(task?.isActive==true)return
@@ -143,9 +162,10 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
                 currentCoroutineContext().ensureActive()
                 if(!reserved){toast(HistoryText.INTERRUPTED);finish();return@launch}
                 checkNotNull(op)
-                val snapshot=op.remaining.firstOrNull{it.mediaUri==op.consentUri} ?: error("No matching consent snapshot")
+                val snapshot=op.remaining.firstOrNull{op.consentUri in it.outputUris} ?: error("No matching consent snapshot")
                 val kind=ExportMediaDeletionConsentKind.valueOf(checkNotNull(op.consentKind))
-                if(handle(snapshot,media.resume(checkNotNull(snapshot.mediaUri),snapshot.exportMillis,snapshot.outputName,kind,granted)))process()
+                val uri=checkNotNull(op.consentUri)
+                if(handle(snapshot,uri,media.resume(uri,snapshot.exportMillis,snapshot.outputNameFor(uri),kind,granted,snapshot.livePublishedUris.isNotEmpty())))process()
             }catch(c:CancellationException){throw c}
             catch(_:Exception){failures=true;toast(HistoryText.FAILED);finish()}
             finally{if(operation?.status!="awaiting-consent" && busy)finish()}

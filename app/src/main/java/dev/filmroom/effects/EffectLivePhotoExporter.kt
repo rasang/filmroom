@@ -49,7 +49,7 @@ object EffectLivePhotoExporter {
         onResolution: (EffectExportReport) -> Unit = {},
         readout: EffectCameraReadout = EffectCameraReadout(),
         motionSource: EffectMotionSource? = null, motionAudioFile: File? = null,
-        photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(), correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO,correlationId,parentCorrelationId) { log ->
+        photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(), onCommitted:(ConversionResult)->Unit = {}, onPrepared:(List<Uri>,List<String>)->Unit = {_,_->}, correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO,correlationId,parentCorrelationId) { log ->
         require(!preflight.deviceUnsupported) { preflight.selection.deviceExportBlockedReason.orEmpty() }
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
         val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
@@ -90,7 +90,7 @@ object EffectLivePhotoExporter {
             originalRequest=originalRequest ?: requireNotNull(resolution).requested
             try {
             log.phase(EffectExportStep.LIVE_PROBE)
-            return@trace sdk.convert(actualRequest, actualSelection, cancelled) {
+            return@trace sdk.convert(actualRequest, actualSelection, cancelled, onPrepared=onPrepared) {
                 // This callback runs after durable publication, before the IO -> caller handoff.
                 // A cancellation at that handoff may discard the return value, but not the saved asset.
                 if(it.stage==ConversionStage.COMPLETE)log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.LIVE_COMMITTED,
@@ -112,7 +112,7 @@ object EffectLivePhotoExporter {
                     ConversionStage.COMPLETE -> 1f
                     else -> .75f
                 })
-            }.also { resolution?.let { report ->
+            }.also { saved -> onCommitted(saved); resolution?.let { report ->
                 log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.LIVE_SAVED,
                     requestedWidth=requireNotNull(originalRequest).width,requestedHeight=requireNotNull(originalRequest).height,
                     width=report.actual.width,height=report.actual.height))

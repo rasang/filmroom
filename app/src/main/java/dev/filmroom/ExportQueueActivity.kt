@@ -537,9 +537,9 @@ class ExportQueueActivity : ComponentActivity() {
                     } finally { archivedOpenPending=false }
                 }
             }
-            details.text=(if(job.state in setOf(ExportJobState.COMPLETED,ExportJobState.CANCELLED))job.progress.compactText+"\n"else "")+"${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n${stockNames[job.parameters.filmStock] ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92)}\n${job.parameters.outputColorSpace}"+
+            details.text=(if(job.state in setOf(ExportJobState.COMPLETED,ExportJobState.CANCELLED))job.progress.compactText+"\n"else "")+(if(job.liveEffect!=null)"Live Photo\n" else "${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n")+"${stockNames[job.parameters.filmStock] ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92)}\n${job.parameters.outputColorSpace}"+
                 if(job.state==ExportJobState.PAUSED && job.inputReady)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3be614977d5d)else ""
-            if(job.archivedHistory)details.text=(if(job.mediaUri==null)getString(R.string.backup_history_no_photos)else getString(R.string.backup_history_archived))+"\n${job.outputWidth} × ${job.outputHeight} · ${job.format.name}\n$stock"
+            if(job.archivedHistory)details.text=(if(job.mediaUri==null)getString(R.string.backup_history_no_photos)else getString(R.string.backup_history_archived))+"\n"+(if(job.liveEffect!=null)"Live Photo" else "${job.outputWidth} × ${job.outputHeight} · ${job.format.name}")+"\n$stock"
             job.originalDiagnostics?.let { raw ->
                 details.append("\n\n"+dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.queue_original_details)+"\n"+raw)
             }

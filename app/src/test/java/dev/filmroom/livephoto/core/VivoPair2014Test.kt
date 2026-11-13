@@ -94,6 +94,20 @@ class VivoPair2014Test {
         assertEquals(2,result.ids.size); assertFalse(result.galleryConfirmed)
         assertEquals(result,publisher.publish(asset)); assertEquals(6,sink.operations)
     }
+    @Test fun preparedQueueBindingIsDurableBeforeAnyMediaBecomesVisible() = withFixture { dir,image,video ->
+        val asset=LivePhotoPackager.packageTo(PackageRequest(image,video,profile,CoverInfo(0,0,1,1000000),true,id),File(dir,"prepared-asset"))
+        val sink=Sink(0);val publisher=PublicationCoordinator(File(dir,"prepared-journal"),sink)
+        var prepared:List<String>?=null
+        val saved=publisher.publish(asset,onPrepared={rows->
+            assertEquals(4,sink.operations) // two inserts/copies; neither publish yet
+            prepared=rows
+        })
+        assertEquals(saved.ids,prepared)
+        val badSink=Sink(0);val bad=PublicationCoordinator(File(dir,"failed-binding"),badSink)
+        assertTrue(runCatching{bad.publish(asset,onPrepared={error("queue journal failed")})}.isFailure)
+        assertTrue(badSink.rows.isEmpty())
+        assertEquals(4,badSink.operations)
+    }
     @Test fun malformedOrNonTerminalOldMetadataIsRejected() = withFixture { dir,image,video ->
         val request=PackageRequest(image,video,profile,CoverInfo(0,0,1,1000000),true,id)
         video.appendBytes(Vivo.uuid(Vivo.tail(Vivo.metadata(id,profile,true,0))) + box("free",byteArrayOf(1)))
