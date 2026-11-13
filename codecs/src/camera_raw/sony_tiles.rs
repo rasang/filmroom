@@ -9,6 +9,7 @@ pub(super) const SCRATCH: u64 = (TILE * TILE * 96) as u64;
 pub(super) fn decode(
     camera: &CameraRaw,
     input: &Path,
+    output: &Path,
     out: &File,
     cancel: &AtomicBool,
 ) -> Result<()> {
@@ -18,6 +19,7 @@ pub(super) fn decode(
     let rect_tuple = |r: Rect| (r.x, r.y, r.w, r.h);
     if raw.source_ifd_offset != Some(camera.source_ifd_offset)
         || d.cpp != 3
+        || d.lens != camera.development.lens
         || d.width != camera.development.width
         || d.height != camera.development.height
         || rect_tuple(d.active) != rect_tuple(camera.development.active)
@@ -47,6 +49,7 @@ pub(super) fn decode(
     {
         return Err(err("INVALID_INPUT", "decode"));
     }
+    let sink = crate::develop::CameraRgbSink::new(&d, output)?;
     // Sequential tiles, even inside a two-worker pool: no parallel full-tile live sets.
     for (index, jpeg) in camera.jpeg_blocks.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
@@ -103,8 +106,10 @@ pub(super) fn decode(
         let mut tile_d = d.clone();
         tile_d.active = tile;
         let developed =
-            crate::develop::develop_tile_cancel(&tile_d, tile.y, TILE, normalized, cancel)?;
-        crate::develop::emit_region(&d, out, &developed, tile, cancel)?;
+            sink.develop(&tile_d, tile.y, TILE, normalized, cancel)?;
+        sink.emit_region(&d, out, &developed, tile, cancel)?;
     }
+    drop(source);
+    sink.finish(&d, out, cancel)?;
     Ok(())
 }

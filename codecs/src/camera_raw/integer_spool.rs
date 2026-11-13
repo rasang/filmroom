@@ -36,12 +36,14 @@ pub(super) fn develop(
         .stack_size(1024 * 1024)
         .build()
         .map_err(|_| err("MEMORY_BUDGET", "develop"))?;
-    let mut first = d.crop.y;
-    while first < d.crop.y + d.crop.h {
+    let sink = crate::develop::CameraRgbSink::new(d, output)?;
+    let region = sink.region(d);
+    let mut first = region.y;
+    while first < region.y + region.h {
         if cancel.load(Ordering::Relaxed) {
             return Err(err("CANCELLED", "develop"));
         }
-        let last = (first + admission.strip_rows as usize).min(d.crop.y + d.crop.h);
+        let last = (first + admission.strip_rows as usize).min(region.y + region.h);
         let y = first.saturating_sub(HALO).max(d.active.y);
         let end = (last + HALO).min(d.active.y + d.active.h);
         let mut normalized = Vec::with_capacity(d.active.w * (end - y));
@@ -63,10 +65,11 @@ pub(super) fn develop(
         }
         drop(row);
         let p = pool
-            .install(|| crate::develop::develop_tile_cancel(&d, y, end - y, normalized, cancel))?;
-        crate::develop::emit(&d, &out, &p, y, first, last, cancel)?;
+            .install(|| sink.develop(&d, y, end - y, normalized, cancel))?;
+        sink.emit_strip(&d, &out, &p, y, first, last, cancel)?;
         first = last;
     }
+    pool.install(|| sink.finish(d, &out, cancel))?;
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "spool"));
     }

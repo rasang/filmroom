@@ -1,6 +1,8 @@
 package dev.filmroom.i18n
 internal object ChineseStrings {
     val values:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.embedded_lens_distortion_applied to "已应用内嵌镜头畸变校正。",
+        dev.filmroom.R.string.embedded_lens_distortion_not_applied to "检测到内嵌镜头畸变参数但未应用，可能保留畸变。",
         dev.filmroom.R.string.print_medium_bw_paper to " · 黑白相纸",
         dev.filmroom.R.string.print_medium_bw_film to " · 黑白电影拷贝片",
         dev.filmroom.R.string.print_medium_bw_help to "所选印相材料是黑白材料，彩色胶片印到它上也会变为黑白。",

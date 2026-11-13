@@ -222,6 +222,10 @@ impl<'a> Decoder for OrfDecoder<'a> {
     let whitelevel = None;
     let photometric = RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&self.camera));
     let mut img = RawImage::new(camera, image, cpp, normalize_wb(self.get_wb()?), photometric, blacklevel, whitelevel, dummy);
+    img.lens_distortion = crate::rawimage::EmbeddedLensDistortion::olympus(
+      self.makernote.get_sub_ifd(OrfMakernotes::ImageProcessingIFD)
+        .and_then(|ifd| ifd.get_entry(0x150au16)).map(|entry| &entry.value)
+    );
     if let Some(crop) = self.get_crop()? {
       img.crop_area = Some(crop);
     }

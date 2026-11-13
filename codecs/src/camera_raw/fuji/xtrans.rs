@@ -4,11 +4,17 @@
 //! This is basic development, not Fujifilm JPEG rendering or a detail-enhancing algorithm.
 use super::*;
 const RADIUS:isize=3;
-pub(super) fn develop(d:&Development,y:usize,h:usize,data:Vec<f32>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>>{
+pub(crate) fn develop(d:&Development,y:usize,h:usize,data:Vec<f32>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>>{
     let rgb=interpolate(&d.cfa,y-d.active.y,d.active.w,h,&data,cancel)?;
     drop(data);
     let mut linear=d.clone();linear.cpp=3;linear.cfa.clear();
     crate::develop::develop_tile_cancel(&linear,y,h,rgb,cancel)
+}
+pub(crate) fn camera(d:&Development,y:usize,h:usize,data:Vec<f32>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>>{
+    let rgb=interpolate(&d.cfa,y-d.active.y,d.active.w,h,&data,cancel)?;
+    drop(data);
+    let pixels=rgb.chunks_exact(3).map(|p|[p[0],p[1],p[2]]).collect();
+    Ok(rawler::pixarray::Color2D::new_with(pixels,d.active.w,h))
 }
 fn interpolate(pattern:&str,y_origin:usize,w:usize,h:usize,raw:&[f32],cancel:&AtomicBool)->Result<Vec<f32>>{
     if pattern.len()!=36 || w<8 || h<8 || raw.len()!=w*h{return Err(unsupported());}

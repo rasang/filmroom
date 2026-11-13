@@ -10,13 +10,14 @@ pub(crate) fn lens_opcodes(
     width: usize,
     height: usize,
     cfa_mode: bool,
+    allow_geometry: bool,
     active: Rect,
     warnings: &mut Vec<Warning>,
 ) -> Result<(
     Vec<crate::gainmap::GainMap>,
     Vec<crate::cfa_gainmap::CfaGainMap>,
     Vec<crate::opcodes::Stage1Opcode>,
-    Option<crate::dng_warp::WarpRectilinear>,
+    Option<crate::dng_warp::WarpPipeline>,
 )> {
     let mut gain_maps = Vec::new();
     let mut cfa_maps = Vec::new();
@@ -36,25 +37,12 @@ pub(crate) fn lens_opcodes(
                 cfa_maps = maps;
                 skipped
             } else if tag == 51022 {
-                let records=crate::opcodes::records(&v.bytes)?;
-                let nonidentity=records.iter().filter(|r|r.flags&1==0 && r.id==1)
-                    .map(|r|crate::dng_warp::WarpRectilinear::parse(r.payload))
-                    .collect::<Result<Vec<_>>>()?.iter().any(|w|!w.is_identity());
-                if nonidentity {
-                    // A single required warp is the verified initial envelope.
-                    // Mixing maps/other required stages must not reorder them.
-                    let required:Vec<_>=records.iter().filter(|r|r.flags&1==0).collect();
-                    if !cfa_mode || required.len()!=1 || required[0].id!=1
-                        || !crate::opcodes::supported_version(required[0].version) {
-                        return Err(err("UNSUPPORTED_DNG_OPCODE","probe"));
-                    }
-                    warp=Some(crate::dng_warp::WarpRectilinear::parse(required[0].payload)?);
-                    records.iter().any(|r|r.flags&1!=0)
-                } else {
-                    let (maps, skipped) = crate::gainmap::parse(&v.bytes, active.w, active.h)?;
-                    gain_maps = maps;
-                    skipped
-                }
+                let (maps, geometry, skipped) = crate::opcodes::parse_stage3(
+                    &v.bytes, active.w, active.h, allow_geometry,
+                )?;
+                gain_maps = maps;
+                warp = geometry;
+                skipped
             } else {
                 crate::opcodes::optional_only(&v.bytes)?
             };
@@ -63,7 +51,7 @@ pub(crate) fn lens_opcodes(
                     .iter()
                     .any(|w| w.code == "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED")
             {
-                warnings.push(Warning{code:"DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED",message:"部分可选镜头校正未应用，可能保留暗角或畸变；当前采用原始 RawDevelop 色彩流程"});
+                warnings.push(Warning{code:"DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED",message:"部分可选镜头校正未应用，可能保留暗角或畸变"});
             }
         }
     }

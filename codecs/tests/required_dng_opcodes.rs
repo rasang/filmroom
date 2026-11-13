@@ -61,6 +61,18 @@ fn warp(planes: u32, coefficient: f64) -> Vec<u8> {
     p.extend([0.5f64, 0.5].into_iter().flat_map(f64::to_be_bytes));
     record(1, &p)
 }
+fn fisheye(planes: u32, coefficient: f64) -> Vec<u8> {
+    let mut p = planes.to_be_bytes().to_vec();
+    for _ in 0..planes {
+        p.extend([coefficient, 0., 0., 0.].into_iter().flat_map(f64::to_be_bytes));
+    }
+    p.extend([0.5f64, 0.5].into_iter().flat_map(f64::to_be_bytes));
+    record(2, &p)
+}
+fn optional(mut op: Vec<u8>) -> Vec<u8> {
+    op[8..12].copy_from_slice(&1u32.to_be_bytes());
+    op
+}
 fn sample(x: usize, y: usize) -> u16 {
     (1600 + x * 7 + y * 3) as u16
 }
@@ -296,6 +308,116 @@ fn strict_warp_identity_version_preview_flags_and_rectangular_list3() {
             );
         }
     }
+}
+#[test]
+fn stage3_optional_versions_full_quality_and_legacy_fallback() {
+    use film_codecs::dng_warp::{Stage3Opcode, Warp};
+    for operation in [warp(1, 0.97), fisheye(3, 1.)] {
+        for flags in [0u32, 1, 2, 3] {
+            let mut op = operation.clone();
+            op[8..12].copy_from_slice(&flags.to_be_bytes());
+            let (maps, pipeline, skipped) = opcodes::parse_stage3(&list(&[op]), W, H, true).unwrap();
+            assert!(maps.is_empty() && !skipped);
+            assert_eq!(pipeline.unwrap().steps.len(), 1);
+        }
+        let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&[optional(operation.clone())]), W, H, false).unwrap();
+        assert!(pipeline.is_none() && skipped);
+        assert_eq!(opcodes::parse_stage3(&list(&[operation.clone()]), W, H, false).unwrap_err().code, "UNSUPPORTED_DNG_OPCODE");
+        let mut newer = operation;
+        newer[4..8].copy_from_slice(&0x01060000u32.to_be_bytes());
+        assert_eq!(opcodes::parse_stage3(&list(&[newer.clone()]), W, H, true).unwrap_err().code, "UNSUPPORTED_DNG_OPCODE");
+        let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&[optional(newer)]), W, H, true).unwrap();
+        assert!(pipeline.is_none() && skipped);
+    }
+    // Optional WarpRectilinear2 is deliberately not processed. Its baseline
+    // fallback must therefore still run, even though 14 immediately precedes it.
+    let newer = optional(record(14, &[]));
+    let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&[newer, fisheye(1, 1.)]), W, H, true).unwrap();
+    assert!(skipped);
+    assert!(matches!(&pipeline.unwrap().steps[..], [Stage3Opcode::Warp(Warp::Fisheye(_))]));
+    for id in [14, 77] {
+        assert_eq!(opcodes::parse_stage3(&list(&[warp(1, 0.97), record(id, &[])]), W, H, true).unwrap_err().code, "UNSUPPORTED_DNG_OPCODE");
+        let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&[optional(record(id, &[])), warp(1, 0.97)]), W, H, true).unwrap();
+        assert!(pipeline.is_some() && skipped);
+    }
+}
+#[test]
+fn stage3_preserves_order_and_reserves_capacity_for_required_operations() {
+    use film_codecs::dng_warp::{Stage3Opcode, Warp};
+    let map = gain([0, 0, H as u32, W as u32, 0, 3, 1, 1], 3, 0.8);
+    let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&[map.clone(), optional(warp(1, 0.97)), optional(map.clone()), fisheye(1, 1.)]), W, H, true).unwrap();
+    let pipeline = pipeline.unwrap();
+    assert!(!skipped);
+    assert_eq!(pipeline.backing_count(), 2);
+    assert!(matches!(&pipeline.steps[..], [Stage3Opcode::GainMap(_), Stage3Opcode::Warp(Warp::Rectilinear(_)), Stage3Opcode::GainMap(_), Stage3Opcode::Warp(Warp::Fisheye(_))]));
+    let mut many = vec![optional(warp(1, 0.9)); 4];
+    many.push(fisheye(1, 1.));
+    let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&many), W, H, true).unwrap();
+    let pipeline = pipeline.unwrap();
+    assert!(skipped);
+    assert_eq!(pipeline.steps.len(), 4);
+    assert!(matches!(pipeline.steps.last().unwrap(), Stage3Opcode::Warp(Warp::Fisheye(_))));
+    assert!(opcodes::parse_stage3(&list(&vec![warp(1, 0.97); 5]), W, H, true).is_err());
+    let mut maps = vec![optional(map.clone()); 4];
+    maps.extend([warp(1, 0.97), map.clone()]);
+    let (_, pipeline, skipped) = opcodes::parse_stage3(&list(&maps), W, H, true).unwrap();
+    assert!(skipped);
+    assert_eq!(pipeline.unwrap().steps.len(), 5);
+    // Map-only files use the existing optional-map policy and streaming route.
+    let (maps, pipeline, skipped) = opcodes::parse_stage3(&list(&[optional(map)]), W, H, true).unwrap();
+    assert!(maps.is_empty() && pipeline.is_none() && skipped);
+}
+
+#[test]
+fn optional_geometry_is_rendered_identically_to_required_geometry() {
+    for (name, operation) in [("rectilinear", warp(3, 0.9)), ("fisheye", fisheye(1, 1.))] {
+        let mut rendered = Vec::new();
+        for (kind, records) in [("required", vec![operation.clone()]), ("optional", vec![optional(operation.clone())]), ("plain", vec![])] {
+            let input = path(&format!("{name}-{kind}.dng"));
+            let output = path(&format!("{name}-{kind}.rgb"));
+            fs::write(&input, fixture(&[(51022, list(&records))], false, 16, 6)).unwrap();
+            let d = Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();
+            assert_eq!(d.warp.is_some(), kind != "plain");
+            assert!(!d.warnings.iter().any(|w|w.code=="DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED"));
+            decode(&input, &output, &Budget::default(), &AtomicBool::new(false)).unwrap();
+            rendered.push(fs::read(&output).unwrap());
+            fs::remove_file(input).unwrap();fs::remove_file(output).unwrap();
+        }
+        assert_eq!(rendered[0], rendered[1], "optional flag must not change supported geometry");
+        assert_ne!(rendered[0], rendered[2], "warp must be applied");
+    }
+}
+
+#[test]
+fn ordered_geometry_chain_keeps_maps_in_place_and_admits_two_backings() {
+    let aw = W - 6;
+    let ah = H - 4;
+    let mut spatial = gain([0, 0, ah as u32, aw as u32, 0, 3, 1, 1], 3, 1.);
+    for (index, value) in [0.3f32, 0.7, 1.2, 1.7, 0.9, 0.4, 1.6, 0.8, 0.5, 0.4, 1.3, 1.8].into_iter().enumerate() {
+        spatial[92+index*4..96+index*4].copy_from_slice(&value.to_be_bytes());
+    }
+    let rect = warp(3, 0.9);
+    let fish = fisheye(1, 1.);
+    let mut outputs = Vec::new();
+    let mut admissions = Vec::new();
+    for (name, records) in [("ordered", vec![spatial.clone(), rect.clone(), fish.clone()]), ("moved", vec![rect.clone(), fish, spatial]), ("single", vec![rect])] {
+        let input = path(&format!("chain-{name}.dng"));
+        let output = path(&format!("chain-{name}.rgb"));
+        fs::write(&input, fixture(&[(51022, list(&records))], false, 16, 6)).unwrap();
+        let d = Dng::read(&mut fs::File::open(&input).unwrap()).unwrap();
+        assert!(d.gain_maps.is_empty());
+        let admission = film_codecs::develop::admit(&d, &Budget::default()).unwrap();
+        admissions.push(admission.required_disk_bytes);
+        let mut budget = Budget::default();budget.disk_budget_bytes = admission.required_disk_bytes - 1;
+        assert_eq!(decode(&input, &output, &budget, &AtomicBool::new(false)).unwrap_err().code, "DISK_BUDGET");
+        assert!(!output.exists());
+        decode(&input, &output, &Budget::default(), &AtomicBool::new(false)).unwrap();
+        outputs.push(fs::read(&output).unwrap());
+        fs::remove_file(input).unwrap();fs::remove_file(output).unwrap();
+    }
+    assert_ne!(outputs[0], outputs[1], "gain maps and geometry do not commute");
+    assert_eq!(admissions[0], admissions[1]);
+    assert_eq!(admissions[0] - admissions[2], (aw * ah * 12) as u64);
 }
 #[test]
 fn required_unknown_badpixel_nonidentity_and_resource_boundaries_failclosed() {

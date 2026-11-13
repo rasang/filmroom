@@ -55,7 +55,7 @@
     "RAW or DNG reconstruction from JPEG",
     "embedded-preview fallback"
   ],
-  "diskModel": "Output only: finalWidth*finalHeight*12, posix_fallocate before develop; source copy is separately owned and budgeted by shell. No transpose/fullRGB temporary spool.",
+  "diskModel": "Final float output: finalWidth*finalHeight*12, reserved with posix_fallocate. Sensor streaming paths additionally reserve their admitted integer spool. Embedded geometry retains an anonymous activeWidth*activeHeight*12 camera-RGB backing; ordered multi-operation DNG geometry uses two alternating backings. All simultaneously live files are charged against the caller disk budget. The original source copy is separately owned and budgeted by the Android wrapper.",
   "privacy": "No network code. Diagnostics only fixed codes/messages/stages and numeric dimensions/budgets/timings. No input paths, EXIF/GPS, maker/model strings, file names, photo bytes or decoder exception text.",
   "errors": [
     "UNSUPPORTED_FORMAT",
@@ -155,5 +155,17 @@
   "memoryModelDng": "No entire sensor/RGB plane: bounded rows with 8-row PPG halo, RawDevelop on each strip; stripRows<=128 chosen before sample allocation; conservative 32MiB + 96*activeWidth*(stripRows+16). Two worker threads. Entire original is never mmap-populated. Compressed blocks add actual max encoded bytes + bounded decoded block bytes + 4MiB decoder overhead; max 8MiB encoded and 4M scalar samples per block.",
   "memoryModelCameraRaw": "128 MiB maximum; bounded allocation-free dummy sensor metadata, lazy input mmap; actual full integer sensor is admitted. Decode peak = 32 MiB + inputBytes + 2*sensorPixels + format-specific scratch (CR2 another 2*sensorPixels; NEF actual EOF padded block; Sony borrowed input). Develop peak = 32 MiB + 2*sensorPixels + 96*activeWidth*(stripRows+16); use max of stages. No full float/RGB plane, no automatic resizing.",
   "cameraWarningCode": "CAMERA_RAW_BASIC_DEVELOPMENT",
-  "metadataAdmissionCamera": "Android wrapper inspects only classic TIFF root entries to choose resource reservation, not support. Non-DNG candidate metadata reserves 32 MiB through shared NativeWorkReservations (+16 MiB existing margin, max two active jobs). DNGVersion retains legacy no-heavy metadata restore. RawLoader profile database remains resident after lease release; fresh OS snapshots reflect it."
+  "metadataAdmissionCamera": "Android wrapper inspects only classic TIFF root entries to choose resource reservation, not support. Non-DNG candidate metadata reserves 32 MiB through shared NativeWorkReservations (+16 MiB existing margin, max two active jobs). DNGVersion retains legacy no-heavy metadata restore. RawLoader profile database remains resident after lease release; fresh OS snapshots reflect it.",
+  "embeddedLensCorrections": {
+    "scope": "Supported DNG CFA List3 WarpRectilinear/WarpFisheye and ordered GainMaps; compatible Sony ARW, Fujifilm RAF and Olympus ORF embedded geometric distortion. Manufacturer CA/vignetting are not implemented.",
+    "details": "docs/EMBEDDED-LENS-CORRECTIONS.md",
+    "warningCodes": [
+      "EMBEDDED_LENS_DISTORTION_APPLIED",
+      "EMBEDDED_LENS_DISTORTION_NOT_APPLIED"
+    ],
+    "dngOptionalWarningCode": "DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED",
+    "sourceWindowMaxBytes": 8388608,
+    "geometryScratchAllowanceBytes": 10485760,
+    "photoInformationOnly": true
+  }
 }

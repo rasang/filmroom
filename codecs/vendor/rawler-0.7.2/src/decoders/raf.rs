@@ -395,6 +395,10 @@ impl<'a> Decoder for RafDecoder<'a> {
       };
       let photometric = RawPhotometricInterpretation::Cfa(CFAConfig::new_from_camera(&camera));
       let mut image = RawImage::new(camera, image, cpp, normalize_wb(self.get_wb()?), photometric, blacklevel, whitelevel, dummy);
+      image.lens_distortion = crate::rawimage::EmbeddedLensDistortion::fuji(
+        raw.get_entry(FujiIFD::GeometricDistortionParams).map(|entry| &entry.value),
+        self.makernotes.get_entry(RafMakernotes::CropMode).map(|entry| &entry.value)
+      );
 
       // Overwrite crop if available in metadata
       if let Some(crop) = self.get_crop()? {
