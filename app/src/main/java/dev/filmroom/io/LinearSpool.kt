@@ -47,24 +47,26 @@ object LinearSpool {
             job.ensureActive();return bitmap
         } catch(t:Throwable){bitmap.recycle();throw t}
     }
-    fun resize(file:File,width:Int,height:Int,target:File,size:PhotoLimits.Dimensions,job:CoroutineContext) {
+    fun resize(file:File,width:Int,height:Int,target:File,size:PhotoLimits.Dimensions,job:CoroutineContext,onProgress:((Int,Int)->Unit)?=null) {
         require(target.createNewFile())
         var success=false
         try {
             target.outputStream().buffered(256*1024).use {output->
                 val bytes=ByteBuffer.allocate(size.width*12).order(ByteOrder.LITTLE_ENDIAN)
-                rows(file,width,height,size.width,size.height,job){_,row->bytes.clear();row.forEach{bytes.putFloat(it)};output.write(bytes.array())}
+                onProgress?.invoke(0,size.height)
+                rows(file,width,height,size.width,size.height,job){y,row->bytes.clear();row.forEach{bytes.putFloat(it)};output.write(bytes.array());onProgress?.invoke(y+1,size.height)}
             }
             job.ensureActive();success=true
         } finally {if(!success)target.delete()}
     }
-    fun fromBitmap(bitmap:Bitmap,target:File,job:CoroutineContext) {
+    fun fromBitmap(bitmap:Bitmap,target:File,job:CoroutineContext,onProgress:((Int,Int)->Unit)?=null) {
         require(target.createNewFile());var success=false
         try {
             target.outputStream().buffered(256*1024).use {out->
                 val colors=IntArray(bitmap.width);val bytes=ByteBuffer.allocate(bitmap.width*12).order(ByteOrder.LITTLE_ENDIAN)
+                onProgress?.invoke(0,bitmap.height)
                 repeat(bitmap.height){y->job.ensureActive();bitmap.getPixels(colors,0,bitmap.width,0,y,bitmap.width,1);bytes.clear()
-                    colors.forEach{c->bytes.putFloat(LinearRgb.srgb8ToLinear[(c ushr 16)and 255]);bytes.putFloat(LinearRgb.srgb8ToLinear[(c ushr 8)and 255]);bytes.putFloat(LinearRgb.srgb8ToLinear[c and 255])};out.write(bytes.array())}
+                    colors.forEach{c->bytes.putFloat(LinearRgb.srgb8ToLinear[(c ushr 16)and 255]);bytes.putFloat(LinearRgb.srgb8ToLinear[(c ushr 8)and 255]);bytes.putFloat(LinearRgb.srgb8ToLinear[c and 255])};out.write(bytes.array());onProgress?.invoke(y+1,bitmap.height)}
             };job.ensureActive();success=true
         }finally{if(!success)target.delete()}
     }

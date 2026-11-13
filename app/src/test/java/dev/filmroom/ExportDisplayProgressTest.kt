@@ -22,6 +22,10 @@ class ExportDisplayProgressTest {
         assertEquals("保存照片\n第 7/7 步 · 100%",progress.last().compactText)
         assertEquals(dev.filmroom.ui.ProcessingVisualStage.SAVING,dev.filmroom.ui.ProcessingVisualStage.fromExportStep(8))
     }
+    @Test fun measuredTailCountsRemainBelowCompletion() {
+        assertEquals(49,ExportDisplayProgress(7,49,100,measured=true).displayPercent)
+        assertNull(ExportDisplayProgress(7,49,100).displayPercent)
+    }
     @Test fun percentageFloorsRealWorkAndUsesLongArithmetic(){
         assertEquals(65,ExportDisplayProgress(5,6500,10000).percent)
         assertEquals(99,ExportDisplayProgress(5,9999,10000).percent)

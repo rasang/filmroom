@@ -65,6 +65,11 @@ internal class ExportPreviewSequence {
         if(active && phase==3 && remaining(now)==0L){active=false;return true}
         return false
     }
+    /** Measured saving may advance while the existing image ritual continues. This does
+     * not change image selection or certify Saved; completion stays below 100 until dwell ends. */
+    fun constrainProgress(stage:Int,percent:Int?,measured:Boolean):Pair<Int,Int?> =
+        if(active && measured && stage==7)stage to percent?.coerceAtMost(99) else constrain(stage,percent)
+
     /** Clamp only the visible rail/text, never durable/native progress. A later
      * phase cannot certify 99% for the earlier image that is still visible. */
     fun constrain(stage:Int,percent:Int?):Pair<Int,Int?> {

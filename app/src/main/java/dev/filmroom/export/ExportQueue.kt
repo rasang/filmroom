@@ -232,6 +232,8 @@ class ExportQueue internal constructor(private val context:Context,private val p
         var negativeDiagnostics:NegativePreviewDiagnostics?=null
         var previewAttempt:String?=null
         var previewAttempted=false
+        var headWork:MeasuredStageWork?=null
+        var tailWork:MeasuredStageWork?=null
         try {
             val accepted=synchronized(activeLock){
                 if(store.get(id)?.state !in setOf(ExportJobState.PENDING,ExportJobState.RETRY))false
@@ -266,7 +268,9 @@ class ExportQueue internal constructor(private val context:Context,private val p
                             processing.trimCacheForReserve(required)
                             if(android.os.StatFs(dir.path).availableBytes>=required) {
                                 val target=File(dir,"codec-reused-${java.util.UUID.randomUUID()}.${initial.format.extension}")
-                                lease.copyTo(target){cacheJob.ensureActive()}
+                                val reuseWork=MeasuredStageWork(1,listOf("copy")){p->update{it.copy(progress=p)}}.also{it.start()}
+                                lease.copyTo(target,{d,t->reuseWork.report("copy",d,t)}){cacheJob.ensureActive()}
+                                reuseWork.finish("copy")
                                 reusedPayload=target;reservedBytes.set(required)
                                 val backend=org.json.JSONObject(lease.receipt).optJSONObject("probe")?.optString("backend")
                                 reusedBackend=dev.filmroom.diagnostics.GpuBackend.entries.firstOrNull{it.id==backend}
@@ -289,7 +293,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     if(!ExportStoragePolicy.hasSpace(android.os.StatFs(dir.path).availableBytes,required))throw EngineException(EngineFailure.STORAGE)
                     reservedBytes.set(required)
                 }
-                if(input.length()!=initial.width.toLong()*initial.height*12) {
+                val needsInput=input.length()!=initial.width.toLong()*initial.height*12
+                val hasPre=initial.border!=null && initial.parameters.preImagingBorder
+                val headSteps=buildList {if(needsInput)add("input");if(hasPre)add("pre")}
+                if(headSteps.isNotEmpty())headWork=MeasuredStageWork(1,headSteps){p->update{it.copy(progress=p)}}.also{it.start()}
+                if(needsInput) {
                     if(initial.inputKind=="LINEAR")throw EngineException(EngineFailure.INCOMPLETE)
                     input.delete()
                     val sourceFile=File(dir,if(initial.inputKind in setOf("RAW","LINEAR_SOURCE"))"source.rgb"else "source.image")
@@ -298,11 +306,12 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     val prepared=File(dir,"prepared-input.part")
                     check(!prepared.exists()||prepared.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ba513cd4be11) }
                     try {
-                        if(initial.maxEdge==null)repository.spoolOriginal(source,prepared)else repository.spoolSized(source,prepared,initial.maxEdge)
+                        if(initial.maxEdge==null)repository.spoolOriginal(source,prepared){d,t->headWork?.report("input",d,t)}else repository.spoolSized(source,prepared,initial.maxEdge){d,t->headWork?.report("input",d,t)}
                         check(prepared.length()==initial.width.toLong()*initial.height*12)
                         FileOutputStream(prepared,true).use{it.fd.sync()}
                         Files.move(prepared.toPath(),input.toPath(),java.nio.file.StandardCopyOption.ATOMIC_MOVE)
                         freshlyPreparedInput=true
+                        headWork?.finish("input")
                     }finally{prepared.delete()}
                 }
                 if(input.length()!=initial.width.toLong()*initial.height*12)throw EngineException(EngineFailure.INCOMPLETE)
@@ -315,7 +324,8 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         preImagingInput=target
                         BorderMemoryAdmission.withBudget(bytes,{NativeWorkReservations.snapshot(context)}){
                             val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,pre.outputWidth,pre.outputHeight,pre)
-                            PreImagingInput.file(input,target,pre,asset,imprint){coroutine.ensureActive()}
+                            PreImagingInput.file(input,target,pre,asset,imprint,onProgress={d,t->headWork?.report("pre",d.toLong(),t.toLong())}){coroutine.ensureActive()}
+                            headWork?.finish("pre")
                         }
                     }
                 }else input
@@ -326,12 +336,18 @@ class ExportQueue internal constructor(private val context:Context,private val p
                             ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
                         }}catch(c:CancellationException){throw c}catch(_:Exception){}catch(_:OutOfMemoryError){}
                     }
-                    update{it.copy(progress=p.display)}
+                    update{if(p.display.stage==1 && it.progress.stage==1 && it.progress.measured)it else it.copy(progress=p.display)}
                 }
                 output=if(pre==null)processing.renderReserved(nativeInput,initial.width,initial.height,initial.parameters,dir,reservedBytes.get(),onNativeProgress)
                     else processing.renderPreImaging(nativeInput,pre.outputWidth,pre.outputHeight,initial.parameters,dir,reservedBytes.get(),PreImagingInput.nativeJson(pre,input),onNativeProgress)
                 }
-                update{it.copy(progress=ExportDisplayProgress(7))}
+                val hasComposition=reusedPayload==null && (initial.border!=null || initial.crop?.let{!it.isIdentity || initial.parameters.imprint.enabled}==true)
+                val tailSteps=buildList {if(hasComposition)add("compose");if(reusedPayload==null)add("encode");add("publish")}
+                tailWork=MeasuredStageWork(7,tailSteps){p->update{it.copy(progress=p)}}.also{it.start()}
+                val onTailWork:(String,Long,Long,Boolean)->Unit={step,d,t,finished->
+                    val name=if(step=="copy")"publish" else step
+                    if(finished)tailWork?.finish(name)else tailWork?.report(name,d,t)
+                }
                 // One persisted instant per encode attempt. A committed row is reused above;
                 // an uncommitted retry gets its actual new export time, not the failed attempt time.
                 update{it.copy(exportMillis=System.currentTimeMillis(),metadataWarning=captureMetadata.warning)}
@@ -341,7 +357,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 if(reusedPayload!=null) {
                     repository.exportEncodedPayload(checkNotNull(reusedPayload),initial.outputWidth,initial.outputHeight,initial.format,
                         initial.parameters.outputColorSpace,captureMetadata,checkNotNull(exportRecord.exportMillis),prepared,committed,cacheSourceBackend=reusedBackend,
-                        onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}})
+                        onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}},onWork=onTailWork)
                 } else {
                 val imprintBudget=if(initial.parameters.imprint.enabled)dev.filmroom.imprint.ImprintPlan.MAX_WORKING_BYTES else 0L
                 val encodingInput=initial.border?.let{border->
@@ -355,10 +371,10 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         framedOutput=target
                         val coroutine=currentCoroutineContext()
                         BorderMemoryAdmission.withBudget(BorderCompositor.workingBytes(border,asset)+imprintBudget,{NativeWorkReservations.snapshot(context)}) {
-                            if(initial.parameters.preImagingBorder)PreImagingInput.restoreHoles(checkNotNull(output),target,border,asset){coroutine.ensureActive()}
+                            if(initial.parameters.preImagingBorder)PreImagingInput.restoreHoles(checkNotNull(output),target,border,asset,onProgress={d,t->tailWork?.report("compose",d.toLong(),t.toLong())}){coroutine.ensureActive()}
                             else {
                                 val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,border.outputWidth,border.outputHeight,border)
-                                BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint){coroutine.ensureActive()}
+                                BorderCompositor.composite(checkNotNull(output),target,border,asset,OutputColorSpace.parse(initial.parameters.outputColorSpace),imprint,onProgress={d,t->tailWork?.report("compose",d.toLong(),t.toLong())}){coroutine.ensureActive()}
                             }
                         }
                     }
@@ -369,10 +385,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
                         val coroutine=currentCoroutineContext()
                         BorderMemoryAdmission.withBudget(CropCompositor.workingBytes(crop)+imprintBudget,{NativeWorkReservations.snapshot(context)}){
                             val imprint=dev.filmroom.imprint.ImprintPlan.create(initial.parameters.imprint,captureMetadata,crop.outputWidth,crop.outputHeight)
-                            CropCompositor.composite(checkNotNull(output),target,crop,imprint,OutputColorSpace.parse(initial.parameters.outputColorSpace)){coroutine.ensureActive()}
+                            CropCompositor.composite(checkNotNull(output),target,crop,imprint,OutputColorSpace.parse(initial.parameters.outputColorSpace),onProgress={d,t->tailWork?.report("compose",d.toLong(),t.toLong())}){coroutine.ensureActive()}
                         }
                     }
                 } ?: checkNotNull(output)
+                if(hasComposition)tailWork?.finish("compose")
                 if(!initial.parameters.preImagingBorder && initial.format==ExportFormat.PNG && sourceDigest!=null && (initial.inputKind=="LINEAR" || freshlyPreparedInput))optionalCache {
                     val completion=processing.completedEncodedReuseIdentity() ?: return@optionalCache null
                     if(processing.encodedReuseIdentity(initial.width,initial.height,initial.parameters)!=completion.identity)return@optionalCache null
@@ -398,6 +415,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     exportMillis=checkNotNull(exportRecord.exportMillis),
                     onMetadataWarning={warning->update{it.copy(metadataWarning=warning)}},
                     pngPixelPayload=pngCacheStream,
+                    onWork=onTailWork,
                     onEncodedPayload={encoded->
                         // Old prepared spools/checkpoint resumes are not certified as a new
                         // decoding of source.image. Direct LINEAR is itself content-hashed.
@@ -426,11 +444,12 @@ class ExportQueue internal constructor(private val context:Context,private val p
                 }
                 }
             }
+            tailWork?.finish("publish")
             store.get(id)?.mediaUri?.let { uri->runCatching{saveFinalThumbnail(uri,dir)} }
-            update{it.copy(progress=ExportDisplayProgress(8))}
+            // Keep measured tail progress visible until cleanup really finishes.
             output?.delete();output=null
             val clean=cleanup(id)
-            update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
+            update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1,measured=tailWork!=null),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
         } catch(c:CancellationException) {
             negativeDiagnostics?.cancel()
             ScanPreviewStore.clear(dir);ExportPresentationStore.clear(context,id)

@@ -390,7 +390,7 @@ class ExportQueueActivity : ComponentActivity() {
             val messageVisibility=if(!finishing && !compactMetadataWarning && (!job.localizedMessage.isNullOrBlank() || (job.archivedHistory && archivedUnavailable)))View.VISIBLE else View.GONE
             if(message.visibility!=messageVisibility)message.visibility=messageVisibility
             rememberPresentation(id,sequence.active)
-            val (stage,percent)=sequence.constrain(job.progress.displayStage,job.progress.displayPercent)
+            val (stage,percent)=sequence.constrainProgress(job.progress.displayStage,job.progress.displayPercent,job.progress.measured)
             val visibility=if(!job.archivedHistory && (finishing || job.state in setOf(ExportJobState.RUNNING,ExportJobState.PAUSED,ExportJobState.FAILED)))View.VISIBLE else View.GONE
             if(bar.visibility!=visibility)bar.visibility=visibility
             bar.bind(stage,percent,!sequence.active && job.state==ExportJobState.COMPLETED && job.progress.stage==8 && job.progress.percent==100,job.state==ExportJobState.RUNNING || finishing)
@@ -399,7 +399,8 @@ class ExportQueueActivity : ComponentActivity() {
             val minLines=if(finishing || job.state in setOf(ExportJobState.RUNNING,ExportJobState.PAUSED,ExportJobState.FAILED))2 else 1
             if(progress.minLines!=minLines)progress.minLines=minLines
             val text=if(sequence.active && (job.state==ExportJobState.RUNNING || finishing))
-                dev.filmroom.engine.ExportDisplayProgress(stage,visual=dev.filmroom.engine.ExportVisualProgress(stage,percent)).compactText
+                (if(stage==7)dev.filmroom.engine.ExportDisplayProgress(7,(percent ?: 0).toLong(),if(percent==null)0 else 100,measured=percent!=null)
+                else dev.filmroom.engine.ExportDisplayProgress(stage,visual=dev.filmroom.engine.ExportVisualProgress(stage,percent))).compactText
                 else ExportJobPresentation.from(job).progress
             // Called by layout/viewport observers: rewriting identical text would request
             // another layout and feed the observer forever, even with no progress change.

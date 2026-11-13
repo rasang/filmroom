@@ -12,13 +12,14 @@ import java.nio.file.StandardCopyOption
 /** The same bounded two-row traversal feeds plain-crop and border preview/export. */
 internal object FinalImageRows {
     fun walk(sourceWidth:Int,outputWidth:Int,outputHeight:Int,map:FinalImageSampling,checkActive:()->Unit,
-             read:(Int,FloatArray)->Unit,compose:(Int,FloatArray,FloatArray,Double,FloatArray)->Unit,write:(Int,FloatArray)->Unit,readTile:((Int,Int,Int,Int,FloatArray)->Unit)?=null,sourceHeight:Int=map.inputHeight) {
+             read:(Int,FloatArray)->Unit,compose:(Int,FloatArray,FloatArray,Double,FloatArray)->Unit,write:(Int,FloatArray)->Unit,readTile:((Int,Int,Int,Int,FloatArray)->Unit)?=null,sourceHeight:Int=map.inputHeight,onProgress:((Int,Int)->Unit)?=null) {
         require(sourceWidth==map.inputWidth && sourceHeight==map.inputHeight)
         var first=FloatArray(sourceWidth*3);var second=FloatArray(sourceWidth*3)
         var firstIndex=-1;var secondIndex=-1;val row=FloatArray(outputWidth*3)
         val tiles=if(map.rotated)FinalImageTileCache(sourceWidth,sourceHeight,readTile ?: {x,y,w,h,out->
             for(dy in 0 until h){read(y+dy,first);first.copyInto(out,dy*FinalImageTileCache.EDGE*3,x*3,(x+w)*3)}
         })else null
+        onProgress?.invoke(0,outputHeight)
         for(y in 0 until outputHeight){
             checkActive();val sampling=map.row(y)
             if(tiles!=null){if(map.rowHasPhoto(y))map.prepareRotatedRow(y,tiles)}
@@ -31,10 +32,11 @@ internal object FinalImageRows {
             }
             compose(y,first,if(sampling.second==sampling.first)first else second,sampling.fraction,row)
             write(y,row)
+            onProgress?.invoke(y+1,outputHeight)
         }
     }
     fun file(source:File,destination:File,sourceWidth:Int,sourceHeight:Int,outputWidth:Int,outputHeight:Int,
-             map:FinalImageSampling,checkActive:()->Unit,compose:(Int,FloatArray,FloatArray,Double,FloatArray)->Unit) {
+             map:FinalImageSampling,checkActive:()->Unit,onProgress:((Int,Int)->Unit)?=null,compose:(Int,FloatArray,FloatArray,Double,FloatArray)->Unit) {
         require(source.canonicalFile!=destination.canonicalFile)
         require(source.length()==sourceWidth.toLong()*sourceHeight*12L)
         val part=File(destination.parentFile,destination.name+".part")
@@ -48,7 +50,7 @@ internal object FinalImageRows {
                     input.seek(index.toLong()*sourceWidth*12L);input.readFully(bytes)
                     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(row)
                     require(row.all{it.isFinite()}){dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e47ae3f26387)}
-                },compose=compose,write={_,row->encoded.clear();encoded.asFloatBuffer().put(row);out.write(encoded.array())},sourceHeight=sourceHeight,
+                },compose=compose,write={_,row->encoded.clear();encoded.asFloatBuffer().put(row);out.write(encoded.array())},sourceHeight=sourceHeight,onProgress=onProgress,
                 readTile={x,y,w,h,tile->
                     for(dy in 0 until h){
                         checkActive();input.seek(((y+dy).toLong()*sourceWidth+x)*12L);input.readFully(bytes,0,w*12)

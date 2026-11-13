@@ -471,32 +471,33 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
     }
 
     /** Returns a NEW owned spool for standard output. Original linear-source callers may borrow linearFile separately. */
-    suspend fun spoolSized(source:PhotoSource,target:File,maxEdge:Int):PhotoLimits.Dimensions {
+    suspend fun spoolSized(source:PhotoSource,target:File,maxEdge:Int,onProgress:(Long,Long)->Unit={_,_->}):PhotoLimits.Dimensions {
         val size=source.outputSize(maxEdge);var completed=false
         try{
             withContext(Dispatchers.IO){
                 val job=currentCoroutineContext();job.ensureActive()
                 privateFile(target);require(!target.exists())
-                if(source.linearFile!=null)LinearSpool.resize(source.linearFile,source.originalWidth,source.originalHeight,target,size,job)
-                else {val bitmap=decodeFile(source.localFile,maxEdge,job);try{LinearSpool.fromBitmap(bitmap,target,job)}finally{bitmap.recycle()}}
+                if(source.linearFile!=null)LinearSpool.resize(source.linearFile,source.originalWidth,source.originalHeight,target,size,job){done,total->onProgress(done.toLong(),total.toLong())}
+                else {val bitmap=decodeFile(source.localFile,maxEdge,job);try{LinearSpool.fromBitmap(bitmap,target,job){done,total->onProgress(done.toLong(),total.toLong())}}finally{bitmap.recycle()}}
             }
             completed=true;return size
         }finally{if(!completed)target.delete()}
     }
 
-    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onEncodedPayload:suspend (File)->Unit={},pngPixelPayload:OutputStream?=null,onMetadataWarning:(String)->Unit={}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=false,metadataIssues=photoMetadata.issues,metadataPhase=MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=photoMetadata.diagnosticDateBasis)) { trace ->
+    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onEncodedPayload:suspend (File)->Unit={},pngPixelPayload:OutputStream?=null,onMetadataWarning:(String)->Unit={},onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=false,metadataIssues=photoMetadata.issues,metadataPhase=MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=photoMetadata.diagnosticDateBasis)) { trace ->
         OutputColorSpace.parse(outputColorSpace)
         val committed:(ExportResult)->Unit={result->trace.committed();onCommitted(result)}
         trace.mark(Stage.ENCODE_START)
         val metadataIssue:(MetadataIssuePhase,MetadataIssue)->Unit={phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
-        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning,pixelPayload=pngPixelPayload,onMetadataIssue=metadataIssue)
+        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning,pixelPayload=pngPixelPayload,onMetadataIssue=metadataIssue,onWork=onWork)
         val input=privateFile(file)
         require(input.length()==LinearRgb.byteCount(width,height))
         val encoded=File(input.parentFile,"codec-output-${UUID.randomUUID()}.${format.extension}")
         try{
             trace.mark(Stage.NATIVE_ENTER)
             // Preserve lexical input for symlink rejection; native receives canonical paths after scoped validation.
-            val report=codecs.encode(file,encoded,width,height,if(format==ExportFormat.TIFF16)"TIFF16" else "JPEG",quality.coerceIn(1,100),outputColorSpace)
+            val report=codecs.encode(file,encoded,width,height,if(format==ExportFormat.TIFF16)"TIFF16" else "JPEG",quality.coerceIn(1,100),outputColorSpace,dev.filmroom.codec.CodecEncodeProgress { done,total,finished -> onWork("encode",done.toLong(),total.toLong(),finished) })
+            onWork("encode",1,1,true)
             trace.mark(Stage.NATIVE_EXIT)
             // This is the only cache boundary: complete encoder output, before any capture/GPS/time EXIF.
             currentCoroutineContext().ensureActive()
@@ -508,7 +509,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             currentCoroutineContext().ensureActive()
             applyMetadata(encoded,format,photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning,metadataIssue)
             return@run exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),committed,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
-                encoded.inputStream().buffered().use{stream->val bytes=ByteArray(64*1024);while(true){job.ensureActive();val n=stream.read(bytes);if(n<0)break;out.write(bytes,0,n)}};true
+                encoded.inputStream().buffered().use{stream->val bytes=ByteArray(64*1024);var written=0L;val total=encoded.length();onWork("copy",0,total,false);while(true){job.ensureActive();val n=stream.read(bytes);if(n<0)break;out.write(bytes,0,n);written+=n;onWork("copy",written,total,false)}};true
             }
         }finally{encoded.delete()}
     }
@@ -517,7 +518,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
      * full metadata, then use the same pending journal, fresh row and commit point as cold export. */
     internal suspend fun exportEncodedPayload(file:File,width:Int,height:Int,format:ExportFormat,
         outputColorSpace:String,photoMetadata:PhotoMetadata,exportMillis:Long,
-        onPrepared:(ExportResult)->Unit={},onCommitted:(ExportResult)->Unit={},cacheSourceBackend:dev.filmroom.diagnostics.GpuBackend?=null,onMetadataWarning:(String)->Unit={}):ExportResult {
+        onPrepared:(ExportResult)->Unit={},onCommitted:(ExportResult)->Unit={},cacheSourceBackend:dev.filmroom.diagnostics.GpuBackend?=null,onMetadataWarning:(String)->Unit={},onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->}):ExportResult {
         require(format in setOf(ExportFormat.JPEG,ExportFormat.TIFF16,ExportFormat.PNG))
         val encoded=privateFile(file)
         return OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=true,encodedPayloadCacheBytes=encoded.length(),encodedPayloadSourceBackend=cacheSourceBackend)) { trace ->
@@ -528,7 +529,12 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 val exif=pngMetadata(photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning){phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
                 return@run exportEncoded(width,height,format,"暗房_原尺寸",{result->trace.committed();onCommitted(result)},
                     {},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
-                    encoded.inputStream().buffered().use { input ->
+                    encoded.inputStream().buffered().use { rawInput ->
+                        val total=encoded.length();var readBytes=0L
+                        val input=object:java.io.FilterInputStream(rawInput) {
+                            override fun read():Int {val n=super.read();if(n>=0){readBytes++;onWork("copy",readBytes,total,false)};return n}
+                            override fun read(b:ByteArray,off:Int,len:Int):Int {val n=rawInput.read(b,off,len);if(n>0){readBytes+=n;onWork("copy",readBytes,total,false)};return n}
+                        }
                         LinearRgbPng.replayPixelPayload(input,out,width,height,colorSpace,profile,exif,exportMillis){job.ensureActive()}
                     };true
                 }
@@ -537,7 +543,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             currentCoroutineContext().ensureActive()
             exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),
                 {result->trace.committed();onCommitted(result)},{},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
-                encoded.inputStream().buffered().use{input->val bytes=ByteArray(64*1024);while(true){job.ensureActive();val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n)}};true
+                encoded.inputStream().buffered().use{input->val bytes=ByteArray(64*1024);var written=0L;val total=encoded.length();onWork("copy",0,total,false);while(true){job.ensureActive();val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n);written+=n;onWork("copy",written,total,false)}};true
             }
         }
     }
@@ -581,7 +587,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
      * engine-data). Source and previous spools are never overwritten. A cancelled
      * result handoff deletes this new spool, including the dispatcher-race case.
      */
-    suspend fun spoolOriginal(source: PhotoSource, destination: File): PhotoLimits.Dimensions {
+    suspend fun spoolOriginal(source: PhotoSource, destination: File,onProgress:(Long,Long)->Unit={_,_->}): PhotoLimits.Dimensions {
         val target = privateFile(destination)
         require(!target.exists()) { "Original spool destination must not exist" }
         require(target != source.localFile.canonicalFile) { "Source cannot be overwritten" }
@@ -605,15 +611,15 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     source.linearFile.inputStream().use { input ->
                         java.io.FileOutputStream(checkNotNull(temporary)).use { file ->
                             file.buffered().use { output ->
-                                val bytes=ByteArray(256*1024)
-                                while(true){job.ensureActive();val n=input.read(bytes);if(n<0)break;output.write(bytes,0,n)}
+                                val bytes=ByteArray(256*1024);var written=0L;onProgress(0,expected)
+                                while(true){job.ensureActive();val n=input.read(bytes);if(n<0)break;output.write(bytes,0,n);written+=n;onProgress(written,expected)}
                                 output.flush();file.fd.sync()
                             }
                         }
                     }
                     if(checkNotNull(temporary).length()!=expected)throw IOException("Incomplete linear original spool")
                     PhotoLimits.Dimensions(source.originalWidth,source.originalHeight)
-                }else OriginalSpool.write(source.localFile, source.originalWidth, source.originalHeight, checkNotNull(temporary), job)
+                }else OriginalSpool.write(source.localFile, source.originalWidth, source.originalHeight, checkNotNull(temporary), job){done,total->onProgress(done.toLong(),total.toLong())}
                 job.ensureActive()
                 java.nio.file.Files.move(checkNotNull(temporary).toPath(), target.toPath())
                 installed = true
@@ -650,6 +656,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         onMetadataWarning: (String) -> Unit = {},
         pixelPayload: OutputStream? = null,
         onMetadataIssue: (MetadataIssuePhase,MetadataIssue) -> Unit = {_,_->},
+        onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->},
     ): ExportResult {
         val colorSpace=OutputColorSpace.parse(outputColorSpace)
         val profile=if(colorSpace==OutputColorSpace.SRGB)null else outputAssets.open("color-profiles/${colorSpace.iccAsset}").use{it.readBytes()}
@@ -661,8 +668,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         val exif=pngMetadata(photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning,onMetadataIssue)
         return exportEncoded(width,height,ExportFormat.PNG,"暗房_原尺寸",onCommitted,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()) { output,job ->
             input.inputStream().buffered(256*1024).use { source ->
-                LinearRgbPng.encode(source,width,height,output,checkActive={job.ensureActive()},onRowEncoded={onProgress(it,height)},colorSpace=colorSpace,iccProfile=profile,exifMetadata=exif,exportMillis=exportMillis,pixelPayload=pixelPayload)
-            };true
+                LinearRgbPng.encode(source,width,height,output,checkActive={job.ensureActive()},onRowEncoded={onProgress(it,height);onWork("encode",it.toLong(),height.toLong(),false)},colorSpace=colorSpace,iccProfile=profile,exifMetadata=exif,exportMillis=exportMillis,pixelPayload=pixelPayload)
+            };onWork("encode",1,1,true);true
         }
     }
 

@@ -5,7 +5,7 @@ use crate::{
 };
 use jni::{
     JNIEnv,
-    objects::{JClass, JString},
+    objects::{JClass, JObject, JString, JValue},
     sys::{jlong, jstring},
 };
 use serde_json::{Value, json};
@@ -238,9 +238,15 @@ pub extern "system" fn Java_dev_filmroom_codec_NativeCodecBridge_nativeDestroy(
         }
     }
 }
-fn run_encode(id: i64, input: &str, output: &str, params: &str) -> Value {
+fn run_encode(
+    id: i64,
+    input: &str,
+    output: &str,
+    params: &str,
+    progress: crate::export::EncodeProgress<'_>,
+) -> Value {
     let start = Instant::now();
-    let result = std::panic::catch_unwind(|| -> Result<Value> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<Value> {
         let h = handle(id)?;
         if h.busy
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -257,18 +263,19 @@ fn run_encode(id: i64, input: &str, output: &str, params: &str) -> Value {
         }
         let p: crate::export::ExportParams =
             serde_json::from_str(params).map_err(|_| err("INVALID_INPUT", "validate"))?;
-        let r = crate::export::encode(
+        let r = crate::export::encode_with_progress(
             &path(&h, input, false)?,
             &path(&h, output, true)?,
             &p,
             &h.cancel,
+            progress,
         )?;
         let mut v = serde_json::to_value(r).map_err(|_| err("ENCODE_FAILED", "encode"))?;
         v["ok"] = json!(true);
         v["stage"] = json!("complete");
         v["outputValid"] = json!(true);
         Ok(v)
-    })
+    }))
     .unwrap_or_else(|_| Err(err("ENCODE_FAILED", "encode")));
     let mut v = match result {
         Ok(v) => v,
@@ -295,12 +302,76 @@ pub extern "system" fn Java_dev_filmroom_codec_NativeCodecBridge_nativeEncode(
         string(&mut env, output),
         string(&mut env, params),
     ) {
-        (Ok(i), Ok(o), Ok(p)) => run_encode(id, &i, &o, &p),
+        (Ok(i), Ok(o), Ok(p)) => run_encode(id, &i, &o, &p, &|_, _, _| {}),
         _ => {
             json!({"ok":false,"code":"INVALID_INPUT","message":"参数无效","stage":"validate","outputValid":false,"schemaVersion":1})
         }
     };
     reply(&mut env, v)
+}
+
+/// A local callback stays on this JNI worker; no cross-thread JNIEnv is retained.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_filmroom_codec_NativeCodecBridge_nativeEncodeWithProgress(
+    mut env: JNIEnv,
+    _: JClass,
+    id: jlong,
+    input: JString,
+    output: JString,
+    params: JString,
+    callback: JObject,
+) -> jstring {
+    let args = (
+        string(&mut env, input),
+        string(&mut env, output),
+        string(&mut env, params),
+    );
+    let v = match args {
+        (Ok(i), Ok(o), Ok(p)) => {
+            let env_cell = std::cell::RefCell::new(&mut env);
+            let failed = std::cell::Cell::new(false);
+            let last_percent = std::cell::Cell::new(u32::MAX);
+            let progress = |done: u32, total: u32, finished: bool| {
+                if failed.get() {
+                    return;
+                }
+                // Only cross JNI for a changed measured percentage, plus final sync.
+                let percent = done.saturating_mul(100) / total.max(1);
+                if !finished && last_percent.replace(percent) == percent {
+                    return;
+                }
+                let mut env = env_cell.borrow_mut();
+                if env
+                    .call_method(
+                        &callback,
+                        "onProgress",
+                        "(IIZ)V",
+                        &[
+                            JValue::Int(done as i32),
+                            JValue::Int(total as i32),
+                            JValue::Bool(finished as u8),
+                        ],
+                    )
+                    .is_err()
+                {
+                    // Preserve the Java exception for the caller and stop native work.
+                    failed.set(true);
+                    if let Ok(h) = handle(id) {
+                        h.cancel.store(true, Ordering::Release);
+                    }
+                }
+            };
+            run_encode(id, &i, &o, &p, &progress)
+        }
+        _ => {
+            json!({"ok":false,"code":"INVALID_INPUT","stage":"validate","outputValid":false,"schemaVersion":1})
+        }
+    };
+    if env.exception_check().unwrap_or(true) {
+        std::ptr::null_mut()
+    } else {
+        reply(&mut env, v)
+    }
 }
 
 #[cfg(test)]

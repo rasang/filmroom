@@ -19,7 +19,7 @@ internal object OriginalSpool {
     private const val MAX_STRIP_PIXELS = 1_048_576 // 4MiB Bitmap + 4MiB IntArray.
 
     @Suppress("DEPRECATION")
-    fun write(source: File, expectedWidth: Int, expectedHeight: Int, destination: File, job: CoroutineContext): PhotoLimits.Dimensions {
+    fun write(source: File, expectedWidth: Int, expectedHeight: Int, destination: File, job: CoroutineContext, onProgress: ((Int, Int) -> Unit)? = null): PhotoLimits.Dimensions {
         job.ensureActive()
         val orientation = ExifInterface(source.absolutePath)
             .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
@@ -44,6 +44,7 @@ internal object OriginalSpool {
             }
             FileOutputStream(destination).use { file ->
                 file.buffered(256 * 1024).use { output ->
+                    onProgress?.invoke(0, mapping.height)
                     var y = 0
                     while (y < mapping.height) {
                         job.ensureActive()
@@ -80,6 +81,7 @@ internal object OriginalSpool {
                                     rowFloats.putFloat(LinearRgb.srgb8ToLinear[blue])
                                 }
                                 output.write(rowBytes)
+                                onProgress?.invoke(outputY + 1, mapping.height)
                             }
                         } finally { bitmap.recycle() }
                         y += rows

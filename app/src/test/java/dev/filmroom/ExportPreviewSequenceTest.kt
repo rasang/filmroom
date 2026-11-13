@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ExportPreviewSequenceTest {
+    @Test fun measuredSavingAdvancesWithoutSkippingImageDwellOrPrematureCompletion() {
+        val s=dev.filmroom.ui.ExportPreviewSequence();s.start();s.shown(1,0)
+        assertEquals(7 to 42,s.constrainProgress(7,42,true))
+        assertEquals(4 to null,s.constrain(7,42)) // Image path still follows ritual.
+        assertEquals(7 to 99,s.constrainProgress(7,100,true))
+        s.shown(2,500);s.shown(3,1000)
+        assertEquals(7 to 99,s.constrainProgress(7,100,true))
+        assertTrue(s.finish(1500));assertEquals(7 to 100,s.constrainProgress(7,100,true))
+    }
     @Test fun sharperNegativeReplacementDoesNotRestartTheStageClock() {
         val s=ExportPreviewSequence();s.start();s.visibility(true,0);s.shown(2,0)
         s.rememberNegative("negative-preview-early-current.png")

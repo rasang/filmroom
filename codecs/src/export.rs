@@ -107,6 +107,8 @@ fn read_at_all(f: &File, mut b: &mut [u8], mut offset: u64) -> io::Result<()> {
     }
     Ok(())
 }
+/// Rows consumed is work progress, not a promise that entropy coding/sync finished.
+pub type EncodeProgress<'a> = &'a dyn Fn(u32, u32, bool);
 struct JpegRows<'a> {
     file: &'a File,
     width: u16,
@@ -117,6 +119,7 @@ struct JpegRows<'a> {
     clipped: Rc<RefCell<u64>>,
     last_counted_y: RefCell<Option<u16>>,
     color_space: crate::output_color::OutputColorSpace,
+    progress: EncodeProgress<'a>,
 }
 impl ImageBuffer for JpegRows<'_> {
     fn get_jpeg_color_type(&self) -> JpegColorType {
@@ -159,6 +162,9 @@ impl ImageBuffer for JpegRows<'_> {
             buffers[1].push(cb);
             buffers[2].push(cr);
         }
+        if self.reason.borrow().is_none() && count_clipping {
+            (self.progress)(u32::from(y) + 1, u32::from(self.height), false);
+        }
     }
 }
 fn jpeg(
@@ -168,6 +174,7 @@ fn jpeg(
     cancel: &AtomicBool,
     reason: Reason,
     icc: &[u8],
+    progress: EncodeProgress<'_>,
 ) -> Result<u64> {
     let clipped = Rc::new(RefCell::new(0));
     let rows = JpegRows {
@@ -179,6 +186,7 @@ fn jpeg(
         reason: reason.clone(),
         clipped: clipped.clone(),
         last_counted_y: RefCell::new(None),
+        progress,
         color_space: crate::output_color::OutputColorSpace::parse(&p.output_color_space)?,
     };
     let writer = CheckedWriter {
@@ -219,6 +227,7 @@ fn tiff16(
     cancel: &AtomicBool,
     reason: Reason,
     icc: &[u8],
+    progress: EncodeProgress<'_>,
 ) -> Result<u64> {
     let writer = CheckedWriter {
         file: out,
@@ -242,6 +251,7 @@ fn tiff16(
             .write_tag(::tiff::tags::Tag::Orientation, 1u16)
             .map_err(tiff_error)?;
         let mut clipped = 0;
+        let mut written_samples = 0u64;
         while image.next_strip_sample_count() > 0 {
             if cancel.load(Ordering::Relaxed) {
                 return Err(err("CANCELLED", "encode"));
@@ -263,6 +273,12 @@ fn tiff16(
                 samples.push((color_space.encode(v) * 65535.).round() as u16);
             }
             image.write_strip(&samples).map_err(tiff_error)?;
+            written_samples += n as u64;
+            progress(
+                (written_samples / (u64::from(p.width) * 3)) as u32,
+                p.height,
+                false,
+            );
         }
         image.finish().map_err(tiff_error)?;
         Ok(clipped)
@@ -280,6 +296,16 @@ pub fn encode(
     p: &ExportParams,
     cancel: &AtomicBool,
 ) -> Result<ExportReport> {
+    encode_with_progress(input, output, p, cancel, &|_, _, _| {})
+}
+/// `finished` is only emitted after the encoder and output sync succeed.
+pub fn encode_with_progress(
+    input: &Path,
+    output: &Path,
+    p: &ExportParams,
+    cancel: &AtomicBool,
+    progress: EncodeProgress<'_>,
+) -> Result<ExportReport> {
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "encode"));
     }
@@ -295,7 +321,9 @@ pub fn encode(
     if p.width == 0 || p.height == 0 {
         return Err(err("INVALID_INPUT", "admission"));
     }
-    if p.width > crate::export_limits::MAX_EXPORT_EDGE || p.height > crate::export_limits::MAX_EXPORT_EDGE {
+    if p.width > crate::export_limits::MAX_EXPORT_EDGE
+        || p.height > crate::export_limits::MAX_EXPORT_EDGE
+    {
         return Err(err("EDGE_LIMIT", "admission"));
     }
     let admission = crate::export_limits::plan(p.width, p.height, format == "JPEG")
@@ -336,10 +364,11 @@ pub fn encode(
     }
     let icc = color_space.icc()?;
     let reason = Rc::new(RefCell::new(None));
+    progress(0, p.height, false);
     let clipped = if format == "JPEG" {
-        jpeg(&input, &mut out, p, cancel, reason, &icc)?
+        jpeg(&input, &mut out, p, cancel, reason, &icc, progress)?
     } else {
-        tiff16(&mut input, &mut out, p, cancel, reason, &icc)?
+        tiff16(&mut input, &mut out, p, cancel, reason, &icc, progress)?
     };
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "encode"));
@@ -347,6 +376,7 @@ pub fn encode(
     out.sync_all().map_err(|e| io_error(e, "encode"))?;
     let output_bytes = out.metadata().map_err(|e| io_error(e, "encode"))?.len();
     guard.keep = true;
+    progress(p.height, p.height, true);
     Ok(ExportReport {
         format,
         mime_type: mime,

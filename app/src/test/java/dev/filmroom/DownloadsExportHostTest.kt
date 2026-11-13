@@ -66,6 +66,25 @@ class DownloadsExportHostTest {
   app.getSharedPreferences("filmroom-pending-exports",0).edit().clear().commit()
   return Triple(app,PhotoRepository(app,PhotoCodecs(app.cacheDir,Api(failure),memorySnapshot={dev.filmroom.engine.NativeMemorySnapshot(4L*1024*1024*1024,128L*1024*1024,false)})),provider)
  }
+ @Test fun pngAndTiffMeasuredWorkNeverReportsPublishBeforeCommit()=runBlocking {
+  val(app,repo,provider)=setup()
+  val input=File(app.cacheDir,"progress-input.rgb").apply{writeBytes(ByteArray(8*8*12))}
+  try {
+   for(format in listOf(ExportFormat.PNG,ExportFormat.TIFF16)) {
+    val events=mutableListOf<Pair<String,Boolean>>()
+    var committed=false
+    repo.exportLinear(input,8,8,format,onCommitted={committed=true},onWork={kind,done,total,finished->
+     assertFalse(committed);assertTrue(done in 0..total)
+     if(kind=="copy")assertFalse(finished)
+     events += kind to finished
+    })
+    assertTrue(committed)
+    assertTrue(events.contains("encode" to true))
+    if(format==ExportFormat.TIFF16)assertTrue(events.any{it.first=="copy"})
+    else assertTrue(events.any{it==("encode" to false)})
+   }
+  }finally{input.delete()}
+ }
  @Test fun tiffCommitsToDownloadsAndKeepsInputEvenWhenDeliveryCancelled()=runBlocking {
   val(app,repo,provider)=setup();val input=File(app.cacheDir,"test-input.rgb").apply{writeBytes(ByteArray(8*8*12))}
   val saved=AtomicReference<ExportResult?>();var task:Job?=null

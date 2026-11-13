@@ -9,7 +9,8 @@ data class ExportVisualProgress(val stage:Int,val percent:Int?=null) {
 
 /** One instance per native export attempt. Never modifies native counters or GPU diagnostics.
  * Actual setup/exposure keep steps 1/2. The native stage-wide work counter distributes GPU chain work over visual steps
- * 3/4/5/6. Per-pass pixels reset between FilmLog passes and must never be used here.
+ * 3/4/5/6, including measured diffusion prepass work already in that counter.
+ * Per-pass pixels reset between FilmLog passes and must never be used here.
  * Reserved output/finalization work remains in the denominator. Batch phases are ignored.
  * Output/save are not part of this distribution; only real output publication can finish 6.
  */
@@ -33,11 +34,11 @@ internal class GpuExportPresentation {
                 previous=ExportVisualProgress(value.display.displayStage,value.display.displayPercent)
             return value
         }
-        val visual=if(prepass) {
-            // Prepass is real work but not completed image pixels. Keep the last certified
-            // setup/exposure presentation, with no timer or invented prepass percentage.
-            previous ?: ExportVisualProgress(2)
-        } else {
+        // Prepass and chain share the same native stage-work denominator. Using
+        // it for both avoids a reset when the chain starts, and does not depend
+        // on polling having observed the prepass. This is completed work, not
+        // image-wide phase completion or a remaining-time estimate.
+        val visual=run {
             chainStarted=true
             val raw=value.display
             if(raw.stage==6 && raw.total>0) {

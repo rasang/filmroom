@@ -14,9 +14,11 @@ object CropCompositor {
     internal fun row(map:FinalImageSampling,first:FloatArray,second:FloatArray,fy:Double,out:FloatArray){
         for(x in map.x0.indices)for(c in 0..2)out[x*3+c]=map.sample(first,second,fy,x,c).toFloat()
     }
-    fun composite(source:File,destination:File,s:CropSnapshot,imprint:dev.filmroom.imprint.ImprintPlan?=null,color:dev.filmroom.io.OutputColorSpace=dev.filmroom.io.OutputColorSpace.SRGB,checkActive:()->Unit={}) {
+    fun composite(source:File,destination:File,s:CropSnapshot,imprint:dev.filmroom.imprint.ImprintPlan?=null,color:dev.filmroom.io.OutputColorSpace=dev.filmroom.io.OutputColorSpace.SRGB,checkActive:()->Unit={}) = composite(source,destination,s,imprint,color,null,checkActive)
+    /** Reports successfully written rows, not completion of flush/sync/rename. */
+    fun composite(source:File,destination:File,s:CropSnapshot,imprint:dev.filmroom.imprint.ImprintPlan?=null,color:dev.filmroom.io.OutputColorSpace=dev.filmroom.io.OutputColorSpace.SRGB,onProgress:((Int,Int)->Unit)?,checkActive:()->Unit={}) {
         val map=map(s)
-        FinalImageRows.file(source,destination,s.sourceWidth,s.sourceHeight,s.outputWidth,s.outputHeight,map,checkActive){y,first,second,fy,row->
+        FinalImageRows.file(source,destination,s.sourceWidth,s.sourceHeight,s.outputWidth,s.outputHeight,map,checkActive,onProgress){y,first,second,fy,row->
             CropCompositor.row(map,first,second,fy,row)
             imprint?.blendRow(y,row,color)
         }

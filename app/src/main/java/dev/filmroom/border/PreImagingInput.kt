@@ -64,11 +64,13 @@ object PreImagingInput {
         imprint?.blendRow(y,row,OutputColorSpace.SRGB)
         require(row.all{it.isFinite()})
     }
-    fun file(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}) {
+    fun file(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,checkActive:()->Unit={}) = file(source,destination,s,raster,imprint,null,checkActive)
+    /** Reports successfully written rows, not completion of flush/sync/rename. */
+    fun file(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,imprint:ImprintPlan?=null,onProgress:((Int,Int)->Unit)?,checkActive:()->Unit={}) {
         checkActive();raster.validate(s)
         val effective=imprint?.frameRaster(s,raster) ?: raster
         val map=BorderSampling(s)
-        FinalImageRows.file(source,destination,s.sourceWidth,s.sourceHeight,s.outputWidth,s.outputHeight,map,checkActive){y,a,b,fy,row->
+        FinalImageRows.file(source,destination,s.sourceWidth,s.sourceHeight,s.outputWidth,s.outputHeight,map,checkActive,onProgress){y,a,b,fy,row->
             inputRow(s,effective,imprint,map,y,a,b,fy,row)
         }
     }
@@ -118,7 +120,9 @@ object PreImagingInput {
             bitmap.setPixels(ints,0,s.outputWidth,0,y,s.outputWidth,1)
         }
     }
-    fun restoreHoles(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,checkActive:()->Unit={}) {
+    fun restoreHoles(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,checkActive:()->Unit={}) = restoreHoles(source,destination,s,raster,null,checkActive)
+    /** Reports successfully written rows, not completion of flush/sync/rename. */
+    fun restoreHoles(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,onProgress:((Int,Int)->Unit)?,checkActive:()->Unit={}) {
         raster.validate(s);require(source.canonicalFile!=destination.canonicalFile && source.length()==s.outputBytes)
         val part=File(destination.parentFile,destination.name+".part")
         require(part.canonicalFile!=source.canonicalFile);check(!part.exists() || part.delete())
@@ -127,7 +131,8 @@ object PreImagingInput {
                 val output=BufferedOutputStream(file,65536);val bytes=ByteArray(s.outputWidth*12);val row=FloatArray(s.outputWidth*3)
                 val data=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
                 val stream=DataInputStream(input)
-                repeat(s.outputHeight){y->checkActive();stream.readFully(bytes);data.position(0);data.get(row);require(row.all{it.isFinite()});restoreHoleRow(s,raster,y,row);data.position(0);data.put(row);output.write(bytes)}
+                onProgress?.invoke(0,s.outputHeight)
+                repeat(s.outputHeight){y->checkActive();stream.readFully(bytes);data.position(0);data.get(row);require(row.all{it.isFinite()});restoreHoleRow(s,raster,y,row);data.position(0);data.put(row);output.write(bytes);onProgress?.invoke(y+1,s.outputHeight)}
                 output.flush();file.fd.sync()
             }}
             checkActive();check(part.length()==s.outputBytes)

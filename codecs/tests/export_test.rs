@@ -170,18 +170,117 @@ fn cancel_inflight_jpeg_and_tiff_removes_partial_preserves_input() {
 fn export_only_84mp_limit_keeps_import_52mp_and_checks_budgets_before_io() {
     assert_eq!(film_codecs::MAX_PIXELS, 52_000_000);
     assert!(film_codecs::validate_dimensions(5311, 9791).is_err()); // 52,000,001
-    let missing=temp("never-created");let output=temp("limit-reject.jpg");
-    for format in ["JPEG","TIFF16"] {
-        let mut p=params(format);p.width=12000;p.height=7001;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"PIXEL_LIMIT");
-        p.width=u32::MAX;p.height=u32::MAX;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"EDGE_LIMIT");
-        p.width=0;p.height=1;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"INVALID_INPUT");
-        p.width=12000;p.height=7000;p.budget.memory_budget_mi_b=1;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"MEMORY_BUDGET");
-        p.budget.memory_budget_mi_b=128;p.budget.disk_budget_bytes=1;
-        assert_eq!(encode(&missing,&output,&p,&AtomicBool::new(false)).unwrap_err().code,"DISK_BUDGET");
+    let missing = temp("never-created");
+    let output = temp("limit-reject.jpg");
+    for format in ["JPEG", "TIFF16"] {
+        let mut p = params(format);
+        p.width = 12000;
+        p.height = 7001;
+        assert_eq!(
+            encode(&missing, &output, &p, &AtomicBool::new(false))
+                .unwrap_err()
+                .code,
+            "PIXEL_LIMIT"
+        );
+        p.width = u32::MAX;
+        p.height = u32::MAX;
+        assert_eq!(
+            encode(&missing, &output, &p, &AtomicBool::new(false))
+                .unwrap_err()
+                .code,
+            "EDGE_LIMIT"
+        );
+        p.width = 0;
+        p.height = 1;
+        assert_eq!(
+            encode(&missing, &output, &p, &AtomicBool::new(false))
+                .unwrap_err()
+                .code,
+            "INVALID_INPUT"
+        );
+        p.width = 12000;
+        p.height = 7000;
+        p.budget.memory_budget_mi_b = 1;
+        assert_eq!(
+            encode(&missing, &output, &p, &AtomicBool::new(false))
+                .unwrap_err()
+                .code,
+            "MEMORY_BUDGET"
+        );
+        p.budget.memory_budget_mi_b = 128;
+        p.budget.disk_budget_bytes = 1;
+        assert_eq!(
+            encode(&missing, &output, &p, &AtomicBool::new(false))
+                .unwrap_err()
+                .code,
+            "DISK_BUDGET"
+        );
         assert!(!output.exists());
+    }
+}
+
+#[test]
+fn encode_progress_preserves_payload_and_finishes_only_after_sync() {
+    use std::cell::RefCell;
+    for format in ["JPEG", "TIFF16"] {
+        let i = input(&format!("progress-input-{format}"));
+        let reference = temp(&format!("progress-reference-{format}"));
+        let o = temp(&format!("progress-output-{format}"));
+        let p = params(format);
+        encode(&i, &reference, &p, &AtomicBool::new(false)).unwrap();
+        let events = RefCell::new(Vec::new());
+        film_codecs::export::encode_with_progress(
+            &i,
+            &o,
+            &p,
+            &AtomicBool::new(false),
+            &|done, total, finished| {
+                assert!(done <= total);
+                assert_eq!(total, p.height);
+                if finished {
+                    assert!(fs::metadata(&o).unwrap().len() > 0);
+                }
+                events.borrow_mut().push((done, total, finished));
+            },
+        )
+        .unwrap();
+        let events = events.into_inner();
+        assert_eq!(events[0], (0, p.height, false));
+        assert_eq!(events.last(), Some(&(p.height, p.height, true)));
+        assert!(events.windows(2).all(|v| v[0].0 <= v[1].0));
+        assert_eq!(events.iter().filter(|v| v.2).count(), 1);
+        // Consuming the final JPEG row / writing the final TIFF strip is not completion.
+        assert!(events.iter().any(|v| *v == (p.height, p.height, false)));
+        assert_eq!(fs::read(&reference).unwrap(), fs::read(&o).unwrap());
+        for path in [i, reference, o] {
+            fs::remove_file(path).unwrap();
+        }
+    }
+}
+
+#[test]
+fn cancelled_progress_never_reports_finished_and_removes_partial() {
+    use std::{cell::Cell, sync::atomic::Ordering};
+    for format in ["JPEG", "TIFF16"] {
+        let i = input(&format!("cancel-progress-input-{format}"));
+        let o = temp(&format!("cancel-progress-output-{format}"));
+        let cancel = AtomicBool::new(false);
+        let finished_seen = Cell::new(false);
+        let result = film_codecs::export::encode_with_progress(
+            &i,
+            &o,
+            &params(format),
+            &cancel,
+            &|done, _, finished| {
+                finished_seen.set(finished_seen.get() || finished);
+                if done > 0 {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            },
+        );
+        assert!(result.is_err());
+        assert!(!finished_seen.get());
+        assert!(!o.exists());
+        fs::remove_file(i).unwrap();
     }
 }

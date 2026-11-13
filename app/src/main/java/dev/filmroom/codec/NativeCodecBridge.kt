@@ -12,12 +12,22 @@ import dev.filmroom.diagnostics.CodecErrorCode
 import dev.filmroom.diagnostics.CodecStage
 import dev.filmroom.diagnostics.RawTechnicalInfo
 
+/** Runs on the encoding worker. Rows are consumed input (JPEG) or written strips (TIFF).
+ * finished is true only after successful encoding and sync, not merely the last row. */
+@androidx.annotation.Keep
+fun interface CodecEncodeProgress {
+    @androidx.annotation.Keep
+    fun onProgress(completedRows:Int, totalRows:Int, finished:Boolean)
+}
+
 interface CodecNativeApi {
     val available: Boolean
     fun nativeCreate(root: String): Long
     fun nativeProbe(handle: Long, input: String, budget: String): String
     fun nativeDecode(handle: Long, input: String, output: String, budget: String): String
     fun nativeEncode(handle: Long, input: String, output: String, parameters: String): String
+    fun nativeEncodeWithProgress(handle:Long,input:String,output:String,parameters:String,progress:CodecEncodeProgress):String =
+        nativeEncode(handle,input,output,parameters)
     fun nativeCancel(handle: Long)
     fun nativeDestroy(handle: Long)
 }
@@ -29,6 +39,7 @@ object NativeCodecBridge:CodecNativeApi {
     external override fun nativeProbe(handle: Long, input: String, budget: String): String
     external override fun nativeDecode(handle: Long, input: String, output: String, budget: String): String
     external override fun nativeEncode(handle: Long, input: String, output: String, parameters: String): String
+    external override fun nativeEncodeWithProgress(handle:Long,input:String,output:String,parameters:String,progress:CodecEncodeProgress):String
     external override fun nativeCancel(handle: Long)
     external override fun nativeDestroy(handle: Long)
 }
@@ -60,12 +71,13 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
             api.nativeProbe(handle,input.canonicalPath,request.toString())
         }
     }
-    suspend fun encode(input: File, output: File, width: Int, height: Int, format: String, quality: Int, outputColorSpace:String="sRGB"): JSONObject {
+    suspend fun encode(input: File, output: File, width: Int, height: Int, format: String, quality: Int, outputColorSpace:String="sRGB",onProgress:CodecEncodeProgress?=null): JSONObject {
         val scope=withContext(Dispatchers.IO){CodecExportScope.select(root,exportJobsRoot,input,output)}
         val request=budget().put("width",width).put("height",height).put("format",format).put("quality",quality).put("outputColorSpace",outputColorSpace)
         val reservedBytes=request.getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
         return execute(heavyBytes=reservedBytes,operationRoot=scope,failureReason=PhotoException.Reason.EXPORT) { handle ->
-            api.nativeEncode(handle,input.canonicalPath,output.canonicalPath,request.toString())
+            if(onProgress==null)api.nativeEncode(handle,input.canonicalPath,output.canonicalPath,request.toString())
+            else api.nativeEncodeWithProgress(handle,input.canonicalPath,output.canonicalPath,request.toString(),onProgress)
         }
     }
     private fun budget(metadataOnly:Boolean=false,cameraRaw:Boolean=false,jxlDng:Boolean=false):JSONObject {

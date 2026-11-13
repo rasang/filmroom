@@ -46,14 +46,35 @@ class GpuExportPresentationTest {
         // Legacy per-pass counters alone cannot certify chain-wide progress.
         assertEquals(ExportVisualProgress(3),GpuExportPresentation().project(progress(100,stageDone=0,stageTotal=0)).display.visual)
     }
-    @Test fun prepassNeverClaimsImageProgressAndCountersStayIntact() {
+    @Test fun measuredPrepassAdvancesWithoutResetAtChainAndCountersStayIntact() {
         val mapper=GpuExportPresentation()
         val exposure=progress(100,phase=NativePhase.AUTO_EXPOSURE).copy(display=ExportDisplayProgress(2,100,100))
         assertEquals(exposure,mapper.project(exposure))
         val prepass=progress(90,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=900_000,stageTotal=4_000_000)
-        assertEquals(ExportVisualProgress(2,100),mapper.project(prepass).display.visual)
+        val projected=mapper.project(prepass)
+        assertEquals(ExportVisualProgress(3,90),projected.display.visual)
+        assertEquals(prepass,projected.copy(display=projected.display.copy(visual=null)))
         mapper.project(prepass.copy(display=prepass.display.copy(done=1_000_000)))
         assertEquals(ExportVisualProgress(4,0),mapper.project(progress(0,stageDone=1_000_000,stageTotal=4_000_000)).display.visual)
+    }
+    @Test fun prepassUsesStageWorkNotItsResettingPassCounter() {
+        val mapper=GpuExportPresentation()
+        assertEquals(ExportVisualProgress(3,40),mapper.project(progress(99,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=500_000,stageTotal=5_000_000)).display.visual)
+        assertEquals(ExportVisualProgress(3,40),mapper.project(progress(0,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=500_000,stageTotal=5_000_000,passId=2)).display.visual)
+        assertEquals(ExportVisualProgress(3,80),mapper.project(progress(100,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=1_000_000,stageTotal=5_000_000,passId=2)).display.visual)
+        assertEquals(ExportVisualProgress(3,80),mapper.project(progress(0,stageDone=1_000_000,stageTotal=5_000_000,passId=3)).display.visual)
+    }
+    @Test fun prepassWithoutMeasuredStageCounterDoesNotInventPercentage() {
+        val mapper=GpuExportPresentation()
+        assertEquals(ExportVisualProgress(3),mapper.project(progress(100,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=0,stageTotal=0)).display.visual)
+        assertEquals(ExportVisualProgress(3,0),mapper.project(progress(0)).display.visual)
+    }
+    @Test fun prepassReplayHidesPercentageAndNewAttemptResets() {
+        val mapper=GpuExportPresentation()
+        mapper.project(progress(80,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=800_000,stageTotal=4_000_000))
+        assertEquals(ExportVisualProgress(3),mapper.project(progress(0,phase=NativePhase.GPU_DIFFUSION_PREPASS,stageDone=0,stageTotal=4_000_000)).display.visual)
+        assertEquals(ExportVisualProgress(4),mapper.project(progress(0,stageDone=1_000_000,stageTotal=4_000_000)).display.visual)
+        assertEquals(ExportVisualProgress(3,0),mapper.project(progress(0,phase=NativePhase.GPU_DIFFUSION_PREPASS,jobId=2,stageDone=0,stageTotal=4_000_000)).display.visual)
     }
     @Test fun outputSavingAndCpuFallbackRemainOwnedByActualNativeEvents() {
         val mapper=GpuExportPresentation();mapper.project(progress(100))

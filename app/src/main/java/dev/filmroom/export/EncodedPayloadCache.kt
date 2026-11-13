@@ -62,14 +62,15 @@ internal class EncodedPayloadCache private constructor(private val root:File) {
         val bytes get()=value.bytes
         val receipt get()=value.receipt
         /** create_new prevents overwriting another job's output, including symlink collisions. */
-        fun copyTo(destination:File,checkActive:()->Unit) {
+        fun copyTo(destination:File,checkActive:()->Unit)=copyTo(destination,null,checkActive)
+        fun copyTo(destination:File,onProgress:((Long,Long)->Unit)?,checkActive:()->Unit) {
             synchronized(this@EncodedPayloadCache){check(!closed)}
             var owned=false
             try {
                 checkActive();check(regular(payload) && payload.length()==value.bytes)
                 FileChannel.open(destination.toPath(),CREATE_NEW,WRITE,NOFOLLOW_LINKS).use { channel ->
                     owned=true
-                    val hash=copy(payload,channel,value.bytes,checkActive)
+                    val hash=copy(payload,channel,value.bytes,checkActive,onProgress)
                     check(hash==value.hash){"Encoded cache integrity mismatch"};channel.force(true)
                 }
                 checkActive()
@@ -183,9 +184,9 @@ internal class EncodedPayloadCache private constructor(private val root:File) {
             components.forEach{value->val bytes=value?.toByteArray(Charsets.UTF_8);digest.update(java.nio.ByteBuffer.allocate(4).putInt(bytes?.size ?: -1).array());bytes?.let{digest.update(it)}}
             return Key(hex(digest.digest()))
         }
-        private fun copy(source:File,target:FileChannel,size:Long,checkActive:()->Unit):String {
+        private fun copy(source:File,target:FileChannel,size:Long,checkActive:()->Unit,onProgress:((Long,Long)->Unit)?=null):String {
             val digest=MessageDigest.getInstance("SHA-256");var total=0L
-            Files.newInputStream(source.toPath(),READ,NOFOLLOW_LINKS).use{input->val bytes=ByteArray(64*1024);while(true){checkActive();val n=input.read(bytes);if(n<0)break;total+=n;check(total<=size);digest.update(bytes,0,n);val buffer=java.nio.ByteBuffer.wrap(bytes,0,n);while(buffer.hasRemaining()){checkActive();target.write(buffer)}}}
+            Files.newInputStream(source.toPath(),READ,NOFOLLOW_LINKS).use{input->val bytes=ByteArray(64*1024);while(true){checkActive();val n=input.read(bytes);if(n<0)break;total+=n;check(total<=size);digest.update(bytes,0,n);val buffer=java.nio.ByteBuffer.wrap(bytes,0,n);while(buffer.hasRemaining()){checkActive();target.write(buffer)};onProgress?.invoke(total,size)}}
             check(total==size);return hex(digest.digest())
         }
         private fun hex(bytes:ByteArray)=bytes.joinToString(""){"%02x".format(it)}
