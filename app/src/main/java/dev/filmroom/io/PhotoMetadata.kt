@@ -42,6 +42,18 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             dev.filmroom.livephoto.core.LivePhotoCaptureExif.accepts(it.group,it.tag)
         }?.let { dev.filmroom.livephoto.core.LivePhotoCaptureExif(it.group,it.tag,it.type,encode(it,value)) } }
 
+    /** A frozen snapshot stays authoritative, including intentionally omitted GPS in backups.
+     * URI fallback may supply a missing original date, but must never replace other capture facts. */
+    internal fun withCaptureDateFallback(fallback:PhotoMetadata):PhotoMetadata {
+        if(attributes["DateTimeOriginal"]!=null || fallback.attributes["DateTimeOriginal"]==null)return this
+        val dates=fallback.attributes.filterKeys { it in setOf("DateTimeOriginal","OffsetTimeOriginal","SubSecTimeOriginal") }
+        val checked=fromAttributes((attributes - setOf("OffsetTimeOriginal","SubSecTimeOriginal"))+dates)
+        return checked.copy(warning=warning ?: checked.warning,issues=MetadataIssues.bounded(issues+checked.issues),
+            sourceCreateDate=fallback.sourceCreateDate,indexTimeZone=fallback.indexTimeZone,indexTimeMillis=fallback.indexTimeMillis,
+            sourceOffsetPresent=fallback.sourceOffsetPresent,imprintFallback=imprintFallback,imprintFallbackKind=imprintFallbackKind)
+    }
+    internal fun hasCaptureFacts():Boolean=attributes.isNotEmpty()
+
     fun livePhotoDates(exportMillis:Long):dev.filmroom.livephoto.core.LivePhotoDates {
         val original=attributes["DateTimeOriginal"]?.takeIf { parseImprintDate(it)!=null }
         val source=sourceCreateDate?.takeIf { validatedSourceInstant(attributes,it)!=null }?.let(OffsetDateTime::parse)
@@ -156,10 +168,15 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             val hint=runCatching{XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP))}.getOrNull()?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
             checked.copy(sourceCreateDate=hint)
         }catch(_:Exception){unavailable()}
+        /** Standard metadata from an already authorized stream; no URI or permission bypass. */
+        fun readCaptureMetadata(input:java.io.InputStream):PhotoMetadata=try {
+            fromExif(ExifInterface(input),null)
+        }catch(_:Exception){unavailable()}catch(_:OutOfMemoryError){unavailable()}
         fun read(file:File):PhotoMetadata=try {
             val cr3=CanonCr3CaptureMetadata.read(file,SCHEMA.values.map{it.group to it.tag}.toSet())
-            if(cr3!=null)fromCanonCr3(cr3) else {
-            val exif=ExifInterface(file.absolutePath)
+            if(cr3!=null)fromCanonCr3(cr3) else fromExif(ExifInterface(file.absolutePath),file)
+        } catch(_:Exception){unavailable()} catch(_:OutOfMemoryError){unavailable()}
+        private fun fromExif(exif:ExifInterface,file:File?):PhotoMetadata {
             var unsupportedText=false
             val textIssues=mutableListOf<MetadataIssue>()
             val fields=SCHEMA.keys.mapNotNull { key->
@@ -178,16 +195,15 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             val sourceHint=runCatching { XmpCaptureTime.read(exif.getAttributeBytes(ExifInterface.TAG_XMP)) }.getOrNull()?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
             val safeFields=checked.attributes
             val nikon=fields["Make"]?.trim()?.uppercase(Locale.ROOT) in setOf("NIKON", "NIKON CORPORATION")
-            val fallback=if(nikon && (safeFields["PhotographicSensitivity"]==null || safeFields["LensSpecification"]==null || (safeFields["OffsetTimeOriginal"]==null && sourceHint==null)))NikonCaptureFallback.read(file)else emptyMap()
+            val fallback=if(file!=null && nikon && (safeFields["PhotographicSensitivity"]==null || safeFields["LensSpecification"]==null || (safeFields["OffsetTimeOriginal"]==null && sourceHint==null)))NikonCaptureFallback.read(file)else emptyMap()
             val merged=fields.toMutableMap()
             fallback.forEach{(key,value)->if(safeFields[key]==null && !(key=="OffsetTimeOriginal" && (sourceHint!=null || fields.containsKey("OffsetTimeOriginal"))))merged[key]=value}
             val result=(if(fallback.isEmpty())checked else fromAttributes(merged).withImprintFallback(checked.imprintFallback,checked.imprintFallbackKind.orEmpty())).let { metadata ->
                 if(sourceHint!=null)metadata.copy(sourceCreateDate=sourceHint) else metadata
             }
             val sourceResult=result.copy(sourceOffsetPresent=result.sourceOffsetPresent || exif.hasAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL))
-            if(unsupportedText)sourceResult.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1),issues=MetadataIssues.bounded(sourceResult.issues+textIssues))else sourceResult
+            return if(unsupportedText)sourceResult.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1),issues=MetadataIssues.bounded(sourceResult.issues+textIssues))else sourceResult
         }
-        } catch(_:Exception){unavailable()} catch(_:OutOfMemoryError){unavailable()}
         private fun fromCanonCr3(cmt:CanonCr3CaptureMetadata.Result):PhotoMetadata {
             val fields=linkedMapOf<String,String>()
             SCHEMA.forEach { (key,spec)->cmt.fields[spec.group to spec.tag]?.let { field ->

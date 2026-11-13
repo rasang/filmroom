@@ -121,11 +121,16 @@ class MainActivity:ComponentActivity() {
     private var builtCompositionEditing=false;private var builtCompositionAspect:Double?=null;private var boundCompositionEditing:Boolean?=null;private var boundCompare:Boolean?=null;private var builtParameters:EditorState?=null;private var shownSource:String?=null;private var lastBitmap:android.graphics.Bitmap?=null
     private val recipeImport: dev.filmroom.presets.RecipeImportDialog by lazy { dev.filmroom.presets.RecipeImportDialog(this,{it.showReadable()},{savedPresetDialogs.open()}) }
     private val recipeScanner: androidx.activity.result.ActivityResultLauncher<Intent> =registerForActivityResult(ActivityResultContracts.StartActivityForResult()){result->recipeImport.accept(result.resultCode,result.data)}
-    private val picker=registerForActivityResult(ActivityResultContracts.PickVisualMedia()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.PHOTO_PICKER)}
+    private val picker=registerForActivityResult(object:ActivityResultContracts.PickVisualMedia(){
+        override fun createIntent(context:android.content.Context,input:PickVisualMediaRequest):Intent =
+            dev.filmroom.io.PhotoLocationAccess.requestPickerMetadata(super.createIntent(context,input))
+    }){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.PHOTO_PICKER)}
     private val filePicker=registerForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)model.importPhoto(uri,dev.filmroom.diagnostics.ImportOrigin.FILES_PICKER)}
+    private val photoLocationPermission=dev.filmroom.ui.PhotoLocationPermission(this){filePicker.launch(arrayOf("image/*", "application/octet-stream"))}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).roundToInt()
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        photoLocationPermission.restore(savedInstanceState)
         recipeImport // Register restoration before STARTED; scanner results return to this editor.
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
         compositionReturnTool=savedInstanceState?.getString("compositionReturnTool");compositionReturnGroup=savedInstanceState?.getString("compositionReturnGroup")
@@ -189,6 +194,7 @@ class MainActivity:ComponentActivity() {
         super.onStop()
     }
     override fun onSaveInstanceState(outState:Bundle){
+        photoLocationPermission.save(outState)
         outState.putString("filmFilterCategory",filmFilterCategory.name);outState.putString("filmFilterBrand",filmFilterBrand);outState.putInt("filmFilterScrollX",filmFilterScrollX)
         (savedPresetDialogs.capture() ?: pendingSavedPreset)?.let{outState.putBundle("savedPresetDialog",it)}
         imprintDialog?.takeIf{it.isShowing}?.let{outState.putBundle("imprintDraft",dev.filmroom.imprint.ImprintDialog.capture(it));outState.putString("imprintSource",imprintDialogSource)}
@@ -1328,9 +1334,10 @@ class MainActivity:ComponentActivity() {
     private fun importDialog(){
         if(!model.state.value.startupReady||model.state.value.busy!=null)return
         AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d6d466c03f8e))
+            .setCustomTitle(TextView(this).apply { text=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_d6d466c03f8e)+"\n\n"+dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.photo_location_import_help); textSize=14f; setPadding(dp(24),dp(20),dp(24),dp(8)) })
             .setAdapter(choiceAdapter(listOf(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_543b8fb9aa67), dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_85534f27f5d9)))){_,which->
                 if(which==0)picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                else filePicker.launch(arrayOf("image/*", "application/octet-stream"))
+                else photoLocationPermission.pickFiles()
             }.setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_2cd0f3be8738),null).showReadable()
     }
     private fun exportDialog(){if(model.state.value.canExport)exportBackgroundGuidance.offer()}

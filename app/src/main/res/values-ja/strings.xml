@@ -791,4 +791,5 @@
     <string name="print_medium_bw_help" formatted="false">選択した印画紙・プリントフィルムはモノクロ用です。カラーネガからもモノクロのプリントになります。</string>
     <string name="preview_histogram_description">現在の写真プレビューの輝度ヒストグラム</string>
     <string name="film_none">なし</string>
+    <string name="photo_location_import_help">撮影位置を保持するには「ファイル」から元画像を選び、写真内の位置情報へのアクセスを許可してください（現在地ではありません）。拒否しても編集できます。選択ツールや共有コピーで削除された位置情報は、許可しても復元できません。</string>
 </resources>

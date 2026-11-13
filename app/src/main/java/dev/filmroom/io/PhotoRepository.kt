@@ -175,7 +175,7 @@ class ExportCancellationException(cause: CancellationException) : CancellationEx
 data class PendingCleanupReport(val removed: Int, val preservedFinalized: Int, val unresolved: Int)
 
 /**
- * No network APIs, broad media permissions, source rewrites or EXIF location copying.
+ * No network APIs or source rewrites. Existing capture metadata, including authorized GPS, is retained.
  * All methods that perform IO are suspend functions on Dispatchers.IO.
  * Cancel during an uninterruptible native decode discards its eventual bitmap.
  */
@@ -194,7 +194,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         RawInputAdapter(NativeRawSourceDecoder(codecs)),
     ))
     private val outputAssets = context.applicationContext.assets
-    private val resolver = context.applicationContext.contentResolver
+    private val importContext = context.applicationContext
+    private val resolver = importContext.contentResolver
     private val sourceDirectory = File(context.applicationContext.cacheDir, "photo-sources")
     private val privateRoots = arrayOf(context.applicationContext.cacheDir.canonicalFile, context.applicationContext.filesDir.canonicalFile)
     private val engineDataDirectory = File(context.applicationContext.filesDir, "engine-data").canonicalFile
@@ -299,7 +300,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.SOURCE_COPY
                     phase = ImportPhase.SOURCE_OPEN
                     emitStage()
-                    resolver.openInputStream(uri)?.use { input ->
+                    PhotoLocationAccess.open(importContext, uri)?.use { input ->
                         phase = ImportPhase.PRIVATE_OPEN
                         privateCopy.outputStream().buffered().use { output ->
                             phase = ImportPhase.SOURCE_READ
