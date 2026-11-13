@@ -33,7 +33,7 @@ internal class HomeMotionSnapshot(
     companion object {
         const val MAX_EDGE = 1600
         fun canRetain(frozen: EditorUiState, current: EditorUiState) =
-            frozen.photo === current.photo && !current.compare && !current.compositionEditing && !current.exporting
+            frozen.photo === current.photo && !current.compositionEditing && !current.exporting
         fun matches(frozen: EditorUiState?, current: EditorUiState) =
             frozen != null && ready(current) && frozen.photo === current.photo &&
                 frozen.rendered === current.rendered && frozen.parameters == current.parameters

@@ -55,6 +55,74 @@ class HomeMotionActivityHostTest {
         MainActivity::class.java.getDeclaredMethod("onSaveInstanceState",Bundle::class.java).apply{isAccessible=true}.invoke(a,out)
         assertEquals("LIGHT_TABLE",out.getString("homeMotionKind"));assertEquals("already-played",out.getString("homeMotionAutoSource"))
     }}
+    /** Host View/state regression only; no GLES player or device frame timing is exercised. */
+    @Test fun compareRetainsLiveStageForBothModesAndDuringParameterUpdates(){
+        for(kind in listOf(EffectKind.LIGHT_TABLE,EffectKind.OPTICAL_LEAK))withReady{a->
+            val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+            val frozen=vm.state.value
+            val stage=View(a)
+            val parent=a.findViewById<ViewGroup>(android.R.id.content)
+            parent.addView(stage)
+            val stageIndex=parent.indexOfChild(stage)
+            set(a,"homeMotionKind",kind);set(a,"homeMotionStage",stage);set(a,"homeMotionState",frozen)
+            // Avoid scheduling native preparation: exercise the synchronous bind contract.
+            set(a,"homeMotionRefreshPosted",true)
+            val bind=MainActivity::class.java.getDeclaredMethod("bind",EditorUiState::class.java).apply{isAccessible=true}
+            bind.invoke(a,frozen.copy(compare=true))
+            assertSame(stage,field(a,"homeMotionStage"));assertSame(parent,stage.parent)
+            assertEquals(View.VISIBLE,stage.visibility);assertEquals(-1f,stage.translationZ,0f);assertEquals(stageIndex,parent.indexOfChild(stage));assertSame(frozen.original,field(a,"lastBitmap"))
+            bind.invoke(a,frozen)
+            assertSame(stage,field(a,"homeMotionStage"));assertEquals(View.VISIBLE,stage.visibility);assertEquals(0f,stage.translationZ,0f);assertEquals(stageIndex,parent.indexOfChild(stage))
+            val pending=frozen.copy(parameters=frozen.parameters.copy(brightness=.3f),updating=true,previewRefining=true)
+            bind.invoke(a,pending)
+            assertSame(stage,field(a,"homeMotionStage"));assertEquals(View.VISIBLE,stage.visibility);assertEquals(0f,stage.translationZ,0f);assertEquals(stageIndex,parent.indexOfChild(stage))
+            bind.invoke(a,pending.copy(compare=true))
+            assertSame(stage,field(a,"homeMotionStage"));assertEquals(View.VISIBLE,stage.visibility);assertEquals(-1f,stage.translationZ,0f);assertEquals(stageIndex,parent.indexOfChild(stage))
+            bind.invoke(a,pending)
+            assertSame(stage,field(a,"homeMotionStage"));assertEquals(View.VISIBLE,stage.visibility);assertEquals(0f,stage.translationZ,0f);assertEquals(stageIndex,parent.indexOfChild(stage))
+            assertSame(frozen,field(a,"homeMotionState"))
+        }
+    }
+    @Test fun compareWithoutLiveKeepsOrdinaryPreviewBehavior(){withReady{a->
+        val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+        val state=vm.state.value
+        val result=Bitmap.createBitmap(160,120,Bitmap.Config.ARGB_8888)
+        try {
+            set(a,"homeMotionKind",null)
+            val bind=MainActivity::class.java.getDeclaredMethod("bind",EditorUiState::class.java).apply{isAccessible=true}
+            bind.invoke(a,state.copy(rendered=result,compare=true))
+            assertNull(field(a,"homeMotionStage"));assertSame(state.original,field(a,"lastBitmap"))
+            bind.invoke(a,state.copy(rendered=result,compare=false))
+            assertNull(field(a,"homeMotionStage"));assertSame(result,field(a,"lastBitmap"))
+        }finally{result.recycle()}
+    }}
+    @Test fun homeChooserHasOrderedIconsAndExactlyOneSelectedRow(){withReady{a->
+        val choices=listOf(null,EffectKind.LIGHT_TABLE,EffectKind.OPTICAL_LEAK)
+        val names=listOf(R.string.home_motion_none,R.string.home_motion_table,R.string.home_motion_finder)
+        val choose=MainActivity::class.java.getDeclaredMethod("chooseHomeMotion").apply{isAccessible=true}
+        val kindField=dev.filmroom.effects.EffectPickerIcon::class.java.getDeclaredField("kind").apply{isAccessible=true}
+        val tintField=dev.filmroom.effects.EffectPickerIcon::class.java.getDeclaredField("tint").apply{isAccessible=true}
+        for(selected in choices){
+            set(a,"homeMotionKind",selected)
+            choose.invoke(a)
+            val popup=field(a,"homeMotionChooser") as android.widget.PopupWindow
+            val rows=popup.contentView as ViewGroup
+            assertEquals(3,rows.childCount)
+            for(i in choices.indices){
+                val row=rows.getChildAt(i) as android.widget.TextView
+                assertEquals(dev.filmroom.i18n.L10n.text(names[i]),row.text.toString())
+                assertEquals(choices[i]==selected,row.isSelected)
+                val icon=row.compoundDrawablesRelative[0]
+                assertTrue(icon is dev.filmroom.effects.EffectPickerIcon)
+                assertEquals(choices[i],kindField.get(icon))
+                val expectedTint=field(a,if(choices[i]==selected)"accent" else "ink") as Int
+                assertEquals(expectedTint,row.currentTextColor);assertEquals(expectedTint,tintField.get(icon))
+                assertEquals(28,icon.bounds.width());assertEquals(28,icon.bounds.height())
+                assertEquals(12,row.compoundDrawablePadding)
+            }
+            popup.dismiss();assertNull(field(a,"homeMotionChooser"))
+        }
+    }}
     /** Host lifecycle only: this does not execute a device GLES video renderer. */
     @Test fun liveSelectionKeepsVisibleRefinementAndLifecycleControlsIt(){
         CameraLayoutRenderHostTest().chosenLanguageForLegacyFixture()

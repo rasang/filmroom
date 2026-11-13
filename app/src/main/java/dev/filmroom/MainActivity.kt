@@ -462,7 +462,14 @@ class MainActivity:ComponentActivity() {
             homeMotionKind=kind;updateHomeMotionButton()
             if(enabledChanged)HomeLiveIconPulse.play(homeMotionButton)
             if(kind!=null)playHomeMotion(kind)
-        }.apply{gravity=Gravity.START or Gravity.CENTER_VERTICAL;setTextColor(if(kind==homeMotionKind)accent else ink);background=shape(Color.TRANSPARENT)},LinearLayout.LayoutParams(-1,dp(48)))}
+        }.apply{
+            gravity=Gravity.START or Gravity.CENTER_VERTICAL
+            val tint=if(kind==homeMotionKind)accent else ink
+            setTextColor(tint);isSelected=kind==homeMotionKind
+            setCompoundDrawablesRelative(dev.filmroom.effects.EffectPickerIcon(kind,tint).apply{setBounds(0,0,dp(28),dp(28))},null,null,null)
+            compoundDrawablePadding=dp(12)
+            background=shape(Color.TRANSPARENT)
+        },LinearLayout.LayoutParams(-1,dp(48)))}
         popup.setOnDismissListener{if(homeMotionChooser===popup)homeMotionChooser=null}
         homeMotionChooser=popup;popup.showAsDropDown(homeMotionButton,-dp(68),-homeMotionButton.height-dp(156))
     }
@@ -606,7 +613,13 @@ class MainActivity:ComponentActivity() {
     }
     private fun bind(s:EditorUiState){
         if(homeMotionInputKey!=s.photo?.cacheKey){homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null}
-        if(homeMotion!=null && (homeMotionPhotoKey!=s.photo?.cacheKey || s.compare || s.compositionEditing || s.exporting))stopHomeMotion()
+        if(homeMotion!=null && (homeMotionPhotoKey!=s.photo?.cacheKey || s.compositionEditing || s.exporting))stopHomeMotion()
+        // Compare brings the original in front of the retained Live stage. Never destroy/rebuild
+        // the stage here: that exposes the ordinary processed photo while preparing it again.
+        if(s.compare){cancelHomeMotionHold();homeMotionHeld=false;homeMotionRequestedAutoplay=false;homeMotion?.showCover()}
+        // Move behind the opaque PhotoView without hiding/removing the SurfaceView:
+        // visibility changes would destroy its surface and flash on the return transition.
+        homeMotionStage?.translationZ=if(s.compare)-1f else 0f
         homeMotionState?.let{old->
             if(!HomeMotionSnapshot.canRetain(old,s))stopHomeMotion()
             else if(!HomeMotionSnapshot.matches(old,s))homeMotion?.showCover()

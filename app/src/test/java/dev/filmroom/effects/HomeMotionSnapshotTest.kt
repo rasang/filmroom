@@ -54,6 +54,20 @@ class HomeMotionSnapshotTest {
         assertFalse(HomeMotionSnapshot.matches(state,state.copy(rendered=bitmap())))
         assertTrue(HomeMotionSnapshot.matches(state,state))
     }
+    @Test fun comparisonRetainsExistingCoverButCannotCaptureOrMatchUntilReleased() {
+        val frozen=state()
+        val comparing=frozen.copy(compare=true)
+        assertTrue(HomeMotionSnapshot.canRetain(frozen,comparing))
+        assertFalse(HomeMotionSnapshot.ready(comparing))
+        assertFalse(HomeMotionSnapshot.matches(frozen,comparing))
+        val updating=comparing.copy(parameters=comparing.parameters.copy(brightness=.4f),updating=true,previewRefining=true)
+        assertTrue(HomeMotionSnapshot.canRetain(frozen,updating))
+        assertTrue(HomeMotionSnapshot.canRetain(frozen,updating.copy(compare=false)))
+        assertTrue(HomeMotionSnapshot.matches(frozen,comparing.copy(compare=false)))
+        assertFalse(HomeMotionSnapshot.canRetain(frozen,comparing.copy(exporting=true)))
+        assertFalse(HomeMotionSnapshot.canRetain(frozen,comparing.copy(compositionEditing=true)))
+        assertFalse(HomeMotionSnapshot.canRetain(frozen,state().copy(compare=true)))
+    }
     @Test fun cancelledPreparationLeavesCopiesClosable() {
         val state=state(); val snapshot=HomeMotionSnapshot.capture(state,EffectKind.OPTICAL_LEAK,prepare=false)
         try { snapshot.prepare { throw java.util.concurrent.CancellationException() }; fail() }
