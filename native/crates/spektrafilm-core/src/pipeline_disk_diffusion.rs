@@ -12,7 +12,7 @@ const PIXEL_BYTES:u64=192;
 pub struct DiskDiffusionPlan { pub rows:u32,pub radius:u32,pub estimated_bytes:u64 }
 /// Reject before allocation; keep individual jobs responsive and bindable.
 pub fn plan(width:u32,height:u32,radius:u32,budget:u32,binding:u64,retained:u64)->Option<DiskDiffusionPlan>{
-    if width==0||height==0||!(128..=512).contains(&budget){return None;}
+    if width==0||height==0||!(128..=1024).contains(&budget){return None;}
     let fixed=FIXED.checked_add(MARGIN)?.checked_add(retained)?;
     let available=(u64::from(budget)*1024*1024).checked_sub(fixed)?;
     let fit=(available/(u64::from(width)*PIXEL_BYTES)).min(binding.saturating_mul(9)/10/(u64::from(width)*12)).min(u64::from(height));
@@ -138,8 +138,10 @@ mod tests {
  struct Cleanup(std::path::PathBuf);impl Drop for Cleanup{fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
  fn dir(name:&str)->Cleanup{use std::sync::atomic::{AtomicU64,Ordering};static N:AtomicU64=AtomicU64::new(0);let p=std::env::temp_dir().join(format!("disk-diff-{name}-{}-{}",std::process::id(),N.fetch_add(1,Ordering::Relaxed)));std::fs::create_dir(&p).unwrap();Cleanup(p)}
  #[test]fn planner_enforces_budget_binding_and_response(){
-  for budget in [128,256,384,512]{let p=plan(2731,2048,179,budget,128*1024*1024,72*1024*1024);if let Some(p)=p{assert!(p.rows>0&&p.rows<=512);assert!(p.estimated_bytes<=u64::from(budget)*1024*1024);assert!(u64::from((p.rows+358).min(2048))*2731*12<=128*1024*1024*9/10);}}
-  assert!(plan(2731,2048,179,512,1024,0).is_none());assert!(plan(2731,2048,179,512,u64::MAX,512*1024*1024).is_none());assert!(plan(0,200,2,512,u64::MAX,0).is_none());assert!(plan(2731,2048,179,768,u64::MAX,0).is_none());
+  for budget in [128,256,384,512,768,1024]{let p=plan(2731,2048,179,budget,128*1024*1024,72*1024*1024);if let Some(p)=p{assert!(p.rows>0&&p.rows<=512);assert!(p.estimated_bytes<=u64::from(budget)*1024*1024);assert!(u64::from((p.rows+358).min(2048))*2731*12<=128*1024*1024*9/10);}}
+  assert!(plan(2731,2048,179,512,1024,0).is_none());assert!(plan(2731,2048,179,512,u64::MAX,512*1024*1024).is_none());assert!(plan(0,200,2,512,u64::MAX,0).is_none());assert!(plan(2731,2048,179,1025,u64::MAX,0).is_none());
+  let large=plan(2731,2048,179,1024,128*1024*1024,72*1024*1024).unwrap();assert!(large.rows<=512);assert!(large.estimated_bytes<=1024*1024*1024);
+  assert!(plan(2731,2048,179,1024,1024,0).is_none());
   let a=plan(2731,2048,179,384,128*1024*1024,0).unwrap();let b=plan(2731,2048,179,512,128*1024*1024,0).unwrap();assert!(b.rows>a.rows);
  }
  #[test]fn disk_downsample_preserves_partial_cells_and_tile_order(){

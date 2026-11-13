@@ -20,7 +20,7 @@ fn cancel(c:&mut impl FnMut()->bool)->Result<()> {if c(){Err(err("CANCELLED"))}e
 /// Joint host/device/staging/driver estimate, not measured RSS. More budget
 /// changes executable geometry; no MemAvailable override or minimum allocation.
 pub(crate) fn band_plan(width:u32,height:u32,halo:u32,budget_mib:u32,binding:u64,fields:u64)->Result<BandPlan> {
-    if width==0||height==0||!(128..=512).contains(&budget_mib){return Err(err("INVALID_BUDGET"));}
+    if width==0||height==0||!(128..=1024).contains(&budget_mib){return Err(err("INVALID_BUDGET"));}
     let total=budget_mib as u64*1024*1024;
     let fixed=FIXED_BYTES.checked_add(fields).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let row=width as u64*BAND_BYTES_PER_PIXEL;
@@ -59,7 +59,7 @@ fn tile_cost(width:u32,height:u32,halo:u32,core_w:u32,core_h:u32)->TileCost {
 /// Maximum live rectangular allocation, including both halo axes. All global
 /// fields remain charged while every tile executes; storage is independently bounded.
 pub(crate) fn tile_plan(width:u32,height:u32,halo:u32,budget_mib:u32,binding:u64,fields:u64)->Result<TilePlan> {
-    if width==0||height==0||width>40000||height>40000||!(128..=512).contains(&budget_mib){return Err(err("INVALID_BUDGET"));}
+    if width==0||height==0||width>40000||height>40000||!(128..=1024).contains(&budget_mib){return Err(err("INVALID_BUDGET"));}
     let fixed=FIXED_BYTES.checked_add(fields).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let available=(budget_mib as u64*1024*1024).checked_sub(fixed).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let memory_pixels=available/BAND_BYTES_PER_PIXEL;
@@ -1396,5 +1396,39 @@ mod capacity_boundary_tests {
         let bytes=fs::read(&output).unwrap();assert_eq!(bytes.len(),w as usize*h as usize*12);
         assert!(bytes.chunks_exact(4).all(|b|f32::from_le_bytes(b.try_into().unwrap()).is_finite()));
         eprintln!("FRONT_EXPORT_COMPLETE case={} seconds={} submits={} updates={} stages={:?}",if unbordered{"unbordered"}else{"bordered"},start.elapsed().as_secs_f64(),result.gpu.gpu_batches,updates,result.stages);
+    }
+}
+
+#[cfg(test)]
+mod doubled_export_budget_tests {
+    use super::*;
+    #[test]
+    fn reported_49mp_budget_geometry_comparison() {
+        let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let mut m=crate::mobile::MobileParams::default();m.mode="export".into();m.film_stock="kodak_portra_400".into();m.paper_stock="kodak_portra_endura".into();m.diffusion_filter="black_pro_mist".into();m.diffusion_strength=2.;m.film_format_mm=35.;m.scan_sharpen_radius=0.699999988079071;
+        let film=spektrafilm_core::profile::load_profile_by_name(&data,&m.film_stock).unwrap();let paper=spektrafilm_core::profile::load_profile_by_name(&data,&m.paper_stock).unwrap();
+        let p=Pipeline::new_with_spectral(film.clone(),paper,m.runtime_for_film(&film),&data).unwrap();
+        let(w,h)=(7347,6767);let halo=p.banded_halo_pixels(35000./7347.);let fields=p.gpu_diffusion_working_bytes(w,h).unwrap();
+        for budget in [512,1024] {
+            let front=tile_plan(w,h,0,budget,128*1024*1024,fields).unwrap();let main=tile_plan(w,h,halo,budget,128*1024*1024,fields).unwrap();
+            eprintln!("BUDGET_COMPARE budget={budget} halo={halo} fields={fields} front={}x{} main={}x{} tiles={} expanded={}x{} estimate={}",front.width,front.rows,main.width,main.rows,w.div_ceil(main.width)*h.div_ceil(main.rows),main.expanded_width,main.expanded_rows,main.estimated_bytes);
+            assert!(main.estimated_bytes<=u64::from(budget)*1024*1024);
+        }
+    }
+    #[test]
+    fn one_gib_geometry_preserves_binding_and_response_caps() {
+        let binding=128*1024*1024;
+        let small=tile_plan(7347,6767,261,512,binding,13_500_136+70_896).unwrap();
+        let large=tile_plan(7347,6767,261,1024,binding,13_500_136+70_896).unwrap();
+        assert!(large.estimated_bytes<=1024*1024*1024);
+        assert!(large.expanded_width as u64*large.expanded_rows as u64*12<=binding*9/10);
+        assert!(large.width<=1024||large.width==7347);
+        assert!(large.rows<=1024||large.rows==6767);
+        assert!(tile_cost(7347,6767,261,large.width,large.rows)<=tile_cost(7347,6767,261,small.width,small.rows));
+        let band=band_plan(1024,4096,10,1024,binding,0).unwrap();
+        assert!(band.rows<=1024);assert!(band.estimated_bytes<=1024*1024*1024);
+        assert_eq!(tile_plan(10,10,0,1025,binding,0).unwrap_err().code,"INVALID_BUDGET");
+        assert_eq!(band_plan(10,10,0,1025,binding,0).unwrap_err().code,"INVALID_BUDGET");
+        assert!(tile_plan(7347,6767,261,1024,1024,0).is_err());
     }
 }

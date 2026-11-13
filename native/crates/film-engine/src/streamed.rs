@@ -237,7 +237,7 @@ fn export_file_checkpointed_impl(execution:Option<&crate::export_execution::Expo
  let mut progress=Reporter::new(progress);
  let start=Instant::now();if !cfg!(feature="precision-f64"){return Err(error("UNSUPPORTED_PRECISION","Streamed physical export requires f64 internal precision"));}
  if width==0||height==0||width>40000||height>40000{return Err(error("INVALID_DIMENSIONS","Dimensions must be1..40000"));}
- if !(128..=512).contains(&memory_budget_mib)||!brightness_ev.is_finite()||!(-2.0..=2.0).contains(&brightness_ev){return Err(error("INVALID_BUDGET","Invalid memory budget or brightness"));}
+ if !(128..=1024).contains(&memory_budget_mib)||!brightness_ev.is_finite()||!(-2.0..=2.0).contains(&brightness_ev){return Err(error("INVALID_BUDGET","Invalid memory budget or brightness"));}
  if input_path==output_path||fs::symlink_metadata(output_path).is_ok()||fs::symlink_metadata(scratch_dir).is_ok(){return Err(error("INVALID_PATH","Output and owned scratch must be new and distinct"));}
  let n=width as u64*height as u64;if fs::metadata(input_path).map_err(io)?.len()!=n*12{return Err(error("INVALID_INPUT_FILE","Input length must equal width*height*12"));}
  if params.io.crop||params.io.upscale_factor!=1.||params.io.input_cctf_decoding||params.io.output_cctf_encoding||params.settings.rgb_to_raw_method!="hanatos2025" {return Err(error("UNSUPPORTED_EXPORT_OPTIONS","Unsupported scientific option; no effect silently ignored"));}

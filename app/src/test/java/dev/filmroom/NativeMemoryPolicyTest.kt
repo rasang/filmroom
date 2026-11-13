@@ -3,6 +3,20 @@ import dev.filmroom.engine.NativeMemoryPolicy as P
 import org.junit.Assert.*
 import org.junit.Test
 class NativeMemoryPolicyTest {
+ @Test fun exportCeilingDoublesWithoutChangingPreviewOrHeadroom(){
+  assertEquals(1024,P.chooseExportBudgetMiB(8192*P.MIB,256*P.MIB,false))
+  assertEquals(512,P.chooseBudgetMiB(8192*P.MIB,256*P.MIB,false))
+  assertEquals(512,P.chooseExportBudgetMiB(2304*P.MIB,256*P.MIB,false))
+  assertEquals(1023,P.chooseExportBudgetMiB(4351*P.MIB,256*P.MIB,false))
+  assertEquals(1024,P.chooseExportBudgetMiB(4352*P.MIB,256*P.MIB,false))
+  assertEquals(128,P.chooseExportBudgetMiB(768*P.MIB,256*P.MIB,false))
+  assertNull(P.chooseExportBudgetMiB(767*P.MIB,256*P.MIB,false))
+  assertNull(P.chooseExportBudgetMiB(8192*P.MIB,256*P.MIB,true))
+  assertNull(P.chooseExportBudgetMiB(8192*P.MIB,-1,false))
+  assertEquals("1024",dev.filmroom.diagnostics.SafeInfo(memoryBudgetMiB=1024).fields()["memoryBudgetMiB"])
+  assertFalse(dev.filmroom.diagnostics.SafeInfo(memoryBudgetMiB=1025).fields().containsKey("memoryBudgetMiB"))
+ }
+
  @Test fun refusesLowOrInsufficientMemoryRatherThanClampingUp(){assertNull(P.chooseBudgetMiB(4096*P.MIB,256*P.MIB,true));assertNull(P.chooseBudgetMiB(767*P.MIB,256*P.MIB,false));assertNull(P.chooseBudgetMiB(128*P.MIB,256*P.MIB,false))}
  @Test fun budgetBoundaryAndCeiling(){assertEquals(128,P.chooseBudgetMiB(768*P.MIB,256*P.MIB,false));assertEquals(512,P.chooseBudgetMiB(8192*P.MIB,256*P.MIB,false));assertEquals(512,P.previewEdge(128));assertEquals(512,P.previewEdge(223));assertEquals(512,P.previewEdge(224))}
  @Test fun detailIsConditionalAndInteractiveRemainsSmall(){

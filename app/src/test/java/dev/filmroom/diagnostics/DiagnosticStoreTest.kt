@@ -209,7 +209,7 @@ class DiagnosticStoreTest {
 
     @Test fun numericWhitelistDropsInvalidValuesAndNoUserTextCanEnter() {
         val info = SafeInfo(width = -1, height = Int.MAX_VALUE, brightness = Double.NaN, grain = Double.POSITIVE_INFINITY,
-            seed = -2, memoryBudgetMiB = 999, film = FilmProfile.fromId("secret.jpg\nTOKEN=abc"), paper = PaperProfile.fromId("content://photos/42"))
+            seed = -2, memoryBudgetMiB = 1025, film = FilmProfile.fromId("secret.jpg\nTOKEN=abc"), paper = PaperProfile.fromId("content://photos/42"))
         assertTrue(info.fields().isEmpty())
         assertFalse(SafeInfo::class.java.constructors.any { constructor -> constructor.parameterTypes.any { it == String::class.java || Throwable::class.java.isAssignableFrom(it) } })
         val body = "1\t1800000000000\t1000\t$runA\t1\t1\tIMPORT\tSTART\t-\t-\twidth=64;uri=content://secret;message=TOKENabc;film=secret.jpg"
