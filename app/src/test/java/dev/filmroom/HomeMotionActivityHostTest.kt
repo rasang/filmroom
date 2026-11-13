@@ -55,4 +55,23 @@ class HomeMotionActivityHostTest {
         MainActivity::class.java.getDeclaredMethod("onSaveInstanceState",Bundle::class.java).apply{isAccessible=true}.invoke(a,out)
         assertEquals("LIGHT_TABLE",out.getString("homeMotionKind"));assertEquals("already-played",out.getString("homeMotionAutoSource"))
     }}
+    /** Host lifecycle only: this does not execute a device GLES video renderer. */
+    @Test fun liveSelectionKeepsVisibleRefinementAndLifecycleControlsIt(){
+        CameraLayoutRenderHostTest().chosenLanguageForLegacyFixture()
+        val host=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            val a=host.get()
+            val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+            val visible=EditorViewModel::class.java.getDeclaredField("previewForeground").apply{isAccessible=true}
+            assertTrue(visible.getBoolean(vm))
+            set(a,"homeMotionKind",EffectKind.LIGHT_TABLE)
+            // Mount's idle-work action must not turn off the visible frame's refinement.
+            vm.setPrewarmForeground(false);assertTrue(visible.getBoolean(vm))
+            host.pause();assertFalse(visible.getBoolean(vm))
+            host.resume();assertTrue(visible.getBoolean(vm))
+            set(a,"homeMotionKind",null)
+            MainActivity::class.java.getDeclaredMethod("stopHomeMotion").apply{isAccessible=true}.invoke(a)
+            assertTrue(visible.getBoolean(vm))
+        }finally{host.pause().stop().destroy()}
+    }
 }

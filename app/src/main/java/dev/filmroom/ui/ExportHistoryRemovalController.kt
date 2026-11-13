@@ -100,14 +100,14 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
             }
             val uris=snapshot.outputUris
             if(snapshot.livePublishedUris.isNotEmpty() && !snapshot.validLiveAssets()) {
-                failures=true;toast(HistoryText.MISSING);outcome(snapshot,"invalid-live-assets");continue
+                removeRecordOnly(snapshot);continue
             }
             val uri=uris.firstOrNull{it !in op.deletedUris}
             if(uri==null && uris.isNotEmpty()) {
                 completeDeletedRecord(snapshot);continue
             }
             if(uri==null){
-                failures=true;toast(HistoryText.MISSING);outcome(snapshot,"missing-uri");continue
+                removeRecordOnly(snapshot);continue
             }
             val result=media.delete(uri,snapshot.exportMillis,snapshot.outputNameFor(uri),snapshot.livePublishedUris.isNotEmpty())
             if(!handle(snapshot,uri,result))return
@@ -123,13 +123,18 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
                 if(snapshot.outputUris.all{it in operation!!.deletedUris})completeDeletedRecord(snapshot)
             }
             ExportMediaDeletionResult.Missing->{
-                if(snapshot.livePublishedUris.isNotEmpty()) {
-                    // A previously removed pair member is already absent. Never search for a replacement.
-                    write(op.copy(deletedUris=(op.deletedUris+uri).distinct(),status="running",consentUri=null,consentKind=null))
-                    if(snapshot.outputUris.all{it in operation!!.deletedUris})completeDeletedRecord(snapshot)
-                }else{failures=true;toast(HistoryText.MISSING);outcome(snapshot,"missing")}
+                // An empty provider result proves this exact asset absent. This is safe for
+                // ordinary outputs too; never search by name for a moved/replacement photo.
+                write(op.copy(deletedUris=(op.deletedUris+uri).distinct(),status="running",consentUri=null,consentKind=null))
+                if(snapshot.outputUris.all{it in operation!!.deletedUris})completeDeletedRecord(snapshot)
             }
             is ExportMediaDeletionResult.Failed->{
+                if(result.reason in setOf(ExportMediaDeletionFailure.INVALID_URI,ExportMediaDeletionFailure.UNVERIFIED_IDENTITY,ExportMediaDeletionFailure.INACCESSIBLE)) {
+                    // User confirmed removing the record. Inability to verify/access media is
+                    // NOT evidence of deletion: stop touching assets and remove only private data.
+                    removeRecordOnly(snapshot)
+                    return true
+                }
                 failures=true
                 toast(when(result.reason){ExportMediaDeletionFailure.CANCELLED->HistoryText.DENIED;ExportMediaDeletionFailure.INVALID_URI,ExportMediaDeletionFailure.UNVERIFIED_IDENTITY->HistoryText.MISSING;else->HistoryText.FAILED})
                 outcome(snapshot,result.reason.name)
@@ -141,6 +146,12 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
             }
         }
         return true
+    }
+    private suspend fun removeRecordOnly(snapshot:ExportHistorySnapshot) {
+        val q=queue ?: return
+        write(operation!!.copy(status="record-only:${snapshot.id}",consentUri=null,consentKind=null))
+        if(q.removeHistoryRecord(operation!!,snapshot))outcome(snapshot,"record-only-unverified")
+        else{failures=true;toast(HistoryText.PROTECTED);outcome(snapshot,"changed")}
     }
     private suspend fun completeDeletedRecord(snapshot:ExportHistorySnapshot) {
         val q=queue ?: return
@@ -177,8 +188,8 @@ internal class ExportHistoryRemovalController(private val activity:ComponentActi
             try{withContext(NonCancellable+Dispatchers.IO){queue?.store?.updateHistoryOperation(op.copy(status="finished",consentUri=null,consentKind=null))}}
             catch(_:Exception){failures=true}
             finally{queue?.store?.releaseHistory(op)}
-            val removed=op.outcomes.values.count{it=="record-removed" || it=="photo-and-record-removed"}
-            if(!failures && removed>0)toast(HistoryText.DONE,removed)
+            val removed=op.outcomes.values.count{it=="record-removed" || it=="photo-and-record-removed" || it=="record-only-unverified"}
+            if(!failures && removed>0)toast(if("record-only-unverified" in op.outcomes.values)HistoryText.DONE_RECORD_ONLY_FALLBACK else HistoryText.DONE,removed)
         }
         operation=null;restoredId=null;launcher?.unregister();launcher=null;launcherId=null;busy=false;changed()
     }

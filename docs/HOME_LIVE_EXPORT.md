@@ -8,8 +8,9 @@ version, disabled updates, or old export/import implementation.
 
 - The icon between Recipe and Compare selects None / Light table / Viewfinder.
   It has no background: white when off, theme orange when on. An enabled-state
-  change runs one restrained 600 ms scale/alpha breath, respecting system animation
-  disablement. It is not a continuous animation.
+  change runs one 1000 ms three-layer ripple (inner to outer, staggered by 80 ms),
+  respecting system animation disablement. The button itself stays fixed; it is not
+  a continuous animation.
 - Selection plays once; stationary hold replays; release returns to the export-cover
   scene. Original paired Live inputs require their own authorized video grant;
   unrecognized/missing input is not fabricated.

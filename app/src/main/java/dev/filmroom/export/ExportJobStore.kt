@@ -116,7 +116,7 @@ class ExportJobStore(val root:File) {
     }
     @Synchronized fun removeHistoryRecord(op:ExportHistoryOperation,snapshot:ExportHistorySnapshot):Boolean {
         if(historyReservations[snapshot.id]!=op.id || !historyMatches(snapshot))return false
-        if(op.deletePhotos && get(snapshot.id)?.archivedHistory!=true && (op.status!="photo-deleted:${snapshot.id}" || historyJournal.read(op.id)?.status!=op.status))return false
+        if(op.deletePhotos && get(snapshot.id)?.archivedHistory!=true && (op.status !in setOf("photo-deleted:${snapshot.id}","record-only:${snapshot.id}") || historyJournal.read(op.id)?.status!=op.status))return false
         if(get(snapshot.id)?.archivedHistory==true) {
             val remaining=archived.filterNot{it.id==snapshot.id}
             archive.write(remaining);archived=remaining

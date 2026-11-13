@@ -38,6 +38,78 @@ class PreviewSchedulingHostTest {
     private fun seed(s:MutableStateFlow<EditorUiState>){
         s.value=EditorUiState(photo=PhotoSource(File("unused"),"test","image/jpeg",6000,4000,0),original=Bitmap.createBitmap(768,512,Bitmap.Config.ARGB_8888))
     }
+    @Test fun liveDisabledIdlePrewarmStillRefinesFilmAndParameterChanges()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val(vm,s)=setup();seed(s);s.value.original!!.recycle();s.value=s.value.copy(original=Bitmap.createBitmap(1536,1024,Bitmap.Config.ARGB_8888));vm.detailPreviewEdge={1536}
+            vm.setPreviewForeground(true);vm.setPrewarmForeground(false)
+            val calls=mutableListOf<Pair<EditorState,Boolean>>()
+            vm.renderPreview={source,p,_,detail->
+                if(detail)assertEquals(1536,maxOf(source.width,source.height))
+                calls+=p to detail
+                Bitmap.createBitmap(if(detail)1536 else 512,if(detail)1024 else 341,Bitmap.Config.ARGB_8888)}
+            val first=EditorState(brightness=.1f)
+            vm.parameters(first);advanceUntilIdle()
+            assertEquals(listOf(false,true),calls.map{it.second})
+            val oldState=s.value
+            val oldSnapshot=dev.filmroom.effects.HomeMotionSnapshot.capture(oldState,dev.filmroom.effects.EffectKind.LIGHT_TABLE)
+            val film=first.copy(filmStock="kodak_ektar_100")
+            vm.parameters(film);advanceUntilIdle()
+            val adjusted=film.copy(brightness=.4f)
+            vm.parameters(adjusted);advanceUntilIdle()
+            assertEquals(listOf(false,true,false,true,false,true),calls.map{it.second})
+            assertEquals(listOf(first,first,film,film,adjusted,adjusted),calls.map{it.first})
+            assertEquals(adjusted,s.value.renderedParameters);assertEquals(1536,s.value.rendered!!.width)
+            assertTrue(dev.filmroom.effects.HomeMotionSnapshot.canRetain(oldState,s.value))
+            assertFalse(dev.filmroom.effects.HomeMotionSnapshot.matches(oldState,s.value))
+            dev.filmroom.effects.HomeMotionSnapshot.capture(s.value,dev.filmroom.effects.EffectKind.LIGHT_TABLE).use{fresh->
+                assertEquals(1536,fresh.result.width);assertNotSame(oldSnapshot.result,fresh.result)
+            }
+            oldSnapshot.close();vm.cancel()
+        }finally{Dispatchers.resetMain()}
+    }
+    @Test fun livePrewarmDisabledDoesNotAdoptLateOldRefinement()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val(vm,s)=setup();seed(s);s.value.original!!.recycle();s.value=s.value.copy(original=Bitmap.createBitmap(1536,1024,Bitmap.Config.ARGB_8888));vm.detailPreviewEdge={1536};vm.setPrewarmForeground(false)
+            val calls=mutableListOf<Pair<Float,Boolean>>();var stale:Bitmap?=null;var active=0;var peak=0
+            vm.cancelPreviewEngine={}
+            vm.renderPreview={source,p,_,detail->
+                if(detail)assertEquals(1536,maxOf(source.width,source.height))
+                active++;peak=maxOf(peak,active);calls+=p.brightness to detail
+                try {
+                    if(detail && p.brightness==.1f)withContext(NonCancellable){delay(200)}
+                    Bitmap.createBitmap(if(detail)1536 else 512,1,Bitmap.Config.ARGB_8888).also{if(detail && p.brightness==.1f)stale=it}
+                }finally{active--}
+            }
+            vm.parameters(EditorState(brightness=.1f))
+            advanceTimeBy(EditorViewModel.SCIENCE_DEBOUNCE_MS+EditorViewModel.REFINEMENT_SETTLE_MS+1);runCurrent()
+            assertEquals(listOf(.1f to false,.1f to true),calls)
+            vm.parameters(EditorState(brightness=.7f));advanceUntilIdle()
+            assertEquals(listOf(.1f to false,.1f to true,.7f to false,.7f to true),calls)
+            assertEquals(1,peak);assertTrue(stale!!.isRecycled)
+            assertEquals(.7f,s.value.renderedParameters!!.brightness,0f);assertEquals(1536,s.value.rendered!!.width)
+            vm.cancel()
+        }finally{Dispatchers.resetMain()}
+    }
+    @Test fun livePreviewForegroundResumesWhileIdlePrewarmingRemainsDisabled()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val(vm,s)=setup();seed(s);s.value.original!!.recycle();s.value=s.value.copy(original=Bitmap.createBitmap(1536,1024,Bitmap.Config.ARGB_8888));vm.detailPreviewEdge={1536};vm.setPrewarmForeground(false)
+            val calls=mutableListOf<Boolean>()
+            vm.renderPreview={source,_,_,detail->
+                if(detail)assertEquals(1536,maxOf(source.width,source.height))
+                calls+=detail;delay(100)
+                Bitmap.createBitmap(if(detail)1536 else 512,1,Bitmap.Config.ARGB_8888)}
+            vm.parameters(EditorState(brightness=.2f));advanceTimeBy(EditorViewModel.SCIENCE_DEBOUNCE_MS+1);runCurrent()
+            vm.setPreviewForeground(false);advanceUntilIdle()
+            assertEquals(listOf(false),calls);assertEquals(512,s.value.rendered!!.width)
+            // Resuming the visible Live cover must not need to re-enable speculative work.
+            vm.setPreviewForeground(true);advanceUntilIdle()
+            assertEquals(listOf(false,true),calls);assertEquals(1536,s.value.rendered!!.width)
+            vm.cancel()
+        }finally{Dispatchers.resetMain()}
+    }
     @Test fun continuousInputKeepsFirstDeadlineAndOnlyLatestEntersScience()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {
@@ -165,7 +237,7 @@ class PreviewSchedulingHostTest {
             vm.processingScreenLeft();advanceTimeBy(20);runCurrent()
             assertSame(previous,s.value.rendered);assertEquals(listOf(false,true),calls)
             // Returning before the cancelled JNI call drains must not overlap it.
-            vm.setPrewarmForeground(true);runCurrent();assertEquals(2,calls.size)
+            vm.setPreviewForeground(true);runCurrent();assertEquals(2,calls.size)
             advanceUntilIdle()
             assertTrue(stale!!.isRecycled);assertEquals(1,peak);assertEquals(listOf(false,true,true),calls)
             assertEquals(1536,s.value.rendered!!.width);assertFalse(s.value.previewRefining);vm.cancel()
@@ -184,7 +256,7 @@ class PreviewSchedulingHostTest {
             val before=cancels;vm.processingScreenLeft();advanceUntilIdle()
             assertEquals(before,cancels);assertEquals(listOf(false),calls);assertEquals(512,s.value.rendered!!.width)
             assertFalse(s.value.previewRefining);assertTrue(s.value.canExport)
-            vm.setPrewarmForeground(true);advanceUntilIdle()
+            vm.setPreviewForeground(true);advanceUntilIdle()
             assertEquals(listOf(false,true),calls);assertEquals(1536,s.value.rendered!!.width);vm.cancel()
         }finally{Dispatchers.resetMain()}
     }

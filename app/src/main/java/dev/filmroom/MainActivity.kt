@@ -212,10 +212,10 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){zoomFrames?.releaseForPressure();dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true);if(::histogram.isInitialized)histogram.setForeground(true)}
-    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus);refreshHomeMotion()}
+    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);model.setPreviewForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus);refreshHomeMotion()}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
-    override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;stopHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
+    override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;stopHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);model.setPreviewForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
     override fun onDestroy(){stopHomeMotion();homeMotionInputOwner?.close();homeMotionInputOwner=null;startupUpdateUi?.close();startupUpdateUi=null;zoomFrames?.close();zoomFrames=null;imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
@@ -446,7 +446,7 @@ class MainActivity:ComponentActivity() {
         val selected=homeMotionKind!=null
         homeMotionButton.isSelected=selected
         homeMotionButton.background=shape(Color.TRANSPARENT)
-        homeMotionButton.compoundDrawables.filterNotNull().forEach{it.setTint(if(selected)accent else Color.WHITE)}
+        HomeLiveIconPulse.install(homeMotionButton,if(selected)accent else Color.WHITE)
         homeMotionButton.contentDescription=dev.filmroom.i18n.L10n.text(if(selected)R.string.home_motion_enabled else R.string.home_motion_label)
     }
     private fun chooseHomeMotion(){
@@ -556,6 +556,8 @@ class MainActivity:ComponentActivity() {
                         if(!ok && homeMotion===player){stopHomeMotion();toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error))}
                     }
                     transferred=true;homeMotion=player;homeMotionState=s;homeMotionPreparingState=null;homeMotionPhotoKey=s.photo?.cacheKey
+                    // Hide ordinary-photo detail and speculative prewarm, not the editor's
+                    // whole-frame refinement: the visible Live cover also needs its sharp frame.
                     photo.setForeground(false);zoomFrames?.foreground(false);model.setPrewarmForeground(false)
                     val stage=HomeMotionStage(this@MainActivity,kind,snapshot.result.width,snapshot.result.height,player)
                     homeMotionStage=stage
@@ -579,7 +581,7 @@ class MainActivity:ComponentActivity() {
         homeMotionStage?.let{(it.parent as? ViewGroup)?.removeView(it)};homeMotionStage=null
         updateHomeMotionButton()
         if(::photo.isInitialized)photo.setForeground(detailForeground)
-        zoomFrames?.foreground(detailForeground);model.setPrewarmForeground(detailForeground)
+        zoomFrames?.foreground(detailForeground);model.setPrewarmForeground(detailForeground);model.setPreviewForeground(detailForeground)
     }
 
     private fun bindZoomFrame(s:EditorUiState) {

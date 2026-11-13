@@ -6,7 +6,7 @@ import dev.filmroom.i18n.L10n
 /** App-owned four-language copy, keyed independently of enum ordinals or preference wire values. */
 internal enum class HistoryText(val zh:String,val en:String,val ja:String,val ko:String) {
  CONFIRM_RECORDS("将仅删除 %1\$d 条记录，保留导出的照片。","Delete %1\$d records only. Exported photos will be kept.","履歴 %1\$d 件のみ削除します。書き出した写真は残ります。","기록 %1\$d개만 삭제하고 내보낸 사진은 유지합니다。"),
- CONFIRM_PHOTOS("将删除 %1\$d 条记录及对应的导出照片，不会删除原图。","Delete %1\$d records and their exported photos. Originals will not be deleted.","履歴 %1\$d 件と対応する書き出し写真を削除します。元画像は削除しません。","기록 %1\$d개와 해당 내보낸 사진을 삭제합니다. 원본은 삭제하지 않습니다。"),
+ CONFIRM_PHOTOS("将删除 %1\$d 条记录及对应的导出照片，不会删除原图。无法访问或确认的相册文件会保留，仅移除记录。","Delete %1\$d records and their exported photos. Originals will not be deleted. Inaccessible or unverifiable gallery files will be kept; only their records will be removed.","履歴 %1\$d 件と対応する書き出し写真を削除します。元画像は削除しません。アクセスまたは確認できない写真は残し、履歴のみ削除します。","기록 %1\$d개와 해당 내보낸 사진을 삭제합니다. 원본은 삭제하지 않습니다. 접근하거나 확인할 수 없는 사진은 유지하고 기록만 삭제합니다。"),
  SINGLE_TITLE("删除这条记录？","Delete this record?","この履歴を削除しますか？","이 기록을 삭제할까요?"),
  CLEAR_TITLE("清空已结束的记录？","Clear finished records?","終了した履歴を消去しますか？","종료된 기록을 비울까요?"),
  CLEAR_ONE_TITLE("清空这条已结束记录？","Clear this finished record?","この終了した履歴を消去しますか？","종료된 이 기록을 비울까요?"),
@@ -17,8 +17,8 @@ internal enum class HistoryText(val zh:String,val en:String,val ja:String,val ko
  TITLE("同时删除导出的照片？","Also delete exported photos?","書き出した写真も削除しますか？","내보낸 사진도 삭제할까요?"),
  ONLY("否，仅删除记录","No, records only","いいえ、履歴のみ","아니요, 기록만 삭제"),
  BOTH("是，同时删除照片","Yes, also delete photos","はい、写真も削除","예, 사진도 삭제"),
- SINGLE_NOTE("仅处理这条记录对应的导出照片，不会删除原图。","Only this record’s exported photo. Originals are never deleted.","この履歴の書き出し写真のみが対象です。元画像は削除しません。","이 기록에 해당하는 내보낸 사진만 처리합니다. 원본은 삭제하지 않습니다."),
- CLEAR_NOTE("仅清理已结束的记录，排队、处理中和已暂停任务会保留。","Finished records only. Queued, running and paused tasks are kept.","終了した履歴のみ対象です。待機・処理・一時停止中のタスクは残ります。","종료된 기록만 처리합니다. 대기, 처리, 일시 중지된 작업은 유지됩니다."),
+ SINGLE_NOTE("仅处理这条记录对应的导出照片，不会删除原图。无法访问或确认的相册文件会保留，仅移除记录。","Only this record’s exported photo. Originals are never deleted. Inaccessible or unverifiable gallery files will be kept; only the record is removed.","この履歴の書き出し写真のみが対象です。元画像は削除しません。確認できない写真は残し、履歴のみ削除します。","이 기록에 해당하는 내보낸 사진만 처리합니다. 원본은 삭제하지 않습니다. 확인할 수 없는 사진은 유지하고 기록만 삭제합니다."),
+ CLEAR_NOTE("仅清理已结束的记录，排队、处理中和已暂停任务会保留。无法访问或确认的相册文件会保留，仅移除记录。","Finished records only. Queued, running and paused tasks are kept. Inaccessible or unverifiable gallery files are kept; only their records are removed.","終了した履歴のみ対象です。待機・処理・一時停止中のタスクは残ります。確認できない写真は残し、履歴のみ削除します。","종료된 기록만 처리합니다. 대기, 처리, 일시 중지된 작업은 유지됩니다. 확인할 수 없는 사진은 유지하고 기록만 삭제합니다."),
  RETRY_WARNING("失败记录移除后将无法重试。","Removed failed exports cannot be retried.","失敗した履歴を削除すると再試行できません。","실패한 기록을 삭제하면 다시 시도할 수 없습니다."),
  REMEMBER("记住删除范围","Remember deletion scope","削除範囲を保存","삭제 범위 기억"),
  HINT("仅记住删除范围，每次仍需确认。可在设置中修改。","Only the scope is remembered. Every deletion still requires confirmation. Change it in Settings.","削除範囲のみ保存します。削除のたびに確認します。設定で変更できます。","삭제 범위만 저장하며 삭제할 때마다 확인합니다. 설정에서 변경할 수 있습니다."),
@@ -27,6 +27,7 @@ internal enum class HistoryText(val zh:String,val en:String,val ja:String,val ko
  IDENTITY("无法安全确认这张导出照片，记录已保留。可选择仅删除记录。","Cannot safely verify this exported photo. Record kept; you can remove only the record.","書き出した写真を安全に確認できません。履歴のみ削除できます。","내보낸 사진을 안전하게 확인할 수 없어 기록을 유지했습니다. 기록만 삭제할 수 있습니다."),
  FAILED("删除未完成，未处理的记录已保留。","Deletion incomplete. Unhandled records kept.","削除が完了しませんでした。未処理の履歴は残しました。","삭제가 완료되지 않아 처리하지 못한 기록을 유지했습니다."),
  DENIED("已取消删除，记录已保留。","Deletion cancelled. Record kept.","削除をキャンセルしました。履歴は残しました。","삭제를 취소하여 기록을 유지했습니다."),
+ DONE_RECORD_ONLY_FALLBACK("已移除 %1\$d 条记录；未能确认删除的相册文件已保留。","Removed %1\$d records; gallery files that could not be verified for deletion were kept.","%1\$d 件の履歴を削除しました。削除を確認できない写真は残しました。","기록 %1\$d개를 삭제했습니다. 삭제를 확인할 수 없는 사진은 유지했습니다."),
  DONE("已移除 %1\$d 条记录。","Removed %1\$d records.","%1\$d 件の履歴を削除しました。","기록 %1\$d개를 삭제했습니다."),
  PROTECTED("任务状态已变化或正在处理，记录已保留。","Task changed or is still active. Record kept.","タスクが変更されたか処理中のため、履歴を残しました。","작업 상태가 변경되었거나 처리 중이므로 기록을 유지했습니다."),
  INTERRUPTED("删除已中断，剩余记录已保留，请重试。","Deletion interrupted. Remaining records kept; please retry.","削除が中断されました。残った履歴で再試行してください。","삭제가 중단되어 나머지 기록을 유지했습니다. 다시 시도해 주세요."),

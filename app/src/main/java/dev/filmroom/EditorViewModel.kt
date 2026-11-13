@@ -73,8 +73,10 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         prepare={parameters,allowed->engine.prewarmFront(parameters,allowed)},cancelNative=engine::cancelPrewarm,
         interactiveIdle={renderJob?.isActive!=true && !mutable.value.exporting && !mutable.value.updating && !mutable.value.previewRefining})
     private var previewForeground=true
-    fun setPrewarmForeground(foreground:Boolean) {
-        idlePrewarmer.setForeground(foreground)
+    /** Speculative idle work is separate from the visible preview's refinement. */
+    fun setPrewarmForeground(foreground:Boolean) { idlePrewarmer.setForeground(foreground) }
+    /** Both the ordinary photo and the Live cover consume whole-photo REFINED frames. */
+    fun setPreviewForeground(foreground:Boolean) {
         val changed=previewForeground!=foreground
         previewForeground=foreground
         if(!foreground && activeRefinementRequest!=null && renderJob?.isActive==true){
@@ -327,7 +329,7 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
         if(mutable.value.busy==null)mutable.value=mutable.value.copy(updating=false,messageUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_6f25582e0d79),message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6f25582e0d79))
     }
     // Leaving the editor must never cancel durable queue work (or an in-flight capture).
-    fun processingScreenLeft() {setPrewarmForeground(false)}
+    fun processingScreenLeft() {setPrewarmForeground(false);setPreviewForeground(false)}
     fun cancelExportForSharing() = Unit
     private fun saveSession() {
         val s=mutable.value;val p=s.photo ?: return
