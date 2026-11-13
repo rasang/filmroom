@@ -11,13 +11,16 @@ concurrency:
 jobs:
   source-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare reproducible source snapshot
-        run: git archive --format=tar.gz --output="$RUNNER_TEMP/filmroom-source.tar.gz" HEAD
+      - name: Prepare reproducible host compiler for offline validation
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          TOOLCHAIN=$(rustc +1.88.0 --print sysroot)
+          tar --exclude='./share/doc' --exclude='./share/man' -czf "$RUNNER_TEMP/rust-toolchain.tar.gz" -C "$TOOLCHAIN" .
       - uses: actions/upload-artifact@v4
         with:
-          name: filmroom-source-${{ github.sha }}
-          path: ${{ runner.temp }}/filmroom-source.tar.gz
-          retention-days: 3
+          name: rust-1.88.0-host-validation
+          path: ${{ runner.temp }}/rust-toolchain.tar.gz
+          retention-days: 1
