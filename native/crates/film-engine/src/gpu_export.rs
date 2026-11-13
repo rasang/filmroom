@@ -6,7 +6,7 @@ use crate::{mobile::{EngineError,Result},streamed::{StreamedMetrics,StageMetrics
 
 // Export ownership semantics are independent of the preview/detail protocol.
 // Every export checkpoint, global-field/FilmLog reuse key, and reuse probe uses this ID.
-pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1-donor-portra-v1-front-prepass-v3-disk-diffusion-v1-spatial-psf-v1";
+pub(crate) const ALGORITHM:&str="export-ae-owned-v2-resident-f32-psf6-cap64-fir256-grain-rms-v1-cinestill4g-v1-donor-portra-v1-front-prepass-v3-disk-diffusion-v1-spatial-psf-v1-route-geometry-v1";
 #[cfg(test)]
 thread_local!{static FORCE_DISK_DIFFUSION:std::cell::Cell<bool>=const{std::cell::Cell::new(false)};}
 const FIXED_BYTES:u64=96*1024*1024;
@@ -206,11 +206,55 @@ fn split_is_worthwhile(width:u32,height:u32,halo:u32,plan:TilePlan)->bool {
 }
 // A full-chain capacity failure may be resolved by splitting; invalid input
 // and other failures must propagate, as must a forced full-chain failure.
+#[cfg(test)]
 fn choose_main_split(width:u32,height:u32,halo:u32,full:&Result<TilePlan>,forced:Option<bool>)->Result<bool> {
     match full {
         Ok(plan)=>Ok(forced.unwrap_or_else(||split_is_worthwhile(width,height,halo,*plan))),
         Err(e) if matches!(e.code,"GPU_MEMORY_BUDGET"|"GPU_BINDING_LIMIT")&&forced!=Some(false)=>Ok(true),
         Err(e)=>Err(err(e.code)),
+    }
+}
+/// Ordinary FilmLog split executes the same prefix/suffix operators as Full.
+/// Compare each operator group's exact clipped pixel domain, not dispatch counts
+/// or a made-up FLOP/time weight. Dominance means no shared operator gains work.
+/// The remaining gates are deliberately conservative policy margins, NOT a
+/// calibrated latency prediction: at least 20% mean domain saving, at most 60%
+/// extra upload/readback pixels, 2x spool bytes and 3x tile/row calls. Extra
+/// FilmLog upload/copy and file sync make marginal wins inappropriate.
+#[derive(Clone,Copy,Debug)]
+struct RouteWork { full:TileCost,prefix:TileCost,suffix:TileCost,full_io:u64,split_io:u64 }
+impl RouteWork {
+    fn new(width:u32,height:u32,halo:u32,full:TilePlan,ph:u32,prefix:TilePlan,sh:u32,suffix:TilePlan)->Self {
+        let n=u64::from(width)*u64::from(height);
+        let full=tile_cost(width,height,halo,full.width,full.rows);
+        let prefix=tile_cost(width,height,ph,prefix.width,prefix.rows);
+        let suffix=tile_cost(width,height,sh,suffix.width,suffix.rows);
+        Self{full,prefix,suffix,full_io:12*(full.expanded_pixels+n),split_io:12*(prefix.expanded_pixels+suffix.expanded_pixels+2*n)}
+    }
+    fn prefer_split(self)->bool {
+        let(f,p,s)=(self.full,self.prefix,self.suffix);
+        p.expanded_pixels<=f.expanded_pixels && s.expanded_pixels<=f.expanded_pixels
+            && (p.expanded_pixels+s.expanded_pixels)*5<=f.expanded_pixels*8
+            && self.split_io<=self.full_io*2
+            && p.tiles+s.tiles<=f.tiles*3 && p.row_io+s.row_io<=f.row_io*3
+    }
+}
+/// Physical halation has additional directional disk passes, so retains its
+/// separate established policy. A feasible full plan is never rejected merely
+/// because the speculative split fails capacity checks.
+fn choose_route(width:u32,height:u32,halo:u32,full:&Result<TilePlan>,candidate:&Result<(TilePlan,TilePlan)>,
+    ph:u32,sh:u32,physical:bool,forced:Option<bool>)->Result<bool> {
+    let capacity=|e:&EngineError|matches!(e.code,"GPU_MEMORY_BUDGET"|"GPU_BINDING_LIMIT");
+    if forced==Some(false){return full.as_ref().map(|_|false).map_err(|e|err(e.code));}
+    if let Err(e)=full {if !capacity(e){return Err(err(e.code));}}
+    match (full,candidate) {
+        (_,Err(e)) if forced==Some(true)=>Err(err(e.code)),
+        (Ok(_),Err(e)) if capacity(e)=>Ok(false),
+        (_,Err(e))=>Err(err(e.code)),
+        (Err(_),Ok(_))=>Ok(true),
+        (Ok(f),Ok((p,s)))=>Ok(forced.unwrap_or_else(||!f.whole && if physical {
+            split_is_worthwhile(width,height,halo,*f)
+        }else{RouteWork::new(width,height,halo,*f,ph,*p,sh,*s).prefer_split()})),
     }
 }
 // Preserve raw phase pixels while display progress spans all main tiles.
@@ -565,8 +609,23 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
     let main_fields=full_field_reservation(retained,fields_bytes,if early_live{preview_bytes}else{0},kernels)
         .ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
     let full_plan=tile_plan(width,height,halo,budget,gpu.max_storage_buffer_binding_size(),main_fields);
-    let split=choose_main_split(width,height,halo,&full_plan,force_split)?;
-    let spatial=split && pipe.gpu_physical_components(width,height).is_some();
+    // Plan both alternatives after prepass scratch is released, using the
+    // same live fields as execution. Taking/restoring camera avoids cloning a
+    // potentially disk-backed global field merely to estimate suffix cost.
+    let physical=pipe.gpu_physical_components(width,height).is_some();
+    let (legacy_prefix_halo,suffix_halo)=pipe.gpu_split_halo_pixels(pitch);
+    let prefix_halo=if physical{pipe.gpu_scattered_raw_halo(width,height)}else{legacy_prefix_halo};
+    let camera=fields.as_mut().and_then(|f|f.camera.take());
+    let suffix_retained=match fields.as_ref(){Some(f)=>f.retained_working_bytes(),None=>Some(0)};
+    if let Some(f)=fields.as_mut(){f.camera=camera;}
+    let split_candidate=(|| {
+        let (pf,sf)=split_field_reservations(retained.unwrap_or(0),suffix_retained.ok_or_else(||err("GPU_MEMORY_BUDGET"))?,if early_live{preview_bytes}else{0},kernels).ok_or_else(||err("GPU_MEMORY_BUDGET"))?;
+        Ok((tile_plan(width,height,prefix_halo,budget,gpu.max_storage_buffer_binding_size(),pf)?,
+            tile_plan(width,height,suffix_halo,budget,gpu.max_storage_buffer_binding_size(),sf)?))
+    })();
+    let split=choose_route(width,height,halo,&full_plan,&split_candidate,prefix_halo,suffix_halo,physical,force_split)?;
+    stages.push(StageMetrics{stage:if physical{"gpu_route_physical_policy"}else if split{"gpu_route_split_geometry_v1"}else{"gpu_route_full_geometry_v1"},elapsed_ms:0.});
+    let spatial=split && physical;
     // For split rendering this is a real prefix plan, not a dummy full plan.
     // Both phases are checked again below with exact optional reservations.
     let mut plan=if split {
@@ -1095,6 +1154,26 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
   assert!(max<0.00002,"same GPU model split regression max={max}");
  }
 
+ #[test]fn automatic_geometry_route_matches_forced_full_output(){
+  if std::env::var("FILMROOM_ROUTE_GPU_TEST").as_deref()!=Ok("1"){return;}
+  let gpu=crate::mobile::full_chain_gpu().expect("WGSL adapter required");assert!(gpu.is_healthy());
+  let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+  let mut m=crate::mobile::MobileParams::default();m.mode="export".into();m.film_stock="kodak_portra_400".into();m.paper_stock="kodak_portra_endura".into();m.grain_amount=0.;m.film_format_mm=8.;
+  let film=spektrafilm_core::profile::load_profile_by_name(&data,&m.film_stock).unwrap();let paper=spektrafilm_core::profile::load_profile_by_name(&data,&m.paper_stock).unwrap();let params=m.runtime_for_film(&film);
+  let(w,h)=(513u32,509u32);let root=std::env::temp_dir().join(format!("gpu-auto-route-{}",std::process::id()));fs::create_dir(&root).unwrap();
+  struct Cleanup(PathBuf);impl Drop for Cleanup{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}let _cleanup=Cleanup(root.clone());
+  let input=root.join("input.rgb");fs::write(&input,(0..w*h*3).flat_map(|i|(0.01f32+(i%251)as f32/300.).to_le_bytes()).collect::<Vec<_>>()).unwrap();let mut outputs=Vec::new();
+  for forced in [Some(false),None] {
+   let output=root.join(format!("out-{forced:?}"));let mut reporter=crate::streamed_progress::Reporter::new(|_|{});
+   let metrics=export_with_split(&params,&m.film_stock,&m.paper_stock,&film,&paper,&data,&input,&output,None,w,h,128,0.,&mut||false,&mut reporter,forced).unwrap();
+   if forced.is_none(){assert!(metrics.stages.iter().any(|s|s.stage=="gpu_route_split_geometry_v1"),"fixture must exercise automatic split");}
+   assert!(metrics.gpu.active);assert_eq!(fs::metadata(&output).unwrap().len(),u64::from(w)*u64::from(h)*12);
+   outputs.push(fs::read(&output).unwrap().chunks_exact(4).map(|b|f32::from_le_bytes(b.try_into().unwrap())).collect::<Vec<_>>());
+  }
+  let max=outputs[0].iter().zip(&outputs[1]).map(|(a,b)|(a-b).abs()).fold(0f32,f32::max);
+  eprintln!("AUTOMATIC_ROUTE_VS_FULL max={max} dimensions={w}x{h}");assert!(max<0.00002,"auto split output regression {max}");
+ }
+
  #[test]fn fifty_megapixel_glimmerglass_admits_bounded_plan(){
   let data=Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");let mut m=crate::mobile::MobileParams::default();m.film_format_mm=93.12;m.diffusion_filter="glimmerglass".into();m.diffusion_strength=0.5;
   let film=spektrafilm_core::profile::load_profile_by_name(&data,&m.film_stock).unwrap();let paper=spektrafilm_core::profile::load_profile_by_name(&data,&m.paper_stock).unwrap();let p=Pipeline::new_with_spectral(film.clone(),paper,m.runtime_for_film(&film),&data).unwrap();
@@ -1431,4 +1510,57 @@ mod doubled_export_budget_tests {
         assert_eq!(band_plan(10,10,0,1025,binding,0).unwrap_err().code,"INVALID_BUDGET");
         assert!(tile_plan(7347,6767,261,1024,1024,0).is_err());
     }
+}
+
+#[cfg(test)]
+mod route_cost_tests {
+ use super::*;
+ const BINDING:u64=128*1024*1024;
+ #[test] fn reported_49mp_does_not_flip_at_64_tiles() {
+  let(w,h)=(7347,6767);let(ph,sh,halo)=(76,261,335);
+  for budget in [512,594,869,992,1024] {
+   let full=tile_plan(w,h,halo,budget,BINDING,13_571_032);
+   let pair=Ok((tile_plan(w,h,ph,budget,BINDING,13_571_032).unwrap(),tile_plan(w,h,sh,budget,BINDING,0).unwrap()));
+   assert!(choose_route(w,h,halo,&full,&pair,ph,sh,false,None).unwrap(),"budget={budget}");
+   let f=*full.as_ref().unwrap();let(p,s)=*pair.as_ref().unwrap();
+   let work=RouteWork::new(w,h,halo,f,ph,p,sh,s);
+   eprintln!("ROUTE budget={budget} full_tiles={} prefix_tiles={} suffix_tiles={} full_pixels={} prefix_pixels={} suffix_pixels={} full_io={} split_io={}",work.full.tiles,work.prefix.tiles,work.suffix.tiles,work.full.expanded_pixels,work.prefix.expanded_pixels,work.suffix.expanded_pixels,work.full_io,work.split_io);
+   for plan in [f,p,s]{assert!(plan.estimated_bytes<=u64::from(budget)*1024*1024);assert!(u64::from(plan.expanded_width)*u64::from(plan.expanded_rows)*12<=BINDING*9/10);}
+  }
+ }
+ #[test] fn whole_and_small_halos_keep_full() {
+  for(w,h,halo)in [(64,64,335),(5000,4000,2),(1,40000,2),(40000,1,2)] {
+   let full=tile_plan(w,h,halo,512,BINDING,0);let pair=Ok((tile_plan(w,h,halo,512,BINDING,0).unwrap(),tile_plan(w,h,2,512,BINDING,0).unwrap()));
+   assert!(!choose_route(w,h,halo,&full,&pair,halo,2,false,None).unwrap());
+  }
+ }
+ #[test] fn capacity_errors_and_forced_routes_remain_explicit() {
+  let f=tile_plan(100,100,0,128,BINDING,0);let pair=Ok((*f.as_ref().unwrap(),*f.as_ref().unwrap()));
+  let bad=Err(err("GPU_MEMORY_BUDGET"));let no_pair=Err(err("GPU_BINDING_LIMIT"));
+  assert!(!choose_route(100,100,2,&f,&no_pair,2,2,false,None).unwrap());
+  assert!(choose_route(100,100,2,&bad,&pair,2,2,false,None).unwrap());
+  assert!(choose_route(100,100,2,&bad,&no_pair,2,2,false,None).is_err());
+  assert!(choose_route(100,100,2,&bad,&pair,2,2,false,Some(false)).is_err());
+  assert!(choose_route(100,100,2,&f,&no_pair,2,2,false,Some(true)).is_err());
+  assert!(choose_route(100,100,2,&f,&pair,2,2,false,Some(true)).unwrap());
+  assert!(choose_route(100,100,2,&Err(err("INVALID_BUDGET")),&pair,2,2,false,None).is_err());
+  assert!(choose_route(100,100,2,&f,&Err(err("INVALID_BUDGET")),2,2,false,None).is_err());
+ }
+ #[test] fn physical_policy_is_not_scored_as_two_phases() {
+  for(w,h)in [(7347,6767),(9000,9000)] {
+   let full=tile_plan(w,h,335,992,BINDING,0);let f=*full.as_ref().unwrap();
+   let pair=Ok((tile_plan(w,h,76,992,BINDING,0).unwrap(),tile_plan(w,h,261,992,BINDING,0).unwrap()));
+   assert_eq!(choose_route(w,h,335,&full,&pair,76,261,true,None).unwrap(),split_is_worthwhile(w,h,335,f));
+  }
+ }
+ #[test] fn row_and_transfer_overhead_can_veto_compute_saving() {
+  let c=|pixels,rows,tiles|TileCost{expanded_pixels:pixels,row_io:rows,tiles};
+  let good=RouteWork{full:c(100,100,10),prefix:c(60,100,10),suffix:c(80,100,10),full_io:100,split_io:150};
+  assert!(good.prefer_split());
+  assert!(!RouteWork{split_io:201,..good}.prefer_split());
+  assert!(!RouteWork{prefix:c(60,301,10),..good}.prefer_split());
+  assert!(!RouteWork{prefix:c(60,100,21),..good}.prefer_split());
+  assert!(!RouteWork{suffix:c(101,100,10),..good}.prefer_split());
+  assert!(!RouteWork{prefix:c(90,100,10),..good}.prefer_split());
+ }
 }
