@@ -2,6 +2,11 @@ package dev.filmroom.i18n
 internal object ChineseStrings {
     val values:Map<Int,String> = mapOf(
         dev.filmroom.R.string.embedded_lens_distortion_applied to "已应用内嵌镜头畸变校正。",
+        dev.filmroom.R.string.lensfun_distortion_applied to "已应用匹配镜头配置的畸变校正。",
+        dev.filmroom.R.string.raw_restore_retry_title to "照片暂未恢复",
+        dev.filmroom.R.string.raw_restore_retry_message to "原照片已保留。请检查可用空间和内存后重试，也可稍后再试。",
+        dev.filmroom.R.string.raw_restore_retry_action to "重试",
+        dev.filmroom.R.string.raw_restore_later_action to "稍后",
         dev.filmroom.R.string.embedded_lens_distortion_not_applied to "检测到内嵌镜头畸变参数但未应用，可能保留畸变。",
         dev.filmroom.R.string.print_medium_bw_paper to " · 黑白相纸",
         dev.filmroom.R.string.print_medium_bw_film to " · 黑白电影拷贝片",

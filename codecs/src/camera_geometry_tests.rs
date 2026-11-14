@@ -146,6 +146,66 @@ fn nonzero_geometry_precedes_crop_and_all_eight_orientations_for_every_strip_siz
 }
 
 #[test]
+fn lensfun_uses_its_visible_reference_then_crops_and_orients_exactly_once() {
+    let mut full = development();
+    full.lens_reference = Rect { x: 12, y: 12, w: 134, h: 82 };
+    full.crop = full.lens_reference;
+    full.lens = LensStatus::Profile(crate::lensfun::rf16_for_test(full.crop.w, full.crop.h));
+    let reference = render_strips(&full, 128);
+    let mut plain = full.clone(); plain.lens = LensStatus::Missing;
+    assert_ne!(reference, render_strips(&plain, 128));
+
+    for orientation in 1..=8 {
+        let mut cropped = full.clone();
+        cropped.crop = development().crop;
+        cropped.orientation = orientation;
+        let expected = crop_and_orient(&reference, &cropped, full.lens_reference);
+        for rows in [8,31,128] {
+            assert_eq!(render_strips(&cropped, rows), expected,
+                "Lensfun orientation {orientation}, rows {rows}");
+        }
+    }
+    let mut translated = full.clone();
+    translated.lens_reference.x -= translated.active.x;
+    translated.lens_reference.y -= translated.active.y;
+    translated.active.x = 0; translated.active.y = 0;
+    translated.crop = translated.lens_reference;
+    assert_eq!(render_strips(&translated,31),reference,
+        "encoded sensor padding cannot change the Lensfun optical center");
+}
+
+#[test]
+fn lensfun_reference_dimension_mismatch_is_rejected_before_spooling() {
+    let mut d = development();
+    d.lens_reference = d.crop;
+    d.lens = LensStatus::Profile(crate::lensfun::rf16_for_test(d.crop.w + 1, d.crop.h));
+    let scratch = Scratch::new();
+    assert_eq!(CameraRgbSink::new(&d, &scratch.0.join("linear.rgb")).err().unwrap().code,
+        "INVALID_INPUT");
+    assert_eq!(std::fs::read_dir(&scratch.0).unwrap().count(),0);
+}
+
+#[test]
+fn lensfun_admission_and_cancellation_share_the_bounded_camera_backing() {
+    let mut d = development();
+    d.lens_reference = d.crop;
+    d.lens = LensStatus::Profile(crate::lensfun::rf16_for_test(d.crop.w,d.crop.h));
+    let mut b = Budget::default();
+    b.disk_budget_bytes = admission().required_disk_bytes + (d.active.w*d.active.h*12) as u64;
+    let admitted = admit_geometry(&d,&b,admission()).unwrap();
+    assert_eq!(admitted.required_disk_bytes,b.disk_budget_bytes);
+    assert_eq!(admitted.estimated_peak_bytes,BASE + GEOMETRY_SCRATCH);
+    b.disk_budget_bytes -= 1;
+    assert_eq!(admit_geometry(&d,&b,admission()).unwrap_err().code,"DISK_BUDGET");
+    let scratch = Scratch::new(); let (path,out) = scratch.output();
+    let sink = CameraRgbSink::new(&d,&path).unwrap();
+    assert!(sink.camera.is_some());
+    assert_eq!(std::fs::read_dir(&scratch.0).unwrap().count(),1,
+        "RGB backing must be anonymous while the output is the only directory entry");
+    assert_eq!(sink.finish(&d,&out,&AtomicBool::new(true)).unwrap_err().code,"CANCELLED");
+}
+
+#[test]
 fn bayer_and_xtrans_demosaic_halos_are_stable_before_geometry() {
     for cfa in ["RGGB", "GRGGBGBGBRGRGRGGBGGBGGRGRGRBGBGBGGRG"] {
         let mut d = development(); d.cpp = 1; d.cfa = cfa.into();

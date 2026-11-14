@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-14",
+  "scope": "Production Lensfun fallback integration; Linux x86_64 release; no Android device or APK claim.",
+  "approved_combination": "Canon EOS R + RF16mm F2.8 STM original CR3 Bayer RAW/C-RAW, full verified sensor/crop, focal 16 mm",
+  "production_codec_sha256": "d92c22c993d4449dd46003718eb8ad938c820b08f37736abf854cf8f10fd9094",
+  "native_source_sha256": {
+    "codecs/src/lensfun.rs": "fecd0190b3da9467bba748832215bc17c52dc554bab575834578746d97070d40",
+    "codecs/src/lensfun_geometry.rs": "33e09139d8a469d5d953833ff5839d9f23d39cf6da55aea7c9bb70757ce03396",
+    "codecs/src/lensfun_metadata.rs": "8850cbe950d777275a840bbdd09c1a5e8f5c900a41a86bdac42529a631cf09c8",
+    "codecs/src/lensfun_profiles.rs": "389732251ea1ac2e6b3e6eed62ee5ef3d8c7c379fcbb2d998030c596b43502ca",
+    "codecs/src/camera_geometry.rs": "ad4c2964e772ee7054fcd141fb673bdf855bdb613a9c2cc9b14bdf16da652735",
+    "codecs/src/camera_raw/additional.rs": "b4b3ccf19c5cfa43a30c01f2236669f74b4f8e119c604baf5e5c62427e8490d0",
+    "codecs/src/camera_raw.rs": "aec56e490c47301769c58bfbb7fde2b435589c8fbf8a98942f98d2b358119bfe",
+    "codecs/src/dng_warp.rs": "385f491c09cd52d171bea485773d8a5ee25f19baf1cb00a02303d5f16416bb14"
+  },
+  "canon_public_sources": {
+    "photographer": "Maciej Luśtyk / Fotopolis",
+    "page": "https://fotopolis.pl/testy/obiektywy/36007-canon-rf-16-mm-f-2-8-stm-pierwsze-wnioski-wrazenia-i-zdjecia-przykladowe-raw-recenzja",
+    "raw_archive": "https://files.fotopolis.pl/CANON_RF_16_F2-8_RAW.zip",
+    "original_filenames": [
+      "7D6A9561.CR3",
+      "7D6A9423.CR3"
+    ],
+    "rights": "Published test originals; not claimed CC0 and not redistributed in this repository."
+  },
+  "control": {
+    "derived_from": "7D6A9561.CR3",
+    "field": "Canon FileInfo[61] / RFLensType",
+    "absolute_offset": 4182,
+    "encoding": "u16 little endian",
+    "original_value": 288,
+    "modified_value": 289,
+    "changed_byte_count": 1,
+    "result": "Ordinary decode succeeds; no Lensfun warning; output SHA-256 exactly equals uncorrected baseline."
+  },
+  "other_sources": "Existing embedded-lens-SOURCES.json; Ricoh GR III raw.pixls.us sample 3115, CC0-1.0.",
+  "samples": [
+    {
+      "name": "canon-rf16-brick",
+      "input_sha256": "b085fa59445288de7467b52e78a4e57897bd38aaacb1d14713f3558cc927715a",
+      "input_bytes": 18011357,
+      "source_unchanged": true,
+      "width": 6720,
+      "height": 4480,
+      "output_bytes": 361267200,
+      "output_sha256": "ad96b1f6501517428e71e6464768984ed660704c4ca455a718d685ebb0a7bf12",
+      "all_values_finite": true,
+      "baseline_output_sha256": "90e6e074e6bcd07ed8620560b01b2eab2bcd22f9992d57c861a6e047fcb60d15",
+      "development_policy": "camera-matrix-linear-srgb-lensfun-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT",
+        "LENSFUN_DISTORTION_APPLIED"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 787799088
+    },
+    {
+      "name": "canon-rf16-atrium",
+      "input_sha256": "7b68c35bcd444b043b0f762292c7a02069090fd12cc490897214bc9a1d62c31f",
+      "input_bytes": 23816291,
+      "source_unchanged": true,
+      "width": 6720,
+      "height": 4480,
+      "output_bytes": 361267200,
+      "output_sha256": "251e3e16e6062fe81b20110204fc7480f8642b50832ab8e7eae4a0fba84a2166",
+      "all_values_finite": true,
+      "baseline_output_sha256": "06691015378443223b58781f9ec45bfe25a195b29544c5c1995eba6c3d9d93bf",
+      "development_policy": "camera-matrix-linear-srgb-lensfun-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT",
+        "LENSFUN_DISTORTION_APPLIED"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 787799088
+    },
+    {
+      "name": "rf-id-conflict",
+      "input_sha256": "281f643d59a56177077ecb55f1b6484f24ce109084f5a3ebc0321b3a0a995f67",
+      "input_bytes": 18011357,
+      "source_unchanged": true,
+      "width": 6720,
+      "height": 4480,
+      "output_bytes": 361267200,
+      "output_sha256": "90e6e074e6bcd07ed8620560b01b2eab2bcd22f9992d57c861a6e047fcb60d15",
+      "all_values_finite": true,
+      "baseline_output_sha256": "90e6e074e6bcd07ed8620560b01b2eab2bcd22f9992d57c861a6e047fcb60d15",
+      "development_policy": "camera-matrix-linear-srgb-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 423892896
+    },
+    {
+      "name": "ricoh-gr3-unchanged",
+      "input_sha256": "05513ee72f7cac4165534c9f64995412084f414a033c80c473c79fd94154292e",
+      "input_bytes": 33374940,
+      "source_unchanged": true,
+      "width": 6000,
+      "height": 4000,
+      "output_bytes": 288000000,
+      "output_sha256": "96c5d7b4eef9db160fedef7072e4535442207531a6c6903ac0ad958718cd4e77",
+      "all_values_finite": true,
+      "baseline_output_sha256": "96c5d7b4eef9db160fedef7072e4535442207531a6c6903ac0ad958718cd4e77",
+      "development_policy": "rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing",
+      "warning_codes": [],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 337678336
+    },
+    {
+      "name": "embedded-6736",
+      "input_sha256": "dc3e2ed22f46fcef778553767e0703bc37cfb043f107afe2d7e6e4dbca34200a",
+      "input_bytes": 43720704,
+      "source_unchanged": true,
+      "width": 6192,
+      "height": 4128,
+      "output_bytes": 306726912,
+      "output_sha256": "162c5066d0347a68383a872c639cc393590a19d594958772fdf41916b70b38cd",
+      "all_values_finite": true,
+      "baseline_output_sha256": "162c5066d0347a68383a872c639cc393590a19d594958772fdf41916b70b38cd",
+      "development_policy": "camera-matrix-linear-srgb-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT",
+        "EMBEDDED_LENS_DISTORTION_APPLIED"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 680368512
+    },
+    {
+      "name": "embedded-1178",
+      "input_sha256": "a23045101b2912e64f154100d646c228c0d16585d21e95e0d1a006e537f7784c",
+      "input_bytes": 25017216,
+      "source_unchanged": true,
+      "width": 6000,
+      "height": 4000,
+      "output_bytes": 288000000,
+      "output_sha256": "079497ec3d6c6ef4e09b4d3d7f940b9bf99f34c550068ffa60b2e90aebc19caa",
+      "all_values_finite": true,
+      "baseline_output_sha256": "079497ec3d6c6ef4e09b4d3d7f940b9bf99f34c550068ffa60b2e90aebc19caa",
+      "development_policy": "raf-xtrans-linear-srgb-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT",
+        "EMBEDDED_LENS_DISTORTION_APPLIED"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 581061888
+    },
+    {
+      "name": "embedded-1993",
+      "input_sha256": "0b433019e5fa61548d7eb0eb7bb90894251542c056da72355202382696d0ceb8",
+      "input_bytes": 17260285,
+      "source_unchanged": true,
+      "width": 5184,
+      "height": 3888,
+      "output_bytes": 241864704,
+      "output_sha256": "838304c8268841998998d3cccf473768057a078eda3dde403970aba5cd6ba256",
+      "all_values_finite": true,
+      "baseline_output_sha256": "838304c8268841998998d3cccf473768057a078eda3dde403970aba5cd6ba256",
+      "development_policy": "camera-matrix-linear-srgb-v1",
+      "warning_codes": [
+        "CAMERA_RAW_BASIC_DEVELOPMENT",
+        "EMBEDDED_LENS_DISTORTION_APPLIED"
+      ],
+      "memory_allowance_bytes": 268435456,
+      "required_disk_bytes": 528849024
+    }
+  ],
+  "all_passed": true,
+  "float_values_scanned": 552098304,
+  "host_jni": {
+    "checks": 19,
+    "passed": true,
+    "sticky_cancel": true,
+    "busy_and_inflight_cleanup": true
+  },
+  "visual_check": "Both production Canon previews inspected: expected distortion correction, no obvious strip seams, repeated border bands or blank corner wedges. This is not an independent optical calibration.",
+  "limits": [
+    "Two Canon C-RAW originals, one camera and one lens; not every encoding, focus or aperture.",
+    "Lensfun geometry fixtures for other models/cameras do not enable them in production.",
+    "Corrected native camera-RGB stage differs from the earlier experimental post-linear-sRGB reference; byte equality to that experiment is not asserted.",
+    "No Android device runtime, ABI cross-build, APK size, device memory or performance measurement."
+  ],
+  "android_host": {
+    "tests": 41,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes": {
+      "RawMetadataWarningHostTest": 12,
+      "RawOwnershipHostTest": 9,
+      "PrivateWorkRecoveryTest": 9,
+      "io.importing.RawInputAdapterHostTest": 11
+    },
+    "build": "Gradle 8.11.1, JDK 17.0.21+9, Android SDK 35, :app:testDebugUnitTest",
+    "excluded_unavailable_packaging_assets": [
+      "verifyEffectAudioAssets",
+      "preparePackedEngineAssets"
+    ],
+    "release_packaging_gates_changed": false,
+    "android_device_runtime": false
+  },
+  "geometry_oracle": {
+    "cases": 16,
+    "points": 1024,
+    "max_coordinate_error_px": 0.000451857,
+    "max_scale_error": 0,
+    "rf16_max_coordinate_error_px": 0.000236887,
+    "reference": "Official native Lensfun 0.3.4 independent per-point region calls; not physical optical accuracy."
+  },
+  "native_release_suite": {
+    "status": "passed",
+    "suites": 40,
+    "passed": 270,
+    "failed": 0,
+    "ignored": 14,
+    "command": "cargo test --offline --locked --release -j2",
+    "ignored_note": "Explicit opt-in tests requiring external RAW or reference-image paths; the separate seven-file production validation is recorded above."
+  }
+}

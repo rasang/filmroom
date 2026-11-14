@@ -490,13 +490,20 @@ class MainActivity:ComponentActivity() {
         straightenReset?.let{enabled(it,s.editable && s.compositionEditing && straighten!=0.0)}
     }
     private fun showStatus(s:EditorUiState){
-        if(s.recoveryFailed){
-            if(recoveryDialog==null)recoveryDialog=AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_168ac579f2fb))
-                .setMessage(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_74edb00b2c95))
-                .setCancelable(false).setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_77b9d0a61b6d)){_,_->recoveryDialog=null;model.retryRecovery()}
-                .setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a558cf14eef8)){_,_->finish()}.showReadable()
+        if(s.recoveryFailed||s.restoreRetryAvailable){
+            if(recoveryDialog==null)recoveryDialog=if(s.recoveryFailed) {
+                AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_168ac579f2fb))
+                    .setMessage(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_74edb00b2c95))
+                    .setCancelable(false).setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_77b9d0a61b6d)){_,_->recoveryDialog=null;model.retryRecovery()}
+                    .setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a558cf14eef8)){_,_->finish()}.showReadable()
+            } else {
+                AlertDialog.Builder(this).setTitle(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.raw_restore_retry_title))
+                    .setMessage(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.raw_restore_retry_message))
+                    .setCancelable(false).setPositiveButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.raw_restore_retry_action)){_,_->recoveryDialog=null;model.retryRestore()}
+                    .setNegativeButton(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.raw_restore_later_action)){_,_->recoveryDialog=null;model.postponeRestore()}.showReadable()
+            }
         }else{recoveryDialog?.dismiss();recoveryDialog=null}
-        val message=s.messageDisplay?.takeUnless{it==s.photo?.developmentWarning||s.recoveryFailed}
+        val message=s.messageDisplay?.takeUnless{it==s.photo?.developmentWarning||s.recoveryFailed||s.restoreRetryAvailable}
         if(message!=null&&(message!=lastToastMessage||s.messageAttempt!=lastToastAttempt))Toast.makeText(this,dev.filmroom.i18n.ToastText.forMessage(s.messageUi),Toast.LENGTH_LONG).show()
         lastToastMessage=message;lastToastAttempt=s.messageAttempt
         if(s.engineUnavailableDisplay!=null&&s.engineUnavailableDisplay!=lastEngineNotice)Toast.makeText(this,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.toast_engine),Toast.LENGTH_LONG).show()

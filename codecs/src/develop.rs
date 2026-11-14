@@ -118,7 +118,8 @@ pub struct Development<'a> {
     pub matrix: Vec<f32>,
     pub baseline_exposure_ev: f32,
     pub gain_maps: &'a [crate::gainmap::GainMap],
-    /// Validated embedded vendor distortion, in the uncropped active image.
+    /// Exactly one validated distortion source: embedded metadata or a qualified
+    /// database fallback. Its reference rectangle is explicit below.
     pub lens: crate::embedded_lens::LensStatus,
     /// Optical normalization rectangle, independent of subsequent output crop.
     pub lens_reference: Rect,

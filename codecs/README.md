@@ -113,3 +113,7 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 ## 内嵌镜头畸变扩展
 
 当前分支扩展 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链，并接入 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 的受支持内嵌畸变模型。厂商路径仅覆盖几何畸变，使用有界、磁盘承载的相机 RGB 重采样，在最终裁切/方向和色彩转换前执行。所需临时磁盘空间纳入实际预算；照片信息区显示应用或未应用状态。参数边界、参考坐标域、自动填充缩放、公开样片及本轮验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。该文档扩展早期 Q2 单个必需 WarpRectilinear 的支持范围，未扩大其历史 SDK 对照结果。
+
+## Lensfun 缺失参数回退
+
+缺少内嵌畸变参数时，新增受限的离线 Lensfun 配置回退，首批仅自动启用已验证的 Canon EOS R + RF 16mm F2.8 STM 原始 CR3 布局。内嵌模型优先，同一张 RAW 只选择一个畸变来源；DNG 和既有 Sony/Fujifilm/Olympus 路径保持原规则。包含严格镜头身份匹配、常量空间坐标计算、开发策略变化后的缓存重建和独立照片信息提示。通用几何模块不代表整个 Lensfun 数据库已经启用；范围、数据来源、缓存契约及验证见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。

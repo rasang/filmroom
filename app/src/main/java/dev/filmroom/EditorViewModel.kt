@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.collect
 import java.io.File
 
 data class EditorUiState(
-    val startupReady:Boolean=true, val recoveryFailed:Boolean=false,
+    val startupReady:Boolean=true, val recoveryFailed:Boolean=false, val restoreRetryAvailable:Boolean=false,
     val photo: PhotoSource?=null, val original: Bitmap?=null, val rendered: Bitmap?=null,
     val parameters: EditorState=EditorState(), val renderedParameters: EditorState?=null,
     val renderedDiagnosticContext:PreviewDiagnosticContext?=null,
@@ -111,9 +111,14 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
             }
             val report=repository.cleanupPendingExports()
             if(report.unresolved>0)mutable.value=mutable.value.copy(messageUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_cd6fac59a752),message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cd6fac59a752))
+            restoreSession()
+        }
+    }
+    private suspend fun restoreSession() {
+        val application=getApplication<Application>()
         val key=if(EditorPreferences(application).restoreLastPhoto)preferences.getString("source",null)else null
         operationJob=currentCoroutineContext()[Job]
-        mutable.value=mutable.value.copy(startupReady=true,busyUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b3622bcacaaf),busy=if(key!=null)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b3622bcacaaf)else null)
+        mutable.value=mutable.value.copy(startupReady=true,restoreRetryAvailable=false,busyUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b3622bcacaaf),busy=if(key!=null)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b3622bcacaaf)else null)
         if(key!=null) {
             val restoreLabel=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b3622bcacaaf)
             mutable.value=mutable.value.copy(busyUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b3622bcacaaf),busy=restoreLabel)
@@ -124,17 +129,33 @@ class EditorViewModel(application: Application): AndroidViewModel(application) {
                 idlePrewarmer.end()
                 history=EditHistory(restoredParameters)
                 mutable.value=mutable.value.copy(photo=p.source,original=p.preview,parameters=history.current,busyUi=null,busy=null,messageUi=null,messageIsDiagnostic=false,message=null)
+                // A changed RAW development policy may have produced a new owned spool.
+                saveSession()
                 scheduleRender()
             } catch(c: CancellationException) { throw c }
-            catch(e: Exception) { preferences.edit().clear().apply(); mutable.value=mutable.value.copy(busyUi=null,busy=null,messageUi=dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_063189730acc),message=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_063189730acc)) }
+            catch(e: Exception) {
+                val retryable=RawRestoreSession.retainAfterFailure(preferences,e)
+                val message=if(retryable)dev.filmroom.R.string.raw_restore_retry_message else dev.filmroom.R.string.text_063189730acc
+                mutable.value=mutable.value.copy(restoreRetryAvailable=retryable,busyUi=null,busy=null,
+                    messageUi=dev.filmroom.i18n.UiMessage.of(message),message=dev.filmroom.i18n.L10n.text(message))
+            }
             finally { idlePrewarmer.end();if(mutable.value.busy==restoreLabel) mutable.value=mutable.value.copy(busyUi=null,busy=null) }
         }
-        }
+    }
+    fun retryRestore() {
+        if(!mutable.value.restoreRetryAvailable || mutable.value.busy!=null)return
+        mutable.value=mutable.value.copy(restoreRetryAvailable=false)
+        operationJob=viewModelScope.launch { restoreSession() }
+    }
+    fun postponeRestore() {
+        if(!mutable.value.restoreRetryAvailable)return
+        mutable.value=mutable.value.copy(restoreRetryAvailable=false,messageUi=null,message=null)
     }
     fun retryRecovery(){if(mutable.value.recoveryFailed)recoveryGate?.retry()}
     fun importPhoto(uri: Uri, origin: dev.filmroom.diagnostics.ImportOrigin = dev.filmroom.diagnostics.ImportOrigin.UNKNOWN) {
         compositionGestureActive=false
         if(!mutable.value.startupReady||mutable.value.busy!=null) return
+        mutable.value=mutable.value.copy(restoreRetryAvailable=false)
         detailInvalidator?.invoke()
         // Capture the editing preference once. A failed/cancelled import never adopts this state.
         val previousParameters=mutable.value.parameters

@@ -762,6 +762,11 @@
     <string name="detail_allocation" formatted="false">メモリ割り当て失敗</string>
     <string name="camera_raw_basic_development" formatted="false">カメラ RAW は黒・白レベル、ホワイトバランス、色変換行列による基本現像を行います。カメラの画作りやすべてのレンズ補正は適用しないため、色や形状がカメラや他のソフトウェアと異なる場合があります。</string>
     <string name="embedded_lens_distortion_applied" formatted="false">埋め込みのレンズ歪曲補正を適用しました。</string>
+    <string name="lensfun_distortion_applied" formatted="false">一致するレンズプロファイルの歪曲補正を適用しました。</string>
+    <string name="raw_restore_retry_title" formatted="false">写真をまだ復元できません</string>
+    <string name="raw_restore_retry_message" formatted="false">元の写真は保持されています。空き容量とメモリを確認してから再試行するか、後でもう一度お試しください。</string>
+    <string name="raw_restore_retry_action" formatted="false">再試行</string>
+    <string name="raw_restore_later_action" formatted="false">後で</string>
     <string name="embedded_lens_distortion_not_applied" formatted="false">埋め込みのレンズ歪曲補正パラメーターを検出しましたが、適用していません。歪曲が残る場合があります。</string>
     <string name="camera_raw_variant_unsupported" formatted="false">このカメラ RAW の画素配置または圧縮方式は未対応、または未検証です。埋め込みプレビューへの置換や原画像の解像度低下は行いません。</string>
     <string name="camera_raw_profile_unsupported" formatted="false">この RAW に有効なカメラ色プロファイルがありません。色の推測や埋め込みプレビューへの置換は行いません。</string>

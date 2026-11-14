@@ -40,6 +40,9 @@ mod integer_spool;
 mod sony_tiles;
 mod canon_stream;
 mod panasonic;
+#[cfg(test)]
+#[path = "lensfun_probe_tests.rs"]
+mod lensfun_probe_tests;
 pub(crate) mod additional;
 pub(crate) mod fuji;
 fn unsupported() -> crate::error::CodecError {
@@ -671,6 +674,10 @@ impl CameraRaw {
                 code: "EMBEDDED_LENS_DISTORTION_NOT_APPLIED",
                 message: "检测到内嵌镜头畸变参数，但当前不支持，未应用校正",
             }),
+            crate::embedded_lens::LensStatus::Profile(_) => warnings.push(Warning {
+                code: "LENSFUN_DISTORTION_APPLIED",
+                message: "已应用匹配镜头配置的畸变校正",
+            }),
             crate::embedded_lens::LensStatus::Missing => {},
         }
         Probe {
@@ -694,7 +701,9 @@ impl CameraRaw {
             max_pixels: crate::MAX_PIXELS,
             warnings,
             has_alternate_forward_matrix: false,
-            development_policy: "camera-matrix-linear-srgb-v1",
+            development_policy: if matches!(&d.lens, crate::embedded_lens::LensStatus::Profile(_)) {
+                crate::lensfun::DEVELOPMENT_POLICY
+            } else { "camera-matrix-linear-srgb-v1" },
             baseline_exposure_applied_ev: 0.,
         }
     }

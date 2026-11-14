@@ -94,6 +94,46 @@ class RawMetadataWarningHostTest {
         assertEquals("检测到内嵌镜头畸变参数但未应用，可能保留畸变。",restoredSkipped.render())
     }
 
+    @Test fun lensfunCorrectionIsAllowlistedDistinctAndLocalized() {
+        val p=parse("""{"code":"LENSFUN_DISTORTION_APPLIED","message":"PRIVATE lens serial GPS"},{"code":"LENSFUN_DISTORTION_APPLIED"}""")
+        assertTrue(p.lensfunDistortionApplied)
+        assertFalse(p.embeddedLensDistortionApplied)
+        assertFalse(p.embeddedLensDistortionNotApplied)
+        assertEquals(1,p.displayMessages.size)
+        assertEquals("已应用匹配镜头配置的畸变校正。",p.displayWarning)
+        val message=p.displayMessages.single()
+        assertEquals("lensfun_distortion_applied",message.key)
+        val restored=dev.filmroom.i18n.UiMessage.fromJson(message.toJson())!!
+        val translations=mapOf(
+            "zh" to "已应用匹配镜头配置的畸变校正。",
+            "en" to "Applied distortion correction from the matched lens profile.",
+            "ja" to "一致するレンズプロファイルの歪曲補正を適用しました。",
+            "ko" to "일치하는 렌즈 프로파일의 왜곡 보정을 적용했습니다.")
+        try {
+            for((language,expected) in translations) {
+                dev.filmroom.i18n.L10n.choose(org.robolectric.RuntimeEnvironment.getApplication(),language)
+                assertEquals(expected,restored.render())
+                assertFalse(restored.render()!!.contains("PRIVATE"))
+            }
+        } finally { chosenChineseFixture() }
+        val unknown=parse("""{"code":"LENSFUN_DISTORTION_APPLIED_PRIVATE"},{"code":"lensfun_distortion_applied"}""")
+        assertFalse(unknown.lensfunDistortionApplied)
+        assertNull(unknown.displayWarning)
+    }
+
+    @Test fun developmentPolicyIsBoundedAndMissingLegacyValuesCannotCertifyCache() {
+        val json=JSONObject("""{"ok":true,"schemaVersion":1,"format":"CR3","width":8,"height":8,"outputOrientation":1,"orientationApplied":true,"outputBytes":768}""")
+        assertNull(RawMetadata.parse(json).developmentPolicy)
+        val policy="camera-matrix-linear-srgb-lensfun-v1"
+        assertEquals(policy,RawMetadata.parse(json.put("developmentPolicy",policy)).developmentPolicy)
+        val legacyDng="rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
+        assertEquals(legacyDng,RawMetadata.parse(json.put("developmentPolicy",legacyDng)).developmentPolicy)
+        for(value in listOf<Any>(true,123,"", " ", "invalid\npolicy", "x".repeat(257))) {
+            assertNull(RawMetadata.parse(json.put("developmentPolicy",value)).developmentPolicy)
+        }
+        assertNull(RawMetadata(8,8,768,false).developmentPolicy)
+    }
+
     @Test fun nativeCameraFormatAndBasicDevelopmentWarningAreStrictlyTyped() {
         val json=JSONObject("""{"ok":true,"schemaVersion":1,"format":"NEF","width":8,"height":8,"outputOrientation":1,"orientationApplied":true,"outputBytes":768,"warnings":[{"code":"CAMERA_RAW_BASIC_DEVELOPMENT","message":"PRIVATE camera serial GPS"},{"code":"CAMERA_RAW_BASIC_DEVELOPMENT"}]}""")
         for(format in dev.filmroom.codec.RawFormat.entries) {

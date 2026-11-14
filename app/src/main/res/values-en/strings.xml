@@ -762,6 +762,11 @@
     <string name="detail_allocation" formatted="false">Memory allocation failed</string>
     <string name="camera_raw_basic_development" formatted="false">Camera RAW uses basic development with black/white levels, white balance and a color matrix. Camera picture styles and full lens corrections are not applied; colors and geometry may differ from the camera or other software.</string>
     <string name="embedded_lens_distortion_applied" formatted="false">Applied embedded lens distortion correction.</string>
+    <string name="lensfun_distortion_applied" formatted="false">Applied distortion correction from the matched lens profile.</string>
+    <string name="raw_restore_retry_title" formatted="false">Photo could not be restored yet</string>
+    <string name="raw_restore_retry_message" formatted="false">The original photo has been kept. Check available storage and memory, then retry, or try again later.</string>
+    <string name="raw_restore_retry_action" formatted="false">Retry</string>
+    <string name="raw_restore_later_action" formatted="false">Later</string>
     <string name="embedded_lens_distortion_not_applied" formatted="false">Embedded lens distortion parameters were detected but not applied. Distortion may remain.</string>
     <string name="camera_raw_variant_unsupported" formatted="false">This camera RAW pixel layout or compression is unsupported or not yet verified. No embedded-preview substitution or resolution reduction was used.</string>
     <string name="camera_raw_profile_unsupported" formatted="false">No valid camera color profile is available for this RAW. Colors were not guessed and no embedded preview was substituted.</string>

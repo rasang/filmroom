@@ -32,6 +32,8 @@ pub enum LensStatus {
     Missing,
     Unsupported,
     Ready(EmbeddedLens),
+    /// A mutually exclusive fallback selected by a qualified original-RAW adapter.
+    Profile(crate::lensfun::LensfunCorrection),
 }
 
 #[derive(Clone, Debug, PartialEq)]
