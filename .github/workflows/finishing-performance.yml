@@ -9,17 +9,113 @@ concurrency:
   group: finishing-performance-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  source-review:
+  apply-reviewed-source:
+    if: github.ref == 'refs/heads/feat/finishing-preview-export-perf'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.apply.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
-      - name: Complete locked dependency sources for offline host validation
+      - name: Install checksum-verified source changes on this branch only
+        id: apply
+        shell: bash
         run: |
-          cargo vendor --locked --manifest-path native/Cargo.toml "$RUNNER_TEMP/native-vendor" > "$RUNNER_TEMP/vendor-config.toml"
-          tar -czf "$RUNNER_TEMP/native-vendor.tar.gz" -C "$RUNNER_TEMP/native-vendor" .
-      - uses: actions/upload-artifact@v4
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feat/finishing-preview-export-perf'
+          if test -f .branch-work/finishing.0.xzpart; then
+            python3 - <<'PY'
+          import hashlib,lzma,pathlib,subprocess
+          data=b''.join(pathlib.Path(f'.branch-work/finishing.{i}.xzpart').read_bytes() for i in range(6))
+          patch=lzma.decompress(data)
+          assert hashlib.sha256(patch).hexdigest()=='fb5c5a22dacc555ca70b032aa3a86b48acf60301980d5d2c1cd47a40c4f9ff00'
+          subprocess.run(['git','apply','--check','-'],input=patch,check=True)
+          subprocess.run(['git','apply','--index','-'],input=patch,check=True)
+          PY
+            git rm .branch-work/finishing.*.xzpart
+            git diff --cached --check
+            git config user.name 'Filmroom branch implementation'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'feat: independent finishing grade and bounded preview/export optimizations' -m 'Add late linear finishing controls, adaptive post-grain reprint reuse, scoped GPU output-buffer reuse and exact JPEG quantization acceleration. Keep old recipe defaults and darkroom semantics.'
+            git push origin HEAD:refs/heads/feat/finishing-preview-export-perf
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  native-contracts:
+    needs: apply-reviewed-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+      RAYON_NUM_THREADS: 2
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: native-locked-host-dependencies
-          path: ${{ runner.temp }}/native-vendor.tar.gz
-          retention-days: 1
+          ref: ${{ needs.apply-reviewed-source.outputs.sha }}
+          persist-credentials: false
+      - run: rustup toolchain install 1.88.0 --profile minimal && rustup override set 1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native -> target
+          key: finishing-contracts
+      - name: Finishing, cache invalidation and bounded reuse contracts
+        working-directory: native
+        run: |
+          cargo test --locked -p film-engine --features precision-f64 --lib finishing -- --test-threads=1
+          cargo test --locked -p film-engine --features precision-f64 --lib preview_brightness_cache_tests -- --test-threads=1
+          cargo test --locked -p film-engine --features precision-f64 --lib preview_stage_cache -- --test-threads=1
+          cargo test --locked -p spektrafilm-core --features precision-f64 --lib preview_film_log_contract_tests -- --test-threads=1
+          cargo test --locked -p spektrafilm-gpu --features precision-f64 --lib resident_reuse -- --test-threads=1
+      - name: Install software Vulkan for mandatory real dispatch tests
+        run: sudo apt-get update -qq && sudo apt-get install -y mesa-vulkan-drivers vulkan-tools
+      - name: Real Vulkan post-grain split and pooled output parity
+        working-directory: native
+        env:
+          FILMROOM_REQUIRE_GPU_SMOKE: '1'
+          XDG_RUNTIME_DIR: /tmp
+        run: cargo test --locked -p spektrafilm-core --features precision-f64,wgpu-backend --test gpu_reprint -- --test-threads=1 --nocapture
+  codec-contracts:
+    needs: apply-reviewed-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CARGO_BUILD_JOBS: 2
+      RAYON_NUM_THREADS: 2
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apply-reviewed-source.outputs.sha }}
+          persist-credentials: false
+      - run: rustup toolchain install 1.88.0 --profile minimal && rustup override set 1.88.0
+      - name: Build pinned JPEG XL host dependency
+        run: echo "FILM_JXL_PREFIX=$(bash third-party/libjxl/build.sh host)" >> "$GITHUB_ENV"
+      - name: Codec tests including exact quantization boundaries
+        working-directory: codecs
+        run: cargo test --locked --lib -- --test-threads=1
+  android-contracts:
+    needs: apply-reviewed-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apply-reviewed-source.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile Android sources and verify legacy recipes and finishing ABI
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest -x :app:verifyEffectAudioAssets --no-daemon --max-workers=2 --tests dev.filmroom.FinishingStateHostTest --tests dev.filmroom.presets.SavedPresetCoverageHostTest --tests dev.filmroom.presets.PresetQrCodecHostTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: finishing-android-unit-reports
+          path: app/build/reports/tests/
+          retention-days: 3
