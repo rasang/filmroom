@@ -45,6 +45,7 @@ class ZoomFrameController(
     private val changed:()->Unit,
     private val retain:(Bitmap,()->Unit)->AutoCloseable,
     private val settleMillis:Long=250,
+    private val refinementTimeoutMillis:Long=8_000,
 ) : AutoCloseable {
     private class Key(val photo:PhotoSource,val parameters:EditorState) {
         val revision:String=photo.previewSourceRevision()
@@ -121,15 +122,30 @@ class ZoomFrameController(
         val token=++generation
         val previous=job
         attemptEdge=edge
-        job=scope.launch {
+        job=scope.launch(start=CoroutineStart.UNDISPATCHED) {
             var produced:Bitmap?=null
             var tokenLease:AutoCloseable?=null
+            var watchdog:Job?=null
             try {
-                previous?.join() // never overlap providers after a non-cooperative JNI cancellation
+                // Preserve the drain chain even if this queued request is itself cancelled.
+                withContext(NonCancellable){previous?.join()}
                 delay(settleMillis)
                 ensureActive()
                 if(token!=generation || !request.same(key) || desired==null || moving)return@launch
                 started=true;changed()
+                // Refinement is optional. Stop an expensive tier rather than leave the
+                // UI spinning forever. Cancellation does NOT release native ownership:
+                // the provider and subsequent requests still wait for JNI to drain.
+                val renderingJob=currentCoroutineContext().job
+                watchdog=scope.launch {
+                    delay(refinementTimeoutMillis)
+                    if(token==generation && started) {
+                        failedEdge=edge;started=false
+                        provider.cancel()
+                        renderingJob.cancel(CancellationException("Zoom refinement time budget exceeded"))
+                        changed()
+                    }
+                }
                 val result=provider.render(request.photo,request.parameters,input,edge)
                 produced=result
                 ensureActive()
@@ -155,6 +171,7 @@ class ZoomFrameController(
             } catch(_:OutOfMemoryError) {
                 if(token==generation)failedEdge=edge
             } finally {
+                watchdog?.cancel()
                 tokenLease?.close()
                 produced?.takeUnless{it.isRecycled}?.recycle()
                 if(token==generation){started=false;job=null;attemptEdge=null;changed();demand()}

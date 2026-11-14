@@ -34,7 +34,7 @@ class ZoomFrameControllerHostTest {
         override fun cancel(){cancelled++}
         override fun close(){closed=true}
     }
-    private class Fixture {
+    private class Fixture(timeout:Long=8_000) {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
         val provider=Provider()
         val base=Bitmap.createBitmap(64,48,Bitmap.Config.ARGB_8888)
@@ -42,12 +42,30 @@ class ZoomFrameControllerHostTest {
         val params=EditorState(filmBorder=true,filmBorderStage=1,useGpu=true)
         var leases=0
         var pressure:(()->Unit)?=null
-        val controller=ZoomFrameController(provider,scope,{},retain={_,callback->leases++;pressure=callback;AutoCloseable{leases--}},settleMillis=250)
+        val controller=ZoomFrameController(provider,scope,{},retain={_,callback->leases++;pressure=callback;AutoCloseable{leases--}},settleMillis=250,refinementTimeoutMillis=timeout)
         fun bind(eligible:Boolean=true,exporting:Boolean=false)=controller.bind(photo,params,base,eligible,exporting=exporting)
         fun close(){controller.close();scope.cancel();base.recycle()}
     }
     private fun pump(ms:Long=300){shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))}
     private fun await(test:()->Boolean){repeat(500){pump(10);if(test())return;Thread.sleep(1)};error("Timed out")}
+    @Test fun timedOutTierStopsSpinnerWithoutRetryAndWaitsForNativeDrain(){
+        val f=Fixture(timeout=500)
+        try {
+            f.bind();f.controller.viewport(1.5);await{f.controller.bitmap!=null}
+            val ready=f.controller.bitmap
+            val gate=CompletableDeferred<Unit>();f.provider.gate=gate
+            f.controller.viewport(3.0);await{f.controller.loading}
+            pump(600)
+            assertFalse(f.controller.loading);assertTrue(f.controller.failed)
+            assertSame(ready,f.controller.bitmap);assertEquals(1,f.provider.cancelled)
+            repeat(10){f.bind();f.controller.viewport(3.0)}
+            assertEquals(listOf(2048,3072),f.provider.calls)
+            gate.complete(Unit);await{f.provider.results.size==2}
+            pump(1000)
+            assertTrue(f.provider.results.last().isRecycled)
+            assertSame(ready,f.controller.bitmap);assertEquals(2,f.provider.calls.size)
+        }finally{f.close()}
+    }
     @Test fun policyNeedsRealExtraSamplesAndUsesBoundedLevels(){
         assertNull(ZoomFramePolicy.target(1.1,6000,1536))
         assertNull(ZoomFramePolicy.target(Double.NaN,6000,1536))
@@ -105,6 +123,21 @@ class ZoomFrameControllerHostTest {
             await{f.controller.bitmap!=null}
             assertEquals(2,f.provider.calls.size);assertTrue(f.provider.results.first().isRecycled)
             assertFalse(f.controller.bitmap!!.isRecycled)
+        }finally{gate.complete(Unit);f.close()}
+    }
+    @Test fun repeatedlyCancelledWaitersCannotBreakNativeDrainChain(){
+        val f=Fixture();val gate=CompletableDeferred<Unit>();f.provider.gate=gate
+        try {
+            f.bind();f.controller.viewport(1.5);await{f.controller.loading}
+            repeat(3){ index->
+                f.controller.bind(f.photo,f.params.copy(brightness=(index+1)*.1f),f.base,true)
+                assertEquals(1,f.provider.calls.size)
+            }
+            pump(1000);assertEquals(1,f.provider.calls.size)
+            f.provider.gate=null;gate.complete(Unit)
+            await{f.controller.bitmap!=null}
+            assertEquals(2,f.provider.calls.size)
+            assertTrue(f.provider.results.first().isRecycled)
         }finally{gate.complete(Unit);f.close()}
     }
     @Test fun exportComparisonAndBackgroundRemoveOverlayAndLease(){

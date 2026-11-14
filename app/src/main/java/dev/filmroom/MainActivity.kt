@@ -110,6 +110,8 @@ class MainActivity:ComponentActivity() {
     private var homeMotionDetailPending:android.graphics.Bitmap?=null
     private var homeMotionDetailToken=0L
     private var homeMotionViewportMoving=false
+    private data class PausedMotionViewport(val photoKey:String, val kind:EffectKind, val viewport:dev.filmroom.effects.HomeMotionViewport.State)
+    private var pausedMotionViewport:PausedMotionViewport?=null
     private lateinit var recipeButton:Button
     private var languageDialog:AlertDialog?=null
     private lateinit var resetPresetButton:Button
@@ -172,6 +174,7 @@ class MainActivity:ComponentActivity() {
         homePairAccess.restore(savedInstanceState)
         homeMotionKind=savedInstanceState?.getString("homeMotionKind")?.let{runCatching{EffectKind.valueOf(it)}.getOrNull()}
         homeMotionAutoSource=savedInstanceState?.getString("homeMotionAutoSource")
+        readPausedMotionViewport(savedInstanceState)
 
         recipeImport // Register restoration before STARTED; scanner results return to this editor.
         renderedLanguage=dev.filmroom.i18n.L10n.language(this)
@@ -220,7 +223,7 @@ class MainActivity:ComponentActivity() {
     override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);model.setPreviewForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus);refreshHomeMotion()}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
-    override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;stopHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);model.setPreviewForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
+    override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;pauseHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);model.setPreviewForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
     override fun onDestroy(){stopHomeMotion();homeMotionInputOwner?.close();homeMotionInputOwner=null;startupUpdateUi?.close();startupUpdateUi=null;zoomFrames?.close();zoomFrames=null;imprintDialog?.dismiss();imprintDialog=null;exportBackgroundGuidance.close();languageDialog?.dismiss();languageDialog=null;detailForeground=false;if(model.detailInvalidator===invalidateDetail)model.detailInvalidator=null;if(::photo.isInitialized)photo.close();super.onDestroy()}
     override fun onStop(){
         if(::photo.isInitialized)photo.setForeground(false)
@@ -238,6 +241,7 @@ class MainActivity:ComponentActivity() {
     override fun onSaveInstanceState(outState:Bundle){
         photoLocationPermission.save(outState)
         homePairAccess.save(outState)
+        savePausedMotionViewport(outState)
         outState.putString("homeMotionKind",homeMotionKind?.name);outState.putString("homeMotionAutoSource",homeMotionAutoSource)
         outState.putString("filmFilterCategory",filmFilterCategory.name);outState.putString("filmFilterBrand",filmFilterBrand);outState.putInt("filmFilterScrollX",filmFilterScrollX)
         (savedPresetDialogs.capture() ?: pendingSavedPreset)?.let{outState.putBundle("savedPresetDialog",it)}
@@ -575,6 +579,7 @@ class MainActivity:ComponentActivity() {
                         if(!ok && homeMotion===player){stopHomeMotion();toast(dev.filmroom.i18n.L10n.text(R.string.home_motion_error))}
                         else if(ok && homeMotion===player)refreshHomeMotionDetail()
                     }
+                    restoreHomeMotionViewport(player,s.photo?.cacheKey,kind)
                     player.onViewportChanged={scale,moving->if(homeMotion===player){homeMotionViewportMoving=moving;if(liveOwnsViewport()){zoomFrames?.viewport(scale.toDouble(),moving);if(!moving)refreshHomeMotionDetail()}}}
                     transferred=true;homeMotion=player;homeMotionState=s;homeMotionPreparingState=null;homeMotionPhotoKey=s.photo?.cacheKey
                     // Hide ordinary-photo detail and speculative prewarm, not the editor's
@@ -594,7 +599,40 @@ class MainActivity:ComponentActivity() {
             }}
         }
     }
+    private fun restoreHomeMotionViewport(player:HomeMotionPreview,photoKey:String?,kind:EffectKind){
+        pausedMotionViewport?.let { saved->
+            if(saved.photoKey==photoKey && saved.kind==kind)player.restoreViewport(saved.viewport)
+        }
+        pausedMotionViewport=null
+    }
+    private fun currentMotionViewport():PausedMotionViewport? = homeMotion?.let { player->
+        val key=homeMotionPhotoKey;val kind=homeMotionKind
+        if(key!=null && kind!=null)PausedMotionViewport(key,kind,player.saveViewport()) else null
+    } ?: pausedMotionViewport
+    private fun savePausedMotionViewport(out:Bundle){
+        currentMotionViewport()?.let { saved->
+            out.putBundle("homeMotionViewport",Bundle().apply {
+                putString("source",saved.photoKey);putString("kind",saved.kind.name)
+                putFloatArray("transform",floatArrayOf(saved.viewport.scale,saved.viewport.offsetX,saved.viewport.offsetY))
+            })
+        }
+    }
+    private fun readPausedMotionViewport(saved:Bundle?){
+        pausedMotionViewport=null
+        val state=saved?.getBundle("homeMotionViewport") ?: return
+        val key=state.getString("source") ?: return
+        val kind=state.getString("kind")?.let{runCatching{EffectKind.valueOf(it)}.getOrNull()} ?: return
+        val v=state.getFloatArray("transform") ?: return
+        if(v.size!=3 || v.any{!it.isFinite()} || v[0]<=0f)return
+        pausedMotionViewport=PausedMotionViewport(key,kind,dev.filmroom.effects.HomeMotionViewport.State(v[0],v[1],v[2]))
+    }
+    private fun pauseHomeMotion(){
+        val saved=currentMotionViewport()
+        stopHomeMotion()
+        pausedMotionViewport=saved
+    }
     private fun stopHomeMotion(){
+        pausedMotionViewport=null
         if(homeMotion!=null || homeMotionPrepare?.isActive==true)HomeMotionLog.record(HomeMotionEvent.STOP,homeMotionKind)
         cancelHomeMotionHold();homeMotionHeld=false;homeMotionRequestedAutoplay=false
         cancelHomeMotionPreparation();homeMotionState=null;homeMotionPhotoKey=null
@@ -655,8 +693,8 @@ class MainActivity:ComponentActivity() {
         val compositionOnly=state.compositionSource!=null && scienceReady && (state.compositionEditing || presentationChanged)
         val eligible=!(state.parameters.filmBorder && state.parameters.filmBorderStage==1) && model.localDetailEnabled && state.startupReady && state.busy==null && !state.exporting && ((!state.updating && !state.previewRefining) || compositionOnly) && !state.compare && state.rendered!=null && scienceReady
         val wholeFrameRefining=state.parameters.preImagingBorder && state.previewRefining && state.startupReady && state.busy==null && !state.exporting && !state.compare && state.rendered!=null
-        detailLoading.visibility=if(detailForeground && (zoomFrames?.loading==true || wholeFrameRefining || detailFeedback.showLoading(status,key,eligible,detailForeground)))View.VISIBLE else View.INVISIBLE
-        detailFeedback.takeFailureToast(status,key,eligible,detailForeground)?.let{
+        detailLoading.visibility=if(detailForeground && (zoomFrames?.loading==true || wholeFrameRefining || (!liveOwnsViewport() && detailFeedback.showLoading(status,key,eligible,detailForeground))))View.VISIBLE else View.INVISIBLE
+        detailFeedback.takeFailureToast(status,key,eligible && !liveOwnsViewport(),detailForeground)?.let{
             Toast.makeText(this,it,Toast.LENGTH_SHORT).show()
         }
     }

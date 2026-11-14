@@ -43,6 +43,8 @@ internal class HomeMotionPreview(context: Context, private val kind: EffectKind,
     private var maxViewportHeight = Int.MAX_VALUE
     @Volatile private var viewportMoving = false
     var onViewportChanged: ((Float, Boolean) -> Unit)? = null
+    fun saveViewport() = viewport.save()
+    fun restoreViewport(state: HomeMotionViewport.State) { viewport.restore(state); requestRender() }
     val viewportScale: Float get() = viewport.scale()
     private val gestures = HomeMotionGestures(context,viewport) { scale,moving ->
         viewportMoving=moving; onViewportChanged?.invoke(scale,moving); requestRender()

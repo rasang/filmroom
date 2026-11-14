@@ -5,6 +5,13 @@ import kotlin.math.roundToInt
 /** UI gesture coordinates are top-left based; GL viewport coordinates are bottom-left based.
  * The logical scene size never changes when zooming, so overlays are not re-rasterized. */
 internal class HomeMotionViewport {
+    data class State(val scale: Float, val offsetX: Float, val offsetY: Float)
+    private var pendingRestore: State? = null
+    @Synchronized fun save(): State = pendingRestore ?: State(zoom, x/sceneWidth, y/sceneHeight)
+    /** Apply only after the new surface has real dimensions and hardware limits. */
+    @Synchronized fun restore(state: State) {
+        if(state.scale.isFinite() && state.scale>0f && state.offsetX.isFinite() && state.offsetY.isFinite()) pendingRestore=state
+    }
     data class Frame(val x: Int, val y: Int, val width: Int, val height: Int)
     private var width = 1
     private var height = 1
@@ -20,9 +27,10 @@ internal class HomeMotionViewport {
         this.width = width.coerceAtLeast(1); this.height = height.coerceAtLeast(1)
         this.sceneWidth = sceneWidth.coerceAtLeast(1); this.sceneHeight = sceneHeight.coerceAtLeast(1)
         maxScale = minOf(4f, maxWidth.toFloat()/this.sceneWidth, maxHeight.toFloat()/this.sceneHeight).coerceAtLeast(.001f)
+        pendingRestore?.let { zoom=it.scale; x=it.offsetX*this.sceneWidth; y=it.offsetY*this.sceneHeight; pendingRestore=null }
         zoom = zoom.coerceIn(minOf(1f,maxScale),maxScale); constrain()
     }
-    @Synchronized fun reset() { zoom = minOf(1f,maxScale); x=0f; y=0f }
+    @Synchronized fun reset() { pendingRestore=null; zoom = minOf(1f,maxScale); x=0f; y=0f }
     @Synchronized fun zoomBy(factor: Float, focusX: Float, focusY: Float) {
         if (!factor.isFinite() || factor<=0 || !focusX.isFinite() || !focusY.isFinite()) return
         val next=(zoom*factor).coerceIn(minOf(1f,maxScale),maxScale)
