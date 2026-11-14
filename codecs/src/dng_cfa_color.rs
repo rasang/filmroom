@@ -275,7 +275,7 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
     use crate::{error::{err, Reason}, profile_develop::{self, ColorRoute}};
     if let Some(t) = parse(root, raw)? {
         return Ok(Some(DevelopmentTransform { camera_to_pcs: t.camera_to_pcs,
-            policy: "DNG_STD_V4; DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
+            policy: "DNG_STD_V5; DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
     }
     let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
     let values = if let Some(ab) = get(50727) {
@@ -315,7 +315,7 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
     let p = profile_develop::parse(root, raw, ColorRoute::NewSof3LinearPrecision)?
         .ok_or_else(|| err("UNSUPPORTED_DNG_CALIBRATION", "probe"))?;
     Ok(Some(DevelopmentTransform { camera_to_pcs: p.camera_to_pcs,
-        policy: "DNG_STD_V4; standard single/dual illuminant CM/FM calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
+        policy: "DNG_STD_V5; standard single/dual illuminant CM/FM calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
 }
 
 #[cfg(test)]

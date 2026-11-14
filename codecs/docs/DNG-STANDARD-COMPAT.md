@@ -69,7 +69,7 @@ derived pixels must never be committed. No new image/GPS metadata logging is add
 
 - Unknown/third/custom illuminants, partial dual ForwardMatrix profiles,
   ReductionMatrix and richer camera profiles.
-- DefaultScale and fractional resampling.
+- Non-unit DefaultScale with spatial ProfileGainTableMap.
 - More required opcodes and combinations of currently supported operators.
 - Wider DNG storage layouts/precision/compression and budget-aware streaming.
 
@@ -98,5 +98,33 @@ rounded crop back inside ActiveArea if rounding crosses its right/bottom edge.
 Only then translate into sensor coordinates. Integer crops retain the existing
 pixel path. This is SDK-equivalent integer crop selection, not subpixel sampling.
 A positive size rounding to zero is explicitly unsupported, never widened to one
-pixel. Non-unit DefaultScale remains unsupported until a complete, correctly
-ordered antialiased resampling pipeline is available.
+pixel. DefaultScale support follows below.
+
+
+## DefaultScale (DNG_STD_V5)
+
+Non-unit DefaultScale is developed in camera RGB after supported List3 operations
+and before color calibration. The rounded source crop selects the mapping;
+target dimensions are independently rounded from the original rational crop size
+multiplied by DefaultScale, not from the rounded crop. Orientation is applied once.
+Full ActiveArea disk backings preserve pixels outside the crop needed by the
+filter. The independent cubic-convolution implementation uses A=-0.75, 128
+subpixel phases and expanded support on downsampling. Both separable passes
+clamp to [0,1], matching actual SDK ResampleImage float output. If source crop
+and target dimensions match, resizing is bypassed just as in SDK rendering.
+
+Uncompressed, tiled/strip SOF3 CFA, streaming Linear SOF3 and Linear JPEG XL share
+the same final camera-space resampling route. Streaming Linear SOF3 is first
+written as exact uint16 samples to an anonymous disk backing. Admission includes
+source spools, camera ping-pong backings, output bytes, phase weights and row
+buffers; cancellation and failure do not retain partial output. No resolution
+fallback is applied to evade a budget limit.
+
+Non-unit DefaultScale with ProfileGainTableMap is explicitly unsupported: the
+SDK rendering coordinate behavior after resize needs a separate spatial PGT
+oracle. It is not silently ignored or evaluated at guessed coordinates.
+
+Host validation includes an external SDK ResampleImage oracle (100 randomized
+cases and 7 fixed cases, all bit-identical float32), stored SDK golden values,
+codec-storage equivalence, eight orientations, fractional crop sizing, budget
+and cancellation checks. This is not Android/physical-device verification.

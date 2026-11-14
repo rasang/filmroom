@@ -131,11 +131,13 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 - 支持空间 BlackLevel 重复模式及逐行/逐列增量；按每 sample plane 的最大黑电平
   归一化，修正旧版非均匀 CFA 黑电平分母。均匀旧输入保持原运算精度。
 - List1 支持必要 MapTable，遵循列表顺序、区域/pitch 与短表末值复用。
-- 文件/目录/元数据预算超限使用 RESOURCE_LIMIT，不混称照片损坏；合法小数
-  裁切尚未支持时使用 UNSUPPORTED_DNG_VARIANT。日志只输出固定原因与安全字段编号。
+- 文件/目录/元数据预算超限使用 RESOURCE_LIMIT，不混称照片损坏。日志只输出固定原因与安全字段编号。
+- 合法小数 DefaultCrop 使用 SDK 一致的整数取整与边界平移，不是假装亚像素采样。
+- 无 ProfileGainTableMap 的 DefaultScale 在 List3 后、颜色处理前执行有抗混叠的
+  camera RGB 重采样；保留全 active 图的裁切外围像素，内存/临时磁盘纳入预算。
 
 仍未实现：未知/自定义光源、第三标定、双光源仅一侧 FM、复杂 profile/校正组合、
-DefaultScale 重采样、小数裁切、其他必需 opcode，以及完整浮点/压缩/CFA 变体。
+DefaultScale 与空间 ProfileGainTableMap 的组合、其他必需 opcode，以及完整浮点/压缩/CFA 变体。
 资源限制与损坏数据防护保留。此批不代表全部 DNG 或所有品牌型号都支持。
 
 验证范围与剩余项见 [标准兼容验证](docs/DNG-STANDARD-COMPAT.md)。

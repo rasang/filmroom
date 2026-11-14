@@ -26,6 +26,8 @@ const BASE: u64 = 32 * MIB;
 const HALO: usize = 8;
 #[path="dng_geometry_develop.rs"]
 mod geometry;
+#[path="dng_scale_develop.rs"]
+mod scale;
 #[path="camera_geometry.rs"]
 mod camera_geometry;
 pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry};
@@ -65,8 +67,10 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
     {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
+    let scale_scratch=scale::scratch(d)?;
     let base = BASE
         .checked_add(d.decode_scratch_bytes())
+        .and_then(|n|n.checked_add(scale_scratch))
         .ok_or_else(|| err("MEMORY_BUDGET", "admission"))?;
     if memory < base {
         return Err(err("MEMORY_BUDGET", "admission"));
@@ -85,7 +89,7 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let disk = d.probe().output_bytes
-        + d.warp.as_ref().map_or(0, |pipeline| (d.active.w*d.active.h*12) as u64 * pipeline.backing_count())
+        + if d.scaled_size.is_some(){scale::backing_bytes(d)}else{d.warp.as_ref().map_or(0, |pipeline| (d.active.w*d.active.h*12) as u64 * pipeline.backing_count())}
         + if d.compression == 52546 {
             crate::jxl::spool_bytes(d)
         } else if d.cfa_spool() {
@@ -478,7 +482,9 @@ fn decode_with_reserve(
     };
     let storage_reader = storage_dng.as_ref().unwrap_or(&d);
     let development = Development::from(&d);
-    if d.warp.is_some() {
+    if d.scaled_size.is_some() {
+        pool.install(|| scale::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel))?;
+    } else if d.warp.is_some() {
         pool.install(|| geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel))?;
     } else if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);

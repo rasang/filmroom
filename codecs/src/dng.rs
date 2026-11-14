@@ -57,6 +57,7 @@ pub struct Dng {
     pub orientation: u8,
     pub active: Rect,
     pub crop: Rect,
+    pub scaled_size: Option<[usize;2]>,
     pub endian: Endian,
     pub offsets: Vec<u32>,
     pub counts: Vec<u32>,
@@ -289,6 +290,20 @@ impl Dng {
         let origin = arr(nums(raw, 50719)?, [0., 0.])?;
         let size = arr(nums(raw, 50720)?, [active.w as f64, active.h as f64])?;
         let crop = default_crop(active, origin, size)?;
+        let scale = if let Some(v)=inherited(root,raw,50718) {
+            if v.typ!=5 || v.count!=2 {return Err(err("INVALID_INPUT","probe").detail(Reason::TagShape,Some(50718)));}
+            arr(Some(v.nums()?),[1.,1.])?
+        } else {[1.,1.]};
+        if scale.iter().any(|x|!x.is_finite()||*x<=0.) {return Err(err("INVALID_INPUT","probe").detail(Reason::TagValue,Some(50718)));}
+        let target=[(size[0]*scale[0]).round(),(size[1]*scale[1]).round()];
+        if target.iter().any(|x|!x.is_finite()||*x>32768.){return Err(err("EDGE_LIMIT","admission").detail(Reason::TagValue,Some(50718)));}
+        if target.iter().any(|x|*x<1.){return Err(err("UNSUPPORTED_DNG_VARIANT","probe").detail(Reason::UnsupportedValue,Some(50718)));}
+        crate::validate_dimensions(target[0] as u32,target[1] as u32)?;
+        if scale != [1.,1.] && profile.as_ref().is_some_and(|p|p.map.is_some()) {
+            return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::UnsupportedValue,Some(50718)));
+        }
+        let target=target.map(|x|x as usize);
+        let scaled_size=if target==[crop.w,crop.h]{None}else{Some(target)};
         let cfa = if cfa_mode {
             if arr(nums(raw, 33421)?, [0., 0.])? != [2., 2.] || uint(raw, 50711, Some(1))? != 1 {
                 return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
@@ -518,6 +533,7 @@ impl Dng {
             orientation: orientation as u8,
             active,
             crop,
+            scaled_size,
             endian: t.endian,
             offsets,
             counts,
@@ -604,24 +620,21 @@ impl Dng {
             has_alternate_forward_matrix: self.has_forward_matrix,
             development_policy: if let Some(p) = &self.profile {
                 if p.map.is_some() {
-                    "DNG_STD_V4; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
+                    "DNG_STD_V5; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
                 } else {
-                    "DNG_STD_V4; DNG standard single/dual illuminant calibrated color to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
+                    "DNG_STD_V5; DNG standard single/dual illuminant calibrated color to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
             } else if let Some(color) = &self.cfa_color {
                 color.policy
             } else {
-                "DNG_STD_V4; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
+                "DNG_STD_V5; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },
             baseline_exposure_applied_ev: self.baseline_exposure_ev,
         }
     }
     pub fn oriented_dim(&self) -> (usize, usize) {
-        if self.orientation >= 5 {
-            (self.crop.h, self.crop.w)
-        } else {
-            (self.crop.w, self.crop.h)
-        }
+        let [w,h]=self.scaled_size.unwrap_or([self.crop.w,self.crop.h]);
+        if self.orientation>=5 {(h,w)}else{(w,h)}
     }
     fn read_compressed(
         &self,

@@ -539,3 +539,30 @@ fn asymmetric_warp_nonzero_active_origin_all_orientations() {
         for p in [input,output]{fs::remove_file(p).unwrap();}
     }
 }
+
+#[path="common/scale.rs"] mod scale_common;
+#[test] fn default_scale_follows_list3_and_is_batch_invariant(){
+    for ops in [vec![],vec![(51022,list(&[warp(1,1.)]))],vec![(51022,list(&[warp(1,0.97),warp(1,1.)]))],vec![(51022,list(&[gain([0,0,(H-4) as u32,(W-6) as u32,0,3,1,1],3,1.1),warp(1,0.97)]))]] {
+        let bytes=scale_common::replace(fixture(&ops,false,16,6),50718,5,2,scale_common::rational(&[(3,2),(2,3)]));
+        let p=path(&format!("scale-ops-{}",ops.len()));fs::write(&p,bytes).unwrap();let mut results=vec![];
+        for memory in [64,128] {
+            let o=path(&format!("scale-ops-{memory}.f32"));let mut budget=Budget::default();budget.memory_budget_mi_b=memory;
+            decode(&p,&o,&budget,&AtomicBool::new(false)).unwrap();results.push(fs::read(&o).unwrap());fs::remove_file(o).unwrap();
+        }
+        if results.len()==2{assert_eq!(results[0],results[1]);}
+        assert!(results[0].chunks_exact(4).all(|p|f32::from_le_bytes(p.try_into().unwrap()).is_finite()));fs::remove_file(p).unwrap();
+    }
+}
+#[test] fn pure_list3_gainmap_is_not_dropped_before_scale(){
+    let map=gain([0,0,H as u32,W as u32,0,3,1,1],3,0.8);
+    let mut results=vec![];
+    for (label,records) in [("plain",vec![]),("pure",vec![map.clone()]),("pipeline",vec![warp(1,1.),map])]{
+        let ops=if records.is_empty(){vec![]}else{vec![(51022,list(&records))]};
+        let mut bytes=fixture(&ops,false,16,1);
+        bytes=scale_common::replace(bytes,50829,4,4,[0u32,0,H as u32,W as u32].into_iter().flat_map(u32::to_le_bytes).collect());
+        bytes=scale_common::replace(bytes,50718,5,2,scale_common::rational(&[(3,2),(2,3)]));
+        let p=path(&format!("scale-pure-{label}"));let o=path(&format!("scale-pure-{label}.f32"));fs::write(&p,bytes).unwrap();
+        decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap();results.push(fs::read(&o).unwrap());fs::remove_file(p).unwrap();fs::remove_file(o).unwrap();
+    }
+    assert_ne!(results[0],results[1]);assert_eq!(results[1],results[2]);
+}

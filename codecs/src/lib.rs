@@ -1,6 +1,7 @@
 //! Entirely local, memory-admitted photo codecs. No network code or telemetry.
 pub mod develop;
 pub mod dng;
+mod dng_scale_resample;
 pub mod dng_black;
 mod compat;
 pub mod error;

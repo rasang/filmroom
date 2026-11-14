@@ -52,3 +52,21 @@ fn new_12bit_tiled_layout_is_explicitly_rejected_at_probe(){
  let result=film_codecs::dng::Dng::read(&mut fs::File::open(&input).unwrap());
  assert_eq!(result.unwrap_err().code,"UNSUPPORTED_DNG_VARIANT");fs::remove_file(input).unwrap();
 }
+
+#[path="common/scale.rs"] mod scale_common;
+#[test] fn scaled_storage_matches_plain_without_pgt(){
+ for tiled in [false] {for orientation in 1..=8u32 {
+  let mut outputs=vec![];
+  for packed in [false,true] {
+   let bytes=scale_common::replace(scale_common::replace(scale_common::rename(tiff_layout(packed,orientation,tiled),52525,65001),50727,5,3,scale_common::rational(&[(2,1),(1,1),(1,1)])),50718,5,2,scale_common::rational(&[(3,2),(2,3)]));
+   let p=path(&format!("scale-{packed}-{tiled}-{orientation}"));let o=path(&format!("scale-{packed}-{tiled}-{orientation}.f32"));
+   fs::write(&p,bytes).unwrap();decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap();outputs.push(fs::read(&o).unwrap());fs::remove_file(p).unwrap();fs::remove_file(o).unwrap();
+  }
+  assert_eq!(outputs[0],outputs[1],"tiled={tiled} orientation={orientation}");
+ }}
+}
+#[test]fn scaled_pgt_is_explicitly_unsupported(){
+ let p=path("scaled-pgt");let o=path("scaled-pgt.f32");
+ fs::write(&p,scale_common::replace(tiff(false,1),50718,5,2,scale_common::rational(&[(2,1),(2,1)]))).unwrap();
+ let e=decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap_err();assert_eq!(e.code,"UNSUPPORTED_DNG_CALIBRATION");assert_eq!(e.tag,Some(50718));assert!(!o.exists());fs::remove_file(p).unwrap();
+}

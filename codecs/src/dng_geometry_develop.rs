@@ -55,7 +55,7 @@ pub(super) fn write_region(
     Ok(())
 }
 
-fn camera_backing(d: &Dng, reader: &Dng, input: &mut File, output: &Path, admission: &Admission,
+pub(super) fn camera_backing(d: &Dng, reader: &Dng, input: &mut File, output: &Path, admission: &Admission,
     pool: &rayon::ThreadPool, cancel: &AtomicBool) -> Result<File> {
     let development = Development::from(d);
     let camera = backing_file(output, (d.active.w * d.active.h * 12) as u64)?;
@@ -66,7 +66,10 @@ fn camera_backing(d: &Dng, reader: &Dng, input: &mut File, output: &Path, admiss
         let start = first.saturating_sub(HALO).max(d.active.y);
         let end = (last + HALO).min(d.active.y + d.active.h);
         let data = reader.read_tile_cancellable(input, start, end - start, cancel)?;
-        let pixels = pool.install(|| camera_tile(&development, start, end - start, data))?;
+        let mut pixels = pool.install(|| camera_tile(&development, start, end - start, data))?;
+        // Legacy pure List3 GainMap is stored separately from warp pipelines.
+        // It still belongs in camera space before DefaultScale/color.
+        if !d.gain_maps.is_empty(){crate::gainmap::apply(&d.gain_maps,&mut pixels.data,d.width,d.height,start,cancel)?;}
         write_region(&camera, d.active, &pixels,
             Rect { x: d.active.x, y: start, w: d.active.w, h: end - start }, first..last, cancel)?;
         first = last;
@@ -159,7 +162,7 @@ pub(super) fn resample_region(
     Ok(())
 }
 
-fn map_stage(source: &File, width: usize, height: usize, map: &crate::gainmap::GainMap, cancel: &AtomicBool,
+pub(super) fn map_stage(source: &File, width: usize, height: usize, map: &crate::gainmap::GainMap, cancel: &AtomicBool,
     mut emit_tile: impl FnMut(Rect, rawler::pixarray::Color2D<f32, 3>) -> Result<()>) -> Result<()> {
     for y in (0..height).step_by(32) { for x in (0..width).step_by(128) {
         if cancel.load(Ordering::Relaxed) { return Err(err("CANCELLED", "develop")); }

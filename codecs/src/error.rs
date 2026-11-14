@@ -58,7 +58,7 @@ pub(crate) fn source(file: &str) -> &'static str {
         "nikon_snef.rs" => "NIKON_SNEF",
         "dng_cfa.rs" => "DNG_CFA",
         "dng_bad_pixels.rs" => "DNG_BAD_PIXELS",
-        "dng_geometry_develop.rs" => "DNG_GEOMETRY_DEVELOP",
+        "dng_scale_develop.rs" | "dng_scale_resample.rs" | "dng_geometry_develop.rs" => "DNG_GEOMETRY_DEVELOP",
         "embedded_lens.rs" => "EMBEDDED_LENS",
         "output_color.rs" => "OUTPUT_COLOR",
         "dng_warp.rs" => "DNG_WARP",

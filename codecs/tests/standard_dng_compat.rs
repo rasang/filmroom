@@ -156,11 +156,11 @@ fn fractional_crop_sdk_rounding_matches_integer_decode_all_orientations() {
 }
 
 #[test]
-fn fractional_crop_does_not_repair_original_out_of_bounds_or_enable_scale() {
+fn fractional_crop_does_not_repair_original_out_of_bounds_or_accept_zero_scale() {
  let p=path("crop-invalid"); let output=path("crop-invalid-out");
  for (tag,data) in [(50719,rational(&[(u32::MAX,1),(0,1)])),
                     (50720,rational(&[(0,1),(12,1)])),
-                    (50718,rational(&[(2,1),(1,1)]))] {
+                    (50718,rational(&[(0,1),(1,1)]))] {
   fs::write(&p,replace(base("RGGB.dng"),tag,5,2,data)).unwrap();
   assert!(decode(&p,&output,&Budget::default(),&AtomicBool::new(false)).is_err());
   assert!(!output.exists());

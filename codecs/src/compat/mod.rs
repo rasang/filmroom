@@ -91,9 +91,9 @@ fn descriptive_metadata(root: &Ifd, raw: &Ifd) -> Result<()> {
 }
 
 pub(crate) fn unit_geometry(root: &Ifd, raw: &Ifd, calibrated_analog_balance: bool) -> Result<()> {
-    for tag in [50718, 50727] {
+    for tag in [50727] {
         // Non-unit AnalogBalance is admitted only after a color path has
-        // validated and incorporated it. DefaultScale stays strictly unit.
+        // validated and incorporated it. DefaultScale is validated by Dng::read.
         if tag == 50727 && calibrated_analog_balance { continue; }
         if let Some(v) = inherited(root, raw, tag) {
             let values = v.nums()?;
