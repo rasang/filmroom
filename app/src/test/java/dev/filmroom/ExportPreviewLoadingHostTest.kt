@@ -744,6 +744,64 @@ class ExportPreviewLoadingHostTest {
         } finally {gates.forEach{it.complete(Unit)};runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
     }
 
+    @Test fun completedMissingOrCorruptFinalRecoversSavedPhotoInsteadOfNegative()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));val dirs=mutableListOf<File>()
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();a.previewSequenceEnabled=false
+                until("queue initialized"){queue(a)!=null};runCurrent()
+                val jobs=(0..2).map { index->
+                    job(8).copy(state=ExportJobState.COMPLETED,mediaUri="content://saved/$index").also { j->
+                        val dir=fixture(queue(a)!!,j);dirs+=dir
+                        if(index==1)File(dir,"final-preview.jpg").writeText("corrupt")
+                        if(index==2){val token=dev.filmroom.export.ScanPreviewStore.begin(dir);File(dir,"scan-preview-$token.jpg").writeText("corrupt scan")}
+                    }
+                }
+                a.thumbnailDecoder={f->if(f.name.startsWith("scan-preview-"))throw java.io.IOException("bad scan") else if(f.name=="final-preview.jpg")null else solid(Color.GREEN)}
+                a.savedThumbnailDecoder={Bitmap.createBitmap(1024,683,Bitmap.Config.ARGB_8888).apply{eraseColor(Color.BLUE)}}
+                render(a,jobs);layout(a,1600)
+                until("both completed records use saved positive"){jobs.all{current(image(a,it.id))?.getPixel(10,10)==Color.BLUE}}
+                assertTrue("Recovery does not race disk writer",!File(dirs[0],"final-preview.jpg").exists())
+            }
+        }finally{runCurrent();dirs.forEach{it.deleteRecursively()};Dispatchers.resetMain()}
+    }
+
+    @Test fun finalPublishedAfterCompletionRefreshesWithinSamePage()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));var dir:File?=null
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();a.previewSequenceEnabled=false
+                until("queue initialized"){queue(a)!=null};runCurrent()
+                val j=job(8).copy(state=ExportJobState.COMPLETED)
+                dir=fixture(queue(a)!!,j)
+                a.thumbnailDecoder={f->solid(if(f.name=="final-preview.jpg")Color.BLUE else Color.BLACK)}
+                render(a,listOf(j));layout(a)
+                until("original fallback"){current(image(a,j.id))?.getPixel(10,10)==Color.BLACK}
+                File(dir,"final-preview.jpg").writeText("late final")
+                render(a,listOf(j))
+                until("late final adopted without reopening"){current(image(a,j.id))?.getPixel(10,10)==Color.BLUE}
+            }
+        }finally{runCurrent();dir?.deleteRecursively();Dispatchers.resetMain()}
+    }
+
+    @Test fun completedUnreadableSavedPhotoDoesNotKeepNegativePixels()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler));var dir:File?=null
+        try {
+            Robolectric.buildActivity(ExportQueueActivity::class.java).setup().use { controller ->
+                val a=controller.get();a.previewSequenceEnabled=false
+                until("queue initialized"){queue(a)!=null};runCurrent()
+                val running=job(5);dir=fixture(queue(a)!!,running)
+                a.thumbnailDecoder={solid(Color.GREEN)}
+                render(a,listOf(running));layout(a)
+                until("negative visible"){current(image(a,running.id))!=null}
+                a.thumbnailDecoder={f->if(f.name=="final-preview.jpg")null else solid(Color.GREEN)}
+                a.savedThumbnailDecoder={throw SecurityException("permission lost")}
+                render(a,listOf(running.copy(state=ExportJobState.COMPLETED,mediaUri="content://saved/lost")))
+                until("negative cleared after inaccessible result"){current(image(a,running.id))==null}
+            }
+        }finally{runCurrent();dir?.deleteRecursively();Dispatchers.resetMain()}
+    }
+
     @Test fun retryDuringSavedPhotoRefinementRejectsOldAttemptAndRecyclesUpgrade()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val gate=CompletableDeferred<Unit>();val entered=CompletableDeferred<Unit>()

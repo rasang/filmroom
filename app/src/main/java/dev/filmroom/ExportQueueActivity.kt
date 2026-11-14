@@ -621,6 +621,9 @@ class ExportQueueActivity : ComponentActivity() {
             refreshSequenceTimeline(job)
             sequence.visibility(visible,previewClock())
             sequence.finish(previewClock());presentVisuals(job);scheduleSequence(visible)
+            if(job.state==ExportJobState.COMPLETED && !sequence.active && previewVersion?.contains("negative-preview")==true) {
+                image.release();previewVersion=null;previewPlaceholder.visibility=View.VISIBLE
+            }
             val visibleStage=sequence.constrain(job.progress.displayStage,job.progress.displayPercent).first
             image.setBreathing((job.state==ExportJobState.RUNNING || sequence.active) && visibleStage in 2..4 && previewVersion?.contains("negative-preview")!=true,visibleStage==3)
             if(!near){previewGeneration++;previewTask?.cancel();image.release();previewPlaceholder.visibility=View.VISIBLE;previewVersion=null;previewKey=null;return}
@@ -633,7 +636,9 @@ class ExportQueueActivity : ComponentActivity() {
             val negativeName=sequence.negativeName
             val sequenceHolding=sequence.remaining(previewClock())>0
             val previewAttempt=ScanPreviewStore.token(dir)
-            val key="${job.state}:${job.progress.displayStage}:$stageFourComplete:$sequenceActive:$sequencePhase:$sequenceHolding:$previewAttempt"
+            val finalFile=File(dir,"final-preview.jpg")
+            val finalRevision="${finalFile.lastModified()}:${finalFile.length()}"
+            val key="${job.state}:${job.progress.displayStage}:$stageFourComplete:$sequenceActive:$sequencePhase:$sequenceHolding:$previewAttempt:$finalRevision"
             val now=android.os.SystemClock.elapsedRealtime()
             if(previewKey!=key || now-previewCheckedAt>=1000){
                 previewKey=key;previewCheckedAt=now;previewTask?.cancel()
@@ -643,8 +648,12 @@ class ExportQueueActivity : ComponentActivity() {
                     var ownedBitmap:android.graphics.Bitmap?=null
                     try {
                     val (loadedPreview,positiveUnavailable,negativeAvailable)=withContext(Dispatchers.IO){
-                        val newest=ExportPreviewSelection.select(dir,job.state,job.progress.displayStage,stageFourComplete,negativeName)
+                        val diskSelection=ExportPreviewSelection.select(dir,job.state,job.progress.displayStage,stageFourComplete,negativeName)
                         fun positive(file:File?)=file?.name=="final-preview.jpg" || file?.name?.startsWith("scan-preview-")==true
+                        // Missing final derivatives are repaired in memory from the saved photograph.
+                        // Do not race the queue's atomic disk writer or use a negative as the result.
+                        val newest=if(job.state==ExportJobState.COMPLETED && job.mediaUri!=null && !positive(diskSelection.file))
+                            ExportPreviewSelection(finalFile,dev.filmroom.i18n.L10n.text(R.string.text_1a418b9270f7)) else diskSelection
                         var positiveUnavailable= !positive(newest.file)
                         val original=ExportPreviewSelection.select(dir,ExportJobState.RUNNING,1)
                         val negative=ExportPreviewSelection.select(dir,ExportJobState.RUNNING,5,negativeName=negativeName)
@@ -663,7 +672,9 @@ class ExportQueueActivity : ComponentActivity() {
                         currentCoroutineContext().ensureActive()
                         val cachedContour=if(contour && version!=knownVersion)ExportContourCache.find("$id:$version")else null
                         val bitmap=if(version!=knownVersion)cachedContour ?: selected.file?.let { file ->
-                            try {thumbnailDecoder(file)?.let { decoded ->
+                            try {((try{if(file.isFile && file.length()>0)thumbnailDecoder(file)else null}catch(c:CancellationException){throw c}catch(_:Exception){null}catch(_:OutOfMemoryError){null}) ?: if(positive(file) && job.state==ExportJobState.COMPLETED && job.mediaUri!=null)
+                                try{savedThumbnailDecoder(job.mediaUri)}catch(c:CancellationException){throw c}catch(_:Exception){null}catch(_:OutOfMemoryError){null}
+                                else null)?.let { decoded ->
                                 // Old installations retain 240px final thumbnails. Read only a
                                 // bounded display derivative from the saved media, off-thread;
                                 // permission/decode/budget failures keep the old valid pixels.
@@ -728,6 +739,9 @@ class ExportQueueActivity : ComponentActivity() {
                     if(scanStillCurrent && previewGeneration==generation && previewKey==key &&
                         (noPositive || (bitmap==null && version!=previewVersion)) && job.state==ExportJobState.COMPLETED && !NegativePreviewStore.pending(dir)) {
                         sequence.stop();sequenceTask?.cancel();sequenceTask=null;presentVisuals(job)
+                        if(previewVersion?.contains("negative-preview")==true) {
+                            image.release();previewVersion=null;previewPlaceholder.visibility=View.VISIBLE
+                        }
                     }
                     } finally {ownedBitmap?.recycle()}
                 }
@@ -769,12 +783,12 @@ internal data class ExportJobPresentation(val status:String,val progress:String,
 internal data class ExportPreviewSelection(val file:File?,val label:String) {
     companion object {
         fun select(dir:File,state:ExportJobState,stage:Int=8,stageFourComplete:Boolean=false,negativeName:String?=null):ExportPreviewSelection {
-            val scan=if(state==ExportJobState.RUNNING && stage>=6)ScanPreviewStore.select(dir)else null
+            val scan=if((state==ExportJobState.RUNNING && stage>=6) || state==ExportJobState.COMPLETED)ScanPreviewStore.select(dir)else null
             val final=File(dir,"final-preview.jpg");val negative=NegativePreviewStore.select(dir,negativeName);val original=File(dir,"original-preview.jpg")
             return when {
                 state==ExportJobState.COMPLETED && final.isFile && final.length()>0->ExportPreviewSelection(final,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1a418b9270f7))
                 scan!=null->ExportPreviewSelection(scan,dev.filmroom.i18n.L10n.text(R.string.export_progress_preview))
-                (stage>=5 || (stage==4 && stageFourComplete)) && state!=ExportJobState.CANCELLED && negative!=null->ExportPreviewSelection(negative,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_37eb7c18d5ef))
+                (stage>=5 || (stage==4 && stageFourComplete)) && state !in setOf(ExportJobState.CANCELLED,ExportJobState.COMPLETED) && negative!=null->ExportPreviewSelection(negative,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_37eb7c18d5ef))
                 original.isFile && original.length()>0->ExportPreviewSelection(original,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b00a78a5faa))
                 else->ExportPreviewSelection(null,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_e3c1f7706839))
             }

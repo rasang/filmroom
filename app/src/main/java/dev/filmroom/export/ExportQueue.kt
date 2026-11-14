@@ -1,6 +1,9 @@
 package dev.filmroom.export
 
 import dev.filmroom.border.*
+import dev.filmroom.diagnostics.Diagnostics
+import dev.filmroom.diagnostics.Operation
+import dev.filmroom.diagnostics.Outcome
 import dev.filmroom.i18n.UiMessage
 import dev.filmroom.R
 import dev.filmroom.crop.*
@@ -463,7 +466,11 @@ class ExportQueue internal constructor(private val context:Context,private val p
             withContext(NonCancellable+Dispatchers.IO) {
                 synchronized(activeLock) { update{it.copy(state=ExportJobState.COMPLETED)} }
                 tailWork?.finish("publish")
-                store.get(id)?.mediaUri?.let { uri->runCatching{finalThumbnailWriter?.invoke(uri,dir) ?: saveFinalThumbnail(uri,dir)} }
+                store.get(id)?.mediaUri?.let { uri->
+                    val diagnostic=Diagnostics.begin(Operation.FINAL_PREVIEW)
+                    val saved=runCatching{finalThumbnailWriter?.invoke(uri,dir) ?: saveFinalThumbnail(uri,dir)}.isSuccess
+                    Diagnostics.end(diagnostic,if(saved)Outcome.SUCCESS else Outcome.FAILED)
+                }
                 output?.delete();output=null
                 val clean=cleanup(id)
                 update{it.copy(state=ExportJobState.COMPLETED,progress=ExportDisplayProgress(8,if(clean)1 else 0,1,measured=tailWork!=null),message=listOfNotNull(if(clean)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1bd91a7d0c53)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_598870cac16e),it.metadataWarning).joinToString("；"),messageUi=UiMessage.of(if(clean)R.string.text_1bd91a7d0c53 else R.string.text_598870cac16e))}
@@ -526,7 +533,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
     private fun cleanup(id:String):Boolean {
         if(store.get(id)?.state in setOf(ExportJobState.CANCELLED,ExportJobState.FAILED))ExportPresentationStore.clear(context,id)
         val dir=store.directory(id)
-        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !(store.get(id)?.state!=ExportJobState.CANCELLED && RawSourcePreviewStore.retained(it.name)) && !(store.get(id)?.state!=ExportJobState.CANCELLED && CleanResultStore.retained(it.name)) && !NegativePreviewStore.retain(dir,it)}
+        return dir.listFiles()?.filter{it.name !in setOf("manifest.json","manifest.json.bak","original-preview.jpg","negative-preview.jpg","negative-preview.png","final-preview.jpg") && !(store.get(id)?.state!=ExportJobState.CANCELLED && RawSourcePreviewStore.retained(it.name)) && !(store.get(id)?.state!=ExportJobState.CANCELLED && CleanResultStore.retained(it.name)) && !(store.get(id)?.state==ExportJobState.COMPLETED && ScanPreviewStore.select(dir)?.name==it.name) && !NegativePreviewStore.retain(dir,it)}
             ?.map{if(it.isDirectory)it.deleteRecursively()else it.delete()}?.all{it} ?: false
     }
     class IntakeLease internal constructor(val generation:Long,private val release:()->Unit):java.io.Closeable {
