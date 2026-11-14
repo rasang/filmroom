@@ -157,6 +157,8 @@ Open photo effects from export history. Each sequence is approximately 3 seconds
 
 **Camera RAW scope:** The list describes tested formats and pixel layouts, not a camera-model allowlist. Identification uses file contents and offline color profiles, not the suffix alone. It does not guarantee every unknown camera, future compression variant or damaged file. Basic matrix development does not reproduce camera styles; small NEF uses an independently verified already-balanced linear-sRGB path without applying white balance twice. Host validation is not physical Android-device validation.
 
+**Embedded lens distortion (this branch):** CFA DNG gains extended geometry and ordered GainMap chains. Sony ARW, Fujifilm RAF and Olympus / OM System ORF gain validated embedded distortion models, applied automatically when supported and reported in photo information. This manufacturer integration covers distortion only. See [embedded lens correction](codecs/docs/EMBEDDED-LENS-CORRECTIONS.md) for supported metadata, crop conventions, additional temporary storage and validation results.
+
 Detailed contracts: [HEIC](docs/HEIC_IMPORT.md) · [DNG/codecs](codecs/README.md) · [Xiaomi DNG scope](docs/XIAOMI_DNG_COMPAT.md) · [Previews](docs/LOCAL_DETAIL_UI.md). These technical documents are primarily in Chinese.
 
 ## Your photos stay on your device

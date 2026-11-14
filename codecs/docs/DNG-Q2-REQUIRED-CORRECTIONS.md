@@ -1,5 +1,12 @@
 # Required CFA corrections and A/D50 calibration
 
+This document records the earlier Q2 single-warp implementation and its SDK
+validation. The current supported geometry scope is extended by
+[Embedded lens distortion correction](EMBEDDED-LENS-CORRECTIONS.md), including
+ordered supported List3 geometry/GainMap chains. The historical measurements
+below remain specific to the original cases; they do not certify the later
+fisheye, mixed-operation or manufacturer extensions.
+
 This is a bounded structural extension, not a blanket Leica or DNG compatibility claim. It was exercised using public raw.pixls.us sample 3204 (Leica Q2, 14-bit uncompressed DNG). The original file is not modified; its required operations are executed rather than removed, made optional, or replaced by embedded JPEG previews.
 
 ## Supported extension

@@ -193,6 +193,9 @@ impl<'a> Decoder for ArwDecoder<'a> {
 
     let mut img = RawImage::new(self.camera.clone(), image, cpp, params.wb, photometric, blacklevel, whitelevel, dummy);
     img.source_ifd_offset = Some(raw.offset);
+    img.lens_distortion = crate::rawimage::EmbeddedLensDistortion::sony(
+      raw.get_entry(0x7037u16).map(|entry| &entry.value)
+    );
 
     if cpp == 3 {
       // For debayer images, we assume WB coeffs already applied

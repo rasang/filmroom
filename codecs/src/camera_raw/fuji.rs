@@ -3,7 +3,7 @@
 //! RGB development is striped. SuperCCD/EXR, unknown packing and >52 MP fail closed.
 use super::*;
 use std::{collections::BTreeMap, os::unix::fs::FileExt, os::fd::AsRawFd};
-mod xtrans;
+pub(crate) mod xtrans;
 const SIGNATURE: &[u8] = b"FUJIFILMCCD-RAW ";
 const FUJI_SCRATCH: u64 = 8 * MIB;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -177,7 +177,7 @@ impl FujiRaw {
         if decode_peak>memory || rows<8{return Err(err("MEMORY_BUDGET","admission"));}
         let disk=self.probe().output_bytes;
         if disk>b.disk_budget_bytes.min(1024*MIB){return Err(err("DISK_BUDGET","admission"));}
-        Ok(Admission{memory_budget_bytes:memory,estimated_peak_bytes:decode_peak.max(retained+d.active.w as u64*(rows+2*HALO) as u64*128),required_disk_bytes:disk,strip_rows:rows as u32})
+        crate::develop::admit_geometry(d,b,Admission{memory_budget_bytes:memory,estimated_peak_bytes:decode_peak.max(retained+d.active.w as u64*(rows+2*HALO) as u64*128),required_disk_bytes:disk,strip_rows:rows as u32})
     }
     pub(crate) fn decode(self,output:&Path,b:&Budget,cancel:&AtomicBool)->Result<(Probe,Admission)>{
         if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
@@ -188,7 +188,8 @@ impl FujiRaw {
             let decoded=pool.install(||bounded("decode",||rawler::get_decoder(&self.source)?.raw_image_with_cancel(&self.source,&Default::default(),false,&||cancel.load(Ordering::Relaxed))));
             if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
             let raw=decoded?;
-            if raw.width!=self.plan.width || raw.height!=self.plan.height || raw.blacklevel.as_vec()!=self.black || raw.whitelevel.0.as_slice()!=[self.white as u32] {return Err(invalid());}
+            if raw.width!=self.plan.width || raw.height!=self.plan.height || raw.blacklevel.as_vec()!=self.black || raw.whitelevel.0.as_slice()!=[self.white as u32]
+                || crate::embedded_lens::from_metadata(&raw.lens_distortion)!=self.camera.development.lens {return Err(invalid());}
             match raw.data {RawImageData::Integer(v) if v.len()==self.plan.width*self.plan.height=>Some(v),_=>return Err(invalid())}
         }else{None};
         // Metadata map and any padded compressed buffer are gone before strip development.
@@ -202,9 +203,11 @@ impl FujiRaw {
         let row_bytes=match self.plan.encoding{Encoding::Packed12|Encoding::Msb32=>d.width*self.plan.bits/8,_=>d.width*2};
         let mut encoded=vec![0u8;row_bytes];
         let mut row=vec![0u16;d.width];
-        let mut first=d.crop.y;
-        while first<d.crop.y+d.crop.h {
-            let last=(first+admission.strip_rows as usize).min(d.crop.y+d.crop.h);
+        let sink=crate::develop::CameraRgbSink::new(d,output)?;
+        let region=sink.region(d);
+        let mut first=region.y;
+        while first<region.y+region.h {
+            let last=(first+admission.strip_rows as usize).min(region.y+region.h);
             let y=first.saturating_sub(HALO).max(d.active.y);let end=(last+HALO).min(d.active.y+d.active.h);
             let mut normalized=Vec::with_capacity(d.active.w*(end-y));
             for sy in y..end {
@@ -219,9 +222,11 @@ impl FujiRaw {
                     normalized.push((*v as f32-black).max(0.)/(self.white-black));
                 }
             }
-            let pixels=pool.install(||if self.plan.xtrans {xtrans::develop(d,y,end-y,normalized,cancel)}else{crate::develop::develop_tile_cancel(d,y,end-y,normalized,cancel)})?;
-            crate::develop::emit(d,&out,&pixels,y,first,last,cancel)?;first=last;
+            let pixels=pool.install(||sink.develop(d,y,end-y,normalized,cancel))?;
+            sink.emit_strip(d,&out,&pixels,y,first,last,cancel)?;first=last;
         }
+        drop(integers);drop(encoded);drop(row);
+        pool.install(||sink.finish(d,&out,cancel))?;
         if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","spool"));}
         if self.identity!=crate::nikon_he::Identity::read(&self.file)?{return Err(invalid());}
         out.sync_all().map_err(|e|io_error(e,"spool"))?;guard.1=true;Ok((probe,admission))

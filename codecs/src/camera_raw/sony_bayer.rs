@@ -41,6 +41,7 @@ pub(super) fn decode(
         let rect = |r: Rect| (r.x, r.y, r.w, r.h);
         if raw.source_ifd_offset != Some(camera.source_ifd_offset)
             || d.cpp != 1
+            || d.lens != camera.development.lens
             || d.width != camera.development.width
             || d.height != camera.development.height
             || rect(d.active) != rect(camera.development.active)

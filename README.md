@@ -157,6 +157,8 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 
 **相机 RAW 验证边界：** 上述列表说明已验证的格式/像素布局，不是机型白名单；按文件内容和离线色彩配置识别，不仅凭后缀放行。没有承诺所有未知新机型、未来压缩变体或任意损坏文件均兼容。基础矩阵显色不复刻相机风格；small NEF 使用独立验证的已平衡线性 sRGB 路径，避免重复白平衡。开发验证中的 host 结果不等于 Android 真机结果。
 
+**内嵌镜头畸变（本分支）：** 完善 CFA DNG 的几何校正与有序 GainMap 链，并为 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 接入经过验证的内嵌畸变参数。识别到支持的模型时自动应用，在照片信息中显示应用状态。本批厂商适配仅覆盖畸变；具体参数范围、裁切约定、额外临时空间和验证结果见[内嵌镜头校正说明](codecs/docs/EMBEDDED-LENS-CORRECTIONS.md)。
+
 详细范围：[HEIC](docs/HEIC_IMPORT.md) · [DNG 与编解码器](codecs/README.md) · [小米 DNG 适配边界](docs/XIAOMI_DNG_COMPAT.md) · [预览](docs/LOCAL_DETAIL_UI.md)。
 
 ## 照片只留在你的设备上

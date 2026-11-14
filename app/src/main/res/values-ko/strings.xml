@@ -761,6 +761,8 @@
     <string name="detail_storage" formatted="false">임시 저장 공간 예산 초과</string>
     <string name="detail_allocation" formatted="false">메모리 할당 실패</string>
     <string name="camera_raw_basic_development" formatted="false">카메라 RAW는 블랙·화이트 레벨, 화이트 밸런스와 색상 행렬을 사용해 기본 현상합니다. 카메라의 화상 스타일과 모든 렌즈 보정은 적용하지 않으므로 색상과 형태가 카메라 또는 다른 소프트웨어와 다를 수 있습니다.</string>
+    <string name="embedded_lens_distortion_applied" formatted="false">파일에 포함된 렌즈 왜곡 보정을 적용했습니다.</string>
+    <string name="embedded_lens_distortion_not_applied" formatted="false">파일에 포함된 렌즈 왜곡 보정 매개변수를 감지했지만 적용하지 않았습니다. 왜곡이 남아 있을 수 있습니다.</string>
     <string name="camera_raw_variant_unsupported" formatted="false">이 카메라 RAW의 픽셀 배열 또는 압축 방식은 지원하지 않거나 아직 검증되지 않았습니다. 내장 미리보기로 대체하거나 원본 해상도를 낮추지 않았습니다.</string>
     <string name="camera_raw_profile_unsupported" formatted="false">이 RAW에 유효한 카메라 색상 프로필이 없습니다. 색상을 추측하거나 내장 미리보기로 대체하지 않았습니다.</string>
 

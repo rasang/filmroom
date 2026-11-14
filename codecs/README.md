@@ -109,3 +109,7 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 ## Fujifilm RAF candidate
 
 现代 Bayer / X-Trans RAF 的内容识别、未压缩行读取与受限无损/有损传感器解码，详见 [RAF 范围与验证](../docs/FUJIFILM_RAF.md)。X-Trans 为单独的保守 6×6 基础插值，不套用 Bayer 算法，不复刻富士直出。52 MP 传感器上限和 256 MiB 相机预算不变；GFX 50S/100 II 样片超限拒绝，旧式 SuperCCD/EXR/双布局拒绝。通过的样片不能泛化为所有 RAF。
+
+## 内嵌镜头畸变扩展
+
+当前分支扩展 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链，并接入 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 的受支持内嵌畸变模型。厂商路径仅覆盖几何畸变，使用有界、磁盘承载的相机 RGB 重采样，在最终裁切/方向和色彩转换前执行。所需临时磁盘空间纳入实际预算；照片信息区显示应用或未应用状态。参数边界、参考坐标域、自动填充缩放、公开样片及本轮验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。该文档扩展早期 Q2 单个必需 WarpRectilinear 的支持范围，未扩大其历史 SDK 对照结果。
