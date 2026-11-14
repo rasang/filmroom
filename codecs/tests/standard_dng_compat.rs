@@ -21,9 +21,9 @@ fn rational(v:&[(u32,u32)])->Vec<u8>{v.iter().flat_map(|(a,b)|a.to_le_bytes().in
  assert_eq!(fs::read(&oa).unwrap(),fs::read(&ob).unwrap());
  for p in [a,b,oa,ob] {fs::remove_file(p).unwrap();}
 }
-#[test]fn fractional_crop_is_unsupported_not_corrupt_and_no_output(){
+#[test]fn subpixel_sized_crop_is_unsupported_not_corrupt_and_no_output(){
  let p=path("fractional");let out=path("fractional-out");
- fs::write(&p,replace(base("RGGB.dng"),50720,5,2,rational(&[(25,2),(12,1)]))).unwrap();
+ fs::write(&p,replace(base("RGGB.dng"),50720,5,2,rational(&[(49,100),(12,1)]))).unwrap();
  let e=decode(&p,&out,&Budget::default(),&AtomicBool::new(false)).unwrap_err();
  assert_eq!(e.code,"UNSUPPORTED_DNG_VARIANT");assert_eq!(e.tag,Some(50720));assert_eq!(serde_json::to_value(&e).unwrap()["reason"],"UNSUPPORTED_VALUE");assert!(!out.exists());fs::remove_file(p).unwrap();
 }
@@ -111,4 +111,59 @@ fn single_forward_matrix_develops_and_partial_dual_fm_fails_closed(){
   b=replace(b,50722,10,9,matrix);b=replace(b,50779,3,1,17u16.to_le_bytes().to_vec());fs::write(&p,b).unwrap();
   assert_eq!(Dng::read(&mut fs::File::open(&p).unwrap()).unwrap_err().code,"UNSUPPORTED_DNG_CALIBRATION");fs::remove_file(p).unwrap();
  }
+}
+
+#[test]
+fn fractional_crop_sdk_rounding_matches_integer_decode_all_orientations() {
+ for fixture in ["RGGB.dng","linear.dng"] {
+  let p=path(&format!("crop-source-{fixture}"));
+  fs::write(&p,base(fixture)).unwrap();
+  let d=Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();
+  let (ax,ay,aw,ah)=(2usize,2usize,(d.width-4)&!1,(d.height-4)&!1);
+  let mut source=replace(base(fixture),50829,4,4,[ay,ax,ay+ah,ax+aw].iter().flat_map(|v|(*v as u32).to_le_bytes()).collect());
+  // Fractional 0.5 + (bound - 0.5) independently rounds to 1 + bound,
+  // then slides back to 0. The interior case rounds origin and size separately.
+  for orientation in 1..=8u16 {
+   source=replace(source,274,3,1,orientation.to_le_bytes().to_vec());
+   for (case,origin,size,rounded) in [
+    ("edge",[(1,2),(1,2)],[((aw*2-1)as u32,2),((ah*2-1)as u32,2)],[0,0,aw,ah]),
+    ("interior",[(51,100),(49,100)],[(25,2),(23,2)],[1,0,13,12])
+   ] {
+    let mut outputs=vec![];
+    for fractional in [true,false] {
+     let ori=if fractional {origin}else{[(rounded[0]as u32,1),(rounded[1]as u32,1)]};
+     let sz=if fractional {size}else{[(rounded[2]as u32,1),(rounded[3]as u32,1)]};
+     let bytes=replace(replace(source.clone(),50719,5,2,rational(&ori)),50720,5,2,rational(&sz));
+     fs::write(&p,bytes).unwrap();
+     let parsed=Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();
+     assert_eq!((parsed.crop.x,parsed.crop.y,parsed.crop.w,parsed.crop.h),(ax+rounded[0],ay+rounded[1],rounded[2],rounded[3]));
+     let expected=if orientation>=5 {(rounded[3],rounded[2])}else{(rounded[2],rounded[3])};
+     assert_eq!(parsed.oriented_dim(),expected);
+     let probe=parsed.probe();
+     assert_eq!((probe.width as usize,probe.height as usize),expected);
+     assert_eq!(probe.output_bytes,(expected.0*expected.1*12) as u64);
+     let output=path(&format!("crop-{fixture}-{orientation}-{case}-{fractional}.f32"));
+     decode(&p,&output,&Budget::default(),&AtomicBool::new(false)).unwrap();
+     let pixels=fs::read(&output).unwrap();
+     assert_eq!(pixels.len(),expected.0*expected.1*12);
+     outputs.push(pixels);fs::remove_file(output).unwrap();
+    }
+    assert_eq!(outputs[0],outputs[1],"{fixture}/{orientation}/{case}");
+   }
+  }
+  fs::remove_file(p).unwrap();
+ }
+}
+
+#[test]
+fn fractional_crop_does_not_repair_original_out_of_bounds_or_enable_scale() {
+ let p=path("crop-invalid"); let output=path("crop-invalid-out");
+ for (tag,data) in [(50719,rational(&[(u32::MAX,1),(0,1)])),
+                    (50720,rational(&[(0,1),(12,1)])),
+                    (50718,rational(&[(2,1),(1,1)]))] {
+  fs::write(&p,replace(base("RGGB.dng"),tag,5,2,data)).unwrap();
+  assert!(decode(&p,&output,&Budget::default(),&AtomicBool::new(false)).is_err());
+  assert!(!output.exists());
+ }
+ fs::remove_file(p).unwrap();
 }

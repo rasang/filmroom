@@ -88,3 +88,15 @@ Stage2 saturates, not by an incorrect denominator. No exact-match claim is made.
 Required MapTable region/pitch/short-tail and ordered two-table cases were
 byte-identical to actual SDK Stage1 output. Test adapters run outside the app;
 no Adobe SDK source, private sample or derived image is committed.
+
+## Fractional default crop (DNG_STD_V4)
+
+Valid fractional DefaultCropOrigin/DefaultCropSize use Adobe SDK 1.7.1
+DefaultCropArea integer rounding: validate the original active-relative range,
+round origin and size separately (positive half values upward), then shift the
+rounded crop back inside ActiveArea if rounding crosses its right/bottom edge.
+Only then translate into sensor coordinates. Integer crops retain the existing
+pixel path. This is SDK-equivalent integer crop selection, not subpixel sampling.
+A positive size rounding to zero is explicitly unsupported, never widened to one
+pixel. Non-unit DefaultScale remains unsupported until a complete, correctly
+ordered antialiased resampling pipeline is available.

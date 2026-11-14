@@ -16,6 +16,34 @@ pub struct Rect {
     pub w: usize,
     pub h: usize,
 }
+/// Match Adobe SDK DefaultCropArea on our unscaled, active-area stage 3.
+/// This is integer rounding, not subpixel crop resampling. Validate the original
+/// rational geometry first; rounding must never sanitize an out-of-bounds tag.
+fn default_crop(active: Rect, origin: [f64; 2], size: [f64; 2]) -> Result<Rect> {
+    let dimensions = [active.w, active.h];
+    let mut starts = [0usize; 2];
+    let mut lengths = [0usize; 2];
+    for axis in 0..2 {
+        let (o, n, bound) = (origin[axis], size[axis], dimensions[axis] as f64);
+        if !o.is_finite() || !n.is_finite() || o < 0. || o >= bound
+            || n <= 0. || n > bound || o + n > bound {
+            return Err(err("INVALID_INPUT", "probe"));
+        }
+        // Nonnegative Round_int32: halfway values round upward, separately.
+        let count = n.round() as usize;
+        if count == 0 {
+            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe")
+                .detail(Reason::UnsupportedValue, Some(50720)));
+        }
+        let start = o.round() as usize;
+        // SDK shifts an otherwise valid rounded crop back inside the image.
+        starts[axis] = start.min(dimensions[axis] - count);
+        lengths[axis] = count;
+    }
+    Ok(Rect { x: active.x + starts[0], y: active.y + starts[1],
+        w: lengths[0], h: lengths[1] })
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Warning {
     pub code: &'static str,
@@ -260,29 +288,7 @@ impl Dng {
         }
         let origin = arr(nums(raw, 50719)?, [0., 0.])?;
         let size = arr(nums(raw, 50720)?, [active.w as f64, active.h as f64])?;
-        if origin
-            .iter()
-            .chain(size.iter())
-            .any(|x| !x.is_finite() || *x < 0.)
-            || size[0] < 1.
-            || size[1] < 1.
-            || origin[0] + size[0] > active.w as f64
-            || origin[1] + size[1] > active.h as f64
-        {
-            return Err(err("INVALID_INPUT", "probe"));
-        }
-        // Fractional crop geometry is legal DNG, but the current integer crop
-        // path cannot resample it. Do not mislabel this as damaged metadata.
-        if origin.iter().chain(size.iter()).any(|x| x.fract() != 0.) {
-            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe")
-                .detail(Reason::UnsupportedValue, Some(if origin.iter().any(|x| x.fract()!=0.) {50719} else {50720})));
-        }
-        let crop = Rect {
-            x: active.x + origin[0] as usize,
-            y: active.y + origin[1] as usize,
-            w: size[0] as usize,
-            h: size[1] as usize,
-        };
+        let crop = default_crop(active, origin, size)?;
         let cfa = if cfa_mode {
             if arr(nums(raw, 33421)?, [0., 0.])? != [2., 2.] || uint(raw, 50711, Some(1))? != 1 {
                 return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
@@ -598,14 +604,14 @@ impl Dng {
             has_alternate_forward_matrix: self.has_forward_matrix,
             development_policy: if let Some(p) = &self.profile {
                 if p.map.is_some() {
-                    "DNG_STD_V3; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
+                    "DNG_STD_V4; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
                 } else {
-                    "DNG_STD_V3; DNG standard single/dual illuminant calibrated color to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
+                    "DNG_STD_V4; DNG standard single/dual illuminant calibrated color to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
             } else if let Some(color) = &self.cfa_color {
                 color.policy
             } else {
-                "DNG_STD_V3; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
+                "DNG_STD_V4; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },
             baseline_exposure_applied_ev: self.baseline_exposure_ev,
         }
@@ -861,5 +867,30 @@ impl Dng {
             cancel,
         )?;
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod default_crop_tests {
+    use super::*;
+    #[test]
+    fn sdk_171_2802_default_crop_area_oracle() {
+        // Captured by executing official SDK DefaultCropArea on a 10x10
+        // Stage3Image, raw-to-full scale 1. Values below are hundredths.
+        let cases = [(0,1,0,0),(0,49,0,0),(0,50,0,1),(0,51,0,1),(0,950,0,10),
+            (49,1,0,0),(49,49,0,0),(49,50,0,1),(49,51,0,1),(49,950,0,10),
+            (50,1,1,0),(50,49,1,0),(50,50,1,1),(50,51,1,1),(50,950,0,10),
+            (51,1,1,0),(51,49,1,0),(51,50,1,1),(51,51,1,1),
+            (950,1,10,0),(950,49,10,0),(950,50,9,1)];
+        let active=Rect{x:4,y:6,w:10,h:10};
+        for (o,n,start,count) in cases {
+            let result=default_crop(active,[o as f64/100.,0.],[n as f64/100.,10.]);
+            if count==0 {assert_eq!(result.unwrap_err().code,"UNSUPPORTED_DNG_VARIANT");}
+            else {let r=result.unwrap(); assert_eq!((r.x,r.y,r.w,r.h),(4+start,6,count,10));}
+        }
+        // Rounding would make these appear valid: do not sanitize bad tags.
+        for (o,n) in [(0.51,9.5),(9.99,0.02),(10.,0.01),(-0.01,1.),(0.,f64::NAN)] {
+            assert_eq!(default_crop(active,[o,0.],[n,10.]).unwrap_err().code,"INVALID_INPUT");
+        }
     }
 }
