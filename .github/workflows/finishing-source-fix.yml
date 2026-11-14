@@ -1,0 +1,37 @@
+name: Apply reviewed detail-entry guard correction
+on:
+  push:
+    branches: [feat/finishing-preview-export-perf]
+    paths: [.github/workflows/finishing-source-fix.yml]
+permissions:
+  contents: write
+jobs:
+  fix-guard:
+    if: github.ref == 'refs/heads/feat/finishing-preview-export-perf'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move parameter-dependent guard from orphan cleanup to detail open
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feat/finishing-preview-export-perf'
+          python3 - <<'PY'
+          import pathlib,subprocess
+          p=pathlib.Path('app/src/main/java/dev/filmroom/engine/OwnedDetailProvider.kt')
+          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='14967db94ead3e4a9f6ed07f657c804d3b2a57f5'
+          text=p.read_text()
+          block='        if(parameters.hasFinishing && !FinishingContract.supported(parameters,status(api.nativeCapabilities(),"capabilities")))\n            throw DetailUnavailable("UNAVAILABLE")\n'
+          assert text.count(block)==1
+          text=text.replace(block,'')
+          marker='        timing.mark(DetailTimingPoint.OPEN_STARTED)\n'
+          assert text.count(marker)==1
+          p.write_text(text.replace(marker,marker+block))
+          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='5576c9428f1249335c21e4b70995b643f5472a5e'
+          PY
+          git add app/src/main/java/dev/filmroom/engine/OwnedDetailProvider.kt
+          git diff --cached --check
+          git config user.name 'Filmroom branch implementation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: validate finishing ABI at parameter-owned detail entry'
+          git push origin HEAD:refs/heads/feat/finishing-preview-export-perf
