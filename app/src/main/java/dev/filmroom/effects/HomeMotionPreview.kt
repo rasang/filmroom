@@ -4,6 +4,7 @@ import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.SystemClock
+import android.view.MotionEvent
 import dev.filmroom.diagnostics.*
 import java.io.File
 import java.util.Collections
@@ -37,6 +38,18 @@ internal class HomeMotionPreview(context: Context, private val kind: EffectKind,
     private var warmupBegan = 0L
     private var audioRequested = false
     private val originalAudioEnabled = EffectOriginalAudioPreference.read(context)
+    private val viewport = HomeMotionViewport()
+    private var maxViewportWidth = Int.MAX_VALUE
+    private var maxViewportHeight = Int.MAX_VALUE
+    @Volatile private var viewportMoving = false
+    var onViewportChanged: ((Float, Boolean) -> Unit)? = null
+    val viewportScale: Float get() = viewport.scale()
+    private val gestures = HomeMotionGestures(context,viewport) { scale,moving ->
+        viewportMoving=moving; onViewportChanged?.invoke(scale,moving); requestRender()
+    }
+    fun handleViewportTouch(event: MotionEvent): Boolean = gestures.touch(event)
+    fun resetViewport() = gestures.reset()
+    fun cancelViewportGesture() = gestures.cancel()
     private var widthPx = 1
     private var heightPx = 1
 
@@ -131,6 +144,9 @@ internal class HomeMotionPreview(context: Context, private val kind: EffectKind,
         try {
             // The prior context is gone: never delete its texture names in the new context.
             disposeMotion(releaseGl=false)
+            val limits = IntArray(2)
+            GLES20.glGetIntegerv(GLES20.GL_MAX_VIEWPORT_DIMS,limits,0)
+            maxViewportWidth=limits[0].coerceAtLeast(1); maxViewportHeight=limits[1].coerceAtLeast(1)
             renderer = EffectGlRenderer(kind,snapshot.source,snapshot.result,snapshot.readout)
             renderer!!.initialize()
             began = SystemClock.elapsedRealtime()
@@ -171,8 +187,14 @@ internal class HomeMotionPreview(context: Context, private val kind: EffectKind,
             val done = !playing || (!waiting && time >= EffectTimeline.durationMs(kind))
             GLES20.glClearColor(24f/255,24f/255,24f/255,1f); GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             val size=HomeMotionLayout.fit(widthPx,heightPx,kind,snapshot.result.width,snapshot.result.height)
+            val previousScale=viewport.scale()
+            viewport.configure(widthPx,heightPx,size.width,size.height,maxViewportWidth,maxViewportHeight)
+            if (previousScale!=viewport.scale()) post {
+                if (!closed.get()) onViewportChanged?.invoke(viewport.scale(),viewportMoving)
+            }
+            val view=viewport.frame()
             renderer?.draw(size.width,size.height,if (done || waiting) HomeMotionLayout.COVER_TIME_MS else time,
-                viewportX=(widthPx-size.width)/2,viewportY=(heightPx-size.height)/2)
+                viewportX=view.x,viewportY=view.y,viewportWidth=view.width,viewportHeight=view.height)
             if (done) {
                 playing=false; disposeMotion(Outcome.SUCCESS); renderMode=RENDERMODE_WHEN_DIRTY
                 val token=generation.get(); post { if (generation.get()==token) audio.stop() }
@@ -222,6 +244,7 @@ internal class HomeMotionPreview(context: Context, private val kind: EffectKind,
     }
     fun replay() {
         if (closed.get()) return
+        playing=true // Publish playback intent before any queued upload can be scheduled.
         val token=generation.incrementAndGet(); audio.stop(); audio.prepare(kind,false,audioFile())
         queueEvent {
             if (!closed.get() && generation.get()==token) {

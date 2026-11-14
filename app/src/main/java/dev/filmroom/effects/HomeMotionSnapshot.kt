@@ -39,15 +39,15 @@ internal class HomeMotionSnapshot(
                 frozen.rendered === current.rendered && frozen.parameters == current.parameters
         fun ready(state: EditorUiState) = state.canExport && !state.previewRefining &&
             !state.compare && !state.exporting && state.original != null
-        private fun copyBounded(bitmap: Bitmap): Bitmap {
-            val scale = minOf(1.0, MAX_EDGE.toDouble() / maxOf(bitmap.width, bitmap.height))
+        private fun copyBounded(bitmap: Bitmap, maxEdge:Int=MAX_EDGE): Bitmap {
+            val scale = minOf(1.0, maxEdge.toDouble() / maxOf(bitmap.width, bitmap.height))
             val copy = Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
                 (bitmap.height * scale).toInt().coerceAtLeast(1), true)
             return if (copy === bitmap) checkNotNull(bitmap.copy(Bitmap.Config.ARGB_8888, false)) else copy
         }
-        fun capture(state: EditorUiState, kind: EffectKind, prepare: Boolean = true): HomeMotionSnapshot {
+        fun capture(state: EditorUiState, kind: EffectKind, prepare: Boolean = true, detailResult:Bitmap?=null): HomeMotionSnapshot {
             check(ready(state)) { "Preview not settled" }
-            val result = copyBounded(checkNotNull(state.rendered))
+            val result = if(detailResult!=null)copyBounded(detailResult,dev.filmroom.roi.ZoomFramePolicy.MAX_EDGE) else copyBounded(checkNotNull(state.rendered))
             var source: Bitmap? = null
             var owned: HomeMotionSnapshot? = null
             try {

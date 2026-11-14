@@ -49,6 +49,29 @@ class HomeMotionActivityHostTest {
         touch(a,MotionEvent.ACTION_DOWN);touch(a,MotionEvent.ACTION_MOVE,300f);assertNull(field(a,"homeMotionHold"))
         touch(a,MotionEvent.ACTION_DOWN);touch(a,MotionEvent.ACTION_POINTER_DOWN);assertNull(field(a,"homeMotionHold"))
     }}
+    @Test fun liveOwnsZoomDemandButComparisonReturnsItToPhotoView(){withReady{a->
+        val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+        val snapshot=dev.filmroom.effects.HomeMotionSnapshot.capture(vm.state.value,EffectKind.LIGHT_TABLE)
+        val player=dev.filmroom.effects.HomeMotionPreview(a,EffectKind.LIGHT_TABLE,snapshot,false){}
+        set(a,"homeMotion",player);set(a,"homeMotionState",vm.state.value);set(a,"homeMotionPhotoKey",vm.state.value.photo?.cacheKey)
+        set(a,"homeMotionRefreshPosted",true)
+        val photo=field(a,"photo") as dev.filmroom.ui.PhotoView
+        val controller=field(a,"zoomFrames")!!
+        val zoom=controller.javaClass.getDeclaredField("zoom").apply{isAccessible=true}
+        zoom.setDouble(controller,2.5)
+        photo.onZoomViewportChanged?.invoke(1.0,false)
+        assertEquals(2.5,zoom.getDouble(controller),0.0)
+        vm.compare()
+        photo.onZoomViewportChanged?.invoke(1.75,false)
+        assertEquals(1.75,zoom.getDouble(controller),0.0)
+        touch(a,MotionEvent.ACTION_DOWN)
+        assertNull(field(a,"homeMotionHold"))
+        assertFalse(field(a,"homeMotionHeld") as Boolean)
+        vm.compare()
+        zoom.setDouble(controller,2.5)
+        photo.onZoomViewportChanged?.invoke(1.0,false)
+        assertEquals(2.5,zoom.getDouble(controller),0.0)
+    }}
     @Test fun selectedKindAndAutoSourceAreSaved(){withReady{a->
         set(a,"homeMotionAutoSource","already-played")
         val out=Bundle()
