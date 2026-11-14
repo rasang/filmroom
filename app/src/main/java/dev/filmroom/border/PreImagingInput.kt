@@ -111,13 +111,27 @@ object PreImagingInput {
      * is overlaid after imaging, and neutral mattes are invariant across output primaries. */
     fun restoreHoles(bitmap:Bitmap,s:BorderSnapshot,raster:BorderRaster,checkActive:()->Unit={}) {
         raster.validate(s);require(bitmap.width==s.outputWidth && bitmap.height==s.outputHeight && bitmap.isMutable)
-        val ints=IntArray(s.outputWidth);val row=FloatArray(s.outputWidth*3)
+        val ints=IntArray(s.outputWidth);val white=matte(s)
         repeat(s.outputHeight){y->
             checkActive();bitmap.getPixels(ints,0,s.outputWidth,0,y,s.outputWidth,1)
-            for(x in ints.indices){val p=ints[x];row[x*3]=LinearRgb.srgb8ToLinear[(p ushr 16)and 255];row[x*3+1]=LinearRgb.srgb8ToLinear[(p ushr 8)and 255];row[x*3+2]=LinearRgb.srgb8ToLinear[p and 255]}
-            restoreHoleRow(s,raster,y,row)
-            for(x in ints.indices)if(hole(s,raster,x,y)>0)ints[x]=(0xff shl 24)or(OutputColorSpace.SRGB.encode8(row[x*3])shl 16)or(OutputColorSpace.SRGB.encode8(row[x*3+1])shl 8)or OutputColorSpace.SRGB.encode8(row[x*3+2])
-            bitmap.setPixels(ints,0,s.outputWidth,0,y,s.outputWidth,1)
+            var changed=false
+            for(x in ints.indices){
+                // Most pixels belong to the photograph, not a hole. Sample coverage
+                // once and leave their original ARGB bytes entirely untouched.
+                val h=hole(s,raster,x,y)
+                if(h==0.0)continue
+                val p=ints[x];var restored=0xff shl 24
+                for(c in 0..2){
+                    val shift=16-c*8
+                    val linear=LinearRgb.srgb8ToLinear[(p ushr shift)and 255]
+                    // Preserve the old double blend -> float -> sRGB rounding,
+                    // including fractional edge coverage and black/white mattes.
+                    val blended=(linear*(1-h)+white*h).toFloat()
+                    restored=restored or(OutputColorSpace.SRGB.encode8(blended)shl shift)
+                }
+                ints[x]=restored;changed=true
+            }
+            if(changed)bitmap.setPixels(ints,0,s.outputWidth,0,y,s.outputWidth,1)
         }
     }
     fun restoreHoles(source:File,destination:File,s:BorderSnapshot,raster:BorderRaster,checkActive:()->Unit={}) = restoreHoles(source,destination,s,raster,null,checkActive)
