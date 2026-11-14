@@ -146,11 +146,11 @@
     <string name="text_13d6c864eb05" formatted="false">The simulated format\'s long-edge length in millimeters, not the film strip width. Affects grain and optical effect scale. 35 mm does not mean the long edge of a standard 135 frame.</string>
     <string name="text_3c14663c1cfa" formatted="false">Auto exposure</string>
     <string name="text_eeb4cdfe3959" formatted="false">Select a metering mode to enable auto exposure. Turning it off retains the last metering mode. Estimates film exposure from the imported photo, not the camera exposure at capture. Average and Median use brightness across the whole image; Center-weighted emphasizes the center; Partial meters only the central circle; Matrix weights a 5×5 grid; Multi-zone weights three concentric regions; Highlight-weighted emphasizes brighter pixels. These are simulated metering modes, not recreations of camera manufacturers\' scene recognition.</string>
-    <string name="text_be94f251df06" formatted="false">Highlight boost</string>
+    <string name="text_be94f251df06" formatted="false">Highlight boost strength</string>
     <string name="text_7b779407bf2a" formatted="false">Increases exposure in highlight areas. 0 disables it.</string>
-    <string name="text_7db1278a003a" formatted="false">Highlight range</string>
+    <string name="text_7db1278a003a" formatted="false">Highlight boost range</string>
     <string name="text_f3e9a635edb2" formatted="false">Controls the area affected by highlight boost.</string>
-    <string name="text_1eb299c92ae4" formatted="false">Highlight threshold</string>
+    <string name="text_1eb299c92ae4" formatted="false">Highlight boost threshold</string>
     <string name="text_67ca9c11ac9c" formatted="false">Sets the brightness at which highlight boost starts, in stops above middle gray. Higher values boost only brighter areas. This does not recover lost highlights.</string>
     <string name="text_35d9afa371aa" formatted="false">Lens softening</string>
     <string name="text_a19e8ff37742" formatted="false">Simulates lens blur, measured in micrometers at the film plane. 0 disables it.</string>
