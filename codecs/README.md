@@ -136,3 +136,7 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 资源限制与损坏数据防护保留。此批不代表全部 DNG 或所有品牌型号都支持。
 
 验证范围与剩余项见 [标准兼容验证](docs/DNG-STANDARD-COMPAT.md)。
+
+## Lensfun 缺失参数回退
+
+缺少内嵌畸变参数时，新增受限的离线 Lensfun 配置回退，首批仅自动启用已验证的 Canon EOS R + RF 16mm F2.8 STM 原始 CR3 布局。内嵌模型优先，同一张 RAW 只选择一个畸变来源；DNG 和既有 Sony/Fujifilm/Olympus 路径保持原规则。包含严格镜头身份匹配、常量空间坐标计算、开发策略变化后的缓存重建和独立照片信息提示。通用几何模块不代表整个 Lensfun 数据库已经启用；范围、数据来源、缓存契约及验证见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。

@@ -24,20 +24,28 @@ import org.robolectric.Shadows.shadowOf
 @Config(sdk=[29],application=Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RawOwnershipHostTest {
-    private class Api(private val warningCode:String?=null):CodecNativeApi {
+    private class Api(var warningCode:String?=null):CodecNativeApi {
         override val available=true
         var blocking=false;val entered=CountDownLatch(1);val release=CountDownLatch(1)
         var metadataOnly=false
         var lastBatch:String?=null
+        var policy="camera-matrix-linear-srgb-v1"
+        var decodeCalls=0
+        var decodeFailureCode:String?=null
+        var pixelValue=0f
         override fun nativeCreate(root:String)=1L
         override fun nativeCancel(handle:Long){release.countDown()}
         override fun nativeDestroy(handle:Long){}
-        private fun response()=JSONObject("{\"ok\":true,\"width\":8,\"height\":8,\"outputOrientation\":1,\"schemaVersion\":1,\"format\":\"DNG\",\"orientationApplied\":true,\"outputBytes\":768,\"warnings\":[],\"outputValid\":true}").apply{warningCode?.let{put("warnings",org.json.JSONArray().put(JSONObject().put("code",it).put("message","PRIVATE RAW NAME")))}}.toString()
+        private fun response()=JSONObject("{\"ok\":true,\"width\":8,\"height\":8,\"outputOrientation\":1,\"schemaVersion\":1,\"format\":\"DNG\",\"orientationApplied\":true,\"outputBytes\":768,\"warnings\":[],\"outputValid\":true}").put("developmentPolicy",policy).apply{warningCode?.let{put("warnings",org.json.JSONArray().put(JSONObject().put("code",it).put("message","PRIVATE RAW NAME")))}}.toString()
         override fun nativeProbe(handle:Long,input:String,budget:String):String{metadataOnly=JSONObject(budget).optBoolean("metadataOnly");return response()}
         override fun nativeDecode(handle:Long,input:String,output:String,budget:String):String{
+            decodeCalls++
             lastBatch=JSONObject(budget).optString("rawBatch")
-            File(output).writeBytes(ByteArray(8*8*12));entered.countDown()
+            val pixels=java.nio.ByteBuffer.allocate(8*8*12).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            repeat(8*8*3){pixels.putFloat(pixelValue)}
+            File(output).writeBytes(pixels.array());entered.countDown()
             if(blocking)check(release.await(10,TimeUnit.SECONDS))
+            decodeFailureCode?.let{return JSONObject().put("ok",false).put("code",it).toString()}
             return response()
         }
         override fun nativeEncode(handle:Long,input:String,output:String,parameters:String)="{\"ok\":false,\"code\":\"INVALID_INPUT\"}"
@@ -67,8 +75,9 @@ class RawOwnershipHostTest {
         val api=Api();val (repo,uri)=setup(api);val loaded=repo.import(uri)
         try{
             val raw=loaded.source.linearFile!!;assertEquals(768L,raw.length())
+            assertTrue(RawDevelopmentCache.recordFile(raw).isFile)
             val restored=repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey)
-            try{assertTrue(api.metadataOnly);assertEquals(raw,restored.source.linearFile);assertEquals(8,restored.preview.width)}finally{restored.preview.recycle()}
+            try{assertTrue(api.metadataOnly);assertEquals(raw,restored.source.linearFile);assertEquals(8,restored.preview.width);assertEquals(1,api.decodeCalls)}finally{restored.preview.recycle()}
             assertTrue(raw.exists());assertTrue(loaded.source.localFile.exists())
             assertThrows(PhotoException::class.java){runBlocking{repo.reopen(loaded.source.cacheKey,"照片",512,"invalid")}}
             assertTrue(raw.exists())
@@ -82,6 +91,101 @@ class RawOwnershipHostTest {
         withContext(Dispatchers.IO){assertTrue(api.entered.await(5,TimeUnit.SECONDS))}
         task.cancelAndJoin()
         assertEquals(before,dir.listFiles().orEmpty().map{it.name}.toSet())
+    }
+
+    @Test fun changedPolicyRebuildsPixelsAndWarningsWithoutChangingBorrowedSpool()=runBlocking {
+        dev.filmroom.i18n.L10n.choose(ApplicationProvider.getApplicationContext(),"zh")
+        val api=Api();val(repo,uri)=setup(api);val loaded=repo.import(uri)
+        var refreshed:LoadedPhoto?=null
+        try {
+            val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
+            api.policy="camera-matrix-linear-srgb-lensfun-v1"
+            api.warningCode="LENSFUN_DISTORTION_APPLIED";api.pixelValue=0.25f
+            val restored=repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey)
+            refreshed=restored
+            val current=checkNotNull(restored.source.linearFile)
+            assertNotEquals(old,current);assertEquals(2,api.decodeCalls)
+            assertArrayEquals(oldBytes,old.readBytes())
+            assertFalse(oldBytes.contentEquals(current.readBytes()))
+            assertEquals("已应用匹配镜头配置的畸变校正。",restored.source.developmentWarning)
+            assertTrue(RawDevelopmentCache.recordFile(current).isFile)
+            val reopened=repo.reopen(restored.source.cacheKey,"照片",512,restored.source.rawCacheKey)
+            try {assertEquals(current,reopened.source.linearFile);assertEquals(2,api.decodeCalls)}
+            finally {reopened.preview.recycle()}
+        } finally {
+            refreshed?.let{it.preview.recycle();repo.discard(it.source)}
+            loaded.preview.recycle();repo.discard(loaded.source)
+        }
+    }
+
+    @Test fun legacyMissingOrMalformedPolicyRecordsRequireFreshDecode()=runBlocking {
+        for(malformed in listOf(false,true)) {
+            val api=Api();val(repo,uri)=setup(api);val loaded=repo.import(uri)
+            var refreshed:LoadedPhoto?=null
+            try {
+                val old=checkNotNull(loaded.source.linearFile)
+                val record=RawDevelopmentCache.recordFile(old)
+                if(malformed)record.writeText("{incomplete") else assertTrue(record.delete())
+                val restored=repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey)
+                refreshed=restored
+                assertEquals(2,api.decodeCalls)
+                assertNotEquals(old,restored.source.linearFile)
+                assertTrue(old.isFile)
+                assertTrue(RawDevelopmentCache.recordFile(checkNotNull(restored.source.linearFile)).isFile)
+            } finally {
+                refreshed?.let{it.preview.recycle();repo.discard(it.source)}
+                loaded.preview.recycle();repo.discard(loaded.source)
+            }
+        }
+    }
+
+    @Test fun failedPolicyRebuildRetainsSessionThroughRecoveryAndCanRetry()=runBlocking {
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        for(code in listOf("DISK_BUDGET","MEMORY_BUDGET","DECODE_FAILED")) {
+            val api=Api();val(repo,uri)=setup(api);val loaded=repo.import(uri)
+            val preferences=app.getSharedPreferences("raw-migration-session",0)
+            preferences.edit().clear().putString("source",loaded.source.cacheKey)
+                .putString("rawSource",loaded.source.rawCacheKey).commit()
+            var refreshed:LoadedPhoto?=null
+            try {
+                val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
+                val directory=checkNotNull(old.parentFile)
+                val before=directory.listFiles().orEmpty().map{it.name}.toSet()
+                api.policy="camera-matrix-linear-srgb-lensfun-v1";api.decodeFailureCode=code
+                val error=assertThrows(PhotoException::class.java){runBlocking{repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey)}}
+                assertTrue("Keep valid session after $code",RawRestoreSession.retainAfterFailure(preferences,error))
+                assertEquals(2,api.decodeCalls)
+                assertEquals(loaded.source.cacheKey,preferences.getString("source",null))
+                assertEquals(old.name,preferences.getString("rawSource",null))
+                assertArrayEquals(oldBytes,old.readBytes())
+                assertTrue(loaded.source.localFile.isFile)
+                assertTrue(RawDevelopmentCache.recordFile(old).isFile)
+                assertEquals(before,directory.listFiles().orEmpty().map{it.name}.toSet())
+                dev.filmroom.lifecycle.PrivateWorkRecovery.recover(app.cacheDir,app.filesDir,
+                    preferences.getString("source",null),preferences.getString("rawSource",null))
+                assertTrue(loaded.source.localFile.isFile);assertTrue(old.isFile)
+                assertTrue(RawDevelopmentCache.recordFile(old).isFile)
+                api.decodeFailureCode=null
+                val restored=repo.reopen(preferences.getString("source",null)!!,"照片",512,preferences.getString("rawSource",null))
+                refreshed=restored
+                assertNotEquals(old,restored.source.linearFile);assertEquals(3,api.decodeCalls)
+            } finally {
+                refreshed?.let{it.preview.recycle();repo.discard(it.source)}
+                loaded.preview.recycle();repo.discard(loaded.source);preferences.edit().clear().commit()
+            }
+        }
+    }
+
+    @Test fun missingOriginalExpiresSessionInsteadOfOfferingRepeatedRestore()=runBlocking {
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        val api=Api();val(repo,_)=setup(api)
+        val preferences=app.getSharedPreferences("raw-missing-session",0)
+        preferences.edit().clear().putString("source","source-missing.image")
+            .putString("rawSource","raw-source-12345678-abcd-4321-abcd-123456789abc.rgb").commit()
+        val error=assertThrows(PhotoException::class.java){runBlocking{repo.reopen(preferences.getString("source",null)!!,"照片",512,preferences.getString("rawSource",null))}}
+        assertFalse(RawRestoreSession.retainAfterFailure(preferences,error))
+        assertFalse(preferences.contains("source"));assertFalse(preferences.contains("rawSource"))
+        assertEquals(0,api.decodeCalls)
     }
     @Test fun hsvWarningFlowsIntoPhotoInfoSourceAndSurvivesRawRestore()=runBlocking {
         val api=Api("DNG_CAMERA_HSV_LOOK_NOT_APPLIED");val(repo,uri)=setup(api);val loaded=repo.import(uri)

@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<lensdatabase version="2"><!-- Selected from Lensfun database, CC BY-SA 3.0. Only distortion is enabled by Filmroom. See PROVENANCE.json. --><camera>
+        <maker>Canon</maker>
+        <model>Canon EOS R</model>
+        <model lang="en">EOS R</model>
+        <mount>Canon RF</mount>
+        <cropfactor>1</cropfactor>
+    </camera>
+
+    <lens>
+        <maker>Canon</maker>
+        <model>Canon RF 16mm F2.8 STM</model>
+        <mount>Canon RF</mount>
+        <cropfactor>1.0</cropfactor>
+        <calibration>
+            <!-- Taken with Canon EOS R6 -->
+            <distortion model="ptlens" focal="16.0" a="0.0240971" b="-0.0938243" c="-0.0165449"/>
+            <tca model="poly3" focal="16.0" br="-0.0001456" vr="1.0004540" bb="0.0003033" vb="0.9998129"/>
+	    <!-- Taken with Canon EOS RP -->
+	    <vignetting model="pa" focal="16" aperture="2.8" distance="10" k1="-2.0926" k2="1.7675" k3="-0.6342"/>
+            <vignetting model="pa" focal="16" aperture="2.8" distance="1000" k1="-2.0926" k2="1.7675" k3="-0.6342"/>
+            <vignetting model="pa" focal="16" aperture="4" distance="10" k1="-1.6570" k2="1.2747" k3="-0.5558"/>
+            <vignetting model="pa" focal="16" aperture="4" distance="1000" k1="-1.6570" k2="1.2747" k3="-0.5558"/>
+            <vignetting model="pa" focal="16" aperture="5.6" distance="10" k1="-1.8258" k2="1.9039" k3="-0.9733"/>
+            <vignetting model="pa" focal="16" aperture="5.6" distance="1000" k1="-1.8258" k2="1.9039" k3="-0.9733"/>
+            <vignetting model="pa" focal="16" aperture="8" distance="10" k1="-1.8322" k2="1.8560" k3="-0.8713"/>
+            <vignetting model="pa" focal="16" aperture="8" distance="1000" k1="-1.8322" k2="1.8560" k3="-0.8713"/>
+            <vignetting model="pa" focal="16" aperture="22" distance="10" k1="-1.7632" k2="1.5167" k3="-0.5384"/>
+            <vignetting model="pa" focal="16" aperture="22" distance="1000" k1="-1.7632" k2="1.5167" k3="-0.5384"/>
+        </calibration>
+    </lens>
+
+    </lensdatabase>

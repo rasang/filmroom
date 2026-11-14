@@ -1,4 +1,4 @@
-//! Vendor distortion uses the same bounded camera-RGB geometry stage as DNG.
+//! Embedded/database distortion uses one bounded camera-RGB geometry stage.
 //! Identity/missing/unsupported metadata preserves the original strip path.
 use super::*;
 use crate::embedded_lens::LensStatus;
@@ -6,7 +6,11 @@ use crate::embedded_lens::LensStatus;
 const GEOMETRY_SCRATCH: u64 = 10 * MIB;
 
 fn enabled(d: &Development) -> bool {
-    matches!(&d.lens, LensStatus::Ready(model) if !model.is_identity())
+    match &d.lens {
+        LensStatus::Ready(model) => !model.is_identity(),
+        LensStatus::Profile(_) => true,
+        LensStatus::Missing | LensStatus::Unsupported => false,
+    }
 }
 
 /// Sensor decoding and resampling are separate phases. Callers release their
@@ -43,6 +47,13 @@ impl CameraRgbSink {
             };
             if !contains(d.active, d.lens_reference) || !contains(d.lens_reference, d.crop) {
                 return Err(err("INVALID_INPUT", "develop"));
+            }
+            if let LensStatus::Profile(model) = &d.lens {
+                if model.dimensions() != [d.lens_reference.w, d.lens_reference.h]
+                    || !d.gain_maps.is_empty()
+                {
+                    return Err(err("INVALID_INPUT", "develop"));
+                }
             }
             Some(super::geometry::backing_file(output, (d.active.w * d.active.h * 12) as u64)?)
         } else {
@@ -97,7 +108,7 @@ impl CameraRgbSink {
 
     pub(crate) fn finish(self, d: &Development, out: &File, cancel: &AtomicBool) -> Result<()> {
         let Some(camera) = self.camera else { return Ok(()); };
-        let LensStatus::Ready(model) = &d.lens else { return Err(err("INVALID_INPUT", "develop")); };
+        if !enabled(d) { return Err(err("INVALID_INPUT", "develop")); }
         // Sony supplies an explicit visible RAW image size. RAF's encoded
         // padding varies with compression; Olympus also stores a visible crop.
         // Keep demosaic halos in the full active image but normalize geometry
@@ -109,8 +120,13 @@ impl CameraRgbSink {
             w: reference.w, h: reference.h };
         super::geometry::resample_region(&camera, d.active.w, d.active.h, destination,
             |x, y, _| {
-                let [sx, sy] = model.source_position_autofill(reference.w, reference.h,
-                    x - destination.x, y - destination.y)?;
+                let [sx, sy] = match &d.lens {
+                    LensStatus::Ready(model) => model.source_position_autofill(reference.w, reference.h,
+                        x - destination.x, y - destination.y)?,
+                    LensStatus::Profile(model) => model.source_position(reference.w, reference.h,
+                        x - destination.x, y - destination.y)?,
+                    _ => return Err(err("INVALID_INPUT", "develop")),
+                };
                 Ok([sx + destination.x as f64, sy + destination.y as f64])
             },
             false, false, cancel, |tile, p| {

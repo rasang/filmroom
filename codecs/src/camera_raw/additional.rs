@@ -163,7 +163,9 @@ impl AdditionalRaw {
         {
             return Err(unsupported());
         }
-        let development = descriptor(&raw, plan.orientation)?;
+        let mut development = descriptor(&raw, plan.orientation)?;
+        crate::lensfun::configure_cr3(format, &raw.make, &raw.model,
+            &mut development, &mut file, identity.bytes);
         if raw.blacklevel.cpp != 1
             || !matches!(
                 (raw.blacklevel.width, raw.blacklevel.height),

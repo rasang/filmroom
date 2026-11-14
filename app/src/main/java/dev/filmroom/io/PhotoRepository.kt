@@ -92,7 +92,7 @@ class PhotoSource internal constructor(
         var closed=false
         AutoCloseable { synchronized(detailLeaseLock){if(!closed){closed=true;detailReaders--;if(discardRequested && detailReaders==0)deleteSourceFiles()}} }
     }
-    private fun deleteSourceFiles(){File(localFile.path+".imprint-time").delete();localFile.delete();linearFile?.delete()}
+    private fun deleteSourceFiles(){File(localFile.path+".imprint-time").delete();localFile.delete();linearFile?.let(RawDevelopmentCache::delete)}
     internal fun discardWhenUnused(){try{detailGridCache.close()}finally{previewMetering.close();synchronized(detailLeaseLock){discardRequested=true;if(detailReaders==0)deleteSourceFiles()}}}
     private val previewMutex=Mutex()
     private val previewCacheLock=Any()
@@ -358,7 +358,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                         preview?.recycle()
                         File(privateCopy.path+".imprint-time").delete()
                         privateCopy.delete()
-                        rawSpool?.delete()
+                        rawSpool?.let(RawDevelopmentCache::delete)
                     }
                 }
             }
@@ -423,6 +423,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
     ): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
+        var regeneratedRaw: File? = null
         var handedOff = false
         try {
             val result = withContext(Dispatchers.IO) {
@@ -437,7 +438,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b769fd8412bb))
                 }
                 val rawFile = rawCacheKey?.takeIf { it.matches(Regex("(?:raw|heic)-source-[0-9a-fA-F-]{36}\\.rgb")) }?.let { File(sourceDirectory,it) }
-                loadPrivate(file, PhotoLimits.safeDisplayName(name), previewMaxEdge, job, rawFile, allowDecode=false).also { it.source.rememberOriginalUri(originalUri); produced = it }
+                loadPrivate(file, PhotoLimits.safeDisplayName(name), previewMaxEdge, job, rawFile, allowDecode=false,
+                    onNewRaw={regeneratedRaw=it}).also { it.source.rememberOriginalUri(originalUri); produced = it }
 
             }
             handedOff = true
@@ -451,7 +453,11 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         } catch (e: Exception) {
             throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_63b74410c9d6), e)
         } finally {
-            if (!handedOff) produced?.preview?.recycle()
+            if (!handedOff) {
+                produced?.preview?.recycle()
+                // The original RAW and borrowed old spool may still have owners.
+                regeneratedRaw?.let(RawDevelopmentCache::delete)
+            }
         }
     }
 

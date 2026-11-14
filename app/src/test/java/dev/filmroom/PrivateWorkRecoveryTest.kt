@@ -80,6 +80,26 @@ class PrivateWorkRecoveryTest {
   }finally{root.deleteRecursively()}
  }
 
+ @Test fun rawDevelopmentRecordsFollowTheirOwnedSpoolsDuringRecovery(){
+  val root=Files.createTempDirectory("recovery-raw-policy").toFile()
+  try {
+   val cache=File(root,"cache").apply{mkdirs()};val files=File(root,"files").apply{mkdirs()}
+   val sources=File(cache,"photo-sources").apply{mkdirs()}
+   val retained=File(sources,"raw-source-12345678-abcd-4321-abcd-123456789abc.rgb").apply{writeText("keep")}
+   val orphan=File(sources,"raw-source-12345678-abcd-4321-abcd-123456789abd.rgb").apply{writeText("old")}
+   val retainedRecord=dev.filmroom.io.RawDevelopmentCache.recordFile(retained).apply{writeText("keep")}
+   val orphanRecord=dev.filmroom.io.RawDevelopmentCache.recordFile(orphan).apply{writeText("old")}
+   val unowned=File(sources,"other.development.json").apply{writeText("keep")}
+   val report=PrivateWorkRecovery.recover(cache,files,"source-123.image",retained.name)
+   assertEquals(2,report.removed);assertEquals(0,report.failed)
+   assertTrue(retained.isFile);assertTrue(retainedRecord.isFile)
+   assertFalse(orphan.exists());assertFalse(orphanRecord.exists());assertTrue(unowned.isFile)
+   assertTrue(retained.delete())
+   val missingSpool=PrivateWorkRecovery.recover(cache,files,"source-123.image",retained.name)
+   assertEquals(1,missingSpool.removed);assertFalse(retainedRecord.exists())
+  } finally {root.deleteRecursively()}
+ }
+
  @Test fun retainedHeicLinearSourceSurvivesAndOrphanIsRecovered(){
   val root=Files.createTempDirectory("recovery-heic").toFile()
   try{

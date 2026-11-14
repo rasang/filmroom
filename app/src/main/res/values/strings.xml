@@ -763,6 +763,11 @@
     <string name="detail_allocation" formatted="false">内存分配失败</string>
     <string name="camera_raw_basic_development" formatted="false">相机 RAW 使用黑白电平、白平衡和色彩矩阵进行基础开发；不复刻相机直出风格，也不应用全部镜头校正，颜色和几何效果可能与相机或其他软件不同。</string>
     <string name="embedded_lens_distortion_applied" formatted="false">已应用内嵌镜头畸变校正。</string>
+    <string name="lensfun_distortion_applied" formatted="false">已应用匹配镜头配置的畸变校正。</string>
+    <string name="raw_restore_retry_title" formatted="false">照片暂未恢复</string>
+    <string name="raw_restore_retry_message" formatted="false">原照片已保留。请检查可用空间和内存后重试，也可稍后再试。</string>
+    <string name="raw_restore_retry_action" formatted="false">重试</string>
+    <string name="raw_restore_later_action" formatted="false">稍后</string>
     <string name="embedded_lens_distortion_not_applied" formatted="false">检测到内嵌镜头畸变参数但未应用，可能保留畸变。</string>
     <string name="camera_raw_variant_unsupported" formatted="false">暂不支持或尚未验证这种相机 RAW 像素布局或压缩类型；未改用内嵌预览或降低原图尺寸。</string>
     <string name="camera_raw_profile_unsupported" formatted="false">此相机 RAW 暂无有效的相机色彩配置，未猜测颜色或改用内嵌预览。</string>

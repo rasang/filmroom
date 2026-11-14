@@ -22,6 +22,7 @@ class RawInputAdapterHostTest {
     private val header=PhotoInputHeader(byteArrayOf(73,73,42,0),4)
     private fun metadata()=JSONObject().put("ok",true).put("schemaVersion",1).put("format","DNG")
         .put("outputOrientation",1).put("orientationApplied",true).put("width",8).put("height",8).put("outputBytes",768)
+        .put("developmentPolicy","rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing")
     private fun request(directory:File,existing:File?=null,allow:Boolean=true,onNew:(File)->Unit={}):PhotoImportRequest {
         val source=File(directory,"photo.jpg").apply{if(!exists())writeBytes(byteArrayOf(73,73,42,0))}
         return PhotoImportRequest(source,"photo.jpg",1280,EmptyCoroutineContext,existing,allow,onNew,directory,PhotoMetadata.unavailable())
@@ -36,6 +37,7 @@ class RawInputAdapterHostTest {
         val decoder=Decoder{metadata()}
         val capture=PhotoMetadata.fromAttributes(mapOf("Make" to "Synthetic", "Model" to "Fixture", "DateTimeOriginal" to "2026:10:31 12:34:56", "ExposureTime" to "1/125", "FNumber" to "28/10", "PhotographicSensitivity" to "100"))
         val request=request(dir,cached,allow=false){fail("Must not allocate")}.copy(captureMetadata=capture)
+        RawDevelopmentCache.write(cached,request.file,dev.filmroom.codec.RawMetadata.parse(metadata()))
         val loaded=RawInputAdapter(decoder).load(request,header)
         try {
             assertEquals(1,decoder.probes);assertEquals(0,decoder.decodes)
@@ -71,12 +73,16 @@ class RawInputAdapterHostTest {
         // Lifecycle owner, not adapter, rolls back registered output on any Throwable.
         assertTrue(registered!!.delete())
     }
-    @Test fun cachedByteMismatchIsRejectedBeforePreview()=runBlocking {
+    @Test fun cachedByteMismatchIsRebuiltBeforePreviewWithoutChangingBorrowedFile()=runBlocking {
         val dir=temp.newFolder();val cached=File(dir,"bad.rgb").apply{writeBytes(byteArrayOf(1))}
         val decoder=Decoder{metadata()}
-        try { RawInputAdapter(decoder).load(request(dir,cached),header);fail("Length mismatch") }
-        catch(e:PhotoException){assertEquals(PhotoException.Reason.UNREADABLE,e.reason);assertEquals(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_52dca03550a9),e.message)}
-        assertEquals(1,decoder.probes);assertEquals(0,decoder.decodes);assertTrue(cached.isFile)
+        val loaded=RawInputAdapter(decoder).load(request(dir,cached),header)
+        try {
+            assertEquals(1,decoder.probes);assertEquals(1,decoder.decodes)
+            assertNotEquals(cached,loaded.source.linearFile)
+            assertEquals(768L,loaded.source.linearFile!!.length())
+            assertArrayEquals(byteArrayOf(1),cached.readBytes())
+        } finally {loaded.preview.recycle()}
     }
     @Test fun cancelledCachedImportNeverPublishesPreviewOrDeletesBorrowedSpool()=runBlocking {
         val dir=temp.newFolder();val cached=File(dir,"cached.rgb").apply{writeBytes(ByteArray(768))}
