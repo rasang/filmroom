@@ -226,6 +226,10 @@ impl<'a> Decoder for OrfDecoder<'a> {
       self.makernote.get_sub_ifd(OrfMakernotes::ImageProcessingIFD)
         .and_then(|ifd| ifd.get_entry(0x150au16)).map(|entry| &entry.value)
     );
+    img.lens_corrections = crate::rawimage::EmbeddedLensCorrections::olympus(
+      self.makernote.get_sub_ifd(OrfMakernotes::ImageProcessingIFD)
+        .and_then(|ifd| ifd.get_entry(0x150cu16)).map(|entry| &entry.value)
+    );
     if let Some(crop) = self.get_crop()? {
       img.crop_area = Some(crop);
     }

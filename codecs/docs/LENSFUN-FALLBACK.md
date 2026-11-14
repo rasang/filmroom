@@ -1,10 +1,15 @@
-# Lensfun distortion fallback
+# Lensfun optical correction fallback
 
 Filmroom can apply an external lens calibration while developing an original
 camera RAW. The correction is local, before the color transform and final
 orientation, and uses the existing bounded camera-RGB resampler. No Lensfun
 shared library, GLib, runtime XML parser or whole-frame coordinate map is added
 to the Android app.
+
+The qualified RF16 route now applies distortion, transverse chromatic aberration
+(TCA), and PA-model vignetting independently. It does not implement longitudinal
+chromatic aberration or general purple-fringe removal. Missing or unsafe capture
+parameters disable only the affected optional operation.
 
 ## Enabled scope
 
@@ -48,6 +53,12 @@ The camera adapter selects exactly one `LensStatus`:
 | Missing embedded model, qualified original CR3 | Inspect the bounded original metadata and select the approved profile |
 | Missing model in any other format/layout | Ordinary existing development |
 
+TCA and vignetting have their own embedded statuses: a validated embedded model
+takes priority for that operation, a present but unsupported model blocks its
+fallback, and a missing model may use the already-qualified external profile.
+An accepted embedded identity is still authoritative. The RF16 opt-in currently
+has no manufacturer TCA/vignette parser; it therefore uses its external data.
+
 DNG never uses this fallback entry point. Its `OpcodeList3` Warp/GainMap ordering,
 required-opcode failures and LinearRaw behavior remain independent. Sony ARW,
 Fujifilm RAF and Olympus/OM System ORF continue through the existing embedded
@@ -70,10 +81,34 @@ RAW source identity and bounded-plan checks also cover this selection.
 
 The RF16 profile is normalized to the **unrotated 6720 × 4480 default crop**.
 The larger active rectangle is retained for demosaic neighborhoods, not used
-as the calibration reference. Correction samples all three camera RGB channels
-at one position; it does not introduce transverse chromatic-aberration,
-vignetting, perspective or projection conversion. White balance/color
-conversion, final crop and EXIF orientation are each applied once afterward.
+as the calibration reference. Vignetting multiplies the original linear camera
+RGB before geometry. Distortion and TCA compose source coordinates, then each
+RGB channel is sampled once. White balance/color conversion, final crop and
+EXIF orientation are each applied once afterward. Perspective and projection
+conversion are not enabled.
+
+The source FNumber comes from CMT2 EXIF `0x829d`, never the lens's maximum
+aperture. Canon FileInfo `0x0093` indexes 20/21 supply far/near focus bounds in
+centimetres; `0xffff` is an explicit infinity marker. Zero, reversed, missing
+or malformed bounds do not become an assumed infinity value. The estimate is
+the midpoint of the two reciprocal distances, preserving the original range.
+Vignetting is enabled only when a bounded interval evaluation certifies at most
+2% **model gain variation** across that entire focus interval and source-radius
+domain. This is a numerical uncertainty bound, not a claim of physical optical
+accuracy. Native exact-match neighbourhoods within the interval are included.
+
+The PA gain uses the calibration half-diagonal convention, whereas distortion
+and poly3 TCA use the half-short-side convention. The complete gain polynomial
+is checked for a positive denominator and gain between 0.25 and 64, including
+a halo of 0.5% of the reference short side. This covers the qualified active
+rectangle outside the default crop without applying the profile to sensor
+padding. No values are silently clipped to make unsafe calibration pass.
+
+TCA uses native Lensfun 0.3.4's additional uniform 1.001 auto-scale multiplier.
+All three channels share that scale. Continuous radial/edge bounds certify
+the combined distortion-plus-TCA map before activation; finite point sampling
+alone is not the border-safety test. The legacy distortion-only coordinate API
+remains unchanged for the existing independent geometry fixtures.
 
 `lensfun_geometry.rs` follows Lensfun 0.3.4's distortion coefficients, focal
 interpolation and automatic scale. It computes coordinates directly with
@@ -95,9 +130,13 @@ strict code whitelist maps it to “已应用匹配镜头配置的畸变校正�
 English, Japanese and Korean resources. It does not also report embedded
 distortion applied for this profile.
 
+The other operations independently report `LENSFUN_TCA_APPLIED` /
+`LENSFUN_TCA_NOT_APPLIED` and `LENSFUN_VIGNETTING_APPLIED` /
+`LENSFUN_VIGNETTING_NOT_APPLIED`. They describe actual selected processing, not
+just calibration presence in XML.
+
 Profile-corrected output uses development policy
-`camera-matrix-linear-srgb-lensfun-v1`; the other native policy strings retain
-their previous values. A completed new RAW spool gets a bounded
+`camera-matrix-linear-srgb-lensfun-v2`. A completed new RAW spool gets a bounded
 `.development.json` sidecar binding the policy to its original source, output
 dimensions, lengths and file timestamps. Restoring a valid same-policy spool
 does not decode again. A stale, missing or corrupt record triggers development
@@ -124,9 +163,10 @@ requires a development-policy version bump.**
 ## Data and attribution
 
 `lensfun/approved.xml` preserves the selected camera and lens records from the
-pinned source snapshot. Only its distortion constants are compiled by
-`tools/generate-lensfun-profiles.py`; unused source TCA/vignetting values do not
-enable those operations. `--check` verifies the generated source is current.
+pinned source snapshot. Its distortion, single poly3 TCA calibration, and ten
+PA vignetting calibrations are compiled by `tools/generate-lensfun-profiles.py`.
+The generator validates the qualified model/focal coverage and rejects an
+unreviewed layout change. `--check` verifies the generated source is current.
 
 The source archive/XML/subset hashes, retrieval date and modifications are in
 `lensfun/PROVENANCE.json`. Calibration data is credited to Lensfun database
@@ -164,7 +204,7 @@ GainMap and the existing embedded tests remain part of the complete native
 suite. Android host tests cover warning localization/persistence and cache
 reuse, migration, recovery and ownership.
 
-## Executed production validation
+## Distortion-only baseline production validation
 
 The actual release `codec_probe` import path decoded **seven full-resolution
 inputs**. An independent chunked scan checked **552,098,304 float values**;
@@ -226,3 +266,33 @@ coordinate fixtures.
 
 Android ABI cross-build, APK packaging, physical-device runtime, peak memory
 and device performance were not tested by this integration validation.
+
+
+## TCA and vignetting model validation
+
+`tests/lensfun_optics_oracle.py` calls the unmodified Lensfun 0.3.4 native C API
+with distortion, scale, TCA and vignetting enabled (flags 43). The committed
+`tests/fixtures/lensfun-0.3.4-optics.json` records the native library, XML, wrapper
+and generator hashes. Twelve cases include both real capture-focus estimates,
+five aperture calibrations, intermediate apertures, small dimensions and
+portrait geometry. Independent 1×1 calls prevent row-stepping accumulation from
+becoming an algorithm requirement. The native F64 color callback uses the same
+float calibration arithmetic without SIMD reciprocal approximations.
+
+The executed standalone Rust comparison checked **432 points × 3 channels** and
+**432 source gains**: auto-scale agrees exactly, maximum coordinate difference
+is **0.000455917 px**, and maximum relative gain difference is **0.000004618**.
+These are numerical agreement measurements, not a physical lens calibration.
+Six model tests also cover source-coordinate ordering and the real active halo,
+unknown/invalid aperture and focus, interior focus variation missed by endpoint
+checks, hidden polynomial singularities, excessive gain, TCA folds/borders,
+invalid channel indexes and additional zoom composition.
+
+Thirteen bounded-metadata tests, including both original public CR3 files,
+passed. Each actual metadata read is **1,986 bytes / 20 boxes**. Both files report
+FNumber 2.8; `7D6A9423.CR3` reports focus 5.98 m to infinity, and `7D6A9561.CR3`
+reports 1.50–1.99 m. Both complete focus intervals pass model admission.
+
+Production decoding and app integration are validated separately from these
+standalone model tests; the distortion-only baseline above is retained as a
+historical record and is not an optical-v2 output hash claim.

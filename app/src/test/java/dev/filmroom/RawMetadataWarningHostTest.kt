@@ -159,4 +159,82 @@ class RawMetadataWarningHostTest {
         assertEquals(dev.filmroom.diagnostics.CodecErrorCode.UNKNOWN,dev.filmroom.diagnostics.CodecErrorCode.fromId("UNSUPPORTED_CAMERA_PRIVATE"))
     }
 
+    private val opticsCodes=listOf(
+        "EMBEDDED_LENS_VIGNETTING_APPLIED", "EMBEDDED_LENS_VIGNETTING_NOT_APPLIED",
+        "EMBEDDED_LENS_TCA_APPLIED", "EMBEDDED_LENS_TCA_NOT_APPLIED",
+        "LENSFUN_VIGNETTING_APPLIED", "LENSFUN_VIGNETTING_NOT_APPLIED",
+        "LENSFUN_TCA_APPLIED", "LENSFUN_TCA_NOT_APPLIED")
+    private fun opticsFlags(p:RawMetadata)=listOf(
+        p.embeddedLensVignettingApplied,p.embeddedLensVignettingNotApplied,
+        p.embeddedLensTcaApplied,p.embeddedLensTcaNotApplied,
+        p.lensfunVignettingApplied,p.lensfunVignettingNotApplied,
+        p.lensfunTcaApplied,p.lensfunTcaNotApplied)
+
+    @Test fun allEightOpticsCodesAreIndependentExactAllowlistedAndDeduplicated() {
+        for((index,code) in opticsCodes.withIndex()) {
+            val p=parse("""{"code":"$code","message":"PRIVATE content://source lens serial GPS"},{"code":"$code"},{"code":"${code}_PRIVATE"}""")
+            assertEquals(code,opticsCodes.indices.map{it==index},opticsFlags(p))
+            assertFalse(p.embeddedLensDistortionApplied || p.embeddedLensDistortionNotApplied || p.lensfunDistortionApplied)
+            assertFalse(p.optionalCorrectionWarning || p.cameraToneCurveWarning || p.cameraHsvLookWarning)
+            assertEquals(code,1,p.displayMessages.size)
+            val message=p.displayMessages.single()
+            assertEquals(code.lowercase(java.util.Locale.ROOT),message.key)
+            assertEquals(emptyList<String>(),message.args)
+            assertFalse(message.toJson().toString().contains("PRIVATE"))
+            assertFalse(p.displayWarning!!.contains("PRIVATE"))
+            assertEquals(message,dev.filmroom.i18n.UiMessage.fromJson(message.toJson()))
+        }
+    }
+
+    @Test fun missingUnknownAndMalformedOpticsCodesDoNotInventCorrections() {
+        val entries=opticsCodes.flatMap { code ->
+            listOf("""{"code":"${code}_PRIVATE"}""","""{"code":"${code.lowercase(java.util.Locale.ROOT)}"}""","""{"code":" $code"}""")
+        }.joinToString(",")+""",null,false,"EMBEDDED_LENS_TCA_APPLIED",{"code":42},{"message":"LENSFUN_TCA_APPLIED"}"""
+        for(p in listOf(parse(entries),parse(""))) {
+            assertTrue(opticsFlags(p).none{it})
+            assertNull(p.displayWarning)
+        }
+        // All twelve previous positional parameters retain their original meaning.
+        val legacy=RawMetadata(8,8,768,false,true,false,dev.filmroom.codec.RawFormat.ARW,true,true,false,false,"camera-matrix-linear-srgb-v1")
+        assertTrue(legacy.cameraToneCurveWarning && legacy.cameraBasicDevelopmentWarning && legacy.embeddedLensDistortionApplied)
+        assertEquals("camera-matrix-linear-srgb-v1",legacy.developmentPolicy)
+        assertTrue(opticsFlags(legacy).none{it})
+    }
+
+    @Test fun independentOpticsSuccessAndFailureCanCoexistWithoutReplacingDistortion() {
+        val p=parse("""{"code":"EMBEDDED_LENS_DISTORTION_APPLIED"},{"code":"EMBEDDED_LENS_VIGNETTING_APPLIED"},{"code":"EMBEDDED_LENS_TCA_NOT_APPLIED"},{"code":"LENSFUN_TCA_APPLIED"}""")
+        assertTrue(p.embeddedLensDistortionApplied && p.embeddedLensVignettingApplied && p.embeddedLensTcaNotApplied && p.lensfunTcaApplied)
+        assertFalse(p.embeddedLensTcaApplied || p.embeddedLensVignettingNotApplied || p.lensfunVignettingApplied || p.optionalCorrectionWarning)
+        assertEquals(listOf("embedded_lens_distortion_applied","embedded_lens_vignetting_applied","embedded_lens_tca_not_applied","lensfun_tca_applied"),p.displayMessages.map{it.key})
+    }
+
+    @Test fun allOpticsMessagesRestoreAsKeysAndRerenderInFourLanguages() {
+        val expected=mapOf(
+            "zh" to listOf("已应用内嵌镜头暗角校正。","检测到内嵌镜头暗角参数，但无法应用校正。","已应用内嵌镜头色差校正。","检测到内嵌镜头色差参数，但无法应用校正。","已应用匹配镜头配置的暗角校正。","已匹配镜头配置，但无法应用暗角校正。","已应用匹配镜头配置的色差校正。","已匹配镜头配置，但无法应用色差校正。"),
+            "en" to listOf("Applied embedded lens vignetting correction.","Embedded lens vignetting parameters were detected, but correction could not be applied.","Applied embedded lens chromatic aberration correction.","Embedded lens chromatic aberration parameters were detected, but correction could not be applied.","Applied vignetting correction from the matched lens profile.","A matching lens profile was found, but vignetting correction could not be applied.","Applied chromatic aberration correction from the matched lens profile.","A matching lens profile was found, but chromatic aberration correction could not be applied."),
+            "ja" to listOf("埋め込みのレンズ周辺光量補正を適用しました。","埋め込みのレンズ周辺光量補正パラメーターを検出しましたが、補正を適用できませんでした。","埋め込みのレンズ色収差補正を適用しました。","埋め込みのレンズ色収差補正パラメーターを検出しましたが、補正を適用できませんでした。","一致するレンズプロファイルの周辺光量補正を適用しました。","一致するレンズプロファイルが見つかりましたが、周辺光量補正を適用できませんでした。","一致するレンズプロファイルの色収差補正を適用しました。","一致するレンズプロファイルが見つかりましたが、色収差補正を適用できませんでした。"),
+            "ko" to listOf("파일에 포함된 렌즈 비네팅 보정을 적용했습니다.","파일에 포함된 렌즈 비네팅 보정 매개변수를 감지했지만 보정을 적용할 수 없었습니다.","파일에 포함된 렌즈 색수차 보정을 적용했습니다.","파일에 포함된 렌즈 색수차 보정 매개변수를 감지했지만 보정을 적용할 수 없었습니다.","일치하는 렌즈 프로파일의 비네팅 보정을 적용했습니다.","일치하는 렌즈 프로파일을 찾았지만 비네팅 보정을 적용할 수 없었습니다.","일치하는 렌즈 프로파일의 색수차 보정을 적용했습니다.","일치하는 렌즈 프로파일을 찾았지만 색수차 보정을 적용할 수 없었습니다."))
+        val restored=opticsCodes.map { code ->
+            val message=parse("""{"code":"$code","message":"PRIVATE raw path"}""").displayMessages.single()
+            dev.filmroom.i18n.UiMessage.fromJson(message.toJson())!!
+        }
+        try {
+            for((language,translations) in expected) {
+                dev.filmroom.i18n.L10n.choose(org.robolectric.RuntimeEnvironment.getApplication(),language)
+                assertEquals(language,translations,restored.map{it.render()})
+            }
+        } finally { chosenChineseFixture() }
+        assertEquals(expected.getValue("zh"),restored.map{it.render()})
+    }
+
+    @Test fun opticsV2PoliciesRemainExactNativeCacheIdentities() {
+        val json=JSONObject("""{"ok":true,"schemaVersion":1,"format":"ARW","width":8,"height":8,"outputOrientation":1,"orientationApplied":true,"outputBytes":768}""")
+        for(policy in listOf("camera-matrix-linear-srgb-embedded-v2","raf-xtrans-linear-srgb-embedded-v2","camera-matrix-linear-srgb-lensfun-v2")) {
+            val p=RawMetadata.parse(json.put("developmentPolicy",policy))
+            assertEquals(policy,p.developmentPolicy)
+            assertNull(p.displayWarning)
+            assertTrue(opticsFlags(p).none{it})
+        }
+    }
+
 }

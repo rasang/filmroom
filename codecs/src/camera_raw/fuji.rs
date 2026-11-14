@@ -162,7 +162,12 @@ impl FujiRaw {
             (true,Encoding::Lossless)=>"RAF_XTRANS_LOSSLESS",(true,Encoding::Lossy)=>"RAF_XTRANS_LOSSY",(true,_)=>"RAF_XTRANS_UNCOMPRESSED",
             (false,Encoding::Lossless)=>"RAF_BAYER_LOSSLESS",(false,Encoding::Lossy)=>"RAF_BAYER_LOSSY",(false,_)=>"RAF_BAYER_UNCOMPRESSED",
         };
-        p.development_policy=if self.plan.xtrans {"raf-xtrans-linear-srgb-v1"}else{"camera-matrix-linear-srgb-v1"};p
+        if self.plan.xtrans {
+            p.development_policy=if self.camera.development.lens_extras.has_ready() {
+                "raf-xtrans-linear-srgb-embedded-v2"
+            } else { "raf-xtrans-linear-srgb-v1" };
+        }
+        p
     }
     pub(crate) fn admit(&self,b:&Budget)->Result<Admission>{
         let memory=b.memory_budget_mi_b.checked_mul(MIB).filter(|v|*v>=BASE && *v<=CAMERA_RAW_MAX_MEMORY_MIB*MIB).ok_or_else(||err("MEMORY_BUDGET","admission"))?;
@@ -187,9 +192,12 @@ impl FujiRaw {
         let integers=if matches!(self.plan.encoding,Encoding::Lossless|Encoding::Lossy) {
             let decoded=pool.install(||bounded("decode",||rawler::get_decoder(&self.source)?.raw_image_with_cancel(&self.source,&Default::default(),false,&||cancel.load(Ordering::Relaxed))));
             if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
-            let raw=decoded?;
+            let mut raw=decoded?;
+            raw.active_area=None;
+            let revalidated=descriptor_cfa(&raw,self.plan.orientation,true)?;
             if raw.width!=self.plan.width || raw.height!=self.plan.height || raw.blacklevel.as_vec()!=self.black || raw.whitelevel.0.as_slice()!=[self.white as u32]
-                || crate::embedded_lens::from_metadata(&raw.lens_distortion)!=self.camera.development.lens {return Err(invalid());}
+                || revalidated.lens!=self.camera.development.lens
+                || revalidated.lens_extras!=self.camera.development.lens_extras {return Err(invalid());}
             match raw.data {RawImageData::Integer(v) if v.len()==self.plan.width*self.plan.height=>Some(v),_=>return Err(invalid())}
         }else{None};
         // Metadata map and any padded compressed buffer are gone before strip development.

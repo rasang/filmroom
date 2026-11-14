@@ -20,6 +20,7 @@ pub(super) fn decode(
     if raw.source_ifd_offset != Some(camera.source_ifd_offset)
         || d.cpp != 3
         || d.lens != camera.development.lens
+        || d.lens_extras != camera.development.lens_extras
         || d.width != camera.development.width
         || d.height != camera.development.height
         || rect_tuple(d.active) != rect_tuple(camera.development.active)

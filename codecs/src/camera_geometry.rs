@@ -3,10 +3,15 @@
 use super::*;
 use crate::embedded_lens::LensStatus;
 
+#[path = "camera_optics.rs"]
+mod optics;
+
 const GEOMETRY_SCRATCH: u64 = 10 * MIB;
 
+pub(crate) fn qualify_optics(d: &mut Development) { optics::qualify(d); }
+
 fn enabled(d: &Development) -> bool {
-    match &d.lens {
+    optics::tca_active(d) || match &d.lens {
         LensStatus::Ready(model) => !model.is_identity(),
         LensStatus::Profile(_) => true,
         LensStatus::Missing | LensStatus::Unsupported => false,
@@ -70,17 +75,17 @@ impl CameraRgbSink {
         &self, d: &Development, y: usize, h: usize, data: Vec<f32>, cancel: &AtomicBool,
     ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
         if cancel.load(Ordering::Relaxed) { return Err(err("CANCELLED", "develop")); }
-        if d.cpp == 1 && d.cfa.len() == 36 {
-            if self.camera.is_some() {
-                crate::camera_raw::fuji::xtrans::camera(d, y, h, data, cancel)
-            } else {
-                crate::camera_raw::fuji::xtrans::develop(d, y, h, data, cancel)
-            }
-        } else if self.camera.is_some() {
-            camera_tile(d, y, h, data)
-        } else {
-            develop_tile_cancel(d, y, h, data, cancel)
-        }
+        let source_vignette = optics::vignette_active(d);
+        if self.camera.is_some() || source_vignette {
+            let mut pixels = if d.cpp == 1 && d.cfa.len() == 36 {
+                crate::camera_raw::fuji::xtrans::camera(d, y, h, data, cancel)?
+            } else { camera_tile(d, y, h, data)? };
+            optics::apply_source_vignette(d, y, &mut pixels, cancel)?;
+            if self.camera.is_some() { Ok(pixels) }
+            else { calibrate_camera_tile(d, pixels, cancel) }
+        } else if d.cpp == 1 && d.cfa.len() == 36 {
+            crate::camera_raw::fuji::xtrans::develop(d, y, h, data, cancel)
+        } else { develop_tile_cancel(d, y, h, data, cancel) }
     }
 
     pub(crate) fn emit_strip(
@@ -119,14 +124,8 @@ impl CameraRgbSink {
             y: reference.y.checked_sub(d.active.y).ok_or_else(|| err("INVALID_INPUT", "develop"))?,
             w: reference.w, h: reference.h };
         super::geometry::resample_region(&camera, d.active.w, d.active.h, destination,
-            |x, y, _| {
-                let [sx, sy] = match &d.lens {
-                    LensStatus::Ready(model) => model.source_position_autofill(reference.w, reference.h,
-                        x - destination.x, y - destination.y)?,
-                    LensStatus::Profile(model) => model.source_position(reference.w, reference.h,
-                        x - destination.x, y - destination.y)?,
-                    _ => return Err(err("INVALID_INPUT", "develop")),
-                };
+            |x, y, channel| {
+                let [sx, sy] = optics::source_position(d, x - destination.x, y - destination.y, channel)?;
                 Ok([sx + destination.x as f64, sy + destination.y as f64])
             },
             false, false, cancel, |tile, p| {

@@ -104,6 +104,45 @@ impl EmbeddedLens {
         }
     }
 
+    /// Continuous operator-norm bound for the unscaled radial map. The radial
+    /// and tangential eigenvalues are f+r*f' and f; bounds use segment endpoints
+    /// or polynomial extrema, not a finite grid. Used to admit combined TCA
+    /// against the bounded RGB sampler before publishing a correction status.
+    pub fn sampling_jacobian_bound(&self) -> Option<f64> {
+        let tangential = self.model.maximum_factor()?;
+        let radial = match &self.model {
+            RadialModel::Sony(spline) => {
+                let mut maximum = spline.interpolate(0.0).max(spline.interpolate(1.0));
+                for i in 0..spline.knots.len()-1 {
+                    let left=spline.knots[i].max(0.0);let right=spline.knots[i+1].min(1.0);
+                    if left>right {continue;}
+                    let (a,b)=spline.segment(i);
+                    maximum=maximum.max((2.0*a*left+b).abs()).max((2.0*a*right+b).abs());
+                }
+                maximum
+            },
+            RadialModel::Fuji(inverse) => {
+                let spline=&inverse.source;
+                let mut maximum=spline.factors.iter().copied().fold(0.0_f64,f64::max);
+                for i in 0..spline.knots.len()-1 {
+                    let (_,intercept)=spline.segment(i);
+                    if !intercept.is_finite() || intercept<=0.0 {return None;}
+                    // For r=s/f(s), ds/dr=f(s)^2/(f-s*f'). Its denominator
+                    // is the constant intercept on a linear source segment.
+                    maximum=maximum.max(spline.factors[i].max(spline.factors[i+1]).powi(2)/intercept);
+                }
+                maximum
+            },
+            RadialModel::Olympus {coefficients:[k2,k4,k6,scale]} => {
+                let (_,maximum)=cubic_range([1.0,3.0*k2,5.0*k4,7.0*k6],scale*scale)?;
+                scale*maximum
+            },
+        };
+        let bound=tangential.max(radial);
+        let bound=bound+64.0*f64::EPSILON*bound.abs().max(1.0);
+        (bound.is_finite() && bound>0.0).then_some(bound)
+    }
+
     /// Inverse image mapping: an output pixel's position in the source image.
     /// Edge extension clamps the final coordinates to valid pixel centers.
     pub fn source_position(
@@ -130,6 +169,18 @@ impl EmbeddedLens {
         y: usize,
     ) -> Result<[f64; 2]> {
         self.position(width, height, x, y, self.zoom)
+    }
+
+    /// A shared zoom can reserve additional room for per-channel correction.
+    /// The caller supplies a continuous upper bound for the TCA radial factor;
+    /// multiplying it by this model's own bound keeps every channel in frame.
+    pub fn source_position_with_zoom(
+        &self, width: usize, height: usize, x: usize, y: usize, zoom: f64,
+    ) -> Result<[f64; 2]> {
+        if !zoom.is_finite() || zoom < self.zoom || zoom > 64.0 {
+            return Err(err("INVALID_INPUT", "embedded_lens_geometry"));
+        }
+        self.position(width, height, x, y, zoom)
     }
 
     fn position(
@@ -376,6 +427,24 @@ mod tests {
 
     fn close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1e-10, "actual {actual}, expected {expected}");
+    }
+
+    #[test]
+    fn continuous_sampling_bounds_include_radial_and_tangential_expansion() {
+        let fuji=ready(fuji_metadata((0..11).map(|i|i as f64*2.0).collect()));
+        close(fuji.sampling_jacobian_bound().unwrap(),1.44);
+        let olympus=ready(EmbeddedLensDistortion::Olympus {coefficients:[0.1,0.02,0.01,1.0]});
+        close(olympus.sampling_jacobian_bound().unwrap(),1.47);
+        let sony=ready(EmbeddedLensDistortion::Sony {samples:vec![1638;11]});
+        close(sony.sampling_jacobian_bound().unwrap(),1.0+1638.0/16384.0);
+        for model in [fuji,olympus,sony] {
+            let limit=model.sampling_jacobian_bound().unwrap()/model.autofill_zoom();
+            for y in [1,13,211,387] {for x in [1,17,231,517] {
+                let a=model.source_position_autofill(520,390,x,y).unwrap();
+                let b=model.source_position_autofill(520,390,x+1,y).unwrap();
+                assert!((a[0]-b[0]).hypot(a[1]-b[1])<=limit+1e-10);
+            }}
+        }
     }
 
     fn fuji_metadata(values: Vec<f64>) -> EmbeddedLensDistortion {

@@ -110,10 +110,10 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 
 现代 Bayer / X-Trans RAF 的内容识别、未压缩行读取与受限无损/有损传感器解码，详见 [RAF 范围与验证](../docs/FUJIFILM_RAF.md)。X-Trans 为单独的保守 6×6 基础插值，不套用 Bayer 算法，不复刻富士直出。52 MP 传感器上限和 256 MiB 相机预算不变；GFX 50S/100 II 样片超限拒绝，旧式 SuperCCD/EXR/双布局拒绝。通过的样片不能泛化为所有 RAF。
 
-## 内嵌镜头畸变扩展
+## RAW 内嵌光学校正
 
-当前分支扩展 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链，并接入 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 的受支持内嵌畸变模型。厂商路径仅覆盖几何畸变，使用有界、磁盘承载的相机 RGB 重采样，在最终裁切/方向和色彩转换前执行。所需临时磁盘空间纳入实际预算；照片信息区显示应用或未应用状态。参数边界、参考坐标域、自动填充缩放、公开样片及本轮验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。该文档扩展早期 Q2 单个必需 WarpRectilinear 的支持范围，未扩大其历史 SDK 对照结果。
+Sony ARW、Fujifilm RAF 的受支持原始 CFA 布局可分别读取并执行机身写入 RAW 的畸变、横向色差（TCA）与暗角参数；Olympus / OM System ORF 支持畸变和 TCA，目前没有经过验证的内嵌暗角系数模型，不把机内阴影补偿开关转换成额外增益。暗角先作用于源线性相机 RGB，畸变和 TCA 组合后仅重采样一次，再进行色彩转换、裁切和方向处理。每项独立准入、报告状态，极端 TCA 参数在解码前检查采样窗口，超出预算仅跳过 TCA。已有 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链继续使用独立标准路径。完整范围、v2 缓存迁移与测试见 [RAW-OPTICS-CORRECTIONS](docs/RAW-OPTICS-CORRECTIONS.md)，厂商参数公式见 [EMBEDDED-OPTICS-MODELS](docs/EMBEDDED-OPTICS-MODELS.md)，前期畸变和 DNG 验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。
 
 ## Lensfun 缺失参数回退
 
-缺少内嵌畸变参数时，新增受限的离线 Lensfun 配置回退，首批仅自动启用已验证的 Canon EOS R + RF 16mm F2.8 STM 原始 CR3 布局。内嵌模型优先，同一张 RAW 只选择一个畸变来源；DNG 和既有 Sony/Fujifilm/Olympus 路径保持原规则。包含严格镜头身份匹配、常量空间坐标计算、开发策略变化后的缓存重建和独立照片信息提示。通用几何模块不代表整个 Lensfun 数据库已经启用；范围、数据来源、缓存契约及验证见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。
+缺少内嵌畸变参数时，使用受限的离线 Lensfun 配置回退，首批仅自动启用已验证的 Canon EOS R + RF 16mm F2.8 STM 原始 CR3 布局。该组合现可分别执行畸变、横向色差（TCA）和暗角校正：暗角先作用于原始线性相机 RGB，畸变与 TCA 复合坐标后只重采样一次。暗角使用实际拍摄光圈和有界对焦距离；缺失、异常或无法通过数值准入的项目单独跳过并报告状态。各项优先保留受支持的内嵌模型，存在但不支持的内嵌参数不会被外部配置悄悄替换；DNG 仍使用独立的标准 opcode 路径。包含严格镜头身份匹配、有界内存、v2 显影策略缓存迁移及逐项照片信息提示。通用模型实现不代表整个 Lensfun 数据库已经启用；范围、源码归属、缓存契约及参考验证见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。

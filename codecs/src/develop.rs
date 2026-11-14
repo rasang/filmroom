@@ -28,7 +28,7 @@ const HALO: usize = 8;
 mod geometry;
 #[path="camera_geometry.rs"]
 mod camera_geometry;
-pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry};
+pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry, qualify_optics};
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -121,6 +121,9 @@ pub struct Development<'a> {
     /// Exactly one validated distortion source: embedded metadata or a qualified
     /// database fallback. Its reference rectangle is explicit below.
     pub lens: crate::embedded_lens::LensStatus,
+    /// Independently validated embedded chromatic-aberration and vignetting
+    /// models. A missing or unsupported item never disables another item.
+    pub lens_extras: crate::embedded_optics::LensExtras,
     /// Optical normalization rectangle, independent of subsequent output crop.
     pub lens_reference: Rect,
 }
@@ -148,6 +151,7 @@ impl<'a> From<&'a Dng> for Development<'a> {
             baseline_exposure_ev: d.baseline_exposure_ev,
             gain_maps: &d.gain_maps,
             lens: crate::embedded_lens::LensStatus::Missing,
+            lens_extras: Default::default(),
             lens_reference: d.active,
         }
     }
@@ -230,6 +234,7 @@ fn calibrate_camera_tile(d:&Development,camera:rawler::pixarray::Color2D<f32,3>,
     linear.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
     linear.crop=linear.active;linear.gain_maps=&[];
     linear.lens=crate::embedded_lens::LensStatus::Missing;
+    linear.lens_extras=Default::default();
     linear.lens_reference=linear.active;
     develop_tile_cancel(&linear,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
 }
@@ -717,6 +722,7 @@ mod rectangle_emit_tests {
                 gain_maps: &[],
                 lens: crate::embedded_lens::LensStatus::Missing,
                 lens_reference: Rect { x: 0, y: 0, w: 17, h: 13 },
+                lens_extras: Default::default(),
             };
             let path = std::env::temp_dir().join(format!(
                 "raw-tile-emit-{}-{orientation}",

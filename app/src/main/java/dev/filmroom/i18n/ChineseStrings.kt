@@ -1,6 +1,14 @@
 package dev.filmroom.i18n
 internal object ChineseStrings {
     val values:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.embedded_lens_vignetting_applied to "已应用内嵌镜头暗角校正。",
+        dev.filmroom.R.string.embedded_lens_vignetting_not_applied to "检测到内嵌镜头暗角参数，但无法应用校正。",
+        dev.filmroom.R.string.embedded_lens_tca_applied to "已应用内嵌镜头色差校正。",
+        dev.filmroom.R.string.embedded_lens_tca_not_applied to "检测到内嵌镜头色差参数，但无法应用校正。",
+        dev.filmroom.R.string.lensfun_vignetting_applied to "已应用匹配镜头配置的暗角校正。",
+        dev.filmroom.R.string.lensfun_vignetting_not_applied to "已匹配镜头配置，但无法应用暗角校正。",
+        dev.filmroom.R.string.lensfun_tca_applied to "已应用匹配镜头配置的色差校正。",
+        dev.filmroom.R.string.lensfun_tca_not_applied to "已匹配镜头配置，但无法应用色差校正。",
         dev.filmroom.R.string.embedded_lens_distortion_applied to "已应用内嵌镜头畸变校正。",
         dev.filmroom.R.string.lensfun_distortion_applied to "已应用匹配镜头配置的畸变校正。",
         dev.filmroom.R.string.raw_restore_retry_title to "照片暂未恢复",

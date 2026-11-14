@@ -763,6 +763,14 @@
     <string name="camera_raw_basic_development" formatted="false">Camera RAW uses basic development with black/white levels, white balance and a color matrix. Camera picture styles and full lens corrections are not applied; colors and geometry may differ from the camera or other software.</string>
     <string name="embedded_lens_distortion_applied" formatted="false">Applied embedded lens distortion correction.</string>
     <string name="lensfun_distortion_applied" formatted="false">Applied distortion correction from the matched lens profile.</string>
+    <string name="embedded_lens_vignetting_applied" formatted="false">Applied embedded lens vignetting correction.</string>
+    <string name="embedded_lens_vignetting_not_applied" formatted="false">Embedded lens vignetting parameters were detected, but correction could not be applied.</string>
+    <string name="embedded_lens_tca_applied" formatted="false">Applied embedded lens chromatic aberration correction.</string>
+    <string name="embedded_lens_tca_not_applied" formatted="false">Embedded lens chromatic aberration parameters were detected, but correction could not be applied.</string>
+    <string name="lensfun_vignetting_applied" formatted="false">Applied vignetting correction from the matched lens profile.</string>
+    <string name="lensfun_vignetting_not_applied" formatted="false">A matching lens profile was found, but vignetting correction could not be applied.</string>
+    <string name="lensfun_tca_applied" formatted="false">Applied chromatic aberration correction from the matched lens profile.</string>
+    <string name="lensfun_tca_not_applied" formatted="false">A matching lens profile was found, but chromatic aberration correction could not be applied.</string>
     <string name="raw_restore_retry_title" formatted="false">Photo could not be restored yet</string>
     <string name="raw_restore_retry_message" formatted="false">The original photo has been kept. Check available storage and memory, then retry, or try again later.</string>
     <string name="raw_restore_retry_action" formatted="false">Retry</string>

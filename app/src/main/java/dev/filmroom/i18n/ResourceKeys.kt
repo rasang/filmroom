@@ -1,6 +1,14 @@
 package dev.filmroom.i18n
 internal object ResourceKeys {
     val names:Map<Int,String> = mapOf(
+        dev.filmroom.R.string.embedded_lens_vignetting_applied to "embedded_lens_vignetting_applied",
+        dev.filmroom.R.string.embedded_lens_vignetting_not_applied to "embedded_lens_vignetting_not_applied",
+        dev.filmroom.R.string.embedded_lens_tca_applied to "embedded_lens_tca_applied",
+        dev.filmroom.R.string.embedded_lens_tca_not_applied to "embedded_lens_tca_not_applied",
+        dev.filmroom.R.string.lensfun_vignetting_applied to "lensfun_vignetting_applied",
+        dev.filmroom.R.string.lensfun_vignetting_not_applied to "lensfun_vignetting_not_applied",
+        dev.filmroom.R.string.lensfun_tca_applied to "lensfun_tca_applied",
+        dev.filmroom.R.string.lensfun_tca_not_applied to "lensfun_tca_not_applied",
         dev.filmroom.R.string.print_medium_bw_paper to "print_medium_bw_paper",
         dev.filmroom.R.string.print_medium_bw_film to "print_medium_bw_film",
         dev.filmroom.R.string.print_medium_bw_help to "print_medium_bw_help",
@@ -741,6 +749,14 @@ internal object ResourceKeys {
     )
     val ids:Map<String,Int> = names.entries.associate { it.value to it.key }
     val arities:Map<String,Int> = mapOf(
+        "embedded_lens_vignetting_applied" to 0,
+        "embedded_lens_vignetting_not_applied" to 0,
+        "embedded_lens_tca_applied" to 0,
+        "embedded_lens_tca_not_applied" to 0,
+        "lensfun_vignetting_applied" to 0,
+        "lensfun_vignetting_not_applied" to 0,
+        "lensfun_tca_applied" to 0,
+        "lensfun_tca_not_applied" to 0,
         "gpu_completion_uncertain" to 0,
         "image_edge_limit_32768" to 0,
         "image_edge_limit_30000" to 0,

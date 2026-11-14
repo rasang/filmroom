@@ -33442,18 +33442,42 @@ shall terminate as of the date such litigation is filed.
 --------------------------------------------------------------------------------
 
 
---- Lensfun distortion geometry and selected database ---
+--- Embedded manufacturer optical correction models ---
+Filmroom source: codecs/src/embedded_lens.rs and codecs/src/embedded_optics.rs.
+These distortion, transverse chromatic-aberration and source-vignetting adapters
+use validated file metadata and bounded direct evaluations of the referenced
+models. This is not a claim of pixel equivalence with another RAW developer.
+
+RawTherapee rtengine/lensmetadata.cc, fixed revision:
+https://github.com/Beep6581/RawTherapee/blob/64c2d90a3248c7ad41842d9162368858b61aac6a/rtengine/lensmetadata.cc
+Copyright (c) 2024 Rawtherapee developers.
+License: GPL-3.0-or-later.
+
+darktable src/iop/lens.cc, fixed revision:
+https://github.com/darktable-org/darktable/blob/78f66f802183c6d241656f82b03ce6c10c1724d8/src/iop/lens.cc
+Copyright (C) 2019-2026 darktable developers.
+License: GPL-3.0-or-later.
+Filmroom adapters are distributed under GPL-3.0-or-later. The GPL text and
+corresponding Filmroom sources accompany the existing codec distribution.
+
+--- Lensfun optical correction algorithms and selected database ---
 Lensfun: https://github.com/lensfun/lensfun
 Copyright Andrew Zabolotny and Lensfun contributors.
-The distortion-only coordinate adaptation follows Lensfun 0.3.4.
+The distortion, transverse chromatic-aberration and PA-vignetting adaptations
+follow Lensfun 0.3.4, including coordinate normalization and interpolation:
+https://github.com/lensfun/lensfun/tree/v0.3.4/libs/lensfun
+Filmroom source: codecs/src/lensfun_geometry.rs and codecs/src/lensfun_optics.rs.
 Original library algorithms: LGPL-3.0-or-later; Filmroom adaptation: GPL-3.0-or-later.
-Filmroom does not bundle the Lensfun shared library, GLib, TCA or vignetting engine.
+Filmroom compiles these bounded adaptations without the Lensfun shared library,
+GLib or a runtime XML parser.
 
 Selected calibration data: Lensfun database contributors, CC BY-SA 3.0.
 https://creativecommons.org/licenses/by-sa/3.0/
 Data source: data/db/mil-canon.xml, retrieved 2026-11-14.
 Selected records: Canon EOS R; Canon RF 16mm F2.8 STM.
-Changes: subset extraction and compilation of unchanged distortion coefficients.
+Changes: subset extraction and compilation of unchanged distortion, poly3 TCA
+and PA-vignetting coefficients. Operations are admitted independently using
+validated source layout, capture metadata and numerical bounds.
 Only explicitly qualified camera/lens/source layouts are enabled.
 Database source and provenance: codecs/lensfun/ in the Filmroom repository.
 The following CC BY-SA 3.0 text applies to the selected calibration data.

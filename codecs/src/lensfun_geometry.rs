@@ -126,6 +126,90 @@ impl Geometry {
         self.scale as f64
     }
 
+    /// Native 0.3.4 reserves a further 0.1% of uniform scale when a subpixel
+    /// callback is enabled. The original distortion-only object is unchanged.
+    pub(crate) fn with_subpixel_scale(&self) -> Option<Self> {
+        let mut result = self.clone();
+        result.scale *= 1.001_f32;
+        result.inverse_scale = (1.0_f64 / result.scale as f64) as f32 as f64;
+        result.certify().then_some(result)
+    }
+
+    pub(crate) fn normalization(&self) -> (f64, f64, [f64; 2]) {
+        (self.norm_scale, self.norm_unscale, self.center)
+    }
+
+    /// Additional caller zoom is evaluated before both radial operators. A
+    /// zoom >= 1 only reduces the already-certified destination rectangle.
+    pub(crate) fn source_position_with_zoom(&self, x: usize, y: usize, zoom: f64) -> Result<[f64; 2]> {
+        if x >= self.width || y >= self.height || !finite_between(zoom, 1.0, 8.0) {
+            return Err(err("INVALID_INPUT", "lensfun_geometry"));
+        }
+        if zoom == 1.0 { return self.source_position(x, y); }
+        let p = [
+            ((x as f64 * self.norm_scale - self.center[0]) / zoom + self.center[0]) * self.norm_unscale,
+            ((y as f64 * self.norm_scale - self.center[1]) / zoom + self.center[1]) * self.norm_unscale,
+        ];
+        let p = self.position(p);
+        if p.iter().any(|v| !v.is_finite()) || p[0] < 0.0 || p[1] < 0.0
+            || p[0] > (self.width - 1) as f64 || p[1] > (self.height - 1) as f64 {
+            return Err(err("INVALID_INPUT", "lensfun_geometry"));
+        }
+        Ok(p)
+    }
+
+    /// Certify a radial subpixel callback composed after geometric distortion.
+    /// `post` must enclose its factor on every radius interval and establish a
+    /// strictly positive radial derivative there. This bounds complete image
+    /// edges continuously; isolated coordinate samples are not admission proof.
+    pub(crate) fn certify_subpixel(&self, post: impl Fn(f64, f64) -> Option<(f64, f64)>) -> bool {
+        let lower = [-self.center[0] * self.inverse_scale, -self.center[1] * self.inverse_scale];
+        let upper = [
+            ((self.width - 1) as f64 * self.norm_scale - self.center[0]) * self.inverse_scale,
+            ((self.height - 1) as f64 * self.norm_scale - self.center[1]) * self.inverse_scale,
+        ];
+        let r = lower[0].abs().max(upper[0].abs()).hypot(lower[1].abs().max(upper[1].abs()));
+        let Some((_, max_factor)) = self.model.range(0.0, r, false) else { return false; };
+        if post(0.0, r * max_factor).is_none() { return false; }
+        let mut budget = 8192_u32;
+        for axis in 0..2 {
+            for fixed in [lower[1 - axis], upper[1 - axis]] {
+                if !self.subpixel_edge_inside(axis, fixed, lower[axis], upper[axis], &post, 0, &mut budget) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn subpixel_edge_inside(&self, axis: usize, fixed: f64, low: f64, high: f64,
+        post: &impl Fn(f64, f64) -> Option<(f64, f64)>, depth: u8, budget: &mut u32) -> bool {
+        if *budget == 0 { return false; }
+        *budget -= 1;
+        let near = if low <= 0.0 && high >= 0.0 { 0.0 } else { low.abs().min(high.abs()) };
+        let far = low.abs().max(high.abs());
+        let r = (fixed.hypot(near), fixed.hypot(far));
+        let Some(base) = self.model.range(r.0, r.1, false) else { return false; };
+        let Some(extra) = post(r.0 * base.0, r.1 * base.1) else { return false; };
+        let factor = product_range(base, extra);
+        let variable = product_range((low, high), factor);
+        let constant = product_range((fixed, fixed), factor);
+        let ranges = if axis == 0 { [variable, constant] } else { [constant, variable] };
+        let mut inside = true;
+        for (i, (lo, hi)) in ranges.into_iter().enumerate() {
+            let lo = (lo + self.center[i]) * self.norm_unscale;
+            let hi = (hi + self.center[i]) * self.norm_unscale;
+            let limit = if i == 0 { self.width - 1 } else { self.height - 1 } as f64;
+            inside &= lo > 1e-7 && hi < limit - 1e-7;
+            if !lo.is_finite() || !hi.is_finite() || hi < 0.0 || lo > limit { return false; }
+        }
+        if inside { return true; }
+        if depth == 20 { return false; }
+        let mid = (low + high) * 0.5;
+        self.subpixel_edge_inside(axis, fixed, low, mid, post, depth + 1, budget)
+            && self.subpixel_edge_inside(axis, fixed, mid, high, post, depth + 1, budget)
+    }
+
     /// Corrected output pixel -> uncorrected source pixel, before EXIF
     /// orientation. All three color planes use the same position. Evaluation
     /// uses f64 and direct coordinates, avoiding Lensfun's accumulated f32
@@ -389,7 +473,7 @@ fn product_range(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
 }
 
 /// Complete extrema of a cubic on a closed interval, including narrow minima.
-fn cubic_range(c: [f64; 4], low: f64, high: f64) -> Option<(f64, f64)> {
+pub(crate) fn cubic_range(c: [f64; 4], low: f64, high: f64) -> Option<(f64, f64)> {
     if c.iter().any(|v| !v.is_finite()) || !low.is_finite() || !high.is_finite() || low > high {
         return None;
     }

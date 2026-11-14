@@ -1,4 +1,32 @@
-# Embedded lens distortion correction
+# Embedded lens corrections
+
+## Current branch scope
+
+The current branch retains the distortion implementation below and also adds
+independent embedded lateral chromatic-aberration (TCA) and vignetting models:
+
+| Manufacturer path | Distortion | TCA | Vignetting |
+| --- | --- | --- | --- |
+| Sony ARW | Supported counted `0x7037` table | Supported counted red/blue `0x7035` table | Supported counted `0x7032` table |
+| Fujifilm RAF | Supported 9/11-knot `0xf00b` layouts | Supported 29/31-value `0xf00f` layouts | Supported 19/23-value `0xf010` layouts |
+| Olympus / OM System ORF | Supported four-value ImageProcessing `0x150a` | Supported six-value ImageProcessing `0x150c` | No verified embedded coefficient model; camera shading switches are not treated as gains |
+
+Every item is independently missing, unsupported, or ready. Only validated
+non-identity models change pixels. TCA is composed with distortion into the
+same source sampling operation; vignetting multiplies source camera RGB before
+sampling. Parameters do not imply support for every camera generation, crop
+mode, preprocessed RAW, or lens. The formulas, coordinate domains, exact pinned
+references, numeric fixtures and remaining limitations are documented in
+[`EMBEDDED-OPTICS-MODELS.md`](EMBEDDED-OPTICS-MODELS.md). Current production,
+resource, cache and image validation is recorded in
+[`RAW-OPTICS-CORRECTIONS.md`](RAW-OPTICS-CORRECTIONS.md).
+
+## Earlier distortion implementation record
+
+The remainder of this document records the earlier distortion-focused change.
+Its test counts, pixel hashes and statements about that change's scope are
+historical results, not the validation totals for the current TCA/vignetting
+extension. DNG's established opcode path remains separate.
 
 This change extends DNG stage-three correction and adds file-embedded distortion
 models for compatible Sony ARW, Fujifilm RAF and Olympus / OM System ORF files.
@@ -14,8 +42,9 @@ a hard-coded camera/lens name. It runs locally and does not download profiles.
 | Fujifilm RAF | FujiIFD `GeometricDistortionParams` (`0xf00b`) | The known 11-node and 9-node layouts; inversion of the stored radius mapping for destination-to-source sampling, with supported crop metadata. |
 | Olympus / OM System ORF | MakerNote ImageProcessing `0x150a` | Four finite parameters describing the radial polynomial and radius scale. The separate correction-setting switch is not treated as the coefficients. |
 
-The manufacturer paths in this change apply **geometric distortion only**.
-They do not add manufacturer chromatic-aberration or vignetting correction.
+The first manufacturer implementation applied **geometric distortion only**.
+The current branch additionally supports the independently validated TCA and
+vignetting paths described above.
 An ORI is handled by the existing ORF decoder, but this does not establish that
 every ORI contains a usable correction model. Missing parameters do not imply
 that a lens is distortion-free.

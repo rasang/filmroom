@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<lensdatabase version="2"><!-- Selected from Lensfun database, CC BY-SA 3.0. Only distortion is enabled by Filmroom. See PROVENANCE.json. --><camera>
+<lensdatabase version="2"><!-- Selected from Lensfun database, CC BY-SA 3.0. Filmroom enables each qualified optical correction independently. See PROVENANCE.json. --><camera>
         <maker>Canon</maker>
         <model>Canon EOS R</model>
         <model lang="en">EOS R</model>

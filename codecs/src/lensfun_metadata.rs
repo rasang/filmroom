@@ -51,6 +51,10 @@ pub(crate) struct CanonRf16Identity {
     pub orientation: u16,
     pub exif_size: [u32; 2],
     pub aspect_crop: [u32; 4],
+    /// Actual capture FNumber. Missing/invalid data disables vignetting only.
+    pub aperture: Option<f64>,
+    /// Canon FileInfo [near, far] metres; 0xffff explicitly denotes infinity.
+    pub focus_range_m: Option<[f64; 2]>,
 }
 
 /// Optional metadata: malformed, conflicting, unknown and over-budget inputs
@@ -146,6 +150,15 @@ impl Value {
         let n = self.endian.u32(&self.bytes[index * 8..]) as u64;
         let d = self.endian.u32(&self.bytes[index * 8 + 4..]) as u64;
         d != 0 && n == u64::from(integer) * d
+    }
+
+    fn positive_rational(&self) -> Option<f64> {
+        if self.typ != 5 || self.count != 1 { return None; }
+        let n = self.endian.u32(&self.bytes) as f64;
+        let d = self.endian.u32(&self.bytes[4..]) as f64;
+        if n == 0.0 || d == 0.0 { return None; }
+        let value = n / d;
+        value.is_finite().then_some(value)
     }
 
     fn ascii(&self, opaque_tail: bool) -> Option<&str> {
@@ -314,22 +327,32 @@ impl<'a, R: Read + Seek> Reader<'a, R> {
             return None;
         }
         let mut seen = BTreeSet::new();
+        let mut invalid_optional = BTreeSet::new();
         let mut result = BTreeMap::new();
         for entry in table[..count * 12].chunks_exact(12) {
             let tag = endian.u16(entry);
-            if !seen.insert(tag) || matches!(tag, 50706 | 50707) {
+            let optional = matches!(kind, DirectoryKind::Exif) && tag == 0x829d;
+            if !seen.insert(tag) {
+                if optional {
+                    invalid_optional.insert(tag);
+                    result.remove(&tag);
+                    continue;
+                }
                 return None;
             }
+            if matches!(tag, 50706 | 50707) { return None; }
             let selected = match kind {
                 DirectoryKind::Camera => matches!(tag, 271 | 272 | 274),
-                DirectoryKind::Exif => matches!(tag, 0x920a | 0xa002 | 0xa003 | 0xa432 | 0xa434),
+                DirectoryKind::Exif => matches!(tag, 0x829d | 0x920a | 0xa002 | 0xa003 | 0xa432 | 0xa434),
                 DirectoryKind::Maker => matches!(tag, 0x0001 | 0x0002 | 0x0010 | 0x0093 | 0x0095 | 0x009a),
             };
-            if !selected {
+            if !selected || invalid_optional.contains(&tag) {
                 continue;
             }
+            let value = (|| {
             let typ = endian.u16(&entry[2..]);
             let count = endian.u32(&entry[4..]) as usize;
+            if optional && (typ != 5 || count != 1) { return None; }
             let width = match typ {
                 2 => 1,
                 3 => 2,
@@ -354,7 +377,10 @@ impl<'a, R: Read + Seek> Reader<'a, R> {
                 }
                 self.read(value_start, len)?
             };
-            result.insert(tag, Value { typ, count, bytes, endian });
+            Some(Value { typ, count, bytes, endian })
+            })();
+            if let Some(value) = value { result.insert(tag, value); }
+            else if !optional { return None; }
         }
         Some(result)
     }
@@ -409,8 +435,22 @@ impl<'a, R: Read + Seek> Reader<'a, R> {
             makernote_lens_model: LENS, focal_length_mm: 16.0,
             lens_type, rf_lens_type, model_id, raw_quality,
             orientation: orientation as u16, exif_size, aspect_crop,
+            aperture: exif.get(&0x829d).and_then(Value::positive_rational)
+                .filter(|v| (0.7..=128.0).contains(v)),
+            focus_range_m: focus_range(file_info),
         })
     }
+}
+
+// ExifTool Canon.pm FileInfo indexes 20/21, at the already pinned source
+// revision cited above: raw unsigned centimetres, 65535 is the infinity marker.
+// Both bounds must be meaningful; zero/contradictory data never invents focus.
+fn focus_range(file_info: &Value) -> Option<[f64; 2]> {
+    let far = file_info.short_at(20)?;
+    let near = file_info.short_at(21)?;
+    if far == 0 || near == 0 || far < near { return None; }
+    let metres = |value| if value == u16::MAX { f64::INFINITY } else { f64::from(value) / 100.0 };
+    Some([metres(near), metres(far)])
 }
 
 #[cfg(test)]
@@ -448,12 +488,14 @@ mod tests {
         settings[22..26].copy_from_slice(&[61182, 16, 16, 1]);
         let mut file_info = vec![0; 71];
         file_info[61] = 288;
+        file_info[20] = 199;
+        file_info[21] = 150;
         let mut maker_name = ascii(0x0095, LENS);
         maker_name.3.resize(138, 0xaa);
         maker_name.2 = 138;
         [
             vec![ascii(271, MAKE), ascii(272, MODEL), shorts(274, &[1])],
-            vec![rationals(0x920a, &[(16, 1)]), shorts(0xa002, &[6720]),
+            vec![rationals(0x829d, &[(28, 10)]), rationals(0x920a, &[(16, 1)]), shorts(0xa002, &[6720]),
                 shorts(0xa003, &[4480]), rationals(0xa432, &[(16, 1), (16, 1), (0, 1), (0, 1)]),
                 ascii(0xa434, LENS)],
             vec![shorts(1, &settings), shorts(2, &[0, 16, 0, 64833]), longs(0x10, &[MODEL_ID]),
@@ -523,6 +565,40 @@ mod tests {
             assert_eq!((identity.lens_type, identity.rf_lens_type), (61182, 288));
             assert_eq!(identity.aspect_crop, [0, 0, 6720, 4480]);
             assert_eq!(identity.raw_quality, quality);
+            assert_eq!(identity.aperture, Some(2.8));
+            assert_eq!(identity.focus_range_m, Some([1.5, 1.99]));
+        }
+    }
+
+    #[test]
+    fn actual_aperture_is_optional_and_malformed_values_do_not_erase_identity() {
+        for field in [rationals(0x829d, &[(28, 0)]), rationals(0x829d, &[(0, 10)]),
+            rationals(0x829d, &[(10000, 1)]), shorts(0x829d, &[28]),
+            Field(0x829d, 5, u32::MAX, vec![])] {
+            let mut f = fields();
+            replace(&mut f, 1, field);
+            let identity = parse(&fixture(f)).unwrap();
+            assert_eq!(identity.aperture, None);
+            assert_eq!(identity.focus_range_m, Some([1.5, 1.99]));
+        }
+        let mut f = fields(); f[1].retain(|v| v.0 != 0x829d);
+        assert_eq!(parse(&fixture(f)).unwrap().aperture, None);
+        let mut f = fields(); f[1].push(rationals(0x829d, &[(40, 10)]));
+        assert_eq!(parse(&fixture(f)).unwrap().aperture, None);
+    }
+
+    #[test]
+    fn focus_bounds_require_actual_nonzero_ordered_values_and_preserve_infinity() {
+        for (far, near, expected) in [
+            (0, 150, None), (199, 0, None), (150, 199, None),
+            (65535, 598, Some([5.98, f64::INFINITY])),
+            (65535, 65535, Some([f64::INFINITY, f64::INFINITY])),
+        ] {
+            let mut f = fields();
+            let field = f[2].iter_mut().find(|v| v.0 == 0x93).unwrap();
+            field.3[40..42].copy_from_slice(&(far as u16).to_le_bytes());
+            field.3[42..44].copy_from_slice(&(near as u16).to_le_bytes());
+            assert_eq!(parse(&fixture(f)).unwrap().focus_range_m, expected);
         }
     }
 
@@ -696,6 +772,10 @@ mod tests {
             let identity = canon_rf16_identity(&mut file, size).expect(name);
             assert_eq!(identity.raw_quality, 7);
             assert_eq!(identity.exif_size, [6720, 4480]);
+            assert_eq!(identity.aperture, Some(2.8));
+            assert_eq!(identity.focus_range_m, Some(if name == "7D6A9423.CR3" {
+                [5.98, f64::INFINITY]
+            } else { [1.5, 1.99] }));
             let mut reader = Reader::new(&mut file, size);
             assert_eq!(reader.identity(), Some(identity));
             assert!(reader.bytes_read < 4096);
