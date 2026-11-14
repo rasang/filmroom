@@ -47,6 +47,7 @@ mod dimension_tests {
 pub mod opcodes;
 pub mod dng_bad_pixels;
 pub mod dng_warp;
+pub mod embedded_lens;
 pub mod dng_cfa_color;
 
 mod lossless;

@@ -26,6 +26,9 @@ const BASE: u64 = 32 * MIB;
 const HALO: usize = 8;
 #[path="dng_geometry_develop.rs"]
 mod geometry;
+#[path="camera_geometry.rs"]
+mod camera_geometry;
+pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry};
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -82,7 +85,7 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
         return Err(err("MEMORY_BUDGET", "admission"));
     }
     let disk = d.probe().output_bytes
-        + if d.warp.is_some() { (d.active.w*d.active.h*12) as u64 } else { 0 }
+        + d.warp.as_ref().map_or(0, |pipeline| (d.active.w*d.active.h*12) as u64 * pipeline.backing_count())
         + if d.compression == 52546 {
             crate::jxl::spool_bytes(d)
         } else if d.cfa_spool() {
@@ -115,6 +118,10 @@ pub struct Development<'a> {
     pub matrix: Vec<f32>,
     pub baseline_exposure_ev: f32,
     pub gain_maps: &'a [crate::gainmap::GainMap],
+    /// Validated embedded vendor distortion, in the uncropped active image.
+    pub lens: crate::embedded_lens::LensStatus,
+    /// Optical normalization rectangle, independent of subsequent output crop.
+    pub lens_reference: Rect,
 }
 impl Development<'_> {
     pub fn oriented_dim(&self) -> (usize, usize) {
@@ -139,6 +146,8 @@ impl<'a> From<&'a Dng> for Development<'a> {
             matrix: d.matrix.clone(),
             baseline_exposure_ev: d.baseline_exposure_ev,
             gain_maps: &d.gain_maps,
+            lens: crate::embedded_lens::LensStatus::Missing,
+            lens_reference: d.active,
         }
     }
 }
@@ -212,6 +221,17 @@ fn camera_tile(d:&Development,y:usize,h:usize,data:Vec<f32>)->Result<rawler::pix
         _=>Err(err("UNSUPPORTED_DNG_VARIANT","develop")),
     }
 }
+/// Calibrate an already demosaiced camera RGB tile without repeating geometry,
+/// black/white normalization, cropping, or the exposure baseline.
+fn calibrate_camera_tile(d:&Development,camera:rawler::pixarray::Color2D<f32,3>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
+    let mut linear=d.clone();
+    linear.cpp=3;linear.width=camera.width;linear.height=camera.height;
+    linear.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
+    linear.crop=linear.active;linear.gain_maps=&[];
+    linear.lens=crate::embedded_lens::LensStatus::Missing;
+    linear.lens_reference=linear.active;
+    develop_tile_cancel(&linear,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
+}
 fn calibrate_camera(d:&Dng,mut camera:rawler::pixarray::Color2D<f32,3>,cancel:&AtomicBool)->Result<rawler::pixarray::Color2D<f32,3>> {
     if let Some(color)=&d.cfa_color {
         let xyz_to_rgb=rawler::imgop::xyz::XYZ_TO_SRGB_D50.map(|r|r.map(|x|x as f64));
@@ -224,11 +244,7 @@ fn calibrate_camera(d:&Dng,mut camera:rawler::pixarray::Color2D<f32,3>,cancel:&A
         }
         pix_finite(camera)
     } else {
-        let mut development=Development::from(d);
-        development.cpp=3;development.width=camera.width;development.height=camera.height;
-        development.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
-        development.crop=development.active;development.gain_maps=&[];
-        develop_tile_cancel(&development,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
+        calibrate_camera_tile(&Development::from(d),camera,cancel)
     }
 }
 
@@ -462,7 +478,7 @@ fn decode_with_reserve(
     let storage_reader = storage_dng.as_ref().unwrap_or(&d);
     let development = Development::from(&d);
     if d.warp.is_some() {
-        geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel)?;
+        pool.install(|| geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel))?;
     } else if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
         let mut batch_y = d.active.y;
@@ -698,6 +714,8 @@ mod rectangle_emit_tests {
                 matrix: vec![1.; 9],
                 baseline_exposure_ev: 0.,
                 gain_maps: &[],
+                lens: crate::embedded_lens::LensStatus::Missing,
+                lens_reference: Rect { x: 0, y: 0, w: 17, h: 13 },
             };
             let path = std::env::temp_dir().join(format!(
                 "raw-tile-emit-{}-{orientation}",

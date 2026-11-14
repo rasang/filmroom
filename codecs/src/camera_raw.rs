@@ -243,6 +243,11 @@ fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Devel
     let cfa = cfa_config
         .map(|config| config.cfa.shift(active.x, active.y).name)
         .unwrap_or_default();
+    let lens = crate::embedded_lens::from_metadata(&raw.lens_distortion);
+    let lens_reference = match &lens {
+        crate::embedded_lens::LensStatus::Ready(model) if model.reference_uses_crop() => crop,
+        _ => active,
+    };
     Ok(Development {
         width: raw.width,
         height: raw.height,
@@ -255,6 +260,8 @@ fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Devel
         matrix,
         baseline_exposure_ev: 0.,
         gain_maps: &[],
+        lens,
+        lens_reference,
     })
 }
 fn sony_version(t: &Tiff) -> Result<u8> {
@@ -651,6 +658,21 @@ impl CameraRaw {
     pub fn probe(&self) -> Probe {
         let d = &self.development;
         let (w, h) = d.oriented_dim();
+        let mut warnings = vec![Warning {
+            code: "CAMERA_RAW_BASIC_DEVELOPMENT",
+            message: "基础矩阵显色，不复刻相机风格或全部镜头校正",
+        }];
+        match &d.lens {
+            crate::embedded_lens::LensStatus::Ready(_) => warnings.push(Warning {
+                code: "EMBEDDED_LENS_DISTORTION_APPLIED",
+                message: "已应用文件内嵌的镜头畸变校正",
+            }),
+            crate::embedded_lens::LensStatus::Unsupported => warnings.push(Warning {
+                code: "EMBEDDED_LENS_DISTORTION_NOT_APPLIED",
+                message: "检测到内嵌镜头畸变参数，但当前不支持，未应用校正",
+            }),
+            crate::embedded_lens::LensStatus::Missing => {},
+        }
         Probe {
             format: self.format,
             variant: if d.cpp == 3 {
@@ -670,16 +692,16 @@ impl CameraRaw {
             input_bytes: self.input_bytes,
             output_bytes: (w * h * 12) as u64,
             max_pixels: crate::MAX_PIXELS,
-            warnings: vec![Warning {
-                code: "CAMERA_RAW_BASIC_DEVELOPMENT",
-                message: "基础矩阵显色，不复刻相机风格或全部镜头校正",
-            }],
+            warnings,
             has_alternate_forward_matrix: false,
             development_policy: "camera-matrix-linear-srgb-v1",
             baseline_exposure_applied_ev: 0.,
         }
     }
     pub fn admit(&self, b: &Budget) -> Result<Admission> {
+        crate::develop::admit_geometry(&self.development,b,self.admit_sensor(b)?)
+    }
+    fn admit_sensor(&self, b: &Budget) -> Result<Admission> {
         if self.he.is_some(){return crate::nikon_he::admit(self,b);}
         let memory = b
             .memory_budget_mi_b
@@ -974,7 +996,7 @@ pub fn decode(
         return Ok((camera.probe(),admission));
     }
     if camera.format == "ARW" && camera.development.cpp == 3 {
-        pool.install(|| sony_tiles::decode(&camera, input, &out, cancel))?;
+        pool.install(|| sony_tiles::decode(&camera, input, output, &out, cancel))?;
         if cancel.load(Ordering::Relaxed) {
             return Err(err("CANCELLED", "spool"));
         }
@@ -1025,6 +1047,7 @@ pub fn decode(
     }
     let d = descriptor(&raw, camera.development.orientation)?;
     if d.cpp != camera.development.cpp
+        || d.lens != camera.development.lens
         || d.width != camera.development.width
         || d.height != camera.development.height
         || d.active.x != camera.development.active.x
@@ -1038,17 +1061,21 @@ pub fn decode(
     {
         return Err(err("INVALID_INPUT", "decode"));
     }
-    let mut first = d.crop.y;
-    while first < d.crop.y + d.crop.h {
-        let last = (first + admission.strip_rows as usize).min(d.crop.y + d.crop.h);
+    let sink = crate::develop::CameraRgbSink::new(&d, output)?;
+    let region = sink.region(&d);
+    let mut first = region.y;
+    while first < region.y + region.h {
+        let last = (first + admission.strip_rows as usize).min(region.y + region.h);
         let y = first.saturating_sub(HALO).max(d.active.y);
         let end = (last + HALO).min(d.active.y + d.active.h);
         let data = normalized_tile(&raw, &d, y, end - y, cancel)?;
         let p =
-            pool.install(|| crate::develop::develop_tile_cancel(&d, y, end - y, data, cancel))?;
-        crate::develop::emit(&d, &out, &p, y, first, last, cancel)?;
+            pool.install(|| sink.develop(&d, y, end - y, data, cancel))?;
+        sink.emit_strip(&d, &out, &p, y, first, last, cancel)?;
         first = last;
     }
+    drop(raw);
+    pool.install(|| sink.finish(&d, &out, cancel))?;
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "spool"));
     }

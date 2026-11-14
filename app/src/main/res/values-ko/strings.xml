@@ -146,11 +146,11 @@
     <string name="text_13d6c864eb05" formatted="false">시뮬레이션하는 화면의 긴 변 길이(밀리미터)이며 필름 롤의 폭이 아닙니다. 입자와 광학 효과의 크기에 영향을 줍니다. 35 mm는 표준 135 화면의 긴 변을 의미하지 않습니다.</string>
     <string name="text_3c14663c1cfa" formatted="false">자동 노출</string>
     <string name="text_eeb4cdfe3959" formatted="false">측광 방식을 선택하면 자동 노출이 켜집니다. 끄면 마지막 측광 방식은 유지됩니다. 가져온 사진으로 필름 노출을 추정하며 촬영 당시 카메라 노출을 설정하는 기능은 아닙니다. 평균과 중앙값은 전체 이미지의 밝기를 사용합니다. 중앙 중점은 중앙에 가중치를 두고, 부분 측광은 중앙 원형 영역만 측정합니다. 매트릭스는 5×5 구역에, 다중 영역은 동심원 형태의 세 영역에 가중치를 적용합니다. 하이라이트 중점은 밝은 픽셀을 중시합니다. 카메라 제조사의 장면 인식을 재현하는 것이 아닌 시뮬레이션 측광입니다.</string>
-    <string name="text_be94f251df06" formatted="false">하이라이트 강화</string>
+    <string name="text_be94f251df06" formatted="false">하이라이트 강화 강도</string>
     <string name="text_7b779407bf2a" formatted="false">밝은 영역의 노출을 높입니다. 0은 끄기입니다.</string>
-    <string name="text_7db1278a003a" formatted="false">하이라이트 범위</string>
+    <string name="text_7db1278a003a" formatted="false">하이라이트 강화 범위</string>
     <string name="text_f3e9a635edb2" formatted="false">하이라이트 강화가 영향을 주는 범위를 제어합니다.</string>
-    <string name="text_1eb299c92ae4" formatted="false">하이라이트 임계값</string>
+    <string name="text_1eb299c92ae4" formatted="false">하이라이트 강화 임계값</string>
     <string name="text_67ca9c11ac9c" formatted="false">하이라이트 강화가 시작되는 밝기를 중간 회색보다 높은 노출 스톱 수로 설정합니다. 값이 높을수록 더 밝은 부분만 강화합니다. 이미 손실된 하이라이트를 복원하지는 않습니다.</string>
     <string name="text_35d9afa371aa" formatted="false">렌즈 소프트닝</string>
     <string name="text_a19e8ff37742" formatted="false">렌즈 흐림을 시뮬레이션합니다. 단위는 필름 면에서의 마이크로미터입니다. 0은 끄기입니다.</string>
@@ -761,6 +761,8 @@
     <string name="detail_storage" formatted="false">임시 저장 공간 예산 초과</string>
     <string name="detail_allocation" formatted="false">메모리 할당 실패</string>
     <string name="camera_raw_basic_development" formatted="false">카메라 RAW는 블랙·화이트 레벨, 화이트 밸런스와 색상 행렬을 사용해 기본 현상합니다. 카메라의 화상 스타일과 모든 렌즈 보정은 적용하지 않으므로 색상과 형태가 카메라 또는 다른 소프트웨어와 다를 수 있습니다.</string>
+    <string name="embedded_lens_distortion_applied" formatted="false">파일에 포함된 렌즈 왜곡 보정을 적용했습니다.</string>
+    <string name="embedded_lens_distortion_not_applied" formatted="false">파일에 포함된 렌즈 왜곡 보정 매개변수를 감지했지만 적용하지 않았습니다. 왜곡이 남아 있을 수 있습니다.</string>
     <string name="camera_raw_variant_unsupported" formatted="false">이 카메라 RAW의 픽셀 배열 또는 압축 방식은 지원하지 않거나 아직 검증되지 않았습니다. 내장 미리보기로 대체하거나 원본 해상도를 낮추지 않았습니다.</string>
     <string name="camera_raw_profile_unsupported" formatted="false">이 RAW에 유효한 카메라 색상 프로필이 없습니다. 색상을 추측하거나 내장 미리보기로 대체하지 않았습니다.</string>
 

@@ -36,6 +36,59 @@ class HomeMotionActivityHostTest {
             block(a)
         }}finally{image.recycle()}
     }
+    @Test fun pausedLiveRestoresMagnificationAndPositionOnlyForSamePhotoAndMode(){withReady{a->
+        val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+        val state=vm.state.value
+        fun player()=dev.filmroom.effects.HomeMotionPreview(a,EffectKind.LIGHT_TABLE,
+            dev.filmroom.effects.HomeMotionSnapshot.capture(state,EffectKind.LIGHT_TABLE),false){}
+        val saved=dev.filmroom.effects.HomeMotionViewport.State(2.5f,.12f,-.08f)
+        set(a,"homeMotionRefreshPosted",true) // Keep native preparation outside this host lifecycle test.
+        fun pause(){
+            val p=player();p.restoreViewport(saved)
+            set(a,"homeMotion",p);set(a,"homeMotionPhotoKey",state.photo!!.cacheKey)
+            MainActivity::class.java.getDeclaredMethod("onPause").apply{isAccessible=true}.invoke(a)
+            MainActivity::class.java.getDeclaredMethod("onResume").apply{isAccessible=true}.invoke(a)
+            assertNull(field(a,"homeMotion"));assertNotNull(field(a,"pausedMotionViewport"))
+        }
+        val restore=MainActivity::class.java.getDeclaredMethod("restoreHomeMotionViewport",dev.filmroom.effects.HomeMotionPreview::class.java,String::class.java,EffectKind::class.java).apply{isAccessible=true}
+        pause()
+        val bundle=Bundle()
+        MainActivity::class.java.getDeclaredMethod("savePausedMotionViewport",Bundle::class.java).apply{isAccessible=true}.invoke(a,bundle)
+        set(a,"pausedMotionViewport",null)
+        MainActivity::class.java.getDeclaredMethod("readPausedMotionViewport",Bundle::class.java).apply{isAccessible=true}.invoke(a,bundle)
+        assertNotNull(field(a,"pausedMotionViewport"))
+        val same=player()
+        try{restore.invoke(a,same,state.photo!!.cacheKey,EffectKind.LIGHT_TABLE);assertEquals(saved,same.saveViewport());assertNull(field(a,"pausedMotionViewport"))}finally{same.close()}
+        pause()
+        val other=player()
+        try{restore.invoke(a,other,"different-photo",EffectKind.LIGHT_TABLE);assertEquals(1f,other.saveViewport().scale,0f)}finally{other.close()}
+        pause()
+        val differentMode=player()
+        try{restore.invoke(a,differentMode,state.photo!!.cacheKey,EffectKind.OPTICAL_LEAK);assertEquals(1f,differentMode.saveViewport().scale,0f)}finally{differentMode.close()}
+    }}
+    @Test fun hiddenPhotoRefinementDoesNotLeakSpinnerOrFailureIntoLive(){withReady{a->
+        val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+        vm.localDetailEnabled=true
+        set(a,"homeMotionRefreshPosted",true)
+        val update=MainActivity::class.java.getDeclaredMethod("updateDetailStatus",dev.filmroom.roi.DetailStatus::class.java).apply{isAccessible=true}
+        val refining=dev.filmroom.roi.DetailStatus(dev.filmroom.roi.DetailPhase.Refining)
+        val spinner=field(a,"detailLoading") as View
+        update.invoke(a,refining);assertEquals(View.VISIBLE,spinner.visibility)
+        val player=dev.filmroom.effects.HomeMotionPreview(a,EffectKind.LIGHT_TABLE,
+            dev.filmroom.effects.HomeMotionSnapshot.capture(vm.state.value,EffectKind.LIGHT_TABLE),false){}
+        set(a,"homeMotion",player)
+        try {
+            update.invoke(a,refining);assertEquals(View.INVISIBLE,spinner.visibility)
+            val feedback=field(a,"detailFeedback") as dev.filmroom.ui.DetailFeedback
+            val before=feedback.savedKeys()
+            update.invoke(a,dev.filmroom.roi.DetailStatus(dev.filmroom.roi.DetailPhase.Fallback,failure=dev.filmroom.roi.DetailFailure.RenderFailed))
+            assertEquals(before,feedback.savedKeys()) // Hidden failure was not consumed/toasted.
+            vm.compare();update.invoke(a,refining)
+            assertEquals(View.INVISIBLE,spinner.visibility) // Original comparison never refines.
+            vm.compare();set(a,"homeMotion",null)
+            update.invoke(a,refining);assertEquals(View.VISIBLE,spinner.visibility)
+        }finally{set(a,"homeMotion",null);player.close();vm.localDetailEnabled=false}
+    }}
     @Test fun entryIsBetweenRecipeAndCompare(){withReady{a->
         val recipe=field(a,"recipeButton") as View;val live=field(a,"homeMotionButton") as View;val compare=field(a,"compare") as View
         fun margin(v:View)=(v.layoutParams as ViewGroup.MarginLayoutParams).rightMargin
@@ -48,6 +101,29 @@ class HomeMotionActivityHostTest {
     @Test fun dragAndMultitouchCancelPendingHold(){withReady{a->
         touch(a,MotionEvent.ACTION_DOWN);touch(a,MotionEvent.ACTION_MOVE,300f);assertNull(field(a,"homeMotionHold"))
         touch(a,MotionEvent.ACTION_DOWN);touch(a,MotionEvent.ACTION_POINTER_DOWN);assertNull(field(a,"homeMotionHold"))
+    }}
+    @Test fun liveOwnsZoomDemandButComparisonReturnsItToPhotoView(){withReady{a->
+        val vm=MainActivity::class.java.getDeclaredMethod("getModel").apply{isAccessible=true}.invoke(a) as EditorViewModel
+        val snapshot=dev.filmroom.effects.HomeMotionSnapshot.capture(vm.state.value,EffectKind.LIGHT_TABLE)
+        val player=dev.filmroom.effects.HomeMotionPreview(a,EffectKind.LIGHT_TABLE,snapshot,false){}
+        set(a,"homeMotion",player);set(a,"homeMotionState",vm.state.value);set(a,"homeMotionPhotoKey",vm.state.value.photo?.cacheKey)
+        set(a,"homeMotionRefreshPosted",true)
+        val photo=field(a,"photo") as dev.filmroom.ui.PhotoView
+        val controller=field(a,"zoomFrames")!!
+        val zoom=controller.javaClass.getDeclaredField("zoom").apply{isAccessible=true}
+        zoom.setDouble(controller,2.5)
+        photo.onZoomViewportChanged?.invoke(1.0,false)
+        assertEquals(2.5,zoom.getDouble(controller),0.0)
+        vm.compare()
+        photo.onZoomViewportChanged?.invoke(1.75,false)
+        assertEquals(1.75,zoom.getDouble(controller),0.0)
+        touch(a,MotionEvent.ACTION_DOWN)
+        assertNull(field(a,"homeMotionHold"))
+        assertFalse(field(a,"homeMotionHeld") as Boolean)
+        vm.compare()
+        zoom.setDouble(controller,2.5)
+        photo.onZoomViewportChanged?.invoke(1.0,false)
+        assertEquals(2.5,zoom.getDouble(controller),0.0)
     }}
     @Test fun selectedKindAndAutoSourceAreSaved(){withReady{a->
         set(a,"homeMotionAutoSource","already-played")

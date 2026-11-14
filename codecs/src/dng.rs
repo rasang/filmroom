@@ -53,7 +53,7 @@ pub struct Dng {
     pub gain_maps: Vec<crate::gainmap::GainMap>,
     pub cfa_gain_maps: Vec<crate::cfa_gainmap::CfaGainMap>,
     pub stage1_opcodes: Vec<crate::opcodes::Stage1Opcode>,
-    pub warp: Option<crate::dng_warp::WarpRectilinear>,
+    pub warp: Option<crate::dng_warp::WarpPipeline>,
     pub cfa_color: Option<crate::dng_cfa_color::Transform>,
 }
 #[derive(Serialize, Clone, Debug)]
@@ -224,7 +224,7 @@ impl Dng {
             h: (a[2] - a[0]) as usize,
         };
         let (gain_maps, cfa_gain_maps, stage1_opcodes, warp) =
-            crate::compat::lens_opcodes(root, raw, width, height, cfa_mode, active, &mut warnings)?;
+            crate::compat::lens_opcodes(root, raw, width, height, cfa_mode, cfa_mode && profile.is_none(), active, &mut warnings)?;
         if profile.is_some()
             && (!gain_maps.is_empty() || !cfa_gain_maps.is_empty() || !stage1_opcodes.is_empty())
         {
@@ -510,6 +510,12 @@ impl Dng {
         if warp.is_some() && (profile.is_some() || !gain_maps.is_empty() || !cfa_mode) {
             return Err(err("UNSUPPORTED_DNG_OPCODE", "probe"));
         }
+        if warp.is_some() {
+            warnings.push(Warning {
+                code: "EMBEDDED_LENS_DISTORTION_APPLIED",
+                message: "已应用 DNG 内嵌的镜头畸变校正",
+            });
+        }
         let decoded = Self {
             width,
             height,
@@ -723,7 +729,7 @@ impl Dng {
                 .iter()
                 .map(|v| v.storage_bytes())
                 .sum::<u64>();
-        let map_bytes = map_bytes + if self.warp.is_some() { 8*1024*1024 + 65536 } else { 0 }
+        let map_bytes = map_bytes + self.warp.as_ref().map_or(0, |pipeline| 10*1024*1024 + pipeline.storage_bytes())
             + if self.has_bad_pixel_repair() { self.width as u64 * 14 } else { 0 };
         if self.compression == 52546 {
             return map_bytes + crate::jxl::scratch_bytes(self);

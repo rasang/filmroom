@@ -237,7 +237,7 @@ impl AdditionalRaw {
         if disk > b.disk_budget_bytes.min(1024 * MIB) {
             return Err(err("DISK_BUDGET", "admission"));
         }
-        Ok(Admission {
+        crate::develop::admit_geometry(d, b, Admission {
             memory_budget_bytes: memory,
             estimated_peak_bytes: decode_peak
                 .max(BASE + d.active.w as u64 * (rows + 2 * HALO) as u64 * 96),

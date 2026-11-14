@@ -183,7 +183,7 @@ class FilmEngine(private val context: Context) {
     /** Independent, explicit zoom tier; never falls back to a cosmetically enlarged preview. */
     suspend fun renderZoom(source:Bitmap,photo:PhotoSource,parameters:EditorState,edge:Int):Bitmap {
         require(edge==2048 || edge==3072)
-        require(parameters.preImagingBorder)
+        require(dev.filmroom.roi.ZoomFramePolicy.supportsPresentation(parameters))
         return renderInternal(source,parameters,"zoom-preview",photo,true,edge)
     }
     suspend fun render(source:Bitmap,parameters:EditorState,mode:String,photo:PhotoSource?=null,settled:Boolean=false):Bitmap =
@@ -389,8 +389,8 @@ class FilmEngine(private val context: Context) {
         }
         if(frameEdge>NativeMemoryPolicy.REFINED_PREVIEW_EDGE) {
             val size=dev.filmroom.io.PhotoLimits.fit(photo.originalWidth,photo.originalHeight,sourceEdge)
-            val frame=dev.filmroom.border.PreImagingInput.snapshot(parameters,size.width,size.height,photo.originalWidth,photo.originalHeight)
-            if(!NativeMemoryPolicy.zoomFrameFloorFits(frame.outputWidth,frame.outputHeight,budget))throw EngineException(EngineFailure.BUDGET)
+            val frame=if(preImaging)dev.filmroom.border.PreImagingInput.snapshot(parameters,size.width,size.height,photo.originalWidth,photo.originalHeight)else null
+            if(!NativeMemoryPolicy.zoomFrameFloorFits(frame?.outputWidth ?: size.width,frame?.outputHeight ?: size.height,budget))throw EngineException(EngineFailure.BUDGET)
         }
         var rendered:Bitmap?=null
         var delivered=false

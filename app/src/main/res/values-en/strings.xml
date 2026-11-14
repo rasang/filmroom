@@ -146,11 +146,11 @@
     <string name="text_13d6c864eb05" formatted="false">The simulated format\'s long-edge length in millimeters, not the film strip width. Affects grain and optical effect scale. 35 mm does not mean the long edge of a standard 135 frame.</string>
     <string name="text_3c14663c1cfa" formatted="false">Auto exposure</string>
     <string name="text_eeb4cdfe3959" formatted="false">Select a metering mode to enable auto exposure. Turning it off retains the last metering mode. Estimates film exposure from the imported photo, not the camera exposure at capture. Average and Median use brightness across the whole image; Center-weighted emphasizes the center; Partial meters only the central circle; Matrix weights a 5×5 grid; Multi-zone weights three concentric regions; Highlight-weighted emphasizes brighter pixels. These are simulated metering modes, not recreations of camera manufacturers\' scene recognition.</string>
-    <string name="text_be94f251df06" formatted="false">Highlight boost</string>
+    <string name="text_be94f251df06" formatted="false">Highlight boost strength</string>
     <string name="text_7b779407bf2a" formatted="false">Increases exposure in highlight areas. 0 disables it.</string>
-    <string name="text_7db1278a003a" formatted="false">Highlight range</string>
+    <string name="text_7db1278a003a" formatted="false">Highlight boost range</string>
     <string name="text_f3e9a635edb2" formatted="false">Controls the area affected by highlight boost.</string>
-    <string name="text_1eb299c92ae4" formatted="false">Highlight threshold</string>
+    <string name="text_1eb299c92ae4" formatted="false">Highlight boost threshold</string>
     <string name="text_67ca9c11ac9c" formatted="false">Sets the brightness at which highlight boost starts, in stops above middle gray. Higher values boost only brighter areas. This does not recover lost highlights.</string>
     <string name="text_35d9afa371aa" formatted="false">Lens softening</string>
     <string name="text_a19e8ff37742" formatted="false">Simulates lens blur, measured in micrometers at the film plane. 0 disables it.</string>
@@ -761,6 +761,8 @@
     <string name="detail_storage" formatted="false">Temporary storage budget exceeded</string>
     <string name="detail_allocation" formatted="false">Memory allocation failed</string>
     <string name="camera_raw_basic_development" formatted="false">Camera RAW uses basic development with black/white levels, white balance and a color matrix. Camera picture styles and full lens corrections are not applied; colors and geometry may differ from the camera or other software.</string>
+    <string name="embedded_lens_distortion_applied" formatted="false">Applied embedded lens distortion correction.</string>
+    <string name="embedded_lens_distortion_not_applied" formatted="false">Embedded lens distortion parameters were detected but not applied. Distortion may remain.</string>
     <string name="camera_raw_variant_unsupported" formatted="false">This camera RAW pixel layout or compression is unsupported or not yet verified. No embedded-preview substitution or resolution reduction was used.</string>
     <string name="camera_raw_profile_unsupported" formatted="false">No valid camera color profile is available for this RAW. Colors were not guessed and no embedded preview was substituted.</string>
 

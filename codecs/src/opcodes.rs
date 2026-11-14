@@ -74,6 +74,102 @@ pub(crate) fn records(bytes: &[u8]) -> Result<Vec<Record<'_>>> {
     }
     Ok(result)
 }
+
+/// List3 uses camera RGB coordinates after demosaic and ActiveArea removal.
+/// Maps-only files retain their established streaming path/optional-map policy.
+/// A geometric list retains all admitted operations in the original order.
+pub fn parse_stage3(
+    bytes: &[u8], width: usize, height: usize, allow_geometry: bool,
+) -> Result<(Vec<crate::gainmap::GainMap>, Option<crate::dng_warp::WarpPipeline>, bool)> {
+    use crate::dng_warp::{Stage3Opcode, WarpPipeline};
+    let records = records(bytes)?;
+    let mut decoded = vec![None; records.len()];
+    let mut budget = Stage3Budget::default();
+    let mut skipped = false;
+
+    // Reserve the bounded capacity for every required operation first. Earlier
+    // optional records must not force a later required operation over budget.
+    for (index, record) in records.iter().enumerate().filter(|(_, r)| r.flags & 1 == 0) {
+        if let Some(step) = decode_stage3_record(record, width, height, allow_geometry)? {
+            if !budget.admit(&step) { return Err(unsupported()); }
+            decoded[index] = Some(step);
+        }
+    }
+    // Recognize optional warps before deciding whether the ordered path is
+    // needed. Unsupported versions/envelopes remain explicit optional skips.
+    for (index, record) in records.iter().enumerate().filter(|(_, r)| r.flags & 1 != 0 && matches!(r.id, 1 | 2)) {
+        match decode_stage3_record(record, width, height, allow_geometry) {
+            Ok(Some(step)) if budget.admit(&step) => decoded[index] = Some(step),
+            Ok(None) => {},
+            Ok(Some(_)) => skipped = true,
+            Err(e) if e.code == "UNSUPPORTED_DNG_OPCODE" => skipped = true,
+            Err(e) => return Err(e),
+        }
+    }
+    let has_geometry = budget.warps != 0;
+    for (index, record) in records.iter().enumerate().filter(|(_, r)| r.flags & 1 != 0 && !matches!(r.id, 1 | 2)) {
+        if record.id != 9 || !has_geometry {
+            // In particular, do not interpret optional WarpRectilinear2 (14)
+            // as WarpRectilinear. Since 14 was not applied, its immediately
+            // following legacy warp remains the usable baseline fallback.
+            skipped = true;
+            continue;
+        }
+        match decode_stage3_record(record, width, height, allow_geometry) {
+            Ok(Some(step)) if budget.admit(&step) => decoded[index] = Some(step),
+            Ok(None) => {},
+            Ok(Some(_)) => skipped = true,
+            Err(e) if e.code == "UNSUPPORTED_DNG_OPCODE" => skipped = true,
+            Err(e) => return Err(e),
+        }
+    }
+    let steps: Vec<_> = decoded.into_iter().flatten().collect();
+    if has_geometry {
+        Ok((Vec::new(), Some(WarpPipeline { steps }), skipped))
+    } else {
+        Ok((steps.into_iter().filter_map(|step| match step {
+            Stage3Opcode::GainMap(map) => Some(map),
+            Stage3Opcode::Warp(_) => None,
+        }).collect(), None, skipped))
+    }
+}
+
+#[derive(Default)]
+struct Stage3Budget { warps: usize, maps: usize, values: usize }
+impl Stage3Budget {
+    fn admit(&mut self, step: &crate::dng_warp::Stage3Opcode) -> bool {
+        use crate::dng_warp::Stage3Opcode;
+        match step {
+            Stage3Opcode::Warp(_) => {
+                if self.warps >= crate::dng_warp::MAX_WARPS { return false; }
+                self.warps += 1;
+            }
+            Stage3Opcode::GainMap(map) => {
+                let values = self.values + map.value_count(); // each map already bounded
+                if self.maps >= crate::gainmap::MAX_MAPS || values > crate::gainmap::MAX_VALUES { return false; }
+                self.maps += 1;
+                self.values = values;
+            }
+        }
+        true
+    }
+}
+
+fn decode_stage3_record(
+    record: &Record<'_>, width: usize, height: usize, allow_geometry: bool,
+) -> Result<Option<crate::dng_warp::Stage3Opcode>> {
+    use crate::dng_warp::{Stage3Opcode, Warp, WarpFisheye, WarpRectilinear};
+    if !supported_version(record.version) { return Err(unsupported()); }
+    let warp = match record.id {
+        1 => Warp::Rectilinear(WarpRectilinear::parse(record.payload)?),
+        2 => Warp::Fisheye(WarpFisheye::parse(record.payload)?),
+        9 => return Ok(Some(Stage3Opcode::GainMap(crate::gainmap::parse_opcode(record.payload, width, height)?))),
+        _ => return Err(unsupported()),
+    };
+    if warp.is_identity() { return Ok(None); }
+    if !allow_geometry || width < 5 || height < 5 { return Err(unsupported()); }
+    Ok(Some(Stage3Opcode::Warp(warp)))
+}
 /// A single set or one per image plane is standard. Every coefficient must be
 /// exact identity, and the entire payload including finite center is validated.
 pub(crate) fn identity_warp(payload: &[u8], planes: u32) -> Result<()> {

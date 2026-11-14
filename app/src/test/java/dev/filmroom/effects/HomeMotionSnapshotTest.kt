@@ -39,6 +39,25 @@ class HomeMotionSnapshotTest {
             assertEquals(800,it.result.width); assertEquals(1600,it.result.height)
         }
     }
+    @Test fun detailSnapshotOwnsCopyAndKeepsHighResolutionInBothModes() {
+        for(kind in listOf(EffectKind.LIGHT_TABLE,EffectKind.OPTICAL_LEAK)) {
+            val state=state(); val detail=bitmap(2048,1536)
+            val snapshot=HomeMotionSnapshot.capture(state,kind,detailResult=detail)
+            assertEquals(2048,snapshot.result.width); assertEquals(1536,snapshot.result.height)
+            assertNotSame(detail,snapshot.result)
+            detail.recycle()
+            assertFalse(snapshot.result.isRecycled)
+            snapshot.close(); assertFalse(state.rendered!!.isRecycled)
+        }
+    }
+    @Test fun oversizedDetailIsBoundedWithoutMutatingProviderBitmap() {
+        val state=state(); val detail=bitmap(3200,1600)
+        HomeMotionSnapshot.capture(state,EffectKind.LIGHT_TABLE,detailResult=detail).use {
+            assertEquals(3072,it.result.width); assertEquals(1536,it.result.height)
+            assertNotSame(detail,it.result)
+        }
+        assertFalse(detail.isRecycled); detail.recycle()
+    }
     @Test fun readinessRejectsTransientEditorStates() {
         val state=state(); assertTrue(HomeMotionSnapshot.ready(state))
         listOf(state.copy(previewRefining=true),state.copy(compare=true),state.copy(exporting=true),

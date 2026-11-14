@@ -52,6 +52,27 @@ class ExportQueuePresentationTest {
         assertEquals("已保存",ExportJobPresentation.from(pendingCleanup).progress)
         assertEquals(100,pendingCleanup.copy(progress=ExportDisplayProgress(8,1,1)).progress.displayPercent)
     }
+    @Test fun completedWithoutFinalNeverSelectsIntermediateNegative() {
+        val dir=Files.createTempDirectory("completed-preview").toFile()
+        try {
+            java.io.File(dir,"negative-preview.png").writeBytes(byteArrayOf(1))
+            assertNull(ExportPreviewSelection.select(dir,ExportJobState.COMPLETED).file)
+            val original=java.io.File(dir,"original-preview.jpg").apply{writeBytes(byteArrayOf(1))}
+            assertEquals(original,ExportPreviewSelection.select(dir,ExportJobState.COMPLETED).file)
+        }finally{dir.deleteRecursively()}
+    }
+    @Test fun completedUsesPositiveScanUntilFinalIsPublished() {
+        val dir=Files.createTempDirectory("completed-scan").toFile()
+        try {
+            val token="12345678-1234-1234-1234-123456789abc"
+            java.io.File(dir,"scan-preview-attempt").writeText(token)
+            val scan=java.io.File(dir,"scan-preview-$token.jpg").apply{writeBytes(byteArrayOf(1))}
+            java.io.File(dir,"negative-preview.png").writeBytes(byteArrayOf(1))
+            assertEquals(scan,ExportPreviewSelection.select(dir,ExportJobState.COMPLETED).file)
+            val final=java.io.File(dir,"final-preview.jpg").apply{writeBytes(byteArrayOf(1))}
+            assertEquals(final,ExportPreviewSelection.select(dir,ExportJobState.COMPLETED).file)
+        }finally{dir.deleteRecursively()}
+    }
     @Test fun previewsNeverMislabelOriginalAsCurrentOutput(){
         val dir=Files.createTempDirectory("queue-preview").toFile()
         try {

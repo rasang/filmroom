@@ -32,6 +32,37 @@ class LocalDetailActivityHostTest {
     @Suppress("UNCHECKED_CAST") private fun state(m:EditorViewModel)=EditorViewModel::class.java.getDeclaredField("mutable").apply{isAccessible=true}.get(m) as MutableStateFlow<EditorUiState>
     private fun await(test:()->Boolean){repeat(1000){shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10));if(test())return;Thread.sleep(2)};error("Timed out")}
     private fun source(name:String)=PhotoSource(File(RuntimeEnvironment.getApplication().cacheDir,name).apply{writeText("source preserved")},name,"image/heic",4001,3001,1)
+    @Test fun pauseResumeWithoutStopRestoresDetailBeforeAnyExport() {
+        RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi")
+        RuntimeEnvironment.getApplication().getSharedPreferences("local-session",0).edit().clear().commit()
+        val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
+        try {
+            val a=controller.get();val vm=model(a);val view=photo(a)
+            val operation=EditorViewModel::class.java.getDeclaredField("operationJob").apply{isAccessible=true}
+            await{(operation.get(vm) as? Job)?.isCompleted==true}
+            val fake=FakeProvider();view.configureDetail(fake);view.layout(0,0,400,300)
+            val image=Bitmap.createBitmap(512,384,Bitmap.Config.ARGB_8888)
+            val params=EditorState(useGpu=false)
+            state(vm).value=EditorUiState(photo=source("resume.heic"),original=image,rendered=image,parameters=params,renderedParameters=params)
+            await{view.bitmap===image}
+            // Permissions/transparent activities can pause and resume without onStop/onStart.
+            // First zoom happens only after that round trip, before any export.
+            controller.pause().resume()
+            assertNotEquals(dev.filmroom.roi.DetailPhase.Paused,view.detailStatus.phase)
+            view.layout(0,0,400,300)
+            view.pinch(3.0,200.0,150.0)
+            await{view.detailCacheBytes>0}
+            assertFalse(vm.state.value.exporting)
+            assertEquals(1,fake.openCalls)
+            val zoom=view.transform()[0]
+            repeat(2) {
+                controller.pause();await{view.detailKey==null}
+                controller.resume();view.layout(0,0,400,300);await{view.detailCacheBytes>0}
+                assertEquals(zoom,view.transform()[0],.001f)
+            }
+            assertEquals(3,fake.openCalls)
+        } finally {controller.pause().stop().destroy();RuntimeEnvironment.setQualifiers("w360dp-h780dp-port-mdpi")}
+    }
     @Test fun actualActivityGesturesCompareParametersSourceRotationBackgroundAndExportCoexist(){
         RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi")
         RuntimeEnvironment.getApplication().getSharedPreferences("local-session",0).edit().clear().commit()
@@ -46,7 +77,7 @@ class LocalDetailActivityHostTest {
             var view=photo(activity);view.configureDetail(fake);view.layout(0,0,400,300)
             val original=Bitmap.createBitmap(768,576,Bitmap.Config.ARGB_8888)
             val underlay=Bitmap.createBitmap(512,384,Bitmap.Config.ARGB_8888)
-            val src=source("one.heic");val params=EditorState()
+            val src=source("one.heic");val params=EditorState(useGpu=false) // CPU retains the ROI route; GPU uses full-frame refinement.
             state.value=EditorUiState(photo=src,original=original,rendered=underlay,parameters=params,renderedParameters=params)
             await{view.bitmap===underlay};shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertTrue(fake.sessions.isEmpty())
             // Actual pinch events exercise ScaleGestureDetector, followed by one-pointer drag.
@@ -111,6 +142,7 @@ class LocalDetailActivityHostTest {
         } finally {controller.pause().stop().destroy();RuntimeEnvironment.setQualifiers("w360dp-h780dp-port-mdpi")}
     }
     @Test fun enabledDefaultMissingAbiRetainsOrdinary768AndWaitsForPreviewIdle(){
+        RuntimeEnvironment.setQualifiers("w400dp-h800dp-port-mdpi")
         RuntimeEnvironment.getApplication().getSharedPreferences("local-session",0).edit().clear().commit()
         val controller=Robolectric.buildActivity(MainActivity::class.java).setup()
         try {
@@ -147,7 +179,7 @@ class LocalDetailActivityHostTest {
             repeat(20){view.pan(1.0,0.0)};shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));assertEquals(1,attempted);assertEquals(1,org.robolectric.shadows.ShadowToast.shownToastCount())
             vm.compare();await{view.bitmap===original};vm.compare();await{view.bitmap===vm.state.value.rendered}
             assertEquals(768,view.bitmap!!.width);assertTrue(vm.state.value.canExport)
-        }finally{controller.pause().stop().destroy()}
+        }finally{controller.pause().stop().destroy();RuntimeEnvironment.setQualifiers("w360dp-h780dp-port-mdpi")}
     }
 
 }

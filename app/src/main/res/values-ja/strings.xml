@@ -146,11 +146,11 @@
     <string name="text_13d6c864eb05" formatted="false">再現する画面の長辺サイズ（mm）です。フィルムの幅ではありません。粒子と光学効果のスケールに影響します。35 mmは標準的な135判の長辺を示すものではありません。</string>
     <string name="text_3c14663c1cfa" formatted="false">自動露出</string>
     <string name="text_eeb4cdfe3959" formatted="false">測光方式を選択すると自動露出が有効になります。オフにしても前回の測光方式は保持されます。読み込んだ写真からフィルム露光量を推定するもので、撮影時のカメラ露出ではありません。平均・中央値は画像全体の輝度、中央部重点は中央を重視、部分測光は中央の円形領域のみを測定します。マトリクスは5×5の区画、多領域は3つの同心領域に重みを付け、ハイライト重点は明るい画素を重視します。測光のシミュレーションであり、カメラメーカーのシーン認識を再現するものではありません。</string>
-    <string name="text_be94f251df06" formatted="false">ハイライト増強</string>
+    <string name="text_be94f251df06" formatted="false">ハイライト増強の強度</string>
     <string name="text_7b779407bf2a" formatted="false">ハイライト領域の露光量を増やします。0でオフ。</string>
-    <string name="text_7db1278a003a" formatted="false">ハイライトの範囲</string>
+    <string name="text_7db1278a003a" formatted="false">ハイライト増強の範囲</string>
     <string name="text_f3e9a635edb2" formatted="false">ハイライト増強が影響する範囲を調整します。</string>
-    <string name="text_1eb299c92ae4" formatted="false">ハイライトのしきい値</string>
+    <string name="text_1eb299c92ae4" formatted="false">ハイライト増強のしきい値</string>
     <string name="text_67ca9c11ac9c" formatted="false">ハイライト増強が始まる明るさを、中間グレーより何段上かで設定します。値が高いほど、より明るい部分だけを増強します。失われたハイライトは復元しません。</string>
     <string name="text_35d9afa371aa" formatted="false">レンズぼかし</string>
     <string name="text_a19e8ff37742" formatted="false">レンズのぼけを再現します。単位はフィルム面上のµmです。0でオフ。</string>
@@ -761,6 +761,8 @@
     <string name="detail_storage" formatted="false">一時ストレージの予算超過</string>
     <string name="detail_allocation" formatted="false">メモリ割り当て失敗</string>
     <string name="camera_raw_basic_development" formatted="false">カメラ RAW は黒・白レベル、ホワイトバランス、色変換行列による基本現像を行います。カメラの画作りやすべてのレンズ補正は適用しないため、色や形状がカメラや他のソフトウェアと異なる場合があります。</string>
+    <string name="embedded_lens_distortion_applied" formatted="false">埋め込みのレンズ歪曲補正を適用しました。</string>
+    <string name="embedded_lens_distortion_not_applied" formatted="false">埋め込みのレンズ歪曲補正パラメーターを検出しましたが、適用していません。歪曲が残る場合があります。</string>
     <string name="camera_raw_variant_unsupported" formatted="false">このカメラ RAW の画素配置または圧縮方式は未対応、または未検証です。埋め込みプレビューへの置換や原画像の解像度低下は行いません。</string>
     <string name="camera_raw_profile_unsupported" formatted="false">この RAW に有効なカメラ色プロファイルがありません。色の推測や埋め込みプレビューへの置換は行いません。</string>
 

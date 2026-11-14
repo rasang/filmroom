@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Non-identity embedded lens distortion regression fixtures. Downloaded originals are not distributed in Git.",
+  "metadata_validation": "SHA-256 matches the existing public fixture catalogs. Parameters were independently decoded from original TIFF/RAF/MakerNote data using Python.",
+  "integration_validation": "All three original RAW files completed Linux release full-resolution decode with a 256 MiB codec allowance. An independent chunked scan verified exact dimensions, byte counts, finite values, output SHA-256, and unchanged source hashes. See codecs/docs/EMBEDDED-LENS-CORRECTIONS.md for scope and remaining Android validation.",
+  "samples": [
+    {
+      "id": 6736,
+      "make": "Sony",
+      "model": "ILCE-6700",
+      "filename": "6736_ILCE-6700.ARW",
+      "source_url": "https://raw.pixls.us/getfile.php/6736/nice/Sony - ILCE-6700 - 14bit (4:3).ARW",
+      "license": "CC0-1.0",
+      "sha256": "dc3e2ed22f46fcef778553767e0703bc37cfb043f107afe2d7e6e4dbca34200a",
+      "bytes": 43720704,
+      "lens_metadata": {
+        "lens": "E 16-55mm F2.8 G",
+        "focal_length_mm": 16.0,
+        "tag": "SubIFD 0x7037",
+        "tiff_type": 8,
+        "count": 17,
+        "parameters": [
+          11,
+          0,
+          -29,
+          -109,
+          -245,
+          -424,
+          -640,
+          -881,
+          -1135,
+          -1390,
+          -1631,
+          -1829,
+          -1829,
+          -1829,
+          -1829,
+          -1829,
+          -1829
+        ]
+      },
+      "decode_validation": {
+        "width": 6192,
+        "height": 4128,
+        "output_bytes": 306726912,
+        "output_sha256": "162c5066d0347a68383a872c639cc393590a19d594958772fdf41916b70b38cd",
+        "all_values_finite": true,
+        "source_sha256_unchanged": true,
+        "memory_allowance_bytes": 268435456,
+        "required_disk_bytes": 680368512,
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_APPLIED"
+        ]
+      }
+    },
+    {
+      "id": 1178,
+      "make": "Fujifilm",
+      "model": "X-T20",
+      "filename": "1178_X-T20.RAF",
+      "source_url": "https://raw.pixls.us/getfile.php/1178/nice/Fujifilm - X-T20 - 14bit 14bit compressed (3:2).RAF",
+      "license": "CC0-1.0",
+      "sha256": "a23045101b2912e64f154100d646c228c0d16585d21e95e0d1a006e537f7784c",
+      "bytes": 25017216,
+      "lens_metadata": {
+        "lens": "XF18-55mmF2.8-4 R LM OIS",
+        "focal_length_mm": 50.5,
+        "tag": "FujiIFD 0xf00b",
+        "tiff_type": 10,
+        "count": 23,
+        "header_rational": [
+          3605,
+          11
+        ],
+        "radial_knots": [
+          0,
+          0.1,
+          0.2,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1
+        ],
+        "distortion_percent": [
+          0,
+          0.114,
+          0.249,
+          0.427,
+          0.667,
+          0.976,
+          1.352,
+          1.818,
+          2.379,
+          3.042,
+          3.837
+        ]
+      },
+      "decode_validation": {
+        "width": 6000,
+        "height": 4000,
+        "output_bytes": 288000000,
+        "output_sha256": "079497ec3d6c6ef4e09b4d3d7f940b9bf99f34c550068ffa60b2e90aebc19caa",
+        "all_values_finite": true,
+        "source_sha256_unchanged": true,
+        "memory_allowance_bytes": 268435456,
+        "required_disk_bytes": 581061888,
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_APPLIED"
+        ]
+      }
+    },
+    {
+      "id": 1993,
+      "make": "Olympus",
+      "model": "E-M1MarkII",
+      "filename": "1993_E-M1MarkII.ORF",
+      "source_url": "https://raw.pixls.us/getfile.php/1993/nice/Olympus - E-M1MarkII - 16bit (4:3).ORF",
+      "license": "CC0-1.0",
+      "sha256": "0b433019e5fa61548d7eb0eb7bb90894251542c056da72355202382696d0ceb8",
+      "bytes": 17260285,
+      "lens_metadata": {
+        "lens": "OLYMPUS M.12-40mm F2.8",
+        "tag": "Olympus ImageProcessing 0x150a",
+        "tiff_type": 11,
+        "count": 4,
+        "parameters": [
+          -0.007392614148557186,
+          0.008197912015020847,
+          -0.0026901846285909414,
+          0.9997931718826294
+        ],
+        "notes": "EXIF DistortionCorrection=Off; embedded geometric model is non-identity."
+      },
+      "decode_validation": {
+        "width": 5184,
+        "height": 3888,
+        "output_bytes": 241864704,
+        "output_sha256": "838304c8268841998998d3cccf473768057a078eda3dde403970aba5cd6ba256",
+        "all_values_finite": true,
+        "source_sha256_unchanged": true,
+        "memory_allowance_bytes": 268435456,
+        "required_disk_bytes": 528849024,
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_APPLIED"
+        ]
+      }
+    }
+  ],
+  "controlled_validation": {
+    "purpose": "Separate copies with only embedded distortion metadata changed; the original public RAW files remain unchanged.",
+    "outputs": [
+      {
+        "filename": "identity_6736_ILCE-6700.ARW",
+        "output_sha256": "8788dc9e51c8d96c9da2cca98aa6d35c27d5c8b9fc07f455d6b3a859b9b3b025",
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_APPLIED"
+        ],
+        "required_disk_bytes": 368068608
+      },
+      {
+        "filename": "unsupported_6736_ILCE-6700.ARW",
+        "output_sha256": "8788dc9e51c8d96c9da2cca98aa6d35c27d5c8b9fc07f455d6b3a859b9b3b025",
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_NOT_APPLIED"
+        ],
+        "required_disk_bytes": 368068608
+      },
+      {
+        "filename": "identity_1178_X-T20.RAF",
+        "output_sha256": "2263d79a1f992ffd5d4297cb777e13040f7030f5c7e8a5040929799fe376f01e",
+        "warning_codes": [
+          "CAMERA_RAW_BASIC_DEVELOPMENT",
+          "EMBEDDED_LENS_DISTORTION_APPLIED"
+        ],
+        "required_disk_bytes": 288000000
+      }
+    ],
+    "sony_identity_equals_unsupported_pixels": true,
+    "sony_and_fuji_identity_differ_from_corrected_pixels": true,
+    "additional_geometry_backing_charged_for_identity_or_unsupported": false,
+    "real_sony_cancel_after_output_begins": {
+      "error_code": "CANCELLED",
+      "file_descriptors_before": 4,
+      "file_descriptors_after": 4,
+      "partial_output": false,
+      "named_camera_temporaries": false
+    }
+  }
+}
