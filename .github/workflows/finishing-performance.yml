@@ -14,13 +14,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare reproducible host compiler for offline validation
+      - name: Complete locked dependency sources for offline host validation
         run: |
-          rustup toolchain install 1.88.0 --profile minimal
-          TOOLCHAIN=$(rustc +1.88.0 --print sysroot)
-          tar --exclude='./share/doc' --exclude='./share/man' -czf "$RUNNER_TEMP/rust-toolchain.tar.gz" -C "$TOOLCHAIN" .
+          cargo vendor --locked --manifest-path native/Cargo.toml "$RUNNER_TEMP/native-vendor" > "$RUNNER_TEMP/vendor-config.toml"
+          tar -czf "$RUNNER_TEMP/native-vendor.tar.gz" -C "$RUNNER_TEMP/native-vendor" .
       - uses: actions/upload-artifact@v4
         with:
-          name: rust-1.88.0-host-validation
-          path: ${{ runner.temp }}/rust-toolchain.tar.gz
+          name: native-locked-host-dependencies
+          path: ${{ runner.temp }}/native-vendor.tar.gz
           retention-days: 1
