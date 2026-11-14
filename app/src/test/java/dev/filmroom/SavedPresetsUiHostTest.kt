@@ -370,7 +370,7 @@ class SavedPresetsUiHostTest {
             assertEquals(Intent.ACTION_CHOOSER,chooser!!.action)
             val send=chooser!!.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             val uri=send.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)!!
-            assertEquals("image/png",send.type);assertEquals("dev.filmroom.presetqr",uri.authority)
+            assertEquals("image/png",send.type);assertEquals((dev.filmroom.BuildConfig.APPLICATION_ID + ".presetqr"),uri.authority)
             assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0);assertEquals(uri,send.clipData!!.getItemAt(0).uri)
             assertEquals(item.parameters(),PresetQrCodec.decode(PresetQrImage.read(activity,uri)).parameters)
             assertNull(shadowOf(activity).nextStartedActivity)
