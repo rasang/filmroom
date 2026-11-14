@@ -16,10 +16,14 @@ object PrivateWorkRecovery {
     private val spoolPatterns=listOf(
         Regex("codec-output-$uuid\\.(?:jpg|tif)"),
         Regex("original-input-$uuid\\.rgb"),
-        Regex("film-result-$uuid\\.rgb"),
-        Regex("film-input-[A-Za-z0-9]+\\.rgb(?:\\.output)?"),
+        Regex("film-result-$uuid\\.rgb(?:\\.finishing\\.part)?"),
+        Regex("film-input-[A-Za-z0-9]+\\.rgb(?:\\.output)?(?:\\.finishing\\.part)?"),
         Regex("original-spool-[A-Za-z0-9]+\\.part"),
     )
+    private val finishingTemporaryPattern=Regex("film-result-$uuid\\.rgb\\.finishing\\.part")
+    private val disposableResultPattern=Regex("film-result-$uuid\\.rgb(?:\\.part|\\.finishing\\.part)?")
+    /** Retry may discard only job-owned results, never source or checkpoint files. */
+    internal fun isDisposableExportResult(name:String)=disposableResultPattern.matches(name)
     private val nativeScratchPattern=Regex("film-native-v5-[0-9]{1,20}-[0-9]{1,39}-[0-9]{1,20}")
     private val rawPattern=Regex("(?:raw|heic)-source-$uuid\\.rgb")
     private val heicPrimaryPattern=Regex("heic-primary-[A-Za-z0-9]+\\.heic")
@@ -55,6 +59,20 @@ object PrivateWorkRecovery {
         cacheEntries?.forEach {file->
             if(spoolPatterns.any{it.matches(file.name)})deleteKnown(file,cacheDir)
             else if(nativeScratchPattern.matches(file.name))deleteNativeScratch(file)
+        }
+        // No workers exist yet. A killed finishing pass cannot run its Rust drop
+        // guard. Inspect only direct files in UUID-owned jobs; preserve resumable
+        // input/checkpoints and never traverse a job directory symlink.
+        val jobs=File(filesDir,"export-jobs")
+        if(Files.isDirectory(jobs.toPath(),NOFOLLOW_LINKS)) {
+            val entries=jobs.listFiles()
+            if(entries==null)failed++
+            entries?.filter { it.name.matches(Regex(uuid)) && Files.isDirectory(it.toPath(),NOFOLLOW_LINKS) }?.forEach { job ->
+                val files=job.listFiles()
+                if(files==null)failed++
+                files?.filter { finishingTemporaryPattern.matches(it.name) && Files.isRegularFile(it.toPath(),NOFOLLOW_LINKS) }
+                    ?.forEach { deleteKnown(it,job) }
+            }
         }
         val sources=File(cacheDir,"photo-sources")
         val retained=retainedSourceKey?.takeIf{sourcePattern.matches(it)}

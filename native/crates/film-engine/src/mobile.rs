@@ -1250,7 +1250,7 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
         result.stages.push(crate::streamed::StageMetrics{stage:"finishing",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
         result.elapsed_ms+=at.elapsed().as_secs_f64()*1000.;
         // Replace the queue thumbnail after the graded output has committed.
-        if let Err(e)=crate::scan_preview::publish_restored(&output,width as u32,height as u32,&params.output_color_space,&mut ||check_cancellation(engine,generation).is_err()) {
+        if let Err(e)=crate::scan_preview::publish_finished(&output,width as u32,height as u32,&params.output_color_space,&mut ||check_cancellation(engine,generation).is_err()) {
             if e.kind()==std::io::ErrorKind::Interrupted{return Err(EngineError::new("CANCELLED","Finishing preview cancelled"));}
         }
     }

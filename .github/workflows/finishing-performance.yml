@@ -2,7 +2,7 @@ name: Finishing performance branch checks
 on:
   push:
     branches: [feat/finishing-preview-export-perf]
-    paths: ['app/**', 'native/**', 'codecs/**', 'docs/**', 'tools/**']
+    paths: ['app/**', 'native/**', 'codecs/**', 'docs/**', 'tools/**', '.github/workflows/finishing-performance.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +30,7 @@ jobs:
         working-directory: native
         run: |
           cargo test --locked -p film-engine --features precision-f64 --lib finishing -- --test-threads=1
+          cargo test --locked -p film-engine --features precision-f64 --lib scan_preview::tests -- --test-threads=1
           cargo test --locked -p film-engine --features precision-f64 --lib preview_brightness_cache_tests -- --test-threads=1
           cargo test --locked -p film-engine --features precision-f64 --lib preview_stage_cache -- --test-threads=1
           cargo test --locked -p spektrafilm-core --features precision-f64 --lib preview_film_log_contract_tests -- --test-threads=1
@@ -77,7 +78,7 @@ jobs:
       - name: Compile Android sources and verify legacy recipes and finishing ABI
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest -x :app:verifyEffectAudioAssets --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --tests dev.filmroom.FinishingStateHostTest --tests dev.filmroom.presets.SavedPresetCoverageHostTest --tests dev.filmroom.presets.PresetQrCodecHostTest
+          ./gradlew :app:testDebugUnitTest -x :app:verifyEffectAudioAssets --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --tests dev.filmroom.FinishingStateHostTest --tests dev.filmroom.presets.SavedPresetCoverageHostTest --tests dev.filmroom.presets.PresetQrCodecHostTest --tests dev.filmroom.lifecycle.FinishingRecoveryHostTest --tests dev.filmroom.export.ScanPreviewStoreHostTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

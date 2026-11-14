@@ -56,6 +56,14 @@ pub fn path(output: &Path) -> Option<PathBuf> {
     Some(output.parent()?.join(format!("scan-source-{id}.png")))
 }
 
+/// A successful post-finishing thumbnail has its own immutable identity. Failure
+/// leaves this absent, rather than exposing an ungraded PNG under a final label.
+pub fn finished_path(output: &Path) -> Option<PathBuf> {
+    let ordinary = path(output)?;
+    let stem = ordinary.file_stem()?.to_str()?;
+    Some(ordinary.with_file_name(format!("{stem}-finished.png")))
+}
+
 pub struct Sampler {
     width: u32, height: u32, w: u32, h: u32,
     pixels: Vec<u8>, row: Vec<[f64; 3]>,
@@ -127,8 +135,11 @@ impl Sampler {
         Ok(())
     }
     pub fn publish(&self, output: &Path, cancel: &mut impl FnMut() -> bool) -> io::Result<Option<PathBuf>> {
+        let Some(target) = path(output) else { active(cancel)?; return Ok(None); };
+        self.publish_target(target, cancel)
+    }
+    fn publish_target(&self, target: PathBuf, cancel: &mut impl FnMut() -> bool) -> io::Result<Option<PathBuf>> {
         active(cancel)?;
-        let Some(target) = path(output) else { return Ok(None); };
         if self.failed || self.next_y != self.h || self.next_sy != 0 || self.next_source != self.height { return Err(invalid()); }
         let temp = target.with_extension("png.tmp");
         struct Guard(PathBuf);
@@ -210,8 +221,17 @@ fn write_png(writer: &mut impl Write, w: u32, h: u32, pixels: &[u8], cancel: &mu
 /// extreme images reduce the thumbnail edge to respect the fixed read budget.
 pub fn publish_restored(output: &Path, width: u32, height: u32, space: &str,
     cancel: &mut impl FnMut() -> bool) -> io::Result<Option<PathBuf>> {
+    publish_restored_kind(output, width, height, space, false, cancel)
+}
+pub fn publish_finished(output: &Path, width: u32, height: u32, space: &str,
+    cancel: &mut impl FnMut() -> bool) -> io::Result<Option<PathBuf>> {
+    publish_restored_kind(output, width, height, space, true, cancel)
+}
+fn publish_restored_kind(output: &Path, width: u32, height: u32, space: &str, finished: bool,
+    cancel: &mut impl FnMut() -> bool) -> io::Result<Option<PathBuf>> {
     active(cancel)?;
-    if path(output).is_none() { return Ok(None); }
+    let target = if finished { finished_path(output) } else { path(output) };
+    let Some(target) = target else { return Ok(None); };
     let edge = restored_edge(width, height)?;
     let mut sampler = Sampler::edge(width, height, edge, space, 1.)?;
     let mut file = File::open(output)?;
@@ -233,7 +253,7 @@ pub fn publish_restored(output: &Path, width: u32, height: u32, space: &str,
     }
     sampler.next_source = height;
     drop(row); drop(file);
-    sampler.publish(output, cancel)
+    sampler.publish_target(target, cancel)
 }
 
 #[cfg(test)] mod tests {
@@ -241,6 +261,24 @@ pub fn publish_restored(output: &Path, width: u32, height: u32, space: &str,
  struct Temp(PathBuf);impl Drop for Temp{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
  fn temp()->Temp{let p=std::env::temp_dir().join(format!("scan-preview-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));fs::create_dir(&p).unwrap();Temp(p)}
  fn output(t:&Temp)->PathBuf{t.0.join("film-result-12345678-1234-1234-1234-123456789abc.rgb")}
+ #[test]fn finishing_publication_has_distinct_identity_and_graded_pixels(){
+  let t=temp();let out=output(&t);let values=vec![0.18f32;96];
+  fs::write(&out,values.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+  let early=publish_restored(&out,8,4,"sRGB",&mut||false).unwrap().unwrap();let before=fs::read(&early).unwrap();
+  let grade=crate::finishing::Finishing{exposure_ev:1.,..Default::default()};
+  grade.apply_spool(&out,32,"sRGB",||false).unwrap();let final_source=publish_finished(&out,8,4,"sRGB",&mut||false).unwrap().unwrap();
+  assert_ne!(early,final_source);assert_eq!(Some(final_source.clone()),finished_path(&out));
+  assert_eq!(fs::read(&early).unwrap(),before);
+  assert_eq!(fs::read(final_source).unwrap(),crate::negative_preview::png_rgb(8,4,&vec![162;96]));
+ }
+ #[test]fn finishing_cancel_or_bad_spool_never_publishes_an_ungraded_final(){
+  let t=temp();let out=output(&t);fs::write(&out,(0..96).flat_map(|_|0.18f32.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+  let early=publish_restored(&out,8,4,"sRGB",&mut||false).unwrap().unwrap();let before=fs::read(&early).unwrap();
+  assert!(publish_finished(&out,8,4,"sRGB",&mut||true).is_err());
+  assert!(!finished_path(&out).unwrap().exists());
+  fs::write(&out,b"incomplete").unwrap();assert!(publish_finished(&out,8,4,"sRGB",&mut||false).is_err());
+  assert!(!finished_path(&out).unwrap().exists());assert_eq!(fs::read(early).unwrap(),before);
+ }
  #[test]fn chunk_sampling_is_read_only_and_srgb_is_encoded_once(){
   let t=temp();let out=output(&t);let image=ImageBuf::from_data(8,4,vec![from_f64(0.18);8*4*3]);let before=image.data.clone();
   for space in ["sRGB","Display P3","Adobe RGB (1998)"]{
