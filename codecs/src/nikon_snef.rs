@@ -8,15 +8,16 @@ const MIB:u64=1024*1024;const BASE:u64=32*MIB;const ROWS:usize=64;
 #[derive(Clone,Copy,Debug,PartialEq)] pub(crate) enum PixelDomain { LibRawNikonSnefLinearSrgbAlreadyBalanced }
 pub(crate) struct Snef {pub domain:PixelDomain,pub as_shot_wb:[f32;3],pub recorded_color_space:Option<u16>,width:usize,height:usize,orientation:u8,input_bytes:u64,offset:u64,bytes:u64,source:Option<RawSource>,file:File,identity:crate::nikon_he::Identity}
 struct Maker {mode:u16,has_wb:bool,color_space:Option<u16>}
+#[track_caller]
 fn bad()->crate::error::CodecError{err("INVALID_INPUT","probe")}
 fn maker(data:&[u8])->Result<Option<Maker>> {
  if data.len()<18 || !data.starts_with(b"Nikon\0\x02") {return Ok(None);}
  let e=match &data[10..12]{b"II"=>Endian::Le,b"MM"=>Endian::Be,_=>return Err(bad())};if e.u16(&data[12..14])!=42{return Err(bad());}
- let at=10usize.checked_add(e.u32(&data[14..18])as usize).ok_or_else(bad)?;
- let start=at.checked_add(2).ok_or_else(bad)?;
- let n=e.u16(data.get(at..start).ok_or_else(bad)?)as usize;if n>256{return Err(bad());}
- let end=start.checked_add(n*12).ok_or_else(bad)?;
- let entries=data.get(start..end).ok_or_else(bad)?;let mut mode=None;let mut wb=false;let mut cs=None;
+ let at=10usize.checked_add(e.u32(&data[14..18])as usize).ok_or_else(|| bad())?;
+ let start=at.checked_add(2).ok_or_else(|| bad())?;
+ let n=e.u16(data.get(at..start).ok_or_else(|| bad())?)as usize;if n>256{return Err(bad());}
+ let end=start.checked_add(n*12).ok_or_else(|| bad())?;
+ let entries=data.get(start..end).ok_or_else(|| bad())?;let mut mode=None;let mut wb=false;let mut cs=None;
  for entry in entries.chunks_exact(12){let tag=e.u16(entry);let ty=e.u16(&entry[2..]);let count=e.u32(&entry[4..]);
   if matches!(tag,0x000c|0x0014|0x0097){wb=true;}
   if tag==0x0093 {if mode.is_some()||ty!=3||count!=1{return Err(bad());}mode=Some(e.u16(&entry[8..]));}
@@ -32,10 +33,10 @@ impl Snef {
   let mut notes=t.ifds.iter().filter_map(|i|i.get(&37500));let Some(note)=notes.next() else{return Ok(None)};if notes.next().is_some(){return Err(bad());}
   let Some(m)=maker(&note.bytes)? else{return Ok(None)};if m.mode!=8{return Ok(None);}
   if !m.has_wb {return Err(err("INVALID_COLOR_METADATA","probe"));}
-  let mut sensors=t.ifds.iter().enumerate().filter(|(_,i)|i.contains_key(&33422));let (index,sensor)=sensors.next().ok_or_else(bad)?;if sensors.next().is_some(){return Err(bad());}
+  let mut sensors=t.ifds.iter().enumerate().filter(|(_,i)|i.contains_key(&33422));let (index,sensor)=sensors.next().ok_or_else(|| bad())?;if sensors.next().is_some(){return Err(bad());}
   let width=uint(sensor,256,None)?as usize;let height=uint(sensor,257,None)?as usize;crate::validate_dimensions(width as u32,height as u32)?;
   if width<8 || width>16384 || width%2!=0 || height<8 || uint(sensor,258,None)?!=12 || uint(sensor,259,None)?!=34713 || uint(sensor,262,None)?!=32803 || uint(sensor,277,Some(1))?!=1 {return Err(err("UNSUPPORTED_CAMERA_RAW_VARIANT","probe"));}
-  let offsets=sensor.get(&273).ok_or_else(bad)?.uints()?;let counts=sensor.get(&279).ok_or_else(bad)?.uints()?;
+  let offsets=sensor.get(&273).ok_or_else(|| bad())?.uints()?;let counts=sensor.get(&279).ok_or_else(|| bad())?.uints()?;
   if offsets.len()!=1||counts.len()!=1||uint(sensor,278,Some(height as u32))?as usize!=height {return Err(err("UNSUPPORTED_CAMERA_RAW_VARIANT","probe"));}
   let offset=u64::from(offsets[0]);let bytes=u64::from(counts[0]);if bytes!=(width as u64)*(height as u64)*3 || offset.checked_add(bytes).is_none_or(|n|n>t.size){return Err(bad());}
   let orientation=uint(&t.ifds[0],274,Some(1))?;if !(1..=8).contains(&orientation){return Err(bad());}

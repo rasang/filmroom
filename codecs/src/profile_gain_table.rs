@@ -2,6 +2,7 @@
 //! caller MUST supply exposure-adjusted RIMM (D50), not camera RGB or sRGB.
 //! Adobe DNG 1.7.1 pp71-73: half-pixel ActiveArea coordinates, table index t*N.
 use crate::{error::{err,Result},tiff::{Endian,Value}};
+#[track_caller]
 fn bad()->crate::error::CodecError{err("INVALID_COLOR_METADATA","probe")}
 pub const MAX_BYTES:usize=256*1024;
 #[derive(Clone,Debug)]pub struct ProfileGainTable{v:usize,h:usize,n:usize,spacing:[f64;2],origin:[f64;2],weights:[f64;5],gains:Vec<f32>}

@@ -7,9 +7,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub const MAX_ENCODED: usize = 8 * 1024 * 1024;
 pub const MAX_SAMPLES: usize = 4 * 1024 * 1024;
 pub const OVERHEAD: u64 = 4 * 1024 * 1024;
+#[track_caller]
 fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "decode")
 }
+#[track_caller]
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_COMPRESSION", "decode")
 }
@@ -29,7 +31,7 @@ struct Bits<'a> {
 impl Bits<'_> {
     fn bit(&mut self) -> Result<u32> {
         if self.left == 0 {
-            self.byte = *self.bytes.get(self.pos).ok_or_else(invalid)?;
+            self.byte = *self.bytes.get(self.pos).ok_or_else(|| invalid())?;
             self.pos += 1;
             if self.byte == 255 {
                 if self.bytes.get(self.pos) != Some(&0) {
@@ -102,14 +104,14 @@ fn validate_limits(
         if src.get(p) != Some(&255) {
             return Err(invalid());
         }
-        let marker = *src.get(p + 1).ok_or_else(invalid)?;
-        let len_bytes = src.get(p + 2..p + 4).ok_or_else(invalid)?;
+        let marker = *src.get(p + 1).ok_or_else(|| invalid())?;
+        let len_bytes = src.get(p + 2..p + 4).ok_or_else(|| invalid())?;
         let len = u16::from_be_bytes([len_bytes[0], len_bytes[1]]) as usize;
         if len < 2 {
             return Err(invalid());
         }
-        let end = p.checked_add(2 + len).ok_or_else(invalid)?;
-        let s = src.get(p + 4..end).ok_or_else(invalid)?;
+        let end = p.checked_add(2 + len).ok_or_else(|| invalid())?;
+        let s = src.get(p + 4..end).ok_or_else(|| invalid())?;
         p = end;
         match marker {
             0xc3 => {
@@ -159,16 +161,16 @@ fn validate_limits(
             0xc4 => {
                 let mut q = 0;
                 while q < s.len() {
-                    let id = *s.get(q).ok_or_else(invalid)? as usize;
+                    let id = *s.get(q).ok_or_else(|| invalid())? as usize;
                     if id > 3 || tables[id].is_some() {
                         return Err(unsupported());
                     }
-                    let counts = s.get(q + 1..q + 17).ok_or_else(invalid)?;
+                    let counts = s.get(q + 1..q + 17).ok_or_else(|| invalid())?;
                     let count: usize = counts.iter().map(|x| *x as usize).sum();
                     if count == 0 || count > 256 {
                         return Err(invalid());
                     }
-                    let vals = s.get(q + 17..q + 17 + count).ok_or_else(invalid)?;
+                    let vals = s.get(q + 17..q + 17 + count).ok_or_else(|| invalid())?;
                     let mut code = 0u32;
                     let mut at = 0;
                     let mut first = [0; 16];
@@ -216,7 +218,7 @@ fn validate_limits(
                         tables
                             .get(id)
                             .and_then(|t| t.as_ref())
-                            .ok_or_else(invalid)?,
+                            .ok_or_else(|| invalid())?,
                     );
                 }
                 if !(1..=7).contains(&s[1 + 2 * n])
@@ -259,7 +261,7 @@ fn validate_limits(
                             }
                         }
                     }
-                    let category = category.ok_or_else(invalid)?;
+                    let category = category.ok_or_else(|| invalid())?;
                     // DNG's lossless JPEG category16 represents -32768, no payload.
                     if category != 16 {
                         for _ in 0..category {

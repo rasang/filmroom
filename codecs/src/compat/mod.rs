@@ -17,6 +17,7 @@ pub(crate) use profiles::profile_metadata;
 fn inherited<'a>(root: &'a Ifd, raw: &'a Ifd, tag: u16) -> Option<&'a crate::tiff::Value> {
     raw.get(&tag).or_else(|| root.get(&tag))
 }
+#[track_caller]
 fn color_err() -> crate::error::CodecError {
     err("INVALID_COLOR_METADATA", "probe")
 }

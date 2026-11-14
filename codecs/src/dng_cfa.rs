@@ -9,9 +9,11 @@ use std::{
     io::{BufReader, Read, Seek, SeekFrom, Take},
     sync::atomic::{AtomicBool, Ordering},
 };
+#[track_caller]
 fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "decode")
 }
+#[track_caller]
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_COMPRESSION", "decode")
 }
@@ -191,7 +193,7 @@ pub fn rows(
         if len < 2 {
             return Err(invalid());
         }
-        header_bytes = header_bytes.checked_add(len + 2).ok_or_else(invalid)?;
+        header_bytes = header_bytes.checked_add(len + 2).ok_or_else(|| invalid())?;
         if header_bytes > 65536 {
             return Err(invalid());
         }
@@ -268,7 +270,7 @@ pub fn rows(
             _ => return Err(unsupported()),
         }
     }
-    let precision = jpeg_precision.ok_or_else(invalid)?;
+    let precision = jpeg_precision.ok_or_else(|| invalid())?;
     let mut row = vec![0u16; width];
     let mut first = [1i32 << (precision - 1); 2];
     let mut rst = 0u8;

@@ -31,7 +31,7 @@ pub(super) fn decode(
     admission: &Admission,
     cancel: &AtomicBool,
 ) -> Result<(Probe, Admission)> {
-    let (offset, count, _) = camera.arw6.ok_or_else(unsupported)?;
+    let (offset, count, _) = camera.arw6.ok_or_else(|| unsupported())?;
     let directory = output
         .parent()
         .filter(|p| !p.as_os_str().is_empty())

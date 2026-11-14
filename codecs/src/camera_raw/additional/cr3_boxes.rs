@@ -11,6 +11,7 @@ struct Scan {
     mdat: usize,
     desc: usize,
 }
+#[track_caller]
 fn bad() -> crate::error::CodecError {
     err("INVALID_INPUT", "probe")
 }
@@ -160,7 +161,7 @@ impl Scan {
                 self.desc += 1;
             }
             if matches!(typ, b"CMT1" | b"CMT2" | b"CMT3" | b"CMT4" | b"CNOP") {
-                self.copied = self.copied.checked_add(bytes).ok_or_else(bad)?;
+                self.copied = self.copied.checked_add(bytes).ok_or_else(|| bad())?;
                 if bytes > 1024 * 1024 || self.copied > 4 * 1024 * 1024 {
                     return Err(err("MEMORY_BUDGET", "probe"));
                 }

@@ -137,7 +137,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                     "INVALID_COLOR_METADATA"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56858cdae70f)
                     else->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_aff865b41066)
                 }
-                throw PhotoException(if(failureReason!=PhotoException.Reason.EXPORT && code in setOf("PIXEL_LIMIT","EDGE_LIMIT")) PhotoException.Reason.TOO_LARGE else failureReason,message,codecCode=safeCode,codecStage=safeStage,rawTechnical=RawTechnicalInfo.fromNative(result.optJSONObject("technical")))
+                throw PhotoException(if(failureReason!=PhotoException.Reason.EXPORT && code in setOf("PIXEL_LIMIT","EDGE_LIMIT")) PhotoException.Reason.TOO_LARGE else failureReason,message,codecCode=safeCode,codecStage=safeStage,rawTechnical=RawTechnicalInfo.fromNative(result.optJSONObject("technical")),codecDetail=dev.filmroom.diagnostics.CodecDiagnosticDetail.fromNative(error))
             }
             result
         } finally {

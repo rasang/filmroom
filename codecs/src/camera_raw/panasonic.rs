@@ -2,7 +2,7 @@
 use super::*;
 pub(super) fn sensor(t:&Tiff)->Result<&crate::tiff::Ifd> {
     let mut candidates=t.ifds.iter().filter(|i|i.contains_key(&280));
-    let sensor=candidates.next().ok_or_else(unsupported)?;
+    let sensor=candidates.next().ok_or_else(|| unsupported())?;
     if candidates.next().is_some() {return Err(unsupported());}
     let version=uint(sensor,45,None)?;
     if !matches!(version,3..=8) {return Err(unsupported());}
@@ -18,13 +18,13 @@ pub(super) fn sensor(t:&Tiff)->Result<&crate::tiff::Ifd> {
     // CF2 validates its typed entropy/strip plan inside metadata-only rawler decode.
     if version==8 {
         if !matches!(bits,12|14|16) {return Err(unsupported());}
-        let offsets=sensor.get(&280).ok_or_else(unsupported)?.uints()?;
+        let offsets=sensor.get(&280).ok_or_else(|| unsupported())?.uints()?;
         if offsets.len()!=1 || offsets[0]<8 || u64::from(offsets[0])>=t.size {return Err(err("INVALID_INPUT","probe"));}
         return Ok(sensor);
     }
     let needed=rawler::decoders::rw2::bounded_payload_bytes(width as usize,height as usize,version as u16,bits)
         .map_err(|_|unsupported())?;
-    let offsets=sensor.get(&280).ok_or_else(unsupported)?.uints()?;
+    let offsets=sensor.get(&280).ok_or_else(|| unsupported())?.uints()?;
     if offsets.len()!=1 || offsets[0]<8 || u64::from(offsets[0]).checked_add(needed as u64).is_none_or(|n|n>t.size) {
         return Err(err("INVALID_INPUT","probe"));
     }

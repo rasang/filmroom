@@ -6,7 +6,9 @@
 //! and non-row-aligned restart intervals until independently validated.
 use crate::error::{err,io_error,Result};
 use std::{fs::File,io::{BufReader,Read,Seek,SeekFrom,Take},sync::atomic::{AtomicBool,Ordering}};
+#[track_caller]
 fn invalid()->crate::error::CodecError{err("INVALID_INPUT","decode")}
+#[track_caller]
 fn unsupported()->crate::error::CodecError{err("UNSUPPORTED_COMPRESSION","decode")}
 struct Input<'a>{r:BufReader<Take<&'a mut File>>, byte:u8,left:u8}
 impl Input<'_>{
@@ -35,7 +37,7 @@ pub fn rows(file:&mut File,offset:u64,bytes:u64,width:usize,height:usize,precisi
  let mut tables:[Option<Huff>;4]=[None,None,None,None];let mut ids=Vec::new();let mut selectors=[0usize;3];let mut restart=0usize;let mut saw_restart=false;let mut header_bytes=2usize;
  loop{
   if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"))}
-  let marker=input.marker()?;let len=input.u16()? as usize;if len<2{return Err(invalid())}header_bytes=header_bytes.checked_add(len+2).ok_or_else(invalid)?;if header_bytes>65536{return Err(invalid())}
+  let marker=input.marker()?;let len=input.u16()? as usize;if len<2{return Err(invalid())}header_bytes=header_bytes.checked_add(len+2).ok_or_else(|| invalid())?;if header_bytes>65536{return Err(invalid())}
   let mut s=vec![0;len-2];input.r.read_exact(&mut s).map_err(|_|invalid())?;
   match marker{
    0xc3=>{if !ids.is_empty()||s.len()!=15||s[0]!=precision||u16::from_be_bytes([s[1],s[2]]) as usize!=height||u16::from_be_bytes([s[3],s[4]]) as usize!=width||s[5]!=3{return Err(unsupported())}for c in s[6..].chunks_exact(3){if c[1]!=0x11||c[2]!=0||ids.contains(&c[0]){return Err(unsupported())}ids.push(c[0]);}},

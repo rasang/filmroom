@@ -155,12 +155,14 @@ class PhotoException(
     val rawTechnical: dev.filmroom.diagnostics.RawTechnicalInfo? = null,
     val uiMessage:dev.filmroom.i18n.UiMessage? = null,
     val importDiagnostic: ImportDiagnosticInfo? = null,
+    val codecDetail: dev.filmroom.diagnostics.CodecDiagnosticDetail? = null,
 ) : IOException(message, cause) {
     constructor(reason:Reason,message:dev.filmroom.i18n.UiMessage,cause:Throwable?=null,cleanupUncertain:Boolean=false,
         codecCode:dev.filmroom.diagnostics.CodecErrorCode?=null,codecStage:dev.filmroom.diagnostics.CodecStage?=null,
-        rawTechnical:dev.filmroom.diagnostics.RawTechnicalInfo?=null):this(reason,
+        rawTechnical:dev.filmroom.diagnostics.RawTechnicalInfo?=null,
+        codecDetail:dev.filmroom.diagnostics.CodecDiagnosticDetail?=null):this(reason,
             message.render() ?: dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ae173945fb80),
-            cause,cleanupUncertain,codecCode,codecStage,rawTechnical,message)
+            cause,cleanupUncertain,codecCode,codecStage,rawTechnical,message,codecDetail=codecDetail)
 
     enum class Reason { UNSUPPORTED, TOO_LARGE, UNREADABLE, STORAGE, EXPORT }
 }
@@ -267,7 +269,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             }
             PhotoException(error.reason, error.message.orEmpty(), error,
                 error.cleanupUncertain, error.codecCode, error.codecStage, error.rawTechnical,
-                error.uiMessage, error.importDiagnostic ?: facts(error))
+                error.uiMessage, error.importDiagnostic ?: facts(error), error.codecDetail)
         } catch(_:Throwable) { error }
         suspend fun emitStage(){
             try { onStage(facts()) } catch(c:CancellationException){throw c} catch(_:Throwable){}
@@ -815,6 +817,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 codecCode = (error as? PhotoException)?.codecCode,
                 codecStage = (error as? PhotoException)?.codecStage,
                 rawTechnical = (error as? PhotoException)?.rawTechnical,
+                codecDetail = (error as? PhotoException)?.codecDetail,
             )
             null -> throw IOException("Export ended without a result")
             else -> throw error

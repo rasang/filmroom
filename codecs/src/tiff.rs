@@ -309,17 +309,17 @@ impl Tiff {
 }
 pub fn uint(ifd: &Ifd, tag: u16, default: Option<u32>) -> Result<u32> {
     if let Some(v) = ifd.get(&tag) {
-        let n = v.uints()?;
+        let n = v.uints().map_err(|e| e.detail(crate::error::Reason::TagValue, Some(tag)))?;
         if n.len() != 1 {
-            return Err(err("INVALID_INPUT", "probe"));
+            return Err(err("INVALID_INPUT", "probe").detail(crate::error::Reason::TagShape, Some(tag)));
         }
         Ok(n[0])
     } else {
-        default.ok_or_else(|| err("INVALID_INPUT", "probe"))
+        default.ok_or_else(|| err("INVALID_INPUT", "probe").detail(crate::error::Reason::MissingTag, Some(tag)))
     }
 }
 pub fn nums(ifd: &Ifd, tag: u16) -> Result<Option<Vec<f64>>> {
-    ifd.get(&tag).map(Value::nums).transpose()
+    ifd.get(&tag).map(Value::nums).transpose().map_err(|e| e.detail(crate::error::Reason::TagValue, Some(tag)))
 }
 
 #[cfg(test)]

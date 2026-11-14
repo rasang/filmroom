@@ -16,9 +16,11 @@ pub struct GainMap {
 }
 pub(crate) const MAX_VALUES: usize = 262144; // cumulative 1 MiB retained gain samples
 pub(crate) const MAX_MAPS: usize = 4;
+#[track_caller]
 fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "probe")
 }
+#[track_caller]
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_DNG_OPCODE", "probe")
 }
@@ -32,7 +34,7 @@ impl<'a> Cursor<'a> {
             .pos
             .checked_add(n)
             .filter(|&x| x <= self.bytes.len())
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| invalid())?;
         let s = &self.bytes[self.pos..end];
         self.pos = end;
         Ok(s)
@@ -66,7 +68,7 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
                     return Err(unsupported());
                 }
                 let map = parse_opcode(record.payload, width, height)?;
-                total = total.checked_add(map.value_count()).ok_or_else(invalid)?;
+                total = total.checked_add(map.value_count()).ok_or_else(|| invalid())?;
                 if total > MAX_VALUES {
                     return Err(unsupported());
                 }
@@ -106,9 +108,9 @@ pub(crate) fn parse_opcode(payload: &[u8], width: usize, height: usize) -> Resul
         || origin.iter().any(|v| v.abs() > 1e12) {
         return Err(unsupported());
     }
-    let values = rows.checked_mul(cols).and_then(|v| v.checked_mul(3)).ok_or_else(invalid)?;
+    let values = rows.checked_mul(cols).and_then(|v| v.checked_mul(3)).ok_or_else(|| invalid())?;
     if values > MAX_VALUES { return Err(unsupported()); }
-    if payload.len() != 76usize.checked_add(values.checked_mul(4).ok_or_else(invalid)?).ok_or_else(invalid)? {
+    if payload.len() != 76usize.checked_add(values.checked_mul(4).ok_or_else(|| invalid())?).ok_or_else(|| invalid())? {
         return Err(invalid());
     }
     let mut gains = Vec::with_capacity(values);

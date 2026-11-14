@@ -1,3 +1,10 @@
+fn failure_json(e: &crate::error::CodecError) -> serde_json::Value {
+    // CodecError holds only fixed strings/enums and source coordinates; no input payload.
+    let mut value = serde_json::to_value(e).expect("fixed codec error serializes");
+    value["ok"] = serde_json::json!(false);
+    value["outputValid"] = serde_json::json!(false);
+    value
+}
 use crate::{
     develop::Budget,
     error::{Result, err},
@@ -123,7 +130,7 @@ fn run(id: i64, input: &str, output: Option<&str>, budget: &str) -> Value {
     let mut v = match result {
         Ok(v) => v,
         Err(e) => {
-            let mut failure = json!({"ok":false,"code":e.code,"message":e.message,"stage":e.stage,"outputValid":false});
+            let mut failure = failure_json(&e);
             // Failure-only, private path verified again; no validation/cancel probes.
             if e.stage != "validate" && e.code != "CANCELLED" {
                 if let Ok(h) = handle(id) {
@@ -280,7 +287,7 @@ fn run_encode(
     let mut v = match result {
         Ok(v) => v,
         Err(e) => {
-            json!({"ok":false,"code":e.code,"message":e.message,"stage":e.stage,"outputValid":false})
+            failure_json(&e)
         }
     };
     v["schemaVersion"] = json!(1);
@@ -407,6 +414,10 @@ mod technical_failure_tests {
         assert_eq!(result["ok"], false);
         assert_eq!(result["code"], "UNSUPPORTED_FORMAT");
         assert_eq!(result["stage"], "probe");
+        assert_eq!(result["diagnosticSchema"], 1);
+        assert!(result["line"].as_u64().unwrap() > 0);
+        assert!(result["column"].as_u64().unwrap() > 0);
+        assert!(!result["source"].as_str().unwrap().contains('/'));
         assert_eq!(result["technical"]["rawWidth"], 8192);
         assert!(
             result["technical"]

@@ -51,6 +51,7 @@ class OperationTrace private constructor(val id:OperationId) {
             codecCode = (t as? PhotoException)?.codecCode,
             codecStage = (t as? PhotoException)?.codecStage,
             rawTechnical = (t as? PhotoException)?.rawTechnical,
+            codecDetail = (t as? PhotoException)?.codecDetail,
             importDiagnostic = (t as? PhotoException)?.importDiagnostic,
         )
         internal fun errorCode(t:Throwable,operation:Operation?=null):ErrorCode=when(t){

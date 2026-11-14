@@ -42,6 +42,7 @@ mod canon_stream;
 mod panasonic;
 pub(crate) mod additional;
 pub(crate) mod fuji;
+#[track_caller]
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_CAMERA_RAW_VARIANT", "probe")
 }
@@ -92,8 +93,8 @@ fn blocks(
     offset_tag: u16,
     count_tag: u16,
 ) -> Result<Vec<(u64, u64)>> {
-    let offsets = i.get(&offset_tag).ok_or_else(unsupported)?.uints()?;
-    let counts = i.get(&count_tag).ok_or_else(unsupported)?.uints()?;
+    let offsets = i.get(&offset_tag).ok_or_else(|| unsupported())?.uints()?;
+    let counts = i.get(&count_tag).ok_or_else(|| unsupported())?.uints()?;
     if offsets.is_empty() || offsets.len() != counts.len() || offsets.len() > 4096 {
         return Err(unsupported());
     }
@@ -269,13 +270,13 @@ fn sony_version(t: &Tiff) -> Result<u8> {
         .ifds
         .iter()
         .find_map(|i| i.get(&37500))
-        .ok_or_else(unsupported)?;
+        .ok_or_else(|| unsupported())?;
     let b = &v.bytes;
     let start = if b.starts_with(b"SONY DSC ") { 12 } else { 0 };
     let n = b
         .get(start..start + 2)
         .map(|x| t.endian.u16(x) as usize)
-        .ok_or_else(unsupported)?;
+        .ok_or_else(|| unsupported())?;
     if n > 256 || start + 2 + n * 12 > b.len() {
         return Err(unsupported());
     }
@@ -347,11 +348,11 @@ impl CameraRaw {
             if t.ifds.iter().any(|i| i.contains_key(&273)) {
                 return Err(unsupported());
             }
-            let offsets = selected.get(&330).ok_or_else(unsupported)?.uints()?;
+            let offsets = selected.get(&330).ok_or_else(|| unsupported())?.uints()?;
             if offsets.len() != 1 || offsets[0] < 8 || offsets[0] as u64 >= t.size {
                 return Err(unsupported());
             }
-            let private = selected.get(&50740).ok_or_else(unsupported)?;
+            let private = selected.get(&50740).ok_or_else(|| unsupported())?;
             if private.typ != 1 || private.bytes.len() != 4 {
                 return Err(unsupported());
             }
@@ -371,7 +372,7 @@ impl CameraRaw {
             expected_dimensions = Some((uint(selected, 2, None)? as usize, uint(selected, 3, None)? as usize));
         } else if format == "CR2" {
             let mut candidates = t.ifds.iter().filter(|i| i.contains_key(&50752));
-            let sensor = candidates.next().ok_or_else(unsupported)?;
+            let sensor = candidates.next().ok_or_else(|| unsupported())?;
             selected = sensor;
             if !sensor.contains_key(&50648)
                 || candidates.next().is_some()
@@ -404,7 +405,7 @@ impl CameraRaw {
                             && uint(i, 259, Some(0)).ok() == Some(7)))
                         && uint(i, 254, Some(0)).ok().is_some_and(|n| n & 1 == 0)
                 })
-                .ok_or_else(unsupported)?;
+                .ok_or_else(|| unsupported())?;
             let cpp = uint(sensor, 277, Some(1))?;
             if cpp != 1 && !(format == "ARW" && cpp == 3) {
                 return Err(unsupported());
@@ -470,9 +471,9 @@ impl CameraRaw {
                     let black = selected
                         .get(&0x7310)
                         .or_else(|| selected.get(&0x7300))
-                        .ok_or_else(unsupported)?
+                        .ok_or_else(|| unsupported())?
                         .uints()?;
-                    let white = selected.get(&50717).ok_or_else(unsupported)?.uints()?;
+                    let white = selected.get(&50717).ok_or_else(|| unsupported())?.uints()?;
                     if !matches!(black.len(), 1 | 4)
                         || white.len() != 1
                         || white[0] == 0
@@ -489,7 +490,7 @@ impl CameraRaw {
                 {
                     // ARW2's stored 8-bit deltas require four ordered curve knees.
                     // Validate before rawler's indexed metadata access (also in dummy).
-                    let curve = sensor.get(&0x7010).ok_or_else(unsupported)?.uints()?;
+                    let curve = sensor.get(&0x7010).ok_or_else(|| unsupported())?.uints()?;
                     if curve.len() != 4 {
                         return Err(unsupported());
                     }
@@ -521,7 +522,7 @@ impl CameraRaw {
             .ifds
             .iter()
             .position(|i| std::ptr::eq(i, selected))
-            .ok_or_else(unsupported)?];
+            .ok_or_else(|| unsupported())?];
         if raw.source_ifd_offset != Some(source_ifd_offset) {
             return Err(unsupported());
         }
@@ -576,7 +577,7 @@ impl CameraRaw {
             // Reject malformed Bayer slice geometry at metadata admission, before
             // scanning a large entropy stream or allocating any spool files.
             if raw.cpp == 1 {
-                let slices = selected.get(&50752).ok_or_else(unsupported)?.uints()?;
+                let slices = selected.get(&50752).ok_or_else(|| unsupported())?.uints()?;
                 if slices.len() != 3 || slices[0] > 4095
                     || (slices[0] != 0 && (slices[1] == 0 || slices[2] == 0
                         || u64::from(slices[0]) * u64::from(slices[1]) + u64::from(slices[2]) != raw.width as u64)) {
@@ -598,7 +599,7 @@ impl CameraRaw {
             let encoded_black = selected
                 .get(&0x7310)
                 .or_else(|| selected.get(&0x7300))
-                .ok_or_else(unsupported)?
+                .ok_or_else(|| unsupported())?
                 .uints()?;
             let encoded_white = uint(selected, 50717, None)?;
             let expected_black: Vec<f32> = (0..4)

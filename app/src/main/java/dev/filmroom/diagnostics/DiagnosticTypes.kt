@@ -218,6 +218,7 @@ data class SafeInfo(
     val codecCode: CodecErrorCode? = null,
     val codecStage: CodecStage? = null,
     val rawTechnical: RawTechnicalInfo? = null,
+    val codecDetail: CodecDiagnosticDetail? = null,
     val importDiagnostic: ImportDiagnosticInfo? = null,
     val metadataIssues: List<MetadataIssue> = emptyList(),
     val metadataPhase: MetadataIssuePhase? = null,
@@ -454,6 +455,7 @@ data class SafeInfo(
         codecCode?.let { put("codecCode", it.name) }
         codecStage?.let { put("codecStage", it.id) }
         rawTechnical?.let { putAll(it.fields()) }
+        codecDetail?.let { putAll(it.fields()) }
         importDiagnostic?.let { putAll(it.fields()) }
         captureTimeBasis?.let{put("captureTimeBasis",it.name)}
         MetadataIssues.encode(metadataIssues).takeIf{it.isNotEmpty()}?.let{put("metadataIssues",it);metadataPhase?.let{phase->put("metadataPhase",phase.name)}}
@@ -467,6 +469,7 @@ data class SafeInfo(
             codecCode = fields["codecCode"]?.let(CodecErrorCode::fromId),
             codecStage = fields["codecStage"]?.let(CodecStage::fromId),
             rawTechnical = RawTechnicalInfo.fromFields(fields),
+            codecDetail = CodecDiagnosticDetail.fromFields(fields),
             importDiagnostic = ImportDiagnosticInfo.fromFields(fields),
             metadataIssues = MetadataIssues.parse(fields["metadataIssues"].orEmpty()),
             metadataPhase = MetadataIssuePhase.entries.firstOrNull{it.name==fields["metadataPhase"]},

@@ -1,4 +1,4 @@
-use crate::{error::{Result, err}, tiff::Ifd};
+use crate::{error::{Result, err, Reason}, tiff::Ifd};
 use super::inherited;
 use super::color_err;
 use crate::dng::Warning;
@@ -11,25 +11,25 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
             .iter()
             .any(|&tag| inherited(root, raw, tag).is_some())
         {
-            let dims = inherited(root, raw, 50937).ok_or_else(color_err)?;
+            let dims = inherited(root, raw, 50937).ok_or_else(|| color_err())?;
             if dims.typ != 4 || dims.count != 3 {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileDimensions, None));
             }
             let dims = dims.uints()?;
             if dims[0] == 0 || dims[1] < 2 || dims[2] == 0 {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileDimensions, None));
             }
             let count = dims
                 .iter()
                 .try_fold(3u64, |n, &d| n.checked_mul(d as u64))
-                .ok_or_else(color_err)?;
+                .ok_or_else(|| color_err())?;
             if count > u32::MAX as u64 || inherited(root, raw, 50938).is_none() {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileDimensions, None));
             }
             for tag in [50938, 50939] {
                 if let Some(data) = inherited(root, raw, tag) {
                     if data.typ != 11 || data.count as u64 != count {
-                        return Err(color_err());
+                        return Err(color_err().detail(Reason::ProfileDimensions, None));
                     }
                 }
             }
@@ -43,7 +43,7 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
         // this is not full DNG camera-profile rendering.
         if let Some(curve) = inherited(root, raw, 50940) {
             if curve.typ != 11 || curve.count < 4 || curve.count % 2 != 0 || curve.count > 4096 {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileCurve, Some(50940)));
             }
             let points: Vec<f32> = curve
                 .bytes
@@ -60,7 +60,7 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
                     .windows(2)
                     .any(|p| p[1][0] <= p[0][0] || p[1][1] < p[0][1])
             {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileCurve, Some(50940)));
             }
             // Keep the shared SDR rule strict except for the bounded vivo
             // compatibility policy. All curve safety checks above still apply.
@@ -68,7 +68,7 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
             if endpoint != 1.
                 && !super::brands::vivo::allows_subunity_tone_endpoint(root, raw, endpoint, points[points.len() - 3])
             {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::ProfileEndpoint, Some(50940)));
             }
             warnings.push(Warning {
                 code: "DNG_CAMERA_TONE_CURVE_NOT_APPLIED",
@@ -109,8 +109,8 @@ pub(super) fn identity_look_table(root: &Ifd, raw: &Ifd) -> Result<()> {
     if !TAGS.iter().any(|tag| root.contains_key(tag)) {
         return Ok(());
     }
-    let dims = root.get(&50981).ok_or_else(color_err)?;
-    let data = root.get(&50982).ok_or_else(color_err)?;
+    let dims = root.get(&50981).ok_or_else(|| color_err())?;
+    let data = root.get(&50982).ok_or_else(|| color_err())?;
     if dims.typ != 4 || dims.count != 3 || dims.bytes.len() != 12 {
         return Err(color_err());
     }
@@ -119,7 +119,7 @@ pub(super) fn identity_look_table(root: &Ifd, raw: &Ifd) -> Result<()> {
         return Err(color_err());
     }
     let count = dims.iter().try_fold(3u64, |n, &v| n.checked_mul(v as u64))
-        .ok_or_else(color_err)?;
+        .ok_or_else(|| color_err())?;
     if count > 65536 / 4 || data.typ != 11 || data.count as u64 != count
         || data.bytes.len() as u64 != count * 4 {
         return Err(color_err());

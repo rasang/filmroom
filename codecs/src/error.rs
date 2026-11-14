@@ -4,11 +4,82 @@ use serde::Serialize;
 pub struct CodecError {
     pub code: &'static str,
     pub message: &'static str,
+    pub diagnostic_schema: u8,
+    pub reason: Reason,
+    pub source: &'static str,
+    pub line: u32,
+    pub column: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<u16>,
     pub stage: &'static str,
 }
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Reason {
+    Validation, MissingTag, TagShape, TagValue, BlackWhiteLevel, WhiteBalanceRange,
+    D65MatrixMissing, MatrixShape, MatrixRange, MatrixSingular, ColorTransform,
+    ProfileDimensions, ProfileCurve, ProfileEndpoint,
+}
+impl CodecError {
+    /// Only a fixed diagnostic category and an explicitly supported tag ID.
+    /// Never attach metadata payloads, paths, or exception strings.
+    pub fn detail(mut self, reason: Reason, tag: Option<u16>) -> Self {
+        self.reason = reason;
+        self.tag = tag.filter(|t| matches!(t, 256|257|258|259|262|266|274|277|278|284|317|322|323|339|33421|33422|50710|50711|50713|50719|50720|50829|50714|50717|50721|50722|50723|50724|50727|50728|50730|50778|50779|50931|50932|50937|50938|50939|50940|50964|50965));
+        self
+    }
+}
+pub(crate) fn source(file: &str) -> &'static str {
+    // Never serialize the compiler's file path. Use this closed public vocabulary.
+    if file.ends_with("compat/calibration.rs") { return "COMPAT_CALIBRATION"; }
+    if file.ends_with("compat/profiles.rs") { return "COMPAT_PROFILES"; }
+    if file.ends_with("compat/lens.rs") { return "COMPAT_LENS"; }
+    if file.contains("/compat/") { return "COMPAT"; }
+    if file.ends_with("camera_raw/additional/cr3_boxes.rs") { return "CAMERA_RAW_ADDITIONAL_CR3_BOXES"; }
+    if file.ends_with("camera_raw/additional.rs") { return "CAMERA_RAW_ADDITIONAL"; }
+    if file.ends_with("camera_raw/sony_tiles.rs") { return "CAMERA_RAW_SONY_TILES"; }
+    if file.ends_with("camera_raw/canon_stream.rs") { return "CAMERA_RAW_CANON_STREAM"; }
+    if file.ends_with("camera_raw/integer_spool.rs") { return "CAMERA_RAW_INTEGER_SPOOL"; }
+    if file.ends_with("camera_raw/sony_bayer.rs") { return "CAMERA_RAW_SONY_BAYER"; }
+    if file.ends_with("camera_raw/sony_arw6.rs") { return "CAMERA_RAW_SONY_ARW6"; }
+    if file.ends_with("camera_raw/fuji/xtrans.rs") { return "CAMERA_RAW_FUJI_XTRANS"; }
+    if file.ends_with("camera_raw/fuji.rs") { return "CAMERA_RAW_FUJI"; }
+    if file.ends_with("camera_raw/panasonic.rs") { return "CAMERA_RAW_PANASONIC"; }
+    match file.rsplit('/').next().unwrap_or("") {
+        "dng.rs" => "DNG", "tiff.rs" => "TIFF",
+        "dng_cfa_color.rs" => "DNG_CFA_COLOR", "dng_color_spec.rs" => "DNG_COLOR_SPEC",
+        "profile_develop.rs" => "PROFILE_DEVELOP", "profile_gain_table.rs" => "PROFILE_GAIN_TABLE",
+        "raw.rs" => "RAW", "camera_raw.rs" => "CAMERA_RAW",
+        "develop.rs" => "DEVELOP", "export.rs" => "EXPORT", "jni_bridge.rs" => "JNI",
+        "lossless.rs" => "LOSSLESS",
+        "linear_jpeg.rs" => "LINEAR_JPEG",
+        "jxl.rs" => "JXL",
+        "nikon_he.rs" => "NIKON_HE",
+        "nikon_snef.rs" => "NIKON_SNEF",
+        "dng_cfa.rs" => "DNG_CFA",
+        "dng_bad_pixels.rs" => "DNG_BAD_PIXELS",
+        "dng_geometry_develop.rs" => "DNG_GEOMETRY_DEVELOP",
+        "embedded_lens.rs" => "EMBEDDED_LENS",
+        "output_color.rs" => "OUTPUT_COLOR",
+        "dng_warp.rs" => "DNG_WARP",
+        "camera_geometry.rs" => "CAMERA_GEOMETRY",
+        "lib.rs" => "LIB",
+        "opcodes.rs" => "OPCODES",
+        "gainmap.rs" => "GAINMAP",
+        "opcode_stage1.rs" => "OPCODE_STAGE1",
+        "cfa_gainmap.rs" => "CFA_GAINMAP",
+        "technical.rs" => "TECHNICAL",
+        _ => "OTHER",
+    }
+}
 pub type Result<T> = std::result::Result<T, CodecError>;
+#[track_caller]
 pub fn err(code: &'static str, stage: &'static str) -> CodecError {
+    let site = std::panic::Location::caller();
     CodecError {
+        diagnostic_schema: 1,
+        reason: Reason::Validation, source: source(site.file()),
+        line: site.line(), column: site.column(), tag: None,
         code,
         stage,
         message: match code {
@@ -42,6 +113,7 @@ pub fn err(code: &'static str, stage: &'static str) -> CodecError {
         },
     }
 }
+#[track_caller]
 pub fn io_error(e: std::io::Error, stage: &'static str) -> CodecError {
     err(
         match e.raw_os_error() {
@@ -54,4 +126,32 @@ pub fn io_error(e: std::io::Error, stage: &'static str) -> CodecError {
         },
         stage,
     )
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    #[track_caller]
+    fn helper() -> CodecError { err("INVALID_COLOR_METADATA", "probe") }
+    #[test]
+    fn fixed_source_never_exposes_paths() {
+        assert_eq!(source("/private/home/alice/project/codecs/src/dng.rs"), "DNG");
+        assert_eq!(source("/private/location/secret.jpg"), "OTHER");
+        assert_eq!(source("src/camera_raw/fuji/xtrans.rs"), "CAMERA_RAW_FUJI_XTRANS");
+    }
+    #[test]
+    fn distinct_callers_and_fixed_details_survive_json() {
+        let first = helper();
+        let second = helper().detail(Reason::MissingTag, Some(50728));
+        assert_ne!(first.line, second.line);
+        assert_eq!(first.code, second.code);
+        assert_eq!(first.stage, second.stage);
+        let json = serde_json::to_value(second).unwrap();
+        assert_eq!(json["reason"], "MISSING_TAG");
+        assert_eq!(json["tag"], 50728);
+        assert!(json["column"].as_u64().unwrap() > 0);
+        assert!(!serde_json::to_string(&json).unwrap().contains("/"));
+        assert!(serde_json::to_value(helper().detail(Reason::TagValue, Some(34853))).unwrap().get("tag").is_none());
+        assert_eq!(serde_json::to_value(helper().detail(Reason::D65MatrixMissing,None)).unwrap()["reason"],"D65_MATRIX_MISSING");
+    }
 }

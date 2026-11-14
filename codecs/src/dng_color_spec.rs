@@ -14,13 +14,38 @@ pub type Matrix = [[f64; 3]; 3];
 pub type Vector = [f64; 3];
 pub type ColorResult<T> = Result<T, ColorError>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColorError { InvalidMetadata, UnsupportedCalibration, NonConvergent }
+enum ColorErrorKind { InvalidMetadata, UnsupportedCalibration, NonConvergent }
+#[derive(Debug, Clone, Copy)]
+pub struct ColorError {
+    kind: ColorErrorKind,
+    site: Option<&'static std::panic::Location<'static>>,
+}
+// Equality remains about failure semantics, not instrumentation location.
+impl PartialEq for ColorError { fn eq(&self, other: &Self) -> bool { self.kind == other.kind } }
+impl Eq for ColorError {}
+#[allow(non_upper_case_globals)]
 impl ColorError {
+    pub const InvalidMetadata: Self = Self { kind: ColorErrorKind::InvalidMetadata, site: None };
+    pub const UnsupportedCalibration: Self = Self { kind: ColorErrorKind::UnsupportedCalibration, site: None };
+    pub const NonConvergent: Self = Self { kind: ColorErrorKind::NonConvergent, site: None };
+    #[track_caller]
+    pub(crate) fn located(mut self) -> Self { self.site = Some(std::panic::Location::caller()); self }
     pub fn code(self) -> &'static str {
-        match self {
-            Self::InvalidMetadata => "INVALID_COLOR_METADATA",
-            Self::UnsupportedCalibration | Self::NonConvergent => "UNSUPPORTED_DNG_CALIBRATION",
+        match self.kind {
+            ColorErrorKind::InvalidMetadata => "INVALID_COLOR_METADATA",
+            ColorErrorKind::UnsupportedCalibration | ColorErrorKind::NonConvergent => "UNSUPPORTED_DNG_CALIBRATION",
         }
+    }
+    #[track_caller]
+    pub fn into_codec(self) -> crate::error::CodecError {
+        let mut error = crate::error::err(self.code(), "probe")
+            .detail(crate::error::Reason::ColorTransform, None);
+        if let Some(site) = self.site {
+            error.source = crate::error::source(site.file());
+            error.line = site.line();
+            error.column = site.column();
+        }
+        error
     }
 }
 #[derive(Clone, Copy, Debug)]
@@ -51,7 +76,8 @@ pub struct Transform {
 }
 const ID: Matrix = [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]];
 pub const D50_XY: [f64;2] = [0.3457,0.3585];
-fn bad<T>() -> ColorResult<T> { Err(ColorError::InvalidMetadata) }
+#[track_caller]
+fn bad<T>() -> ColorResult<T> { Err(ColorError::InvalidMetadata.located()) }
 fn xyz(xy: [f64;2]) -> ColorResult<Vector> {
     if !xy.iter().all(|v|v.is_finite()) || xy[0]<=0. || xy[1]<=0. || xy[0]+xy[1]>=1. { return bad(); }
     Ok([xy[0]/xy[1],1.,(1.-xy[0]-xy[1])/xy[1]])
@@ -132,7 +158,7 @@ pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->C
     if !positive(ab)||!positive(neutral) {return bad();}
     let [one,two]=input.calibrations;
     let (a,d)=match (one.illuminant,two.illuminant) {
-        (17,21)=>(one,two),(21,17)=>(two,one),_=>return Err(ColorError::UnsupportedCalibration),
+        (17,21)=>(one,two),(21,17)=>(two,one),_=>return Err(ColorError::UnsupportedCalibration.located()),
     };
     let a=prepare(a,ab,input.calibration_signatures_match)?;
     let d=prepare(d,ab,input.calibration_signatures_match)?;
@@ -150,7 +176,7 @@ pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->C
         let delta=(next[0]-xy[0]).abs()+(next[1]-xy[1]).abs();xy=next;
         if delta<1e-7 {converged=true;break;}
     }
-    if !converged {return Err(ColorError::NonConvergent);}
+    if !converged {return Err(ColorError::NonConvergent.located());}
     let temperature_kelvin=cct(xy)?;let weight=blend(xy)?;
     let cam=apply(mix(a.cm,d.cm,weight),xyz(xy)?);
     let peak=cam.into_iter().fold(f64::NEG_INFINITY,f64::max);
@@ -187,12 +213,12 @@ pub(crate) fn robertson_from_table(xy:[f64;2],dng_reference:bool)->ColorResult<f
             let (lo,hi)=(ROBERTSON[i-1][0],ROBERTSON[i][0]);
             let f=if prev<=0. {0.}else{prev/(prev-curr)};
             let reciprocal=lo+(hi-lo)*f;
-            if reciprocal<=0. {return Err(ColorError::UnsupportedCalibration);}
+            if reciprocal<=0. {return Err(ColorError::UnsupportedCalibration.located());}
             return Ok(1e6/reciprocal);
         }
         prev=curr;
     }
-    Err(ColorError::UnsupportedCalibration)
+    Err(ColorError::UnsupportedCalibration.located())
 }
 
 /*
@@ -254,6 +280,22 @@ const ROBERTSON:[[f64;4];31]=[
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn diagnostic_origin_survives_color_error_conversion() {
+        let mut invalid_neutral = expert();
+        invalid_neutral.as_shot_neutral[0] = 0.;
+        let first = resolve(&invalid_neutral).unwrap_err().into_codec();
+        let mut invalid_matrix = expert();
+        invalid_matrix.calibrations[0].color_matrix[0][0] = f64::NAN;
+        let second = resolve(&invalid_matrix).unwrap_err().into_codec();
+        assert_eq!(first.code, second.code);
+        assert_eq!(first.source, "DNG_COLOR_SPEC");
+        assert_eq!(second.source, "DNG_COLOR_SPEC");
+        assert_ne!((first.line, first.column), (second.line, second.column));
+        let serialized = serde_json::to_string(&first).unwrap();
+        assert!(!serialized.contains('/'));
+        assert!(!serialized.contains("NaN"));
+    }
     fn expert()->Input {
         let cal=[1.0029296875,1.,1.0087890625];
         Input{analog_balance:[1.;3],as_shot_neutral:[493./1024.,1.,179./256.],calibration_signatures_match:true,

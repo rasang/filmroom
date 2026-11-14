@@ -26,6 +26,7 @@ struct OutputGuard<'a>(&'a Path,bool);impl Drop for OutputGuard<'_>{fn drop(&mut
 struct DirGuard(PathBuf);impl Drop for DirGuard{fn drop(&mut self){let _=std::fs::remove_dir(&self.0);}}
 static SEQUENCE:AtomicU64=AtomicU64::new(0);
 fn cancelled(c:&AtomicBool)->Result<()>{if c.load(Ordering::Relaxed){Err(err("CANCELLED","decode"))}else{Ok(())}}
+#[track_caller]
 fn spool_error(e:std::io::Error)->crate::error::CodecError {match e.kind(){std::io::ErrorKind::OutOfMemory=>err("MEMORY_BUDGET","decode"),std::io::ErrorKind::InvalidData=>err("INVALID_INPUT","decode"),std::io::ErrorKind::Interrupted=>err("CANCELLED","decode"),std::io::ErrorKind::Unsupported=>err("UNSUPPORTED_CAMERA_RAW_VARIANT","decode"),_=>io_error(e,"decode")}}
 pub(crate) fn decode(output:&Path,mut c:CameraRaw,a:Admission,cancel:&AtomicBool)->Result<(Probe,Admission)>{
  cancelled(cancel)?;let mut h=c.he.take().ok_or_else(||err("INVALID_INPUT","decode"))?;let d=&c.development;

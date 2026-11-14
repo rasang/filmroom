@@ -4,9 +4,11 @@ use crate::error::{Result, err};
 #[path = "opcode_stage1.rs"]
 mod stage1;
 pub use stage1::{Stage1Opcode, apply_stage1_sample, apply_stage1_neighborhood, parse_stage1};
+#[track_caller]
 pub(crate) fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "probe")
 }
+#[track_caller]
 pub(crate) fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_DNG_OPCODE", "probe")
 }
@@ -26,7 +28,7 @@ impl<'a> Cursor<'a> {
             .pos
             .checked_add(n)
             .filter(|&e| e <= self.bytes.len())
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| invalid())?;
         let out = &self.bytes[self.pos..end];
         self.pos = end;
         Ok(out)

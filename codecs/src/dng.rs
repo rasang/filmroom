@@ -1,7 +1,7 @@
 #[path = "dng_cfa.rs"]
 pub mod cfa_storage;
 use crate::{
-    error::{Result, err, io_error},
+    error::{Result, err, io_error, Reason},
     tiff::{Endian, Ifd, Tiff, nums, uint},
 };
 use serde::Serialize;
@@ -78,6 +78,7 @@ pub struct Probe {
     pub development_policy: &'static str,
     pub baseline_exposure_applied_ev: f32,
 }
+#[track_caller]
 fn color_err() -> crate::error::CodecError {
     err("INVALID_COLOR_METADATA", "probe")
 }
@@ -309,7 +310,7 @@ impl Dng {
             } else if black.len() == 3 {
                 black
             } else {
-                return Err(color_err());
+                return Err(color_err().detail(Reason::BlackWhiteLevel, Some(50714)));
             }
         };
         let white = nums(raw, 50717)?.unwrap_or_else(|| vec![((1u32 << bits[0]) - 1) as f64]);
@@ -318,22 +319,22 @@ impl Dng {
         } else if !cfa_mode && white.len() == 3 {
             white
         } else {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::TagShape, Some(50717)));
         };
         if black
             .iter()
             .zip(&white)
             .any(|(&b, &w)| !b.is_finite() || !w.is_finite() || b < 0. || w <= b || w > 65535.)
         {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::BlackWhiteLevel, Some(50717)));
         }
-        let neutral = inherited(root, raw, 50728).ok_or_else(color_err)?.nums()?;
+        let neutral = inherited(root, raw, 50728).ok_or_else(|| color_err().detail(Reason::MissingTag, Some(50728)))?.nums().map_err(|e| e.detail(Reason::TagValue, Some(50728)))?;
         if neutral.len() != 3
             || neutral
                 .iter()
                 .any(|&x| !x.is_finite() || x <= 0. || x > 100.)
         {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::WhiteBalanceRange, Some(50728)));
         }
         let wb = [
             (1. / neutral[0]) as f32,
@@ -342,7 +343,7 @@ impl Dng {
             1.,
         ];
         if wb.iter().any(|&x| x > 100.) {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::WhiteBalanceRange, Some(50728)));
         }
         let cfa_color = if cfa_mode { crate::dng_cfa_color::parse(root, raw)? } else { None };
         if cfa_color.is_some() && !gain_maps.is_empty() {
@@ -352,13 +353,13 @@ impl Dng {
         for (mt, il) in [(50721, 50778), (50722, 50779)] {
             if let (Some(m), Some(l)) = (inherited(root, raw, mt), inherited(root, raw, il)) {
                 if l.uints()? == vec![21] {
-                    let mut values = m.nums()?;
+                    let mut values = m.nums().map_err(|e| e.detail(Reason::TagValue, Some(mt)))?;
                     if values.len() != 9 {
-                        return Err(color_err());
+                        return Err(color_err().detail(Reason::MatrixShape, Some(mt)));
                     }
                     let calibration_tag = if mt == 50721 { 50723 } else { 50724 };
                     if let Some(calibration) = inherited(root, raw, calibration_tag) {
-                        let diagonal = calibration.nums()?;
+                        let diagonal = calibration.nums().map_err(|e| e.detail(Reason::TagValue, Some(calibration_tag)))?;
                         for row in 0..3 {
                             for col in 0..3 {
                                 values[row * 3 + col] *= diagonal[row * 4];
@@ -372,16 +373,16 @@ impl Dng {
         }
         // The new ColorMatrix-only route carries its own transform. No D65
         // matrix is invented or relabelled for demosaic-only intermediate data.
-        let matrix = if cfa_color.is_some() { Vec::new() } else { matrix.ok_or_else(color_err)? };
+        let matrix = if cfa_color.is_some() { Vec::new() } else { matrix.ok_or_else(|| color_err().detail(Reason::D65MatrixMissing, None))? };
         if cfa_color.is_none() && (matrix.len() != 9 || matrix.iter().any(|x| !x.is_finite() || x.abs() > 10.)) {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::MatrixRange, None));
         }
         if cfa_color.is_none() {
         let m = &matrix;
         let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
             + m[2] * (m[3] * m[7] - m[4] * m[6]);
         if det.abs() < 1e-8 {
-            return Err(color_err());
+            return Err(color_err().detail(Reason::MatrixSingular, None));
         }
         }
         let orientation = uint(root, 274, Some(1))?;

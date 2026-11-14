@@ -11,8 +11,9 @@ enum Encoding { Packed12, Words, Msb32, Lossless, Lossy }
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Plan { width:usize, height:usize, bits:usize, offset:u64, bytes:u64, little:bool, encoding:Encoding, xtrans:bool, orientation:u8, crop:[usize;4] }
 struct Entry<'a> { typ:u16, count:usize, data:&'a [u8] }
+#[track_caller]
 fn invalid() -> crate::error::CodecError { err("INVALID_INPUT","probe") }
-fn span(b:&[u8],at:usize,n:usize)->Result<&[u8]> {b.get(at..at.checked_add(n).ok_or_else(invalid)?).ok_or_else(invalid)}
+fn span(b:&[u8],at:usize,n:usize)->Result<&[u8]> {b.get(at..at.checked_add(n).ok_or_else(|| invalid())?).ok_or_else(|| invalid())}
 fn be32(b:&[u8])->usize {u32::from_be_bytes(b[..4].try_into().unwrap()) as usize}
 fn be16(b:&[u8])->usize {u16::from_be_bytes(b[..2].try_into().unwrap()) as usize}
 fn endian(b:&[u8])->Result<crate::tiff::Endian> { match b.get(..4) {Some(b"II\x2a\0")=>Ok(crate::tiff::Endian::Le),Some(b"MM\0\x2a")=>Ok(crate::tiff::Endian::Be),_=>Err(unsupported())} }
@@ -26,14 +27,14 @@ fn directory<'a>(b:&'a [u8],at:usize,e:crate::tiff::Endian,allow_next:bool)->Res
     for ent in table[..n*12].chunks_exact(12) {
         let tag=e.u16(ent);let typ=e.u16(&ent[2..]);let count=e.u32(&ent[4..]) as usize;
         let size=match typ {1|2|6|7=>1,3|8=>2,4|9|11|13=>4,5|10|12=>8,_=>return Err(invalid())};
-        let bytes=count.checked_mul(size).filter(|n|*n<=64*1024).ok_or_else(invalid)?;
+        let bytes=count.checked_mul(size).filter(|n|*n<=64*1024).ok_or_else(|| invalid())?;
         let data=if bytes<=4 {&ent[8..8+bytes]}else {span(b,e.u32(&ent[8..]) as usize,bytes)?};
         if out.insert(tag,Entry{typ,count,data}).is_some(){return Err(invalid());}
     }
     Ok(out)
 }
 fn scalar(d:&BTreeMap<u16,Entry<'_>>,tag:u16,e:crate::tiff::Endian)->Result<usize> {
-    let v=d.get(&tag).ok_or_else(unsupported)?;
+    let v=d.get(&tag).ok_or_else(|| unsupported())?;
     if v.count!=1 || !matches!(v.typ,3|4|13){return Err(invalid());}
     Ok(if v.typ==3 {e.u16(v.data) as usize}else{e.u32(v.data) as usize})
 }
@@ -47,10 +48,10 @@ fn validate_compressed(b:&[u8],w:usize,h:usize,bits:usize,xtrans:bool)->Result<E
         || lines!=h/6 || lines>2048 {return Err(unsupported());}
     let sizes=span(b,16,blocks*4)?;
     let mut pos=16+(blocks*4).div_ceil(16)*16;
-    if p[2]==0 {pos=pos.checked_add(blocks*lines.div_ceil(16)*16).ok_or_else(invalid)?;}
+    if p[2]==0 {pos=pos.checked_add(blocks*lines.div_ceil(16)*16).ok_or_else(|| invalid())?;}
     for size in sizes.chunks_exact(4) {
         let n=be32(size);if n==0 {return Err(invalid());}
-        span(b,pos,n)?;pos=pos.checked_add(n).ok_or_else(invalid)?;
+        span(b,pos,n)?;pos=pos.checked_add(n).ok_or_else(|| invalid())?;
     }
     if b.len()!=pos {return Err(invalid());}
     Ok(if p[2]==1{Encoding::Lossless}else{Encoding::Lossy})
@@ -68,7 +69,7 @@ fn plan(source:&RawSource)->Result<Plan>{
     let app1_len=be16(span(j,4,2)?);if app1_len<8{return Err(invalid());}
     let exif=span(j,12,app1_len-8)?;let je=endian(exif)?;
     let root=directory(exif,je.u32(span(exif,4,4)?) as usize,je,true)?;
-    let make=root.get(&271).ok_or_else(unsupported)?;
+    let make=root.get(&271).ok_or_else(|| unsupported())?;
     if make.typ!=2 || make.data.strip_suffix(&[0]).unwrap_or(make.data).trim_ascii_end()!=b"FUJIFILM" {return Err(unsupported());}
     let orientation=if root.contains_key(&274){scalar(&root,274,je)?}else{1};
     if !(1..=8).contains(&orientation) {return Err(invalid());}
@@ -105,13 +106,13 @@ fn plan(source:&RawSource)->Result<Plan>{
         }
     }
     if pos>tag_data.len(){return Err(invalid());}
-    let (cx,cy)=crop_origin.ok_or_else(unsupported)?;let(cw,ch)=crop_size.ok_or_else(unsupported)?;
+    let (cx,cy)=crop_origin.ok_or_else(|| unsupported())?;let(cw,ch)=crop_size.ok_or_else(|| unsupported())?;
     if cw<8 || ch<8 || cx.checked_add(cw).is_none_or(|v|v>width) || cy.checked_add(ch).is_none_or(|v|v>height) {return Err(invalid());}
     let crop=[cx,cy,cw,ch];
     let xtrans=pattern.is_some();
-    let black=sensor.get(&0xf00a).ok_or_else(unsupported)?;
+    let black=sensor.get(&0xf00a).ok_or_else(|| unsupported())?;
     if black.typ!=4 || black.count!=(if xtrans{36}else{4}) || black.data.chunks_exact(4).any(|v|e.u32(v)>=1u32<<bits){return Err(err("INVALID_COLOR_METADATA","probe"));}
-    let wb=sensor.get(&0xf00e).ok_or_else(unsupported)?;
+    let wb=sensor.get(&0xf00e).ok_or_else(|| unsupported())?;
     if wb.typ!=4 || wb.count!=3 || wb.data.chunks_exact(4).any(|v|e.u32(v)==0 || e.u32(v)>65535){return Err(err("INVALID_COLOR_METADATA","probe"));}
     let packed=width*height*bits/8;
     let encoding=if bytes<packed {validate_compressed(encoded,width,height,bits,xtrans)?}
@@ -139,7 +140,7 @@ impl FujiRaw {
             || raw.width!=plan.width || raw.height!=plan.height || raw.cpp!=1
             || !matches!(&raw.data,RawImageData::Integer(v) if v.is_empty()) {return Err(unsupported());}
         if raw.camera.find_hint("jpeg32") != (plan.encoding==Encoding::Msb32) {return Err(unsupported());}
-        let crop=raw.crop_area.map(rect).ok_or_else(unsupported)?;
+        let crop=raw.crop_area.map(rect).ok_or_else(|| unsupported())?;
         if [crop.x,crop.y,crop.w,crop.h]!=plan.crop {return Err(invalid());}
         // The camera DB has fixed uncompressed margins (e.g. X-T2 right 128),
         // but compressed RAF changes sensor width. The on-file crop is authoritative.

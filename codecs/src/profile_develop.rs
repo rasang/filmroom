@@ -1,12 +1,13 @@
 //! New ProfileGainTableMap path: normalized linear camera RGB -> calibrated
 //! XYZ D50 -> exposure-adjusted RIMM lookup -> scalar gain -> linear sRGB.
 //! No Adobe SDK runtime or code; SDK is an external numerical test oracle.
-use crate::{dng::{Rect},dng_color_spec::{self as color,Calibration,Input,Matrix},error::{err,Result},tiff::{Ifd,Value},profile_gain_table::ProfileGainTable};
+use crate::{dng::{Rect},dng_color_spec::{self as color,Calibration,Input,Matrix},error::{err,Result,Reason},tiff::{Ifd,Value},profile_gain_table::ProfileGainTable};
 use std::sync::atomic::{AtomicBool,Ordering};
 #[derive(Clone,Debug)]pub struct ProfileDevelopment {pub map:Option<ProfileGainTable>,pub camera_to_pcs:Matrix,pub camera_to_rimm:Matrix}
+#[track_caller]
 fn bad()->crate::error::CodecError{err("INVALID_COLOR_METADATA","probe")}
 fn get<'a>(root:&'a Ifd,raw:&'a Ifd,t:u16)->Option<&'a Value>{raw.get(&t).or_else(||root.get(&t))}
-fn matrix(root:&Ifd,raw:&Ifd,t:u16)->Result<Matrix>{let v=get(root,raw,t).ok_or_else(bad)?;if v.typ!=10||v.count!=9{return Err(bad())}let a=v.nums()?;Ok(std::array::from_fn(|r|std::array::from_fn(|c|a[r*3+c])))}
+fn matrix(root:&Ifd,raw:&Ifd,t:u16)->Result<Matrix>{let v=get(root,raw,t).ok_or_else(|| bad().detail(Reason::MissingTag,Some(t)))?;if v.typ!=10||v.count!=9{return Err(bad().detail(Reason::MatrixShape,Some(t)))}let a=v.nums().map_err(|e|e.detail(Reason::TagValue,Some(t)))?;Ok(std::array::from_fn(|r|std::array::from_fn(|c|a[r*3+c])))}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum ColorRoute { Legacy, NewSof3LinearPrecision }
 pub fn parse(root:&Ifd,raw:&Ifd,route:ColorRoute)->Result<Option<ProfileDevelopment>>{
@@ -18,18 +19,18 @@ pub fn parse(root:&Ifd,raw:&Ifd,route:ColorRoute)->Result<Option<ProfileDevelopm
  if [50937,50938,50939,50981,50982,50983,52529,52531,52544,52548,52549,52550].iter().any(|&t|get(root,raw,t).is_some()) {return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
  let map=v.map(ProfileGainTable::parse).transpose()?;
  let diagonal=|tag|->Result<[f64;3]>{if get(root,raw,tag).is_none(){return Ok([1.;3])}let m=matrix(root,raw,tag)?;if m.iter().enumerate().any(|(r,row)|row.iter().enumerate().any(|(c,v)|r!=c&&*v!=0.)){return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"))}Ok([m[0][0],m[1][1],m[2][2]])};
- let nv=get(root,raw,50728).ok_or_else(bad)?;if nv.typ!=5||nv.count!=3{return Err(bad())}let neutral=nv.nums()?;if neutral.len()!=3{return Err(bad())}
- if let Some(v)=get(root,raw,50727){if v.typ!=5||v.count!=3{return Err(bad())}}
- let analog=get(root,raw,50727).map(Value::nums).transpose()?.unwrap_or(vec![1.;3]);if analog.len()!=3{return Err(bad())}
+ let nv=get(root,raw,50728).ok_or_else(|| bad().detail(Reason::MissingTag,Some(50728)))?;if nv.typ!=5||nv.count!=3{return Err(bad().detail(Reason::TagShape,Some(50728)))}let neutral=nv.nums().map_err(|e|e.detail(Reason::TagValue,Some(50728)))?;if neutral.len()!=3{return Err(bad())}
+ if let Some(v)=get(root,raw,50727){if v.typ!=5||v.count!=3{return Err(bad().detail(Reason::TagShape,Some(50727)))}}
+ let analog=get(root,raw,50727).map(Value::nums).transpose().map_err(|e|e.detail(Reason::TagValue,Some(50727)))?.unwrap_or(vec![1.;3]);if analog.len()!=3{return Err(bad())}
  if !std::ptr::eq(root,raw) && [50931,50932].iter().any(|t|raw.contains_key(t)){return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
  let signature=|tag|->Result<&[u8]>{match root.get(&tag){None=>Ok(&[]),Some(v)=>{if !matches!(v.typ,1|2)||v.bytes.len()>1024||v.bytes.last()!=Some(&0){return Err(bad())}Ok(v.bytes.strip_suffix(&[0]).unwrap())}}};
- let cal=|i:u16|->Result<Calibration>{let tag=50778+i;let v=get(root,raw,tag).ok_or_else(bad)?;let il=v.uints()?;if v.typ!=3||v.count!=1||il.len()!=1{return Err(bad())}Ok(Calibration{illuminant:il[0].try_into().map_err(|_|bad())?,color_matrix:matrix(root,raw,50721+i)?,forward_matrix:matrix(root,raw,50964+i)?,camera_calibration:diagonal(50723+i)?})};
+ let cal=|i:u16|->Result<Calibration>{let tag=50778+i;let v=get(root,raw,tag).ok_or_else(|| bad().detail(Reason::MissingTag,Some(tag)))?;let il=v.uints().map_err(|e|e.detail(Reason::TagValue,Some(tag)))?;if v.typ!=3||v.count!=1||il.len()!=1{return Err(bad())}Ok(Calibration{illuminant:il[0].try_into().map_err(|_|bad())?,color_matrix:matrix(root,raw,50721+i)?,forward_matrix:matrix(root,raw,50964+i)?,camera_calibration:diagonal(50723+i)?})};
  let input=Input{calibrations:[cal(0)?,cal(1)?],analog_balance:analog.try_into().unwrap(),as_shot_neutral:neutral.try_into().unwrap(),calibration_signatures_match:signature(50931)?==signature(50932)?};
- let transform=color::resolve(&input).map_err(|e|err(e.code(),"probe"))?;
+ let transform=color::resolve(&input).map_err(|e|e.into_codec())?;
  // Standard linear ProPhoto/RIMM primaries, normalized to exact D50 PCS white.
  let mut rimm_to_pcs=[[0.7977,0.1352,0.0313],[0.2880,0.7119,0.0001],[0.,0.,0.8249]];
  let white=color::d50_xyz();for r in 0..3{let sum:f64=rimm_to_pcs[r].iter().sum();for c in 0..3{rimm_to_pcs[r][c]*=white[r]/sum;}}
- let inverse=color::inverse(rimm_to_pcs).map_err(|_|bad())?;
+ let inverse=color::inverse(rimm_to_pcs).map_err(|e|e.into_codec())?;
  Ok(Some(ProfileDevelopment{map,camera_to_pcs:transform.camera_to_pcs,camera_to_rimm:color::product(inverse,transform.camera_to_pcs)}))
 }
 // DNG 1.7.1 §5, p99: clip normalized raw above 1 BEFORE camera-color

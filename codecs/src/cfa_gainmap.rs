@@ -13,9 +13,11 @@ pub struct CfaGainMap {
     origin: [f64; 2],
     gains: Vec<f32>,
 }
+#[track_caller]
 fn invalid() -> crate::error::CodecError {
     err("INVALID_INPUT", "probe")
 }
+#[track_caller]
 fn unsupported() -> crate::error::CodecError {
     err("UNSUPPORTED_DNG_OPCODE", "probe")
 }
@@ -29,7 +31,7 @@ impl<'a> Read<'a> {
             .at
             .checked_add(n)
             .filter(|v| *v <= self.b.len())
-            .ok_or_else(invalid)?;
+            .ok_or_else(|| invalid())?;
         let s = &self.b[self.at..end];
         self.at = end;
         Ok(s)
@@ -94,15 +96,15 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<CfaGainMa
         {
             return Err(unsupported());
         }
-        let values = rows.checked_mul(cols).ok_or_else(invalid)?;
-        total = total.checked_add(values).ok_or_else(invalid)?;
+        let values = rows.checked_mul(cols).ok_or_else(|| invalid())?;
+        total = total.checked_add(values).ok_or_else(|| invalid())?;
         if total > 262144 {
             return Err(unsupported());
         }
         if payload.len()
             != 76usize
-                .checked_add(values.checked_mul(4).ok_or_else(invalid)?)
-                .ok_or_else(invalid)?
+                .checked_add(values.checked_mul(4).ok_or_else(|| invalid())?)
+                .ok_or_else(|| invalid())?
         {
             return Err(invalid());
         }

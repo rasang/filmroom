@@ -35,7 +35,8 @@ pub struct Transform {
     pub d50_weight: f64,
     pub iterations: usize,
 }
-fn invalid<T>() -> ColorResult<T> { Err(ColorError::InvalidMetadata) }
+#[track_caller]
+fn invalid<T>() -> ColorResult<T> { Err(ColorError::InvalidMetadata.located()) }
 fn positive(v: Vector) -> bool { v.iter().all(|x| x.is_finite() && *x > 0.) }
 fn peak(v: Vector) -> f64 { v.into_iter().fold(f64::NEG_INFINITY, f64::max) }
 fn round(v: f64, precision: f64) -> f64 { (v * precision + 0.5).floor() / precision }
@@ -79,7 +80,7 @@ pub fn resolve(input: &Input) -> ColorResult<Transform> {
     let [one, two] = input.calibrations;
     let (a, d) = match (one.illuminant, two.illuminant) {
         (17, 23) => (one, two), (23, 17) => (two, one),
-        _ => return Err(ColorError::UnsupportedCalibration),
+        _ => return Err(ColorError::UnsupportedCalibration.located()),
     };
     let ab_min = input.analog_balance.into_iter().fold(f64::INFINITY, f64::min);
     let neutral_max = peak(input.as_shot_neutral);
@@ -107,7 +108,7 @@ pub fn resolve(input: &Input) -> ColorResult<Transform> {
         if change < 1e-7 { converged = true; break; }
     }
     // No silent approximate white point on oscillation/nonconvergence.
-    if !converged { return Err(ColorError::NonConvergent); }
+    if !converged { return Err(ColorError::NonConvergent.located()); }
     let temperature_kelvin = robertson_from_table(white_xy, true)?;
     let d50_weight = weight(white_xy)?;
     let cm = mix(a, d, d50_weight);
@@ -182,14 +183,16 @@ mod tests {
 /// The TIFF reader must retain ReductionMatrix1/2 (50725/50726), even if only
 /// as descriptors, so their presence cannot be silently ignored.
 pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::Result<Option<Transform>> {
-    use crate::{error::err, tiff::Value};
-    let bad = || err("INVALID_COLOR_METADATA", "probe");
-    let unsupported = || err("UNSUPPORTED_DNG_CALIBRATION", "probe");
+    use crate::{error::{err, Reason}, tiff::Value};
+    #[track_caller]
+    fn bad() -> crate::error::CodecError { err("INVALID_COLOR_METADATA", "probe") }
+    #[track_caller]
+    fn unsupported() -> crate::error::CodecError { err("UNSUPPORTED_DNG_CALIBRATION", "probe") }
     let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
     if crate::tiff::uint(raw, 262, Some(0))? != 32803 { return Ok(None); }
     let illuminant = |tag| -> crate::error::Result<Option<u16>> {
         let Some(v) = get(tag) else { return Ok(None); };
-        let values = v.uints()?;
+        let values = v.uints().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?;
         if values.len()!=1 { return Ok(None); }
         Ok(values[0].try_into().ok())
     };
@@ -202,9 +205,9 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
         50981,50982,50983,52525,52529,52530,52531,52532,52544,52547,52548,52549,52550]
         .iter().any(|&tag| get(tag).is_some()) { return Err(unsupported()); }
     let matrix = |tag| -> crate::error::Result<Matrix> {
-        let v = get(tag).ok_or_else(bad)?;
-        if v.typ != 10 || v.count != 9 { return Err(bad()); }
-        let a = v.nums()?;
+        let v = get(tag).ok_or_else(|| bad().detail(Reason::MissingTag, Some(tag)))?;
+        if v.typ != 10 || v.count != 9 { return Err(bad().detail(Reason::MatrixShape, Some(tag))); }
+        let a = v.nums().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?;
         Ok(std::array::from_fn(|r| std::array::from_fn(|c| a[r*3+c])))
     };
     let diagonal_cc = |tag| -> crate::error::Result<Vector> {
@@ -214,9 +217,9 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
         Ok([m[0][0],m[1][1],m[2][2]])
     };
     let vector = |tag, default: Option<Vector>| -> crate::error::Result<Vector> {
-        let Some(v) = get(tag) else { return default.ok_or_else(bad); };
-        if v.typ != 5 || v.count != 3 { return Err(bad()); }
-        v.nums()?.try_into().map_err(|_| bad())
+        let Some(v) = get(tag) else { return default.ok_or_else(|| bad().detail(Reason::MissingTag, Some(tag))); };
+        if v.typ != 5 || v.count != 3 { return Err(bad().detail(Reason::TagShape, Some(tag))); }
+        v.nums().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?.try_into().map_err(|_| bad())
     };
     // Signatures are IFD0 fields. Do not guess when incorrectly placed in a
     // distinct raw IFD, and compare their actual bytes rather than display text.
@@ -239,7 +242,7 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
         as_shot_neutral: vector(50728,None)?,
         calibration_signatures_match: signature(50931)? == signature(50932)?,
     };
-    resolve(&input).map(Some).map_err(|e| err(e.code(),"probe"))
+    resolve(&input).map(Some).map_err(|e| e.into_codec())
 }
 
 #[cfg(test)]
