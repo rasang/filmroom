@@ -55,8 +55,9 @@ fn anonymous(output: &Path, bytes: u64) -> Result<File> {
 pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admission:&Admission,cancel:&AtomicBool)->Result<()> {
     let d=&camera.development;
     let mut storage=Storage {file:anonymous(output,(d.width*d.height*d.cpp*2) as u64)?,samples:d.width*d.height*d.cpp,cancel,failure:None};
-    let raw={
-        let source=RawSource::new(input).map_err(|e|io_error(e,"decode"))?;
+    let (raw,actual)={
+        let file=File::open(input).map_err(|e|io_error(e,"decode"))?;
+        let source=RawSource::new_from_file(&file,input).map_err(|e|io_error(e,"decode"))?;
         for j in &camera.jpeg_blocks {
             let bytes=source.subview(j.offset,j.bytes).map_err(|e|io_error(e,"decode"))?;
             crate::lossless::validate_camera(bytes,j.width,j.height,cancel)?;
@@ -66,9 +67,11 @@ pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admiss
             if d.cpp==3 {decoder.canon_sraw_stream(&source,&mut storage)} else {decoder.canon_bayer_stream(&source,&mut storage)}
         });
         if let Some(e)=storage.failure.take() {return Err(e);}
-        decoded?
+        let raw=decoded?;
+        let mut actual=descriptor(&raw,d.orientation)?;
+        configure_profile(&source,&file,"CR2",&raw,&mut actual);
+        (raw,actual)
     }; // release input mapping before linear development
-    let actual=descriptor(&raw,d.orientation)?;
     let rect=|r:Rect|(r.x,r.y,r.w,r.h);
     let levels_valid=if d.cpp==3 {
         (raw.blacklevel.width,raw.blacklevel.height)==(1,1) && raw.blacklevel.levels.len()==3 && raw.whitelevel.0.len()==3
@@ -78,6 +81,7 @@ pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admiss
     };
     if raw.source_ifd_offset!=Some(camera.source_ifd_offset) || actual.cpp!=d.cpp || actual.width!=d.width || actual.height!=d.height
         || rect(actual.active)!=rect(d.active) || rect(actual.crop)!=rect(d.crop)
+        || actual.lens!=d.lens || actual.lens_extras!=d.lens_extras || actual.lens_profile!=d.lens_profile
         || raw.blacklevel.cpp!=d.cpp || !levels_valid {
         return Err(err("INVALID_COLOR_METADATA","decode"));
     }
@@ -85,9 +89,11 @@ pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admiss
         else {(raw.blacklevel.as_bayer_array().to_vec(),raw.whitelevel.as_bayer_array().to_vec())};
     if black.iter().zip(&white).any(|(b,w)|!b.is_finite()||*b<0.||!w.is_finite()||w<=b) {return Err(err("INVALID_COLOR_METADATA","decode"));}
     drop(raw);
-    let mut first=d.crop.y;
-    while first<d.crop.y+d.crop.h {
-        let last=(first+admission.strip_rows as usize).min(d.crop.y+d.crop.h);
+    let sink=crate::develop::CameraRgbSink::new(d,output)?;
+    let region=sink.region(d);
+    let mut first=region.y;
+    while first<region.y+region.h {
+        let last=(first+admission.strip_rows as usize).min(region.y+region.h);
         let y=first.saturating_sub(HALO).max(d.active.y);
         let end=(last+HALO).min(d.active.y+d.active.h);
         let mut integers=vec![0u16;d.active.w*d.cpp];
@@ -102,9 +108,11 @@ pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admiss
             }));
         }
         drop(integers);
-        let p=crate::develop::develop_tile_cancel(d,y,end-y,data,cancel)?;
-        crate::develop::emit(d,out,&p,y,first,last,cancel)?;
+        let p=sink.develop(d,y,end-y,data,cancel)?;
+        sink.emit_strip(d,out,&p,y,first,last,cancel)?;
         first=last;
     }
+    drop(storage);
+    sink.finish(d,out,cancel)?;
     Ok(())
 }

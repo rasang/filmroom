@@ -1,21 +1,28 @@
-//! Bounded, exact identity admission for the initial Lensfun fallback.
+//! Bounded source metadata for Lensfun fallback.
 //!
-//! Only native Canon CR3, EOS R, RF 16mm F2.8 STM and its full 3:2 crop are
-//! admitted. The caller must also check the decoded CFA/sensor/active/crop
-//! rectangles and give embedded distortion metadata priority. These tags are
-//! identity evidence, not proof that every camera preprocessing step is known.
+//! `capture_identity` is the production cross-format entrance. Original names
+//! and capture parameters are read independently; database-derived identities
+//! retain provenance, candidate ambiguity and on-file conflict checks.
+//! Adapters separately qualify original CFA data, geometry and per-item
+//! embedded correction priority. Identity is not proof of processing state.
 //!
-//! No database-resolved lens name is used: rawler's LensResolver may accept a
-//! name before checking a conflicting ID. Here the two on-file names, RF ID,
-//! shared lens ID, camera ID and focal lengths must all agree.
-//! Canon FileInfo[61] = RFLensType; 288 = RF 16mm F2.8 STM. Definitions were
-//! checked against ExifTool Canon.pm at commit
-//! 1da714924f67763b6a8a7013dd2aa1983a16f87b and rawler's RF lens table.
+//! The old exact EOS R / RF16 reader below is compiled only in tests, retaining
+//! the initial admission rule as a regression oracle, not a runtime whitelist.
+//! Canon FileInfo[61] and its infinity/distance definitions were checked against
+//! ExifTool Canon.pm at 1da714924f67763b6a8a7013dd2aa1983a16f87b.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::File,
     io::{Read, Seek, SeekFrom},
+};
+#[cfg(test)]
+use std::fs::File;
+
+#[path = "lensfun_metadata/capture.rs"]
+mod capture;
+pub(crate) use capture::{
+    capture_identity, CaptureIdentity, CaptureMetadata, CaptureStatus,
+    LensIdentityProvenance, SourceEvidence,
 };
 
 const MAX_INPUT_BYTES: u64 = 512 * 1024 * 1024;
@@ -23,21 +30,28 @@ const MAX_READ_BYTES: usize = 32 * 1024;
 const MAX_SINGLE_READ: usize = 4096;
 const MAX_BOXES: usize = 256;
 const MAX_CMT_BYTES: u64 = 64 * 1024;
+#[cfg(test)]
 const MAX_IFD_ENTRIES: usize = 128;
+#[cfg(test)]
 const MAX_VALUE_BYTES: usize = 256;
 const CANON_DESC: [u8; 16] = [
     0x85, 0xc0, 0xb6, 0x87, 0x82, 0x0f, 0x11, 0xe0,
     0x81, 0x11, 0xf4, 0xce, 0x46, 0x2b, 0x6a, 0x48,
 ];
+#[cfg(test)]
 const MAKE: &str = "Canon";
+#[cfg(test)]
 const MODEL: &str = "Canon EOS R";
+#[cfg(test)]
 const LENS: &str = "RF16mm F2.8 STM";
+#[cfg(test)]
 const MODEL_ID: u32 = 0x8000_0424;
 
 /// Every field has been checked against on-file metadata, not a fuzzy lookup.
 /// `aspect_crop` is EXIF/image space [left, top, width, height], not a sensor
 /// rectangle. Sensor-space admission belongs to the camera adapter.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg(test)]
 pub(crate) struct CanonRf16Identity {
     pub make: &'static str,
     pub model: &'static str,
@@ -59,6 +73,7 @@ pub(crate) struct CanonRf16Identity {
 
 /// Optional metadata: malformed, conflicting, unknown and over-budget inputs
 /// return None and must not prevent RAW decoding. The caller's cursor is kept.
+#[cfg(test)]
 pub(crate) fn canon_rf16_identity(
     file: &mut File,
     input_bytes: u64,
@@ -112,6 +127,7 @@ enum Region {
 }
 
 #[derive(Clone, Copy)]
+#[cfg(test)]
 enum DirectoryKind {
     Camera,
     Exif,
@@ -143,6 +159,7 @@ impl Value {
         self.short_at(0).map(u32::from).or_else(|| self.long_at(0))
     }
 
+    #[cfg(test)]
     fn rational_is(&self, index: usize, integer: u32) -> bool {
         if self.typ != 5 || index >= self.count {
             return false;
@@ -161,6 +178,7 @@ impl Value {
         value.is_finite().then_some(value)
     }
 
+    #[cfg(test)]
     fn ascii(&self, opaque_tail: bool) -> Option<&str> {
         if self.typ != 2 {
             return None;
@@ -301,6 +319,7 @@ impl<'a, R: Read + Seek> Reader<'a, R> {
         Some(())
     }
 
+    #[cfg(test)]
     fn directory(&mut self, extent: Extent, kind: DirectoryKind) -> Option<Directory> {
         let h = self.read(extent.start, 8)?;
         let endian = match &h[..2] {
@@ -385,6 +404,7 @@ impl<'a, R: Read + Seek> Reader<'a, R> {
         Some(result)
     }
 
+    #[cfg(test)]
     fn identity(&mut self) -> Option<CanonRf16Identity> {
         if !(16..=MAX_INPUT_BYTES).contains(&self.size) {
             return None;

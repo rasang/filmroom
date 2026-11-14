@@ -112,8 +112,11 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 
 ## RAW 内嵌光学校正
 
-Sony ARW、Fujifilm RAF 的受支持原始 CFA 布局可分别读取并执行机身写入 RAW 的畸变、横向色差（TCA）与暗角参数；Olympus / OM System ORF 支持畸变和 TCA，目前没有经过验证的内嵌暗角系数模型，不把机内阴影补偿开关转换成额外增益。暗角先作用于源线性相机 RGB，畸变和 TCA 组合后仅重采样一次，再进行色彩转换、裁切和方向处理。每项独立准入、报告状态，极端 TCA 参数在解码前检查采样窗口，超出预算仅跳过 TCA。已有 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链继续使用独立标准路径。完整范围、v2 缓存迁移与测试见 [RAW-OPTICS-CORRECTIONS](docs/RAW-OPTICS-CORRECTIONS.md)，厂商参数公式见 [EMBEDDED-OPTICS-MODELS](docs/EMBEDDED-OPTICS-MODELS.md)，前期畸变和 DNG 验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。
+Sony ARW、Fujifilm RAF 的受支持原始 CFA 布局可分别读取并执行机身写入 RAW 的畸变、横向色差（TCA）与暗角参数；Olympus / OM System ORF 支持畸变和 TCA，没有经过验证的内嵌暗角系数模型。ORF 阴影补偿可能已写入 RAW，当前也不自动叠加外部 PA 暗角。暗角先作用于源线性相机 RGB，畸变和 TCA 组合后仅重采样一次，再进行相应色彩校准、裁切和方向处理。各项独立选择并报告状态，采样窗口在解码前以连续界检查。已有 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链继续使用独立标准路径。完整范围、embedded-v2 / Lensfun-v3 缓存策略及分阶段验证见 [RAW-OPTICS-CORRECTIONS](docs/RAW-OPTICS-CORRECTIONS.md)，厂商参数公式见 [EMBEDDED-OPTICS-MODELS](docs/EMBEDDED-OPTICS-MODELS.md)，前期畸变和 DNG 验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。
 
 ## Lensfun 缺失参数回退
 
-缺少内嵌畸变参数时，使用受限的离线 Lensfun 配置回退，首批仅自动启用已验证的 Canon EOS R + RF 16mm F2.8 STM 原始 CR3 布局。该组合现可分别执行畸变、横向色差（TCA）和暗角校正：暗角先作用于原始线性相机 RGB，畸变与 TCA 复合坐标后只重采样一次。暗角使用实际拍摄光圈和有界对焦距离；缺失、异常或无法通过数值准入的项目单独跳过并报告状态。各项优先保留受支持的内嵌模型，存在但不支持的内嵌参数不会被外部配置悄悄替换；DNG 仍使用独立的标准 opcode 路径。包含严格镜头身份匹配、有界内存、v2 显影策略缓存迁移及逐项照片信息提示。通用模型实现不代表整个 Lensfun 数据库已经启用；范围、源码归属、缓存契约及参考验证见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。
+本轮的最终构建、真实 RAW 对照、应用/JNI 回归和主机库体积测量见
+[完整库验证记录](docs/LENSFUN-FULL-VALIDATION.md)。
+
+固定 Lensfun 快照的完整 56 个 XML、1,580 条镜头记录、1,059 条相机记录已编译为离线配置和索引，生产选择不再限于 RF16。原始 CFA 的 CR3、CR2、NEF、ARW、RAF、ORF、PEF、RW2 路径可在严格身份 / 卡口 / 画幅匹配后逐项补齐缺失参数；有正向原机 firmware/source 证据且无任何 opcode、转换标记等排斥条件的 CFA DNG 也可进入回退，并保留 DNG 专用色彩 / 曝光处理。内嵌 `Ready`（含单位模型）或 `Unsupported` 阻止同项回退，只有 `Missing` 且来源合同允许时才尝试外部标定。共用算法支持多焦距畸变 / TCA、PA 三维插值和镜头原投影；暗角要求实际光圈与有效对焦距离，缺失或不安全时单独跳过。组合坐标只重采样一次，完整矩形连续认证先收紧边界再增加裁切，源窗口保留 8 MiB 上限。实际采用外部操作时，相机 CFA、X-Trans、原机 CFA DNG 分别使用 `camera-matrix-linear-srgb-lensfun-v3`、`raf-xtrans-linear-srgb-lensfun-v3`、`dng-cfa-linear-srgb-lensfun-v3` 缓存策略。记录全量可匹配不等于每张 RAW 三项可用、全库实拍通过或已测得 APK 增量；范围、许可、缓存及原生 oracle 见 [LENSFUN-FALLBACK](docs/LENSFUN-FALLBACK.md)。

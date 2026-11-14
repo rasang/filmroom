@@ -145,7 +145,8 @@ impl FujiRaw {
         // but compressed RAF changes sensor width. The on-file crop is authoritative.
         // Develop against the complete encoded sensor, with global halo, then crop once.
         raw.active_area=None;
-        let development=descriptor_cfa(&raw,plan.orientation,true)?;
+        let mut development=descriptor_cfa(&raw,plan.orientation,true)?;
+        configure_profile(&source,&file,"RAF",&raw,&mut development);
         if (development.cfa.len()==36)!=plan.xtrans {return Err(unsupported());}
         if raw.blacklevel.cpp!=1 || raw.blacklevel.width!=(if plan.xtrans{6}else{2}) || raw.blacklevel.height!=raw.blacklevel.width
             || raw.blacklevel.levels.len()!=raw.blacklevel.width*raw.blacklevel.height || raw.whitelevel.0.len()!=1 {return Err(err("INVALID_COLOR_METADATA","probe"));}
@@ -163,7 +164,9 @@ impl FujiRaw {
             (false,Encoding::Lossless)=>"RAF_BAYER_LOSSLESS",(false,Encoding::Lossy)=>"RAF_BAYER_LOSSY",(false,_)=>"RAF_BAYER_UNCOMPRESSED",
         };
         if self.plan.xtrans {
-            p.development_policy=if self.camera.development.lens_extras.has_ready() {
+            p.development_policy=if self.camera.development.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
+                "raf-xtrans-linear-srgb-lensfun-v3"
+            } else if self.camera.development.lens_extras.has_ready() {
                 "raf-xtrans-linear-srgb-embedded-v2"
             } else { "raf-xtrans-linear-srgb-v1" };
         }
@@ -194,10 +197,12 @@ impl FujiRaw {
             if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
             let mut raw=decoded?;
             raw.active_area=None;
-            let revalidated=descriptor_cfa(&raw,self.plan.orientation,true)?;
+            let mut revalidated=descriptor_cfa(&raw,self.plan.orientation,true)?;
+            configure_profile(&self.source,&self.file,"RAF",&raw,&mut revalidated);
             if raw.width!=self.plan.width || raw.height!=self.plan.height || raw.blacklevel.as_vec()!=self.black || raw.whitelevel.0.as_slice()!=[self.white as u32]
                 || revalidated.lens!=self.camera.development.lens
-                || revalidated.lens_extras!=self.camera.development.lens_extras {return Err(invalid());}
+                || revalidated.lens_extras!=self.camera.development.lens_extras
+                || revalidated.lens_profile!=self.camera.development.lens_profile {return Err(invalid());}
             match raw.data {RawImageData::Integer(v) if v.len()==self.plan.width*self.plan.height=>Some(v),_=>return Err(invalid())}
         }else{None};
         // Metadata map and any padded compressed buffer are gone before strip development.

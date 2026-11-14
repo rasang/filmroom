@@ -763,6 +763,7 @@
     <string name="camera_raw_basic_development" formatted="false">Camera RAW uses basic development with black/white levels, white balance and a color matrix. Camera picture styles and full lens corrections are not applied; colors and geometry may differ from the camera or other software.</string>
     <string name="embedded_lens_distortion_applied" formatted="false">Applied embedded lens distortion correction.</string>
     <string name="lensfun_distortion_applied" formatted="false">Applied distortion correction from the matched lens profile.</string>
+    <string name="lensfun_distortion_not_applied" formatted="false">A matching lens profile was found, but distortion correction could not be applied.</string>
     <string name="embedded_lens_vignetting_applied" formatted="false">Applied embedded lens vignetting correction.</string>
     <string name="embedded_lens_vignetting_not_applied" formatted="false">Embedded lens vignetting parameters were detected, but correction could not be applied.</string>
     <string name="embedded_lens_tca_applied" formatted="false">Applied embedded lens chromatic aberration correction.</string>

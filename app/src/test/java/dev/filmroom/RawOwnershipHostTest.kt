@@ -148,20 +148,24 @@ class RawOwnershipHostTest {
         }
     }
 
-    private data class OpticsRoute(val format:String,val oldPolicy:String,val newPolicy:String,val prefix:String)
+    private data class OpticsRoute(val format:String,val oldPolicy:String,val newPolicy:String,val prefix:String,val oldDistortion:Boolean=true)
     private val opticsRoutes=listOf(
         OpticsRoute("ARW","camera-matrix-linear-srgb-v1","camera-matrix-linear-srgb-embedded-v2","EMBEDDED_LENS"),
         OpticsRoute("RAF","raf-xtrans-linear-srgb-v1","raf-xtrans-linear-srgb-embedded-v2","EMBEDDED_LENS"),
-        OpticsRoute("CR3","camera-matrix-linear-srgb-lensfun-v1","camera-matrix-linear-srgb-lensfun-v2","LENSFUN"))
+        OpticsRoute("CR3","camera-matrix-linear-srgb-lensfun-v1","camera-matrix-linear-srgb-lensfun-v2","LENSFUN"),
+        OpticsRoute("CR3","camera-matrix-linear-srgb-lensfun-v2","camera-matrix-linear-srgb-lensfun-v3","LENSFUN"),
+        OpticsRoute("RAF","raf-xtrans-linear-srgb-v1","raf-xtrans-linear-srgb-lensfun-v3","LENSFUN",false),
+        OpticsRoute("DNG","rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing","dng-cfa-linear-srgb-lensfun-v3","LENSFUN",false))
     private fun opticsApi(route:OpticsRoute)=Api().apply {
-        format=route.format;policy=route.oldPolicy;warningCode="${route.prefix}_DISTORTION_APPLIED"
+        format=route.format;policy=route.oldPolicy;warningCode=if(route.oldDistortion) "${route.prefix}_DISTORTION_APPLIED" else null
     }
     private fun upgradeOptics(api:Api,route:OpticsRoute) {
         api.policy=route.newPolicy;api.pixelValue=0.375f
+        api.warningCode="${route.prefix}_DISTORTION_APPLIED"
         api.warningCodes=listOf("${route.prefix}_VIGNETTING_APPLIED","${route.prefix}_TCA_APPLIED")
     }
 
-    @Test fun allOpticsV1PoliciesRebuildPixelsAndMessagesOnceThenReuseTheirV2Spool()=runBlocking {
+    @Test fun allOpticsPolicyUpgradesRebuildPixelsAndMessagesOnceThenReuseTheirCurrentSpool()=runBlocking {
         val app=ApplicationProvider.getApplicationContext<Application>()
         dev.filmroom.i18n.L10n.choose(app,"zh")
         for(route in opticsRoutes) {
@@ -172,7 +176,7 @@ class RawOwnershipHostTest {
                 val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
                 val oldRecord=RawDevelopmentCache.recordFile(old);val oldRecordBytes=oldRecord.readBytes()
                 assertEquals(route.oldPolicy,JSONObject(oldRecord.readText()).getString("developmentPolicy"))
-                assertFalse(loaded.source.developmentWarning!!.contains("暗角"))
+                assertFalse(loaded.source.developmentWarning.orEmpty().contains("暗角"))
                 upgradeOptics(api,route)
                 val restored=repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey);refreshed=restored
                 val current=checkNotNull(restored.source.linearFile)
@@ -201,7 +205,7 @@ class RawOwnershipHostTest {
         }
     }
 
-    @Test fun allOpticsV2MigrationFailuresPreserveV1SessionSourceSpoolAndRecordUntilExplicitRetry()=runBlocking {
+    @Test fun allOpticsMigrationFailuresPreservePreviousSessionSourceSpoolAndRecordUntilExplicitRetry()=runBlocking {
         val app=ApplicationProvider.getApplicationContext<Application>()
         for(route in opticsRoutes)for(code in listOf("DISK_BUDGET","MEMORY_BUDGET","DECODE_FAILED")) {
             val api=opticsApi(route);val(repo,uri)=setup(api);val loaded=repo.import(uri)

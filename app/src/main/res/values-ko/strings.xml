@@ -763,6 +763,7 @@
     <string name="camera_raw_basic_development" formatted="false">카메라 RAW는 블랙·화이트 레벨, 화이트 밸런스와 색상 행렬을 사용해 기본 현상합니다. 카메라의 화상 스타일과 모든 렌즈 보정은 적용하지 않으므로 색상과 형태가 카메라 또는 다른 소프트웨어와 다를 수 있습니다.</string>
     <string name="embedded_lens_distortion_applied" formatted="false">파일에 포함된 렌즈 왜곡 보정을 적용했습니다.</string>
     <string name="lensfun_distortion_applied" formatted="false">일치하는 렌즈 프로파일의 왜곡 보정을 적용했습니다.</string>
+    <string name="lensfun_distortion_not_applied" formatted="false">일치하는 렌즈 프로파일을 찾았지만 왜곡 보정을 적용할 수 없었습니다.</string>
     <string name="embedded_lens_vignetting_applied" formatted="false">파일에 포함된 렌즈 비네팅 보정을 적용했습니다.</string>
     <string name="embedded_lens_vignetting_not_applied" formatted="false">파일에 포함된 렌즈 비네팅 보정 매개변수를 감지했지만 보정을 적용할 수 없었습니다.</string>
     <string name="embedded_lens_tca_applied" formatted="false">파일에 포함된 렌즈 색수차 보정을 적용했습니다.</string>

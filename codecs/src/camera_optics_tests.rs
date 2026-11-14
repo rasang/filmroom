@@ -52,6 +52,152 @@ fn close(actual: &[u8], expected: &[u8], epsilon: f32) {
     assert!(error <= epsilon, "max pixel error {error}, allowed {epsilon}");
 }
 
+fn full_library_profile(d:&mut Development,lens_model:&str,focal:f64,aperture:Option<f64>,focus:Option<[f64;2]>) {
+    // This is a sensor-to-RGB sink test, independently of source-file parsing:
+    // select on a synthetic CFA descriptor, then feed analytic camera RGB.
+    let cpp=d.cpp;d.cpp=1;
+    let identity=crate::lensfun_metadata::CaptureIdentity {
+        make:"Canon".into(),model:"Canon EOS R".into(),lens_make:Some("Canon".into()),
+        lens_model:Some(lens_model.into()),lens_aliases:vec![],mount:Some("Canon RF".into()),
+        focal_length_mm:focal,aperture,focus_range_m:focus,
+        provenance:crate::lensfun_metadata::LensIdentityProvenance::OriginalExif,
+    };
+    crate::lensfun::configure_capture("CR3",&identity,d);d.cpp=cpp;
+    assert!(d.lens_profile.is_some(),"profile {lens_model}");
+}
+
+#[test]
+fn complete_database_selects_multiple_lenses_and_missing_capture_values_are_per_operation() {
+    for (name,focal,aperture) in [("Canon RF 16mm F2.8 STM",16.0,2.8),
+        ("Canon RF 24-105mm F4L IS USM",50.0,4.0)] {
+        let mut d=development();d.lens=LensStatus::Missing;d.crop=d.active;
+        full_library_profile(&mut d,name,focal,Some(aperture),Some([1000.0,1000.0]));
+        let p=d.lens_profile.as_ref().unwrap();
+        assert!(p.has_distortion(),"{name}");
+        assert!(p.has_tca(),"{name}");
+        assert!(p.has_vignetting(),"{name}");
+        let all=render_strips(&d,31);
+        let mut no_exposure=development();no_exposure.lens=LensStatus::Missing;no_exposure.crop=no_exposure.active;
+        full_library_profile(&mut no_exposure,name,focal,None,None);
+        let p=no_exposure.lens_profile.as_ref().unwrap();
+        assert!(p.has_distortion() && p.has_tca() && !p.has_vignetting());
+        assert!(p.vignetting_not_applied());
+        assert_ne!(all,render_strips(&no_exposure,31));
+    }
+}
+
+#[test]
+fn olympus_source_does_not_double_apply_shading_even_with_complete_exposure_metadata() {
+    let mut d=development();d.cpp=1;d.crop=d.active;d.lens=LensStatus::Missing;
+    let identity=crate::lensfun_metadata::CaptureIdentity {
+        make:"Olympus".into(),model:"E-M10".into(),lens_make:Some("Panasonic".into()),
+        lens_model:Some("Lumix G 20mm F1.7 Asph.".into()),lens_aliases:vec![],
+        mount:Some("Micro 4/3 System".into()),focal_length_mm:20.0,
+        aperture:Some(1.7),focus_range_m:Some([10.0,10.0]),
+        provenance:crate::lensfun_metadata::LensIdentityProvenance::OriginalExif,
+    };
+    crate::lensfun::configure_capture("ORF",&identity,&mut d);
+    let p=d.lens_profile.as_ref().expect("the original lens still matches");
+    assert!(p.has_distortion() && p.has_tca());
+    assert!(!p.has_vignetting() && !p.vignetting_not_applied());
+    assert!(matches!(d.lens_extras.vignette,State::Missing));
+}
+
+#[test]
+fn full_library_preserves_embedded_identity_unsupported_and_missing_independently() {
+    let mut d=development();d.crop=d.active;d.lens=lens(0);
+    let embedded=d.lens.clone();
+    full_library_profile(&mut d,"Canon RF 16mm F2.8 STM",16.0,Some(2.8),Some([1000.0,1000.0]));
+    let p=d.lens_profile.as_ref().unwrap();
+    assert_eq!(d.lens,embedded);
+    assert!(!p.has_distortion() && p.has_tca() && p.has_vignetting());
+    let corrected=render_strips(&d,31);
+    let mut plain=d.clone();plain.lens_profile=None;
+    assert_ne!(corrected,render_strips(&plain,31));
+
+    let mut d=development();d.crop=d.active;d.lens=LensStatus::Unsupported;
+    d.lens_extras.tca=State::Unsupported;
+    full_library_profile(&mut d,"Canon RF 16mm F2.8 STM",16.0,Some(2.8),Some([1000.0,1000.0]));
+    let p=d.lens_profile.as_ref().unwrap();
+    assert!(!p.has_distortion() && !p.has_tca() && p.has_vignetting());
+    assert!(!p.distortion_not_applied() && !p.tca_not_applied());
+    assert!(matches!(d.lens,LensStatus::Unsupported));
+    assert!(matches!(d.lens_extras.tca,State::Unsupported));
+    assert!(CameraRgbSink::new(&d,&Scratch::new().0.join("unused")).unwrap().camera.is_none());
+}
+
+#[test]
+fn mixed_source_references_keep_all_orientations_and_strip_boundaries() {
+    for embedded in [false,true] {
+        let mut full=development();full.crop=full.active;
+        if !embedded {full.lens=LensStatus::Missing;}
+        full_library_profile(&mut full,"Canon RF 16mm F2.8 STM",16.0,Some(2.8),Some([1000.0,1000.0]));
+        assert!(full.lens_profile.as_ref().unwrap().has_tca());
+        let reference=render_strips(&full,128);
+        for orientation in 1..=8 {
+            let mut cropped=full.clone();cropped.crop=development().crop;cropped.orientation=orientation;
+            let expected=crop_and_orient(&reference,&cropped,full.active);
+            for rows in [8,31,128] {assert_eq!(render_strips(&cropped,rows),expected);}
+        }
+    }
+    // An off-center default crop makes embedded active and external reference
+    // origins different. The model composition must still use source pixels.
+    let mut mixed=development();
+    full_library_profile(&mut mixed,"Canon RF 16mm F2.8 STM",16.0,None,None);
+    assert!(mixed.lens_profile.as_ref().unwrap().has_tca());
+    let expected=render_strips(&mixed,128);
+    for rows in [8,17,31] {assert_eq!(render_strips(&mixed,rows),expected);}
+}
+
+#[test]
+fn embedded_tca_composes_with_external_distortion_without_a_second_resample() {
+    let mut d=development();d.lens=LensStatus::Missing;d.crop=d.active;d.lens_extras=tca();
+    let original_tca=d.lens_extras.tca.clone();
+    full_library_profile(&mut d,"Canon RF 16mm F2.8 STM",16.0,None,None);
+    let p=d.lens_profile.as_ref().unwrap();
+    assert!(p.has_distortion() && !p.has_tca());
+    assert_eq!(d.lens_extras.tca,original_tca);
+    let expected=render_strips(&d,128);
+    for rows in [8,31] {assert_eq!(render_strips(&d,rows),expected);}
+    let mut plain=d.clone();plain.lens_profile=None;
+    assert_ne!(render_strips(&plain,128),expected);
+}
+
+#[test]
+fn rf16_continuous_composition_keeps_native_field_of_view_at_full_resolution_and_shifted_reference() {
+    for shifted in [false,true] {
+        let mut d=development();
+        d.width=6100;d.height=4100;
+        d.active=Rect{x:27,y:31,w:6048,h:4048};
+        d.crop=Rect{x:51,y:43,w:6000,h:4000};
+        d.lens_reference=d.active;
+        d.lens=LensStatus::Missing;
+        if shifted {
+            // Keep the manufacturer's active reference independently of the
+            // external profile's off-center visible crop, without another gain.
+            d.lens_extras=embedded_optics::from_metadata(&EmbeddedLensCorrections {
+                tca:EmbeddedOpticsState::Missing,
+                vignette:EmbeddedOpticsState::Ready(EmbeddedVignette::Sony{samples:vec![0;11]}),
+            });
+        }
+        full_library_profile(&mut d,"Canon RF 16mm F2.8 STM",16.0,None,None);
+        let p=d.lens_profile.as_ref().unwrap();
+        assert!(p.has_distortion() && p.has_tca());
+        assert!(p.extra_zoom<=1.002,
+            "interval overestimation must not force a 10% crop: shifted={shifted}, zoom={}",p.extra_zoom);
+        let old=crate::lensfun::rf16_with_optics_for_test(d.crop.w,d.crop.h,None,None);
+        let dx=(d.crop.x-d.lens_reference.x) as f64;
+        let dy=(d.crop.y-d.lens_reference.y) as f64;
+        for y in [0,1,999,1999,3998,3999] {for x in [0,1,1499,2999,5998,5999] {for c in 0..3 {
+            let expected=old.source_position_channel(d.crop.w,d.crop.h,x,y,c).unwrap();
+            let actual=optics::source_position(&d,x+dx as usize,y+dy as usize,c).unwrap();
+            assert!((actual[0]-dx-expected[0]).abs()<0.001
+                && (actual[1]-dy-expected[1]).abs()<0.001,
+                "native RF16 view changed at ({x},{y}), channel {c}, shifted={shifted}");
+        }}}
+    }
+}
+
 #[test]
 fn vignette_is_applied_at_source_coordinates_before_distortion_and_color_once() {
     for distortion in [LensStatus::Missing, development().lens] {

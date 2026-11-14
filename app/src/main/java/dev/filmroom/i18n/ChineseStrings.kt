@@ -11,6 +11,7 @@ internal object ChineseStrings {
         dev.filmroom.R.string.lensfun_tca_not_applied to "已匹配镜头配置，但无法应用色差校正。",
         dev.filmroom.R.string.embedded_lens_distortion_applied to "已应用内嵌镜头畸变校正。",
         dev.filmroom.R.string.lensfun_distortion_applied to "已应用匹配镜头配置的畸变校正。",
+        dev.filmroom.R.string.lensfun_distortion_not_applied to "已匹配镜头配置，但无法应用畸变校正。",
         dev.filmroom.R.string.raw_restore_retry_title to "照片暂未恢复",
         dev.filmroom.R.string.raw_restore_retry_message to "原照片已保留。请检查可用空间和内存后重试，也可稍后再试。",
         dev.filmroom.R.string.raw_restore_retry_action to "重试",

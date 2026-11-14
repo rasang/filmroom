@@ -4,10 +4,18 @@
 use super::*;
 use crate::embedded_optics::State;
 
+#[path = "camera_profile_optics.rs"]
+mod profile;
+use profile::{qualify_profile, profile_position};
+
 /// A mathematically valid optional TCA can still need an enormous shared RGB
 /// source window. Certify its worst 128x32 destination tile using continuous
 /// Jacobian/factor bounds. Rejected TCA leaves every other operation intact.
 pub(super) fn qualify(d: &mut Development) {
+    if d.lens_profile.is_some() {
+        qualify_profile(d);
+        return;
+    }
     let State::Ready(tca)=&d.lens_extras.tca else {return;};
     if tca.is_identity() {return;}
     let certified=(|| {
@@ -38,7 +46,8 @@ pub(super) fn tca_active(d: &Development) -> bool {
     match &d.lens_extras.tca {
         State::Ready(model) => !model.is_identity(),
         State::Unsupported => false,
-        State::Missing => matches!(&d.lens, LensStatus::Profile(p) if p.has_tca()),
+        State::Missing => d.lens_profile.as_ref().is_some_and(|p| p.has_tca())
+            || matches!(&d.lens, LensStatus::Profile(p) if p.has_tca()),
     }
 }
 
@@ -46,7 +55,8 @@ pub(super) fn vignette_active(d: &Development) -> bool {
     match &d.lens_extras.vignette {
         State::Ready(model) => !model.is_identity(),
         State::Unsupported => false,
-        State::Missing => matches!(&d.lens, LensStatus::Profile(p) if p.has_vignetting()),
+        State::Missing => d.lens_profile.as_ref().is_some_and(|p| p.has_vignetting())
+            || matches!(&d.lens, LensStatus::Profile(p) if p.has_vignetting()),
     }
 }
 
@@ -66,6 +76,13 @@ pub(super) fn apply_source_vignette(
             let sx = d.active.x as f64 + column as f64 - reference.x as f64;
             let gain = match &d.lens_extras.vignette {
                 State::Ready(model) => model.source_gain(reference.w, reference.h, sx, sy)?,
+                State::Missing if d.lens_profile.as_ref().is_some_and(|p| p.has_vignetting()) => {
+                    let profile=d.lens_profile.as_ref().unwrap();
+                    let reference=profile.reference();
+                    profile.vignette.as_ref().unwrap().source_gain(
+                        (d.active.x+column) as f64-reference.x as f64,
+                        (y+row) as f64-reference.y as f64)?
+                },
                 State::Missing => match &d.lens {
                     LensStatus::Profile(profile) => profile.source_gain(reference.w, reference.h, sx, sy)?,
                     _ => return Err(err("INVALID_INPUT", "lens_vignetting")),
@@ -93,6 +110,9 @@ pub(super) fn source_position(
     let (width, height) = (reference.w, reference.h);
     if width == 0 || height == 0 || x >= width || y >= height || channel >= 3 {
         return Err(err("INVALID_INPUT", "lens_geometry"));
+    }
+    if let Some(profile)=d.lens_profile.as_ref().filter(|p|p.has_distortion() || p.has_tca()) {
+        return profile_position(d,profile,x,y,channel);
     }
     let embedded_tca = match &d.lens_extras.tca {
         State::Ready(model) if !model.is_identity() => Some(model),

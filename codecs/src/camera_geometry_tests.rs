@@ -46,6 +46,7 @@ fn development() -> Development<'static> {
         matrix: vec![0.64, 0.28, 0.08, 0.15, 0.78, 0.07, 0.03, 0.11, 0.86],
         baseline_exposure_ev: 0.5, gain_maps: &[],
         lens_extras: Default::default(),
+        lens_profile: None,
         // A radius-varying model remains nonzero after automatic fill zoom.
         lens: crate::embedded_lens::from_metadata(&EmbeddedLensDistortion::Sony {
             samples: vec![0, -29, -109, -245, -424, -640, -881, -1135, -1390, -1631, -1829],

@@ -6,16 +6,17 @@
 //! Those implementations are copyright Andrew Zabolotny and Lensfun contributors,
 //! LGPL-3.0; this adaptation is distributed under Filmroom's GPL-3.0-or-later.
 //!
-//! The caller supplies an already selected, rectilinear calibration and the
+//! The caller supplies an already selected calibration, preserving its original
+//! projection (no fisheye-to-rectilinear or other projection conversion), and the
 //! dimensions of its unrotated reference image. Pixel centers run from 0 to
 //! width/height - 1. Calibration crop, camera crop, aspect ratio, and optical
 //! center are distinct inputs. `real-focal` has no effect in Lensfun 0.3.4 when
 //! projection conversion is disabled, so it is deliberately absent here.
 //!
-//! This module does not select profiles or authorize their use. It supports only
-//! one distortion model per calibration, ordered focal samples, and in-range
-//! focal lengths. Unlike Lensfun's nearest-endpoint fallback, it rejects focal
-//! extrapolation. Automatic scale follows Lensfun's eight-direction estimate;
+//! This module does not select profiles or authorize their use.
+//! `new` retains its strict ordered, single-model, in-range contract. The general
+//! database entry point also implements native duplicate replacement, first-model
+//! selection and nearest-endpoint interpolation. Automatic scale follows Lensfun's eight-direction estimate;
 //! an additional bounded interval check rejects folds and any footprint that
 //! cannot be certified inside the source image. No image-sized maps are stored.
 
@@ -54,7 +55,12 @@ pub struct Geometry {
     center: [f64; 2],
     scale: f32,
     inverse_scale: f64,
+    identity: bool,
 }
+
+/// Bounds setup memory independently of image dimensions. The pinned full
+/// database's largest distortion/TCA/vignetting tables all fit this limit.
+pub const MAX_CALIBRATION_POINTS: usize = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Polynomial {
@@ -73,6 +79,43 @@ impl Geometry {
         width: usize,
         height: usize,
     ) -> Option<Self> {
+        let model = interpolate(calibration.points, focal_mm)?;
+        Self::from_model(calibration, camera_crop, width, height, model, false)
+    }
+
+    /// Native database semantics: a later equal-f32 focal replaces the earlier
+    /// slot; the first remaining model wins; interpolation uses only that model.
+    /// A focal beyond its calibration samples uses the closest endpoint, as in
+    /// Lensfun 0.3.4. Identity/lens-range matching remains the caller's job.
+    pub fn new_general(calibration: &Calibration<'_>, camera_crop: f64,
+        focal_mm: f64, width: usize, height: usize) -> Option<Self> {
+        if calibration.points.is_empty() || calibration.points.len() > MAX_CALIBRATION_POINTS
+            || !finite_between(focal_mm, 0.1, 2000.0) { return None; }
+        let mut rows: Vec<CalibrationPoint> = Vec::with_capacity(calibration.points.len());
+        for &row in calibration.points {
+            if !finite_between(row.focal_mm, 0.1, 2000.0) { return None; }
+            Polynomial::from_model(row.model)?;
+            if let Some(old) = rows.iter_mut().find(|old| old.focal_mm as f32 == row.focal_mm as f32) {
+                *old = row;
+            } else { rows.push(row); }
+        }
+        let kind = Polynomial::from_model(rows.first()?.model)?.kind;
+        rows.retain(|row| Polynomial::from_model(row.model).is_some_and(|p| p.kind == kind));
+        rows.sort_by(|a, b| (a.focal_mm as f32).total_cmp(&(b.focal_mm as f32)));
+        let focal = (focal_mm as f32).clamp(rows.first()?.focal_mm as f32, rows.last()?.focal_mm as f32) as f64;
+        Self::new(&Calibration { points: &rows, ..*calibration }, camera_crop, focal, width, height)
+    }
+
+    /// Reference coordinate frame without a distortion callback or its 1.001
+    /// scaling margin. Enables standalone TCA/vignetting and mixed corrections.
+    pub fn identity(calibration: &Calibration<'_>, camera_crop: f64,
+        width: usize, height: usize) -> Option<Self> {
+        let model = Polynomial::from_model(DistortionModel::Poly3 { k1: 0.0 })?;
+        Self::from_model(calibration, camera_crop, width, height, model, true)
+    }
+
+    fn from_model(calibration: &Calibration<'_>, camera_crop: f64,
+        width: usize, height: usize, model: Polynomial, identity: bool) -> Option<Self> {
         if !(5..=32768).contains(&width)
             || !(5..=32768).contains(&height)
             || width.checked_mul(height)? > 52_000_000
@@ -83,7 +126,6 @@ impl Geometry {
         {
             return None;
         }
-        let model = interpolate(calibration.points, focal_mm)?;
         // Retain Lensfun's float inputs and double normalization fields. The
         // normalized coordinates and coefficients refer to the calibration
         // sensor's half short side, after conversion through sensor diagonals.
@@ -108,7 +150,9 @@ impl Geometry {
             ],
             scale: 1.0,
             inverse_scale: 1.0,
+            identity,
         };
+        if identity { return Some(geometry); }
         geometry.scale = geometry.auto_scale()?;
         if !finite_between(geometry.scale as f64, 0.125, 8.0) {
             return None;
@@ -124,6 +168,52 @@ impl Geometry {
 
     pub fn autofill_zoom(&self) -> f64 {
         self.scale as f64
+    }
+
+    pub fn is_identity(&self) -> bool { self.identity }
+
+    pub fn center_pixels(&self) -> [f64; 2] {
+        self.center.map(|c| c * self.norm_unscale)
+    }
+
+    /// Continuous output-box enclosure. Rectangles are [xmin,ymin,xmax,ymax]
+    /// in unrotated reference pixels; this is an interval bound, not a grid.
+    pub fn source_bounds(&self, rectangle: [f64; 4], extra_zoom: f64) -> Option<[f64; 4]> {
+        if rectangle.iter().any(|v| !v.is_finite()) || rectangle[0] < 0.0 || rectangle[1] < 0.0
+            || rectangle[0] > rectangle[2] || rectangle[1] > rectangle[3]
+            || rectangle[2] > (self.width - 1) as f64 || rectangle[3] > (self.height - 1) as f64
+            || !finite_between(extra_zoom, 1.0, 8.0) { return None; }
+        if self.identity && self.inverse_scale == 1.0 && extra_zoom == 1.0 { return Some(rectangle); }
+        let xy = [0, 1].map(|i| (
+            (rectangle[i] * self.norm_scale - self.center[i]) * self.inverse_scale / extra_zoom,
+            (rectangle[i + 2] * self.norm_scale - self.center[i]) * self.inverse_scale / extra_zoom));
+        let (near, far) = rectangle_radius(xy);
+        let factor = self.model.range(near, far, false)?;
+        let output = [0, 1].map(|i| {
+            let (lo, hi) = product_range(xy[i], factor);
+            ((lo + self.center[i]) * self.norm_unscale - 1e-8,
+             (hi + self.center[i]) * self.norm_unscale + 1e-8)
+        });
+        Some([output[0].0, output[1].0, output[0].1, output[1].1])
+    }
+
+    /// Euclidean operator norm of the complete geometry map over its entire
+    /// certified output rectangle. Additional zoom divides this bound by zoom.
+    pub fn sampling_jacobian_bound(&self) -> Option<f64> {
+        if self.identity && self.inverse_scale == 1.0 { return Some(1.0); }
+        let radius = self.input_radius();
+        let factor = self.model.range(0.0, radius, false)?;
+        let derivative = self.model.range(0.0, radius, true)?;
+        let bound = factor.0.abs().max(factor.1.abs()).max(derivative.0.abs()).max(derivative.1.abs())
+            * self.inverse_scale * (1.0 + 1e-12);
+        (bound.is_finite() && bound > 0.0).then_some(bound)
+    }
+
+    fn input_radius(&self) -> f64 {
+        let high = [(self.width - 1) as f64, (self.height - 1) as f64];
+        let extent = [0, 1].map(|i| self.center[i].abs()
+            .max((high[i] * self.norm_scale - self.center[i]).abs()) * self.inverse_scale);
+        extent[0].hypot(extent[1])
     }
 
     /// Native 0.3.4 reserves a further 0.1% of uniform scale when a subpixel
@@ -229,6 +319,7 @@ impl Geometry {
     }
 
     fn position(&self, p: [f64; 2]) -> [f64; 2] {
+        if self.identity && self.inverse_scale == 1.0 { return p; }
         let x = (p[0] * self.norm_scale - self.center[0]) * self.inverse_scale;
         let y = (p[1] * self.norm_scale - self.center[1]) * self.inverse_scale;
         let factor = self.model.factor(x.hypot(y));
@@ -412,7 +503,7 @@ impl Polynomial {
 }
 
 fn interpolate(points: &[CalibrationPoint], focal: f64) -> Option<Polynomial> {
-    if points.is_empty() || points.len() > 64 || !finite_between(focal, 0.1, 2000.0) {
+    if points.is_empty() || points.len() > MAX_CALIBRATION_POINTS || !finite_between(focal, 0.1, 2000.0) {
         return None;
     }
     let focal = focal as f32;
@@ -467,9 +558,15 @@ fn finite_between(value: f64, min: f64, max: f64) -> bool {
     value.is_finite() && (min..=max).contains(&value)
 }
 
-fn product_range(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+pub(crate) fn product_range(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     let values = [a.0 * b.0, a.0 * b.1, a.1 * b.0, a.1 * b.1];
     (values.into_iter().fold(f64::INFINITY, f64::min), values.into_iter().fold(f64::NEG_INFINITY, f64::max))
+}
+
+pub(crate) fn rectangle_radius(xy: [(f64, f64); 2]) -> (f64, f64) {
+    let near = xy.map(|(a, b)| if a <= 0.0 && b >= 0.0 { 0.0 } else { a.abs().min(b.abs()) });
+    let far = xy.map(|(a, b)| a.abs().max(b.abs()));
+    (near[0].hypot(near[1]), far[0].hypot(far[1]))
 }
 
 /// Complete extrema of a cubic on a closed interval, including narrow minima.

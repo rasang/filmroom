@@ -1,210 +1,302 @@
 # Lensfun optical correction fallback
 
-Filmroom can apply an external lens calibration while developing an original
-camera RAW. The correction is local, before the color transform and final
-orientation, and uses the existing bounded camera-RGB resampler. No Lensfun
-shared library, GLib, runtime XML parser or whole-frame coordinate map is added
-to the Android app.
+Filmroom compiles the complete pinned Lensfun database into its original-camera
+RAW development path. Distortion, transverse chromatic aberration (TCA), and
+vignetting are selected independently. The production route is no longer an
+RF16-only allowlist. A database record becomes executable only after source,
+identity, capture-parameter, geometry and resource checks for the relevant
+operation. Database inclusion does not imply that every RAW file has enough
+metadata or that every camera/lens combination has been photographed and tested.
 
-The qualified RF16 route now applies distortion, transverse chromatic aberration
-(TCA), and PA-model vignetting independently. It does not implement longitudinal
-chromatic aberration or general purple-fringe removal. Missing or unsafe capture
-parameters disable only the affected optional operation.
+The correction runs locally in linear camera RGB before the color transform
+and final orientation. Android gains no Lensfun shared library, GLib dependency,
+runtime XML parser or whole-frame coordinate map. TCA addresses lateral channel
+misalignment; longitudinal chromatic aberration and general purple-fringe
+removal are outside this model.
 
-## Enabled scope
+## Pinned inventory and source scope
 
-The initial enabled combination is **Canon EOS R + Canon RF 16mm F2.8 STM**, at
-16 mm, in original CR3 Bayer RAW/C-RAW with the verified full-sensor layout.
-This is one lens/camera combination, not automatic support for the entire
-Lensfun database. The two public optical-validation inputs are C-RAW; the
-same metadata/layout contract also admits the existing supported lossless RAW
-variant, without claiming a new real-file lossless sample.
+The unchanged snapshot in [`lensfun/database`](../lensfun/database) contains
+**56 XML files, 1,580 lens records, 1,059 camera records and 52 mount definitions**.
+[`DATABASE-STATS.json`](../lensfun/DATABASE-STATS.json) records the generated
+inventory; [`PROVENANCE.json`](../lensfun/PROVENANCE.json) binds each XML to its
+source archive and SHA-256.
 
-The independent reader requires all of these to agree:
+| Calibration present | Lens records |
+| --- | ---: |
+| Distortion | 1,538 |
+| TCA | 1,021 |
+| Vignetting | 717 |
+| All three | 591 |
+| TCA or vignetting without distortion | 39 |
 
-| Field | Required value |
+These counts refer to database records. Alternate calibration sensors,
+fixed-camera lenses and accessory combinations can have separate records;
+there are 1,481 distinct maker/model names. A missing distortion calibration
+does not prevent use of a separately available TCA or vignetting calibration.
+
+Supported original CFA adapters can request profiles for CR3, CR2, NEF, ARW,
+RAF, ORF, PEF and RW2. This extends profile selection within the existing RAW
+decoder/layout support; it does not add unsupported sensor compression modes or
+remove the image-size and memory limits. Eligible original CFA DNGs have the
+additional source gate described below. Camera-produced RGB/YCbCr RAW,
+LinearRaw, JPEG, HEIC and previously developed linear spools do not enter this
+external-CFA fallback.
+
+ORF has an additional per-source restriction: Olympus shading compensation
+may already be written into the RAW pixels, and this adapter does not establish
+that it was absent. External PA vignetting is therefore not automatically
+added to ORF, even when a profile, aperture and focus values are available.
+Embedded distortion/TCA and eligible external distortion/TCA retain their own
+selection. This source gate does not invent an unsupported on-file gain table
+or change the previous embedded warning semantics.
+
+### Identity and calibration choice
+
+`lensfun_metadata/capture.rs` retains provenance for original tags and decoded
+lens identity separately. Original make/model, lens names, actual focal length
+and available independent IDs must agree. A name resolved by the decoder's
+lens database is not relabelled as an original EXIF name. Missing, contradictory
+or ambiguous identity leaves the external operations off.
+
+`lensfun_database.rs` uses exact normalized names and declared aliases, a known
+unambiguous camera crop, and compatible mounts. Its normalization handles case,
+spacing, equivalent aperture spelling and declared manufacturer/model aliases;
+it does not rank partial names or use edit-distance matching. Distinct optical
+models remain ambiguous. Alternate sensor calibrations are selected without
+using an APS-C-only calibration over an uncalibrated full-frame outer area.
+
+An unnamed lens can be identified through a fixed camera's private mount and
+actual focal length. An accessory-specific record requires the corresponding
+combination identity. Explicitly shared fixed-lens families with discrete focal
+groups, such as the GR III / GW-4 family, select the exact float32 focal group;
+the pipeline does not interpolate between the bare lens and attachment groups.
+See the [database README](../lensfun/README.md) for the full matching contract.
+
+The additional original-tag reader is bounded to 32 KiB total reads, 4 KiB per
+read and 256 container boxes; DNG conversion-marker traversal additionally
+limits the IFD graph to 16 directories. It preserves the file cursor and does
+not copy image, preview or complete MakerNote payloads. Decoder metadata runs
+inside the adapter's existing bounded probe scope. Missing or unsafe optional
+metadata does not prevent ordinary RAW development.
+
+### Original CFA DNG gate
+
+A `.dng` extension or absence of a known converter name is insufficient.
+`dng_lensfun.rs` requires positive native-camera evidence: normalized Software
+starts with the original camera model followed by a firmware/version marker
+and a numeric version.
+The independent RAW descriptor must agree with the DNG reader on sensor size,
+active rectangle, default crop and available orientation, and describe CFA data.
+
+External fallback is excluded when any OpcodeList1/2/3 tag is present, including
+an empty, optional or unsupported opcode list. Existing warp, gain-map and
+Stage1 operations, an existing DNG profile path, OriginalRawFileName/Data,
+Adobe conversion private-data markers and non-unit/invalid DefaultScale also
+block this route. Bounded original metadata must pass the normal identity and
+conversion-marker checks. Missing firmware evidence keeps the existing DNG
+processing path.
+
+Admitted DNG fallback retains DNG-specific calibration, white balance, color
+matrix and exposure processing through `calibrate_camera`. The existing ordered
+DNG Warp/GainMap pipeline, required-opcode failures and LinearRaw behavior stay
+independent. It is not a second correction pass after a DNG opcode pipeline.
+
+## Independent selection of the three operations
+
+Each operation obeys the same precedence, independently of the other two:
+
+| Embedded state for this operation | External behavior |
 | --- | --- |
-| Original Make / Model | Canon / Canon EOS R |
-| Canon ModelID | `0x80000424` |
-| EXIF and MakerNote LensModel | `RF16mm F2.8 STM` |
-| Canon LensType / RFLensType | `61182` / `288` |
-| Actual and lens-range focal lengths | 16 mm |
-| Sensor / CFA | 6888 × 4546 / RGGB, one component |
-| Active rectangle | x=144, y=46, width=6742, height=4498 |
-| Default crop | x=156, y=58, width=6720, height=4480 |
-| EXIF image / Canon aspect crop | 6720 × 4480 / full 3:2, no additional crop |
-| EXIF orientation | 1–8, agrees with the RAW adapter |
+| `Ready`, including an identity model | Keep the embedded result; do not add that external operation |
+| `Unsupported` or invalid present metadata | Keep the unsupported status; do not replace it with a database estimate |
+| `Missing`, with a consistent profile match | Attempt this profile's corresponding calibration and numerical admission |
+| `Missing`, without a match or calibration | Keep ordinary development for this operation |
 
-The generic geometry module also implements PTLens, poly3 and poly5 models,
-calibration/camera crop factors, aspect ratio, optical center and focal-length
-interpolation. Those capabilities do not opt other lenses or cameras into the
-RAW pipeline. Ricoh GR III/IIIx and the other database entries remain disabled
-until their original-source contract and optical result are qualified.
+There is one selected distortion map and one selected TCA map, even when their
+sources differ. For example, embedded distortion can coexist with external
+TCA and vignetting. A missing actual aperture or focus value disables external
+vignetting while allowing matched distortion and TCA. An unsafe optical model
+or execution domain is not enabled merely because its XML exists. A rejected
+external operation cannot replace an already admitted embedded operation.
 
-## A single distortion source
+## Capture parameters, interpolation and original projection
 
-The camera adapter selects exactly one `LensStatus`:
+The selected camera crop, calibration crop, aspect ratio and optical center
+remain distinct inputs. External profiles use the unrotated visible default
+crop as their reference. Manufacturer models retain the reference chosen by
+their adapters; the composition translates between those coordinate frames.
+EXIF orientation is applied after optical processing.
 
-| Existing state | Lensfun behavior |
+The shared model code follows the fixed official **Lensfun 0.3.4** formulas:
+
+| Operation | Models and interpolation |
 | --- | --- |
-| Supported embedded model, including identity | Keep the embedded path; no fallback |
-| Present but unsupported/invalid embedded model | Keep the existing unsupported notice; no fallback |
-| Already selected external profile | No second selection or resampling pass |
-| Missing embedded model, qualified original CR3 | Inspect the bounded original metadata and select the approved profile |
-| Missing model in any other format/layout | Ordinary existing development |
+| Distortion | PTLens, poly3 and poly5; native focal-scaled Hermite interpolation |
+| TCA | Linear and poly3; linear is represented exactly by zero higher terms; native multi-focal interpolation |
+| Vignetting | PA; native inverse-distance weighting over focal length, aperture and reciprocal focus distance |
 
-TCA and vignetting have their own embedded statuses: a validated embedded model
-takes priority for that operation, a present but unsupported model blocks its
-fallback, and a missing model may use the already-qualified external profile.
-An accepted embedded identity is still authoritative. The RF16 opt-in currently
-has no manufacturer TCA/vignette parser; it therefore uses its external data.
+Later equal-float32 calibration keys replace earlier values while preserving
+the original slot, as in the native loader. The general distortion path uses
+the first remaining model family and skips other families, rather than blending
+incompatible formulas. Distortion/TCA queries outside their calibration sample
+interval use the native nearest endpoint after the identity/focal-range checks.
+Vignetting uses the lens's complete native MinFocal/MaxFocal range for its metric,
+not just the subset with PA samples. Tables are bounded to 1,024 points; this
+covers the pinned database's largest 301-point distortion and 440-point PA
+records. It is not the old 64-point or single-focal implementation.
 
-DNG never uses this fallback entry point. Its `OpcodeList3` Warp/GainMap ordering,
-required-opcode failures and LinearRaw behavior remain independent. Sony ARW,
-Fujifilm RAF and Olympus/OM System ORF continue through the existing embedded
-paths. JPEG, HEIC and previously developed linear spools are not treated as
-uncorrected sensor data.
+Fisheye, equisolid, stereographic and panoramic records preserve their original
+projection. This is optical correction within that projection, not automatic
+fisheye-to-rectilinear conversion. Native `real-focal` is not used when projection
+conversion is disabled. A circular-lens PA fit that becomes invalid outside its
+image circle is rejected for a full rectangular source domain; other valid
+operations can remain available.
 
-Optional profile lookup fails closed: missing or contradictory identity,
-unsupported geometry, a folded mapping, or an uncertifiable source footprint
-leaves ordinary RAW decoding available. A selected correction still obeys the
-normal disk/memory admission, cancellation and output-failure contracts.
+Vignetting requires the actual capture FNumber and a valid source focus reading
+or interval. The reader does not substitute maximum lens aperture or guessed
+infinity. Canon FileInfo near/far bounds, for example, retain an explicit
+infinity marker and reject zero, reversed or malformed bounds. The selected
+focus estimate is the reciprocal-distance midpoint. A continuous interval
+check requires at most 2% **model gain variation** throughout the complete
+reported focus interval and source-radius domain, including native exact-match
+neighborhoods. This is a model uncertainty bound, not measured optical accuracy.
 
-## Metadata and geometry
+The focus certificate preserves signed polynomial cancellation: it evaluates
+the interval-center difference polynomial over the complete source radius,
+then adds the coefficient-interval remainder and floating-point allowance.
+This admits the RF135 capture interval of 1.08–1.12 m without relaxing the 2%
+limit or changing any native coefficients. A wider unsafe interval and an
+interior-radius error that cancels only at the corner remain rejected.
 
-The CR3 reader follows only the original `moov` / Canon UUID / CMT1–3 containers.
-It reads selected root TIFF entries rather than relying on a fuzzy or
-database-resolved marketing name. It preserves the file cursor, rejects
-duplicate or cross-container fields, and has a 32 KiB cumulative read budget,
-256-box limit, 64 KiB CMT extent limit and 128-entry root-IFD limit. The existing
-RAW source identity and bounded-plan checks also cover this selection.
+PA gain uses the calibration half-diagonal convention; distortion and poly3
+TCA use the half-short-side convention. The gain polynomial must have a positive
+denominator and gain in [0.25, 64] over the **actual active source rectangle**
+relative to the profile crop, including demosaic/resample neighborhoods. The
+full-library path does not assume a fixed 0.5% halo. Unsafe values are rejected,
+not clipped to make a model pass.
 
-The RF16 profile is normalized to the **unrotated 6720 × 4480 default crop**.
-The larger active rectangle is retained for demosaic neighborhoods, not used
-as the calibration reference. Vignetting multiplies the original linear camera
-RGB before geometry. Distortion and TCA compose source coordinates, then each
-RGB channel is sampled once. White balance/color conversion, final crop and
-EXIF orientation are each applied once afterward. Perspective and projection
-conversion are not enabled.
+## Single resampling pass and continuous admission
 
-The source FNumber comes from CMT2 EXIF `0x829d`, never the lens's maximum
-aperture. Canon FileInfo `0x0093` indexes 20/21 supply far/near focus bounds in
-centimetres; `0xffff` is an explicit infinity marker. Zero, reversed, missing
-or malformed bounds do not become an assumed infinity value. The estimate is
-the midpoint of the two reciprocal distances, preserving the original range.
-Vignetting is enabled only when a bounded interval evaluation certifies at most
-2% **model gain variation** across that entire focus interval and source-radius
-domain. This is a numerical uncertainty bound, not a claim of physical optical
-accuracy. Native exact-match neighbourhoods within the interval are included.
+The processing order is sensor normalization/demosaic, source-camera-RGB
+vignetting, one composite distortion/TCA resampling, color calibration, crop
+and orientation. Gain is evaluated at original source coordinates. Temporary
+camera-RGB calibration clears optical state already executed, preventing a
+second gain or geometry operation.
 
-The PA gain uses the calibration half-diagonal convention, whereas distortion
-and poly3 TCA use the half-short-side convention. The complete gain polynomial
-is checked for a positive denominator and gain between 0.25 and 64, including
-a halo of 0.5% of the reference short side. This covers the qualified active
-rectangle outside the default crop without applying the profile to sensor
-padding. No values are silently clipped to make unsafe calibration pass.
+Lensfun's native uniform scale and the TCA 1.001 starting reserve are retained.
+The combined map is checked continuously over the whole output rectangle.
+Adaptive interval subdivision tightens the enclosure before increasing uniform
+zoom; it does not crop simply because a coarse whole-image interval loses the
+correlation between radius and position. The 6000-pixel RF16 regression also
+checks an offset active/crop reference and keeps the previously validated view.
+The per-pixel route still rejects nonfinite or out-of-range coordinates.
 
-TCA uses native Lensfun 0.3.4's additional uniform 1.001 auto-scale multiplier.
-All three channels share that scale. Continuous radial/edge bounds certify
-the combined distortion-plus-TCA map before activation; finite point sampling
-alone is not the border-safety test. The legacy distortion-only coordinate API
-remains unchanged for the existing independent geometry fixtures.
+A separate full-domain Jacobian and RGB-channel separation bound certifies the
+worst 128×32 destination tile, including interpolation taps, against the
+existing **8 MiB source-read window**. Small boundary boxes cannot hide a larger
+memory requirement. Finite coordinate grids alone are not admission proofs.
 
-`lensfun_geometry.rs` follows Lensfun 0.3.4's distortion coefficients, focal
-interpolation and automatic scale. It computes coordinates directly with
-constant-size state. It rejects focal extrapolation and mixed-model
-calibrations. An additional continuous polynomial/interval check certifies
-positive radial derivative and an in-bounds full image boundary; a finite
-grid alone is not the admission test. The per-pixel path also checks finite,
-in-range coordinates.
-
-The active camera-RGB backing adds 12 bytes per active pixel to temporary disk
-usage, exactly as for embedded correction. Geometry scratch stays within the
-existing 10 MiB allowance. Sensor/input storage is released before geometry
-finishes. No 6720 × 4480 XY map is allocated by production code.
+Vignetting alone keeps strip processing. Geometry adds an active camera-RGB
+backing of 12 bytes per active pixel to temporary disk admission and retains
+the existing 10 MiB geometry scratch allowance. Sensor/input storage is released
+before final geometry. Cancellation, source revalidation, output ownership and
+normal memory/disk limits remain in force. No image-sized XY map is allocated.
 
 ## Cache and photo information
 
-Successful profile selection reports `LENSFUN_DISTORTION_APPLIED`. The app's
-strict code whitelist maps it to “已应用匹配镜头配置的畸变校正。” and the corresponding
-English, Japanese and Korean resources. It does not also report embedded
-distortion applied for this profile.
+Each requested external operation reports its own selected result:
+`LENSFUN_DISTORTION_APPLIED` / `LENSFUN_DISTORTION_NOT_APPLIED`,
+`LENSFUN_TCA_APPLIED` / `LENSFUN_TCA_NOT_APPLIED`, and
+`LENSFUN_VIGNETTING_APPLIED` / `LENSFUN_VIGNETTING_NOT_APPLIED`. Missing calibration
+is distinct from a present requested calibration that could not be applied.
+The app accepts only known codes and maps them to localized resources.
 
-The other operations independently report `LENSFUN_TCA_APPLIED` /
-`LENSFUN_TCA_NOT_APPLIED` and `LENSFUN_VIGNETTING_APPLIED` /
-`LENSFUN_VIGNETTING_NOT_APPLIED`. They describe actual selected processing, not
-just calibration presence in XML.
+Output that actually uses the full-library fallback has a format-specific policy:
 
-Profile-corrected output uses development policy
-`camera-matrix-linear-srgb-lensfun-v2`. A completed new RAW spool gets a bounded
-`.development.json` sidecar binding the policy to its original source, output
-dimensions, lengths and file timestamps. Restoring a valid same-policy spool
-does not decode again. A stale, missing or corrupt record triggers development
-from the retained original RAW into a new UUID spool, then persists the new
-session cache key. Missing/invalid restore keys retain their existing error
-behavior.
+| Development route | Policy |
+| --- | --- |
+| Camera CFA | `camera-matrix-linear-srgb-lensfun-v3` |
+| Fuji X-Trans | `raf-xtrans-linear-srgb-lensfun-v3` |
+| Original CFA DNG | `dng-cfa-linear-srgb-lensfun-v3` |
 
-Rebuilding never overwrites a spool that may still be held by an export or
-another source. Failure/cancellation removes only the new owned files; normal
-ownership release and startup recovery clean matching records. Previews and
-exports read the same completed linear spool, so a newly probed status cannot
-be displayed over an old uncorrected cache.
+Prior Lensfun v1/v2 spools must be
+redeveloped from the retained original source before reuse as v3. Ordinary
+routes that did not apply an external operation keep their corresponding policy.
+The manufacturer-only optical policies remain their existing embedded-v2 values.
 
-A failed rebuild after a valid original-file probe retains the old session
-keys as well as its files. The existing recovery dialog offers manual retry
-or postponement; it does not loop automatically. This keeps a temporary
-memory/disk failure from turning the retained original into an orphan at the
-next startup. Confirmed missing/invalid original paths retain the existing
-session-expiry behavior.
+The bounded `.development.json` sidecar binds policy, source and output identity.
+A valid same-policy spool can be reused; stale, missing or corrupt cache metadata
+causes a new owned spool to be built. A failed or cancelled rebuild retains the
+original/session and old valid files, cleans only the new owned output, and
+uses the existing manual-retry recovery path. It does not loop automatically.
+Previews and exports consume the same completed linear spool. Fresh probe
+warnings can update photo information even if unchanged pixels are reused.
 
 **Changing coefficients, reference geometry, interpolation or resampling
 requires a development-policy version bump.**
 
-## Data and attribution
+## Data, attribution and reproducible checks
 
-`lensfun/approved.xml` preserves the selected camera and lens records from the
-pinned source snapshot. Its distortion, single poly3 TCA calibration, and ten
-PA vignetting calibrations are compiled by `tools/generate-lensfun-profiles.py`.
-The generator validates the qualified model/focal coverage and rejects an
-unreviewed layout change. `--check` verifies the generated source is current.
+`tools/generate-lensfun-profiles.py` compiles all original database XML into
+static profiles and indexes. `--check` verifies source hashes and generated
+outputs. `lensfun/approved.xml` and the RF16 helpers are retained for old-route
+compatibility fixtures; they no longer define production inventory or scope.
+The XML snapshot and generated Rust byte counts are not APK measurements.
 
-The source archive/XML/subset hashes, retrieval date and modifications are in
-`lensfun/PROVENANCE.json`. Calibration data is credited to Lensfun database
-contributors under CC BY-SA 3.0. The geometry adaptation credits the original
-LGPL-3.0-or-later Lensfun implementation and is distributed with Filmroom's
-GPL-3.0-or-later source. License texts and attribution are retained in source
-and the app's existing codec notices screen.
+Calibration data credits Lensfun database contributors under CC BY-SA 3.0.
+The algorithm adaptations credit the fixed LGPL-3.0-or-later Lensfun sources
+and ship with Filmroom's GPL-3.0-or-later code. Original XML, source/provenance
+hashes and full license texts are retained in the repository and app notices.
 
-## Reproducible checks
-
-From `codecs`, with the normal Rust/libjxl build environment:
+From `codecs`, with the normal Rust/libjxl environment:
 
 ```sh
 python3 tools/generate-lensfun-profiles.py --check
-cargo test --offline --locked --release -j2
-FILMROOM_RF16_CR3_DIR=/path/to/public/canon \
-  cargo test --offline --locked --release \
-  public_eos_r_rf16_samples_have_exact_on_file_identity -- --ignored --nocapture
-FILM_LENS_FIXTURES=/path/to/public/embedded \
-  cargo test --offline --locked --release --test embedded_lens_metadata -- --ignored
+cargo test --offline --locked --release --jobs 2
+cargo test --offline --locked --release --test lensfun_geometry --test lensfun_optics
 ```
 
-`tests/fixtures/lensfun-0.3.4-points.json` contains compact coordinates from the
-actual official native library, not coordinates generated by this Rust
-implementation. `tests/lensfun_geometry_oracle.py` records the native library,
-wrapper/converter and XML hashes and regenerates those fixtures using the
-separately archived reference inputs. Cases cover RF16, focal interpolation,
-poly3/poly5, calibration/camera crop, aspect/center and `real-focal` without
-projection conversion.
+The committed native-reference checks separate data coverage from optical
+numerics and production RAW validation:
 
-The regression suite also exercises exclusive source selection, strict
-metadata rejection, output policy/warnings, all eight orientations, translated
-active regions, strip-size invariance, admission and cancellation. DNG Warp/
-GainMap and the existing embedded tests remain part of the complete native
-suite. Android host tests cover warning localization/persistence and cache
-reuse, migration, recovery and ownership.
+- `tests/lensfun_database_oracle.py` loads all 1,580 original records through the
+  official native C API and checks 6,320 focal/aperture range fields.
+- `tests/lensfun_geometry_oracle.py` preserves the 16-case / 1,024-point geometry
+  fixture covering model families, interpolation, crop/aspect/center and
+  `real-focal` without projection conversion.
+- `tests/lensfun_optics_oracle.py` preserves the RF16 432-point, three-channel
+  coordinate and source-gain comparison.
+- `tests/lensfun_full_optics_oracle.py` adds 11 profiles / 15 captures / 135 points,
+  including 301/440-row tables, zoom interpolation, native duplicate and mixed
+  model rules, linear TCA, original fisheye projections and independent TCA/PA
+  without distortion. One invalid circular-domain PA model is explicitly
+  rejected instead of copying native zero/clipped color output.
 
-## Distortion-only baseline production validation
+These scripts use the separately archived, hash-pinned native 0.3.4 library and
+unmodified official schema converter; Filmroom's Rust results do not generate
+the expected coordinates. The additional optical comparison measured maximum
+coordinate error 0.000597730 px, gain relative error 0.000000454, identical TCA
+coefficient floats and PA coefficient difference at most about 5.96e-8.
+The regression suite also checks continuous bounds, focus intervals, source
+halos, all orientations, translated references, strip stability and cancellation.
+
+The numerical fixtures establish agreement with the reference formulas and
+coverage of the selected cases. The completed production RAW and application
+checks, tied to final source/binary hashes, are recorded in
+[LENSFUN-FULL-VALIDATION](LENSFUN-FULL-VALIDATION.md) and
+[lensfun-full-SOURCES.json](../tests/public-fixtures/lensfun-full-SOURCES.json).
+Android packaging, APK delta and device measurements remain separate work.
+The earlier results below must not be reused as claims that every full-library
+lens or this v3 production binary was validated.
+
+## Historical distortion-only baseline production validation
+
+The following is the earlier RF16 distortion-only gate recorded in
+`tests/public-fixtures/lensfun-SOURCES.json`. Its totals and hashes describe
+that earlier binary. In particular, the old unchanged-DNG control does not
+require an eligible original CFA DNG to remain uncorrected under the new gate.
+
 
 The actual release `codec_probe` import path decoded **seven full-resolution
 inputs**. An independent chunked scan checked **552,098,304 float values**;
@@ -268,7 +360,7 @@ Android ABI cross-build, APK packaging, physical-device runtime, peak memory
 and device performance were not tested by this integration validation.
 
 
-## TCA and vignetting model validation
+## Historical RF16 TCA and vignetting model validation
 
 `tests/lensfun_optics_oracle.py` calls the unmodified Lensfun 0.3.4 native C API
 with distortion, scale, TCA and vignetting enabled (flags 43). The committed
@@ -279,7 +371,7 @@ portrait geometry. Independent 1×1 calls prevent row-stepping accumulation from
 becoming an algorithm requirement. The native F64 color callback uses the same
 float calibration arithmetic without SIMD reciprocal approximations.
 
-The executed standalone Rust comparison checked **432 points × 3 channels** and
+The earlier executed standalone Rust comparison checked **432 points × 3 channels** and
 **432 source gains**: auto-scale agrees exactly, maximum coordinate difference
 is **0.000455917 px**, and maximum relative gain difference is **0.000004618**.
 These are numerical agreement measurements, not a physical lens calibration.

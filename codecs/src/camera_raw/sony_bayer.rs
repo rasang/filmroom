@@ -37,12 +37,14 @@ pub(super) fn decode(
         // Metadata and subsequent tile reads are bound to the same opened inode.
         let source = RawSource::new_from_file(&file, input).map_err(|e| io_error(e, "decode"))?;
         let raw = bounded("decode", || rawler::decode_dummy(&source))?;
-        let d = descriptor(&raw, camera.development.orientation)?;
+        let mut d = descriptor(&raw, camera.development.orientation)?;
+        configure_profile(&source,&file,"ARW",&raw,&mut d);
         let rect = |r: Rect| (r.x, r.y, r.w, r.h);
         if raw.source_ifd_offset != Some(camera.source_ifd_offset)
             || d.cpp != 1
             || d.lens != camera.development.lens
         || d.lens_extras != camera.development.lens_extras
+        || d.lens_profile != camera.development.lens_profile
             || d.width != camera.development.width
             || d.height != camera.development.height
             || rect(d.active) != rect(camera.development.active)

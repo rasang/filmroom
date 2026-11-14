@@ -21,12 +21,14 @@ data class RawMetadata(
     val embeddedLensTcaApplied:Boolean=false,val embeddedLensTcaNotApplied:Boolean=false,
     val lensfunVignettingApplied:Boolean=false,val lensfunVignettingNotApplied:Boolean=false,
     val lensfunTcaApplied:Boolean=false,val lensfunTcaNotApplied:Boolean=false,
+    val lensfunDistortionNotApplied:Boolean=false,
 ) {
     val displayMessages:List<dev.filmroom.i18n.UiMessage> get() = listOfNotNull(
         if(cameraBasicDevelopmentWarning) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.camera_raw_basic_development) else null,
         if(embeddedLensDistortionApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_distortion_applied) else null,
         if(embeddedLensDistortionNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_distortion_not_applied) else null,
         if(lensfunDistortionApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_distortion_applied) else null,
+        if(lensfunDistortionNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_distortion_not_applied) else null,
         if(embeddedLensVignettingApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_vignetting_applied) else null,
         if(embeddedLensVignettingNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_vignetting_not_applied) else null,
         if(embeddedLensTcaApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_tca_applied) else null,
@@ -78,7 +80,8 @@ data class RawMetadata(
                     lensfunVignettingApplied=RawDevelopmentWarning.LENSFUN_VIGNETTING_APPLIED in codes,
                     lensfunVignettingNotApplied=RawDevelopmentWarning.LENSFUN_VIGNETTING_NOT_APPLIED in codes,
                     lensfunTcaApplied=RawDevelopmentWarning.LENSFUN_TCA_APPLIED in codes,
-                    lensfunTcaNotApplied=RawDevelopmentWarning.LENSFUN_TCA_NOT_APPLIED in codes)
+                    lensfunTcaNotApplied=RawDevelopmentWarning.LENSFUN_TCA_NOT_APPLIED in codes,
+                    lensfunDistortionNotApplied=RawDevelopmentWarning.LENSFUN_DISTORTION_NOT_APPLIED in codes)
             }catch(e:Exception){throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5f37317ec18e),e)}
         }
     }
@@ -89,6 +92,7 @@ private enum class RawDevelopmentWarning(val code:String) {
     EMBEDDED_LENS_DISTORTION_APPLIED("EMBEDDED_LENS_DISTORTION_APPLIED"),
     EMBEDDED_LENS_DISTORTION_NOT_APPLIED("EMBEDDED_LENS_DISTORTION_NOT_APPLIED"),
     LENSFUN_DISTORTION_APPLIED("LENSFUN_DISTORTION_APPLIED"),
+    LENSFUN_DISTORTION_NOT_APPLIED("LENSFUN_DISTORTION_NOT_APPLIED"),
     EMBEDDED_LENS_VIGNETTING_APPLIED("EMBEDDED_LENS_VIGNETTING_APPLIED"),
     EMBEDDED_LENS_VIGNETTING_NOT_APPLIED("EMBEDDED_LENS_VIGNETTING_NOT_APPLIED"),
     EMBEDDED_LENS_TCA_APPLIED("EMBEDDED_LENS_TCA_APPLIED"),

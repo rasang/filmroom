@@ -763,6 +763,7 @@
     <string name="camera_raw_basic_development" formatted="false">カメラ RAW は黒・白レベル、ホワイトバランス、色変換行列による基本現像を行います。カメラの画作りやすべてのレンズ補正は適用しないため、色や形状がカメラや他のソフトウェアと異なる場合があります。</string>
     <string name="embedded_lens_distortion_applied" formatted="false">埋め込みのレンズ歪曲補正を適用しました。</string>
     <string name="lensfun_distortion_applied" formatted="false">一致するレンズプロファイルの歪曲補正を適用しました。</string>
+    <string name="lensfun_distortion_not_applied" formatted="false">一致するレンズプロファイルが見つかりましたが、歪曲補正を適用できませんでした。</string>
     <string name="embedded_lens_vignetting_applied" formatted="false">埋め込みのレンズ周辺光量補正を適用しました。</string>
     <string name="embedded_lens_vignetting_not_applied" formatted="false">埋め込みのレンズ周辺光量補正パラメーターを検出しましたが、補正を適用できませんでした。</string>
     <string name="embedded_lens_tca_applied" formatted="false">埋め込みのレンズ色収差補正を適用しました。</string>

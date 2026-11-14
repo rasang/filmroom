@@ -1,14 +1,252 @@
 {
   "upstream": "https://github.com/lensfun/lensfun",
-  "database_file": "data/db/mil-canon.xml",
   "retrieved": "2026-11-14",
   "source_archive_url": "https://codeload.github.com/lensfun/lensfun/tar.gz/refs/heads/master",
   "source_archive_sha256": "48eb8f268111c3b20a71990e2f6affa084e70fe5ef1ccf8e538f198d3d54d09b",
-  "source_xml_sha256": "2de8e9467a6af6f83cc9da834d3d3b94d1aaf54519f60c68ac6bc02780a77516",
-  "subset_sha256": "3519b7c439cc2248759b574db4b239bcbb6fae749734ca259f172299a2fc73bf",
   "attribution": "Lensfun database contributors",
   "license": "CC-BY-SA-3.0",
   "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-  "modifications": "Extracted only Canon EOS R camera and Canon RF 16mm F2.8 STM lens records; preserved all calibration values. Compiled distortion, poly3 transverse chromatic aberration and PA vignetting constants for offline, independently qualified operations. Updated the subset comment to describe per-operation admission.",
-  "opt_in_scope": "Canon EOS R original CR3 Bayer RAW/C-RAW; exact verified sensor/active/default-crop, Canon RF16 IDs and focal length. No blanket brand or database enablement."
+  "modifications": "Preserved the complete 56-file pinned schema-2 database byte-for-byte. Build-time generation retains all camera, lens, mount, alias, crop, aspect, projection and optical calibration records. Duplicate calibration keys use Lensfun 0.3.4 loader last-value-wins semantics; linear TCA is represented by equivalent poly3 zero higher-order terms. No XML parser or native Lensfun dependency is shipped.",
+  "opt_in_scope": "Complete database is available to generic exact identity/mount/crop lookup. RAW adapters independently establish source geometry and each operation independently qualifies its calibration. Database inclusion does not assert that absent metadata or absent calibration values exist.",
+  "database_directory": "database",
+  "database_files": {
+    "6x6.xml": {
+      "sha256": "ca13c2756b32d728675372695c072517a0e38af5eff2ecd3e17599dee7fc58b3",
+      "bytes": 29550
+    },
+    "actioncams.xml": {
+      "sha256": "79a5da0322574b95690464444c9d9ba1da0e1f827da44fd6bff120a0ec10e4b4",
+      "bytes": 17188
+    },
+    "compact-canon.xml": {
+      "sha256": "bae47e4b3a0f8852641038ae2dcca5b28ed7965e65ca795fd676f9de857c4670",
+      "bytes": 247046
+    },
+    "compact-casio.xml": {
+      "sha256": "ab35433879c4574ef8f97cd4e3d114d7ff8db4e7279da9d502fc9e911b51ee27",
+      "bytes": 6889
+    },
+    "compact-fujifilm.xml": {
+      "sha256": "58af9ebef2410c428ae2c5d01003d2247330d47d918823e63522b4d897a997d1",
+      "bytes": 67954
+    },
+    "compact-kodak.xml": {
+      "sha256": "377018ccd74f58e966b37a11e5a8689be4268153bebece9f1f2a0dbfa8234845",
+      "bytes": 2091
+    },
+    "compact-konica-minolta.xml": {
+      "sha256": "832a7473951ab625e10c48af6cf60f89b57280016d45729e2584cf9e41ad3cc7",
+      "bytes": 13349
+    },
+    "compact-leica.xml": {
+      "sha256": "8e4676679377576dc19e7900ce86fc69b0248ea1d4538aa22ee1ee09431a3be3",
+      "bytes": 9113
+    },
+    "compact-nikon.xml": {
+      "sha256": "5393bdb8223e13d21b85818e96571e97c035470b49b0452dfcedc2e1ff512d3b",
+      "bytes": 40003
+    },
+    "compact-olympus.xml": {
+      "sha256": "7637d469ad54a02ebce9492a9aa9424a2ff1ec07b0398158076f762fdc08389b",
+      "bytes": 34454
+    },
+    "compact-panasonic.xml": {
+      "sha256": "f191fc2a5d49fb50c06f4c399ee8c1a83a05f93a0efaecd352ec5c1479b8e60b",
+      "bytes": 70621
+    },
+    "compact-pentax.xml": {
+      "sha256": "596fae3edaadcf2d90ae930fc1bec42597ca0b2bd11842e686e1b915f3736390",
+      "bytes": 6689
+    },
+    "compact-ricoh.xml": {
+      "sha256": "46df96ebc367d5170cb6b7dfc3742093f0ad946264518fc5488573ba052f29d7",
+      "bytes": 18424
+    },
+    "compact-samsung.xml": {
+      "sha256": "36e3a778046d56385c387d48474cd32a89a5da94d99e640b5ce716ce747f898d",
+      "bytes": 13875
+    },
+    "compact-sigma.xml": {
+      "sha256": "0ddc265e3e580da05dcd4664d1b9c2464838d74dd02519c826520950c8f1759e",
+      "bytes": 2395
+    },
+    "compact-sony.xml": {
+      "sha256": "6b1e5ec3710915f04eceffb87eafdfded4b56d5b4bc58d5086ae59f7d3c066f0",
+      "bytes": 126390
+    },
+    "contax.xml": {
+      "sha256": "5eba12e6fd4913470afb6fe25fee47a263084b6cec830297273909872f47669a",
+      "bytes": 1696
+    },
+    "generic.xml": {
+      "sha256": "cd572d4110981546b2c4cd296c2ff16755b30063fa136d8b06ad2ca13ab4c59f",
+      "bytes": 5416
+    },
+    "mil-canon.xml": {
+      "sha256": "2de8e9467a6af6f83cc9da834d3d3b94d1aaf54519f60c68ac6bc02780a77516",
+      "bytes": 247994
+    },
+    "mil-fujifilm.xml": {
+      "sha256": "cc8fd1d595bf6b57ea2e4f0bbdc30f5ac8af4867fad29efe445a79c90c2d2177",
+      "bytes": 213330
+    },
+    "mil-hasselblad.xml": {
+      "sha256": "13e1fa55d36c2ed7d22964c21ce6c21d887bfe4506e840e425da1ce4157c3756",
+      "bytes": 1048
+    },
+    "mil-leica.xml": {
+      "sha256": "c691037e2e0743388473c2a0545e340462c412b7e3b57e451f4f9c89dde2388a",
+      "bytes": 11663
+    },
+    "mil-nikon.xml": {
+      "sha256": "3814e192a9f599847eefeea6163d26186d8107cb794f33e4724803e476e45cea",
+      "bytes": 187918
+    },
+    "mil-olympus.xml": {
+      "sha256": "989a3d88ef07a286efc2755df214792fdf71d60366932a1b369a77ad39cf2abb",
+      "bytes": 147123
+    },
+    "mil-panasonic.xml": {
+      "sha256": "eb5f01f33e65721f3900786d5970c7e220dd042aaa56968be33c009a358ff3c5",
+      "bytes": 299264
+    },
+    "mil-pentax.xml": {
+      "sha256": "675a94f52794868ad9f1d79e17b7128783c34b3db23e9eac346c5963812a16e5",
+      "bytes": 1385
+    },
+    "mil-samsung.xml": {
+      "sha256": "10130e9e125e0882a16fd3033cfed0175e9c14cb7d35e630cdb94736f27e5dc3",
+      "bytes": 13007
+    },
+    "mil-samyang.xml": {
+      "sha256": "ae3bf262f12facdc6f81b837cf6d36fdde2a930d2bfb0918d5abaa47fcfea3ab",
+      "bytes": 25990
+    },
+    "mil-sigma.xml": {
+      "sha256": "34082bae4f6b476f8b75ea03d2f88a0485b1c5f7ce6bde87c7d729742f7b81ba",
+      "bytes": 126270
+    },
+    "mil-sony.xml": {
+      "sha256": "f9f7e5d7461ac58f76eb55dcc5b211f2e9a451402ddb4a9ecb12d1e4dc04f2b8",
+      "bytes": 274541
+    },
+    "mil-tamron.xml": {
+      "sha256": "64077167f06e25b1a9393eaefd8ceb9b288c7ad20b046c2d97c83fbca536b6b6",
+      "bytes": 108177
+    },
+    "mil-tokina.xml": {
+      "sha256": "addb27bd82b0d729644b9da1342f92401f63cc5945309ed17f38f4b7af1649e3",
+      "bytes": 1014
+    },
+    "mil-zeiss.xml": {
+      "sha256": "ef8a238904fc9ea6fdb6171863dfd70cd94814af19ecd8c31ee000ca1864589d",
+      "bytes": 19171
+    },
+    "misc.xml": {
+      "sha256": "2000a347d9dc37d908ea5b56c760de5b2b4ab475857959ae2e901c31339b01bb",
+      "bytes": 176039
+    },
+    "om-system.xml": {
+      "sha256": "ab7cfcfd4c4023f7d0affd87a971e93a391d4d11952b9bf0436aa7967e68880e",
+      "bytes": 45205
+    },
+    "rf-leica.xml": {
+      "sha256": "f93636e1980ad308d1873cc3ac078cdc77c0d529d777cd45c5c8d0e4781981e3",
+      "bytes": 6712
+    },
+    "slr-canon.xml": {
+      "sha256": "5244e6df8f2522f829c57e2073313ce31a624e9ed9605310fe43613b9d588c99",
+      "bytes": 780353
+    },
+    "slr-hasselblad.xml": {
+      "sha256": "97602c467699904bf101179ea2fa24f05f3e1879250498a6ba306cd95a3b7a6b",
+      "bytes": 642
+    },
+    "slr-konica-minolta.xml": {
+      "sha256": "5639ca94f121f609247c2c120b65830b3ef7784db6ecfa7e8eb3d29ff5046c1b",
+      "bytes": 47170
+    },
+    "slr-leica.xml": {
+      "sha256": "c5e74cb511712e99ed60a066e85c842fea58f693c5039c3819485619f5293d0e",
+      "bytes": 432
+    },
+    "slr-nikon.xml": {
+      "sha256": "aa770005b85567721038456183cfdbf6b6cea51b33a399b291f447287b9e91db",
+      "bytes": 551265
+    },
+    "slr-olympus.xml": {
+      "sha256": "f7693b6779edd8ed10d7dc23113669255bfa4987cea7db0e843f7f5f2bbbe615",
+      "bytes": 116602
+    },
+    "slr-panasonic.xml": {
+      "sha256": "cd79acb49d9ce5f2a4cecc572b3e117f03da380bed2dcbfd52327192d8ce2381",
+      "bytes": 419
+    },
+    "slr-pentax.xml": {
+      "sha256": "93be1fe9263e06d7d69a8a6ae10cb52f23cad08ddc44f57f749e1ca288bc0c6e",
+      "bytes": 210117
+    },
+    "slr-ricoh.xml": {
+      "sha256": "c835798136a53535fdf4f81312ac9aad0ea3de3ef732c183d8cc4d2f432011d9",
+      "bytes": 2869
+    },
+    "slr-samsung.xml": {
+      "sha256": "dc0a29e424ff96e4316ddeb76126fa6f6c73a8836905a3e1f56f0c493826148f",
+      "bytes": 1110
+    },
+    "slr-samyang.xml": {
+      "sha256": "fb1585bea91f5f59e1fae8811dd76c92252ee5d52e3647df2aff4695048443b5",
+      "bytes": 16811
+    },
+    "slr-schneider.xml": {
+      "sha256": "de607cfe4ba6e7debc61e282ce39b72825c07601572e14af2bc9108ba67faf81",
+      "bytes": 5890
+    },
+    "slr-sigma.xml": {
+      "sha256": "f55f41c144fbb72e3c51d2dfef40e918930d37db1b4150bd02bd746406c036d2",
+      "bytes": 444640
+    },
+    "slr-soligor.xml": {
+      "sha256": "1aba0aab19bce87ea86175b6551cb5306a512eb54be1698b89991b86008f6a04",
+      "bytes": 573
+    },
+    "slr-sony.xml": {
+      "sha256": "e5ca7f532afe23ff380bf2f9e5458f687bed603355d73a254d85c4e692942fdc",
+      "bytes": 88865
+    },
+    "slr-tamron.xml": {
+      "sha256": "c62090789cebe6bbb663111c6e97beeb1111852bb735088e29cf8782df4bab45",
+      "bytes": 201992
+    },
+    "slr-tokina.xml": {
+      "sha256": "b1213eda81a613bc3976340398c6b8ce8b7dc29423476fc565d5f8e5cf612ecf",
+      "bytes": 91977
+    },
+    "slr-ussr.xml": {
+      "sha256": "1fd6acc8a8f40373379bea2899ffd96fc34b22d9b044d0474dabd4c89af44efb",
+      "bytes": 19024
+    },
+    "slr-vivitar.xml": {
+      "sha256": "c5c67e3fe38e8fa19044acadc7730047690435f66aac563f55ffe04997a88111",
+      "bytes": 2157
+    },
+    "slr-zeiss.xml": {
+      "sha256": "49aa211a41fd5fe391d26af5fa65bdf9428d60863ffff15d3916fa1c520dc101",
+      "bytes": 14957
+    }
+  },
+  "legacy_subset": {
+    "file": "approved.xml",
+    "sha256": "3519b7c439cc2248759b574db4b239bcbb6fae749734ca259f172299a2fc73bf",
+    "source_file": "data/db/mil-canon.xml",
+    "source_sha256": "2de8e9467a6af6f83cc9da834d3d3b94d1aaf54519f60c68ac6bc02780a77516"
+  },
+  "lookup_normalizations": [
+    "Case and whitespace; typographic range hyphens; f/ versus f aperture spelling.",
+    "Explicit XML name aliases and manufacturer spelling equivalents.",
+    "Declared I/II combined optical records expand to unsuffixed first generation, I and II; no other generation is inferred.",
+    "Micro 4/3 and Micro 4/3 System identify the same mount standard.",
+    "Shared specific model aliases identify alternate sensor calibrations of one interchangeable lens; generic fixed-lens aliases never merge unrelated cameras.",
+    "A fixed-camera record that explicitly retains the generic fixed-lens alias alongside attachments uses discrete exact-f32 focal groups; no interpolation between attachment groups."
+  ]
 }

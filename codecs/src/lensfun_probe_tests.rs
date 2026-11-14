@@ -7,7 +7,7 @@ fn camera() -> CameraRaw {
         development: Development {
             width:150,height:100,cpp:1,orientation:1,active,crop:active,
             cfa:"RGGB".into(),wb:[1.0;4],matrix:vec![],baseline_exposure_ev:0.0,
-            gain_maps:&[],lens:crate::embedded_lens::LensStatus::Missing,lens_extras:Default::default(),lens_reference:active,
+            gain_maps:&[],lens:crate::embedded_lens::LensStatus::Missing,lens_extras:Default::default(),lens_profile:None,lens_reference:active,
         },
         format:"CR3",input_bytes:100,jpeg_blocks:vec![],decoder_extra_bytes:0,
         source_ifd_offset:0,arw1_offset:None,arw6:None,
@@ -21,7 +21,7 @@ fn profile_has_a_distinct_warning_and_invalidates_older_linear_cache_policy() {
     assert_eq!(plain.development_policy,"camera-matrix-linear-srgb-v1");
     c.development.lens = crate::embedded_lens::LensStatus::Profile(crate::lensfun::rf16_for_test(150,100));
     let profile = c.probe();
-    assert_eq!(profile.development_policy,"camera-matrix-linear-srgb-lensfun-v2");
+    assert_eq!(profile.development_policy,"camera-matrix-linear-srgb-lensfun-v3");
     assert_eq!(profile.width,plain.width);
     assert_eq!(profile.height,plain.height);
     assert!(profile.warnings.iter().any(|w|w.code=="LENSFUN_DISTORTION_APPLIED"));
@@ -45,7 +45,7 @@ fn optics_warnings_and_policy_describe_each_selected_operation_without_double_cl
     assert!(codes.contains(&"LENSFUN_DISTORTION_APPLIED"));
     assert!(codes.contains(&"LENSFUN_TCA_APPLIED"));
     assert!(codes.contains(&"LENSFUN_VIGNETTING_APPLIED"));
-    assert_eq!(p.development_policy,"camera-matrix-linear-srgb-lensfun-v2");
+    assert_eq!(p.development_policy,"camera-matrix-linear-srgb-lensfun-v3");
     c.development.lens_extras=embedded_optics::from_metadata(&EmbeddedLensCorrections {
         tca:EmbeddedOpticsState::Ready(EmbeddedTca::Sony{red:vec![0;11],blue:vec![0;11],distortion:None}),
         vignette:EmbeddedOpticsState::Ready(EmbeddedVignette::Sony{samples:vec![0;11]}),
