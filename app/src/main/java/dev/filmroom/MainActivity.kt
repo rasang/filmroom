@@ -220,7 +220,7 @@ class MainActivity:ComponentActivity() {
     }
     override fun onTrimMemory(level:Int){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW){zoomFrames?.releaseForPressure();dev.filmroom.border.BorderCatalog.clearCache();if(::photo.isInitialized)photo.releaseDetail()}}
     override fun onStart(){super.onStart();if(::photo.isInitialized)photo.setForeground(true);if(::histogram.isInitialized)histogram.setForeground(true)}
-    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);model.setPreviewForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized)updateDetailStatus(photo.detailStatus);refreshHomeMotion()}
+    override fun onResume(){super.onResume();zoomFrames?.foreground(true);model.setPrewarmForeground(true);model.setPreviewForeground(true);if(renderedLanguage!=dev.filmroom.i18n.L10n.language(this)){recreate();return};settingsOpening=false;if(startupUpdateUi==null){startupUpdateUi=dev.filmroom.update.UpdateSettingsUi(this).also{it.checkOnColdStart()}};exportBackgroundGuidance.onResume();homeMotionInputOwner?.close();homeMotionInputOwner=null;homeMotionInputKey=null;dev.filmroom.ui.EditorSystemBars.apply(this);detailForeground=true;if(::photo.isInitialized){photo.setForeground(!liveOwnsViewport());updateDetailStatus(photo.detailStatus)};refreshHomeMotion()}
     override fun onWindowFocusChanged(hasFocus:Boolean){super.onWindowFocusChanged(hasFocus);if(hasFocus)dev.filmroom.ui.EditorSystemBars.apply(this)}
     override fun onMultiWindowModeChanged(inMultiWindowMode:Boolean,newConfig:android.content.res.Configuration){super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);dev.filmroom.ui.EditorSystemBars.apply(this);if(::photo.isInitialized && renderedTwoPane!=landscapeEditor){recreate();return};androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)}
     override fun onPause(){if(::homeMotionButton.isInitialized)HomeLiveIconPulse.reset(homeMotionButton);detailForeground=false;homeMotionChooser?.dismiss();homeMotionHeld=false;homeMotionRequestedAutoplay=false;pauseHomeMotion();zoomFrames?.foreground(false);model.setPrewarmForeground(false);model.setPreviewForeground(false);if(::photo.isInitialized)photo.finishCompositionGesture();detailForeground=false;if(::detailLoading.isInitialized)detailLoading.visibility=View.INVISIBLE;super.onPause()}
@@ -396,6 +396,7 @@ class MainActivity:ComponentActivity() {
             override fun close()=zoomEngine.close()
         },lifecycleScope,changed={
             photo.zoomFrame=zoomFrames?.bitmap
+            photo.setWholeFrameDetailActive(zoomFrames?.ownsDetail==true)
             refreshHomeMotionDetail()
             updateDetailStatus(photo.detailStatus)
         },retain={bitmap,evict->dev.filmroom.engine.NativeWorkReservations.retain(bitmap.allocationByteCount.toLong(),
@@ -647,7 +648,7 @@ class MainActivity:ComponentActivity() {
         val allowed=model.localDetailEnabled && s.startupReady && s.busy==null && !s.updating && !s.previewRefining &&
             !s.compositionEditing && s.rendered!=null && s.parameters==s.renderedParameters
         zoomFrames?.bind(s.photo,s.parameters,s.rendered,allowed,s.compare,s.exporting || zoomExporting)
-        if(::photo.isInitialized){zoomFrames?.viewport(if(liveOwnsViewport())homeMotion!!.viewportScale.toDouble() else photo.viewport.zoom,liveOwnsViewport() && homeMotionViewportMoving);photo.zoomFrame=zoomFrames?.bitmap}
+        if(::photo.isInitialized){zoomFrames?.viewport(if(liveOwnsViewport())homeMotion!!.viewportScale.toDouble() else photo.viewport.zoom,liveOwnsViewport() && homeMotionViewportMoving);photo.zoomFrame=zoomFrames?.bitmap;photo.setWholeFrameDetailActive(zoomFrames?.ownsDetail==true)}
         refreshHomeMotionDetail()
     }
     private fun refreshHomeMotionDetail(){

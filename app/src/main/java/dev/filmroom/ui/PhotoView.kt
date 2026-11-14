@@ -15,7 +15,7 @@ import dev.filmroom.roi.*
 /** Underlay, comparison and local cells share one source-oriented fit/zoom/pan transform. */
 class PhotoView(context: Context): View(context), AutoCloseable {
     val viewport = Viewport()
-    /** Complete pre-imaged scientific frame only; coordinates are the entire frame, not aperture. */
+    /** Complete scientific frame; coordinates are the entire frame, not aperture. Caller must match presentation. */
     var zoomFrame:Bitmap?=null;set(value){field=value;invalidate()}
     var onZoomViewportChanged:((Double,Boolean)->Unit)?=null
     var bitmap: Bitmap?=null; set(value) {
@@ -253,7 +253,14 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         bindDetailState()
         invalidate()
     }
-    private fun bindDetailState(){detail?.bind(detailSource,detailParameters,detailEligible && (!detailPresentedBorder || presentation!=null || cropPresentation!=null),detailComparing)}
+    private var wholeFrameDetailActive=false
+    /** Suppress the old grid only while a whole frame is pending/ready. A failed tier
+     * relinquishes ownership after native drain, allowing the existing ROI fallback. */
+    fun setWholeFrameDetailActive(value:Boolean){
+        if(wholeFrameDetailActive==value)return
+        wholeFrameDetailActive=value;bindDetailState();invalidate()
+    }
+    private fun bindDetailState(){detail?.bind(detailSource,detailParameters,!wholeFrameDetailActive && detailEligible && (!detailPresentedBorder || presentation!=null || cropPresentation!=null),detailComparing)}
     fun setForeground(value: Boolean) { if(!value)finishCompositionGesture();foreground=value; detail?.foreground(value) }
     fun releaseDetail() { detail?.releaseForPressure() }
     fun transform()=pendingTransform ?: floatArrayOf(viewport.zoom.toFloat(),((.5-viewport.centerX)*viewport.imageWidth).toFloat(),((.5-viewport.centerY)*viewport.imageHeight).toFloat())
@@ -291,9 +298,12 @@ class PhotoView(context: Context): View(context), AutoCloseable {
         super.onDraw(canvas);val b=bitmap?.takeUnless{it.isRecycled} ?: return
         target.set(viewport.left.toFloat(),viewport.top.toFloat(),(viewport.left+viewport.imageWidth).toFloat(),(viewport.top+viewport.imageHeight).toFloat())
         canvas.drawBitmap(b,null,target,paint)
-        if(!compositionEditing && !isLiveComposition && !imprintDraftPreview && preImagingCompositionPreview)
-            zoomFrame?.takeUnless{it.isRecycled}?.let{canvas.drawBitmap(it,null,target,paint)}
+        val fullDetail=zoomFrame?.takeUnless{it.isRecycled}
+            ?.takeIf{!compositionEditing && !isLiveComposition && !imprintDraftPreview}
+        fullDetail?.let{canvas.drawBitmap(it,null,target,paint)}
         onNextPreviewDraw?.also{onNextPreviewDraw=null}?.invoke(b)
+        // An older 1536-grid ROI must never cover a newer full-frame refinement.
+        if(fullDetail!=null)return
         if(isLiveComposition || freeEdit || (imprintDraftPreview && usableInteractiveFrame() && compositionGeometryReady)){
             if(preImagingCompositionPreview){
                 drawProcessedComposition(canvas)

@@ -42,12 +42,81 @@ class ZoomFrameControllerHostTest {
         val params=EditorState(filmBorder=true,filmBorderStage=1,useGpu=true)
         var leases=0
         var pressure:(()->Unit)?=null
-        val controller=ZoomFrameController(provider,scope,{},retain={_,callback->leases++;pressure=callback;AutoCloseable{leases--}},settleMillis=250,refinementTimeoutMillis=timeout)
+        var changed:()->Unit={}
+        val controller=ZoomFrameController(provider,scope,{changed()},retain={_,callback->leases++;pressure=callback;AutoCloseable{leases--}},settleMillis=250,refinementTimeoutMillis=timeout)
         fun bind(eligible:Boolean=true,exporting:Boolean=false)=controller.bind(photo,params,base,eligible,exporting=exporting)
         fun close(){controller.close();scope.cancel();base.recycle()}
     }
     private fun pump(ms:Long=300){shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))}
     private fun await(test:()->Boolean){repeat(500){pump(10);if(test())return;Thread.sleep(1)};error("Timed out")}
+    @Test fun plainPhotoRefinesBeforeAnyExportAndPresentationChangesRetireFrame(){
+        val f=Fixture()
+        val plain=EditorState(useGpu=true,filmBorder=false)
+        try {
+            f.controller.bind(f.photo,plain,f.base,true)
+            f.controller.viewport(3.0)
+            await{f.controller.bitmap?.width==3072}
+            assertEquals(listOf(2048,3072),f.provider.calls)
+            val ready=f.controller.bitmap!!
+            // A post-imaging border must never display the uncomposed photo frame.
+            f.controller.bind(f.photo,plain.copy(filmBorder=true,filmBorderStage=0),f.base,true)
+            pump(1000)
+            assertNull(f.controller.bitmap);assertTrue(ready.isRecycled)
+            assertEquals(2,f.provider.calls.size)
+        } finally {f.close()}
+    }
+    @Test fun unsupportedPresentationsAndCpuKeepExistingRoute(){
+        val plain=EditorState(useGpu=true,filmBorder=false)
+        val unsupported=listOf(
+            plain.copy(useGpu=false),
+            plain.copy(filmBorder=true,filmBorderStage=0),
+            plain.copy(crop=dev.filmroom.model.CropSettings(dev.filmroom.model.CropMode.SQUARE)),
+            plain.copy(imprint=plain.imprint.copy(dateEnabled=true))
+        )
+        assertTrue(ZoomFramePolicy.usesWholeFrame(plain))
+        assertTrue(ZoomFramePolicy.usesWholeFrame(plain.copy(filmBorder=true,filmBorderStage=1)))
+        for(parameters in unsupported){
+            assertFalse(ZoomFramePolicy.usesWholeFrame(parameters))
+            val f=Fixture()
+            try {
+                f.controller.bind(f.photo,parameters,f.base,true);f.controller.viewport(3.0);pump(1000)
+                assertTrue(f.provider.calls.isEmpty());assertNull(f.controller.bitmap)
+            }finally{f.close()}
+        }
+    }
+    @Test fun firstTierFailureReleasesOwnershipForExistingRoiFallback(){
+        val f=Fixture();f.provider.failEdge=2048
+        try {
+            f.controller.bind(f.photo,EditorState(filmBorder=false,useGpu=true),f.base,true)
+            f.controller.viewport(1.5)
+            assertTrue(f.controller.ownsDetail)
+            await{f.controller.failed}
+            assertFalse(f.controller.ownsDetail)
+            assertNull(f.controller.bitmap)
+        }finally{f.close()}
+    }
+    @Test fun timeoutDoesNotReleaseRoiOwnershipUntilNativeDrain(){
+        val f=Fixture(timeout=500);val gate=CompletableDeferred<Unit>();f.provider.gate=gate
+        try {
+            f.controller.bind(f.photo,EditorState(filmBorder=false,useGpu=true),f.base,true)
+            f.controller.viewport(1.5);await{f.controller.loading};pump(600)
+            assertTrue(f.controller.failed);assertTrue(f.controller.ownsDetail)
+            gate.complete(Unit);await{!f.controller.ownsDetail}
+            assertNull(f.controller.bitmap)
+        }finally{gate.complete(Unit);f.close()}
+    }
+    @Test fun pressureDuringNativeDrainNotifiesRoiOwnershipRelease(){
+        val f=Fixture();val gate=CompletableDeferred<Unit>();f.provider.gate=gate
+        val observed=mutableListOf<Boolean>();f.changed={observed+=f.controller.ownsDetail}
+        try {
+            f.controller.bind(f.photo,EditorState(filmBorder=false,useGpu=true),f.base,true)
+            f.controller.viewport(1.5);await{f.controller.loading}
+            f.controller.releaseForPressure()
+            assertTrue(f.controller.ownsDetail);assertTrue(observed.last())
+            gate.complete(Unit);await{!f.controller.ownsDetail && observed.last()==false}
+            assertNull(f.controller.bitmap)
+        }finally{gate.complete(Unit);f.close()}
+    }
     @Test fun timedOutTierStopsSpinnerWithoutRetryAndWaitsForNativeDrain(){
         val f=Fixture(timeout=500)
         try {
@@ -67,6 +136,9 @@ class ZoomFrameControllerHostTest {
         }finally{f.close()}
     }
     @Test fun policyNeedsRealExtraSamplesAndUsesBoundedLevels(){
+        // Tier requests remain subject to the real budget; 3072 is not promised on 512 MiB.
+        assertTrue(dev.filmroom.engine.NativeMemoryPolicy.zoomFrameFloorFits(2048,1365,512))
+        assertFalse(dev.filmroom.engine.NativeMemoryPolicy.zoomFrameFloorFits(3072,2048,512))
         assertNull(ZoomFramePolicy.target(1.1,6000,1536))
         assertNull(ZoomFramePolicy.target(Double.NaN,6000,1536))
         assertNull(ZoomFramePolicy.target(3.0,1000,1000))

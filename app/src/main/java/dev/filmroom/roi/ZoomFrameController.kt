@@ -6,7 +6,7 @@ import dev.filmroom.model.EditorState
 import kotlinx.coroutines.*
 import kotlin.math.abs
 
-/** Produces a full scientific frame, including the pre-imaging border and imprints.
+/** Produces a full scientific frame, including the pre-imaging border and imprints when enabled.
  * Implementations own cancellation during dispatcher handoffs and must never return
  * a bitmap still being written by native code. They must keep source leases until JNI drains. */
 interface ZoomFrameProvider : AutoCloseable {
@@ -16,6 +16,12 @@ interface ZoomFrameProvider : AutoCloseable {
 
 /** Geometry-only policy. This does not claim that the native memory planner will admit a level. */
 object ZoomFramePolicy {
+    /** The engine returns a complete frame for pre-imaging, or a bare uncropped photo.
+     * Post-imaging borders/crops/imprints are composed by the editor, not renderZoom;
+     * they must keep their existing detail route until that composition is shared. */
+    fun supportsPresentation(parameters:EditorState):Boolean = parameters.preImagingBorder ||
+        (!parameters.filmBorder && parameters.crop==dev.filmroom.model.CropSettings() && !parameters.imprint.enabled)
+    fun usesWholeFrame(parameters:EditorState):Boolean = parameters.useGpu && supportsPresentation(parameters)
     const val FIRST_EDGE=2048
     const val MAX_EDGE=3072
     const val MIN_ZOOM=1.15
@@ -61,6 +67,7 @@ class ZoomFrameController(
     private var generation=0L
     private var job:Job?=null
     private var started=false
+    private var inFlight=0
     private var ready:Bitmap?=null
     private var readyKey:Key?=null
     private var readyEdge=0
@@ -73,12 +80,15 @@ class ZoomFrameController(
     val bitmap:Bitmap? get()=ready?.takeIf{!closed && front && allowed && zoom>=ZoomFramePolicy.MIN_ZOOM && key?.same(readyKey)==true && !it.isRecycled}
     val loading:Boolean get()=!closed && front && allowed && started
     val failed:Boolean get()=failedEdge!=null || pressureBlocked
+    /** Retain ownership while cancelled JNI drains; only then may the ROI fallback start. */
+    val ownsDetail:Boolean get()=!closed && front && allowed && desired!=null &&
+        (bitmap!=null || !failed || inFlight>0)
 
     fun bind(photo:PhotoSource?,parameters:EditorState,baseBitmap:Bitmap?,eligible:Boolean,compareOriginal:Boolean=false,exporting:Boolean=false) {
         if(closed)return
         val next=photo?.let{Key(it,parameters)}
         if(key?.same(next)!=true)pressureBlocked=false
-        val nextAllowed=eligible && !compareOriginal && !exporting && parameters.preImagingBorder && parameters.useGpu && baseBitmap?.isRecycled==false
+        val nextAllowed=eligible && !compareOriginal && !exporting && ZoomFramePolicy.usesWholeFrame(parameters) && baseBitmap?.isRecycled==false
         if(key?.same(next)!=true || next==null || base!==baseBitmap || (allowed && !nextAllowed)) {
             invalidate(clear=true)
         }
@@ -109,7 +119,9 @@ class ZoomFrameController(
         val source=key;val input=base
         val target=if(!closed && front && allowed && source!=null && input!=null && !input.isRecycled)
             ZoomFramePolicy.target(zoom,maxOf(source.photo.originalWidth,source.photo.originalHeight),maxOf(input.width,input.height)) else null
+        val previousDesired=desired
         desired=target
+        if(previousDesired!=desired)changed()
         if(pressureBlocked)return
         if(target==null){if(job!=null || ready!=null || failedEdge!=null)invalidate(clear=true);return}
         if(moving){if(job!=null && !started)invalidate(clear=false,resetFailure=false);return}
@@ -126,6 +138,7 @@ class ZoomFrameController(
             var produced:Bitmap?=null
             var tokenLease:AutoCloseable?=null
             var watchdog:Job?=null
+            var enteredProvider=false
             try {
                 // Preserve the drain chain even if this queued request is itself cancelled.
                 withContext(NonCancellable){previous?.join()}
@@ -146,6 +159,7 @@ class ZoomFrameController(
                         changed()
                     }
                 }
+                inFlight++;enteredProvider=true
                 val result=provider.render(request.photo,request.parameters,input,edge)
                 produced=result
                 ensureActive()
@@ -172,9 +186,11 @@ class ZoomFrameController(
                 if(token==generation)failedEdge=edge
             } finally {
                 watchdog?.cancel()
+                if(enteredProvider)inFlight--
                 tokenLease?.close()
                 produced?.takeUnless{it.isRecycled}?.recycle()
                 if(token==generation){started=false;job=null;attemptEdge=null;changed();demand()}
+                else changed() // A retired native call may have held ROI ownership until now.
             }
         }
     }
