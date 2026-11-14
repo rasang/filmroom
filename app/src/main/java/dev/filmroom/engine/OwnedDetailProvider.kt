@@ -35,8 +35,6 @@ class OwnedDetailProvider internal constructor(
         return caps.optBoolean("visibleRegion")
     }
     suspend fun cleanupOwnedOrphans()=withContext(Dispatchers.IO) {
-        if(parameters.hasFinishing && !FinishingContract.supported(parameters,status(api.nativeCapabilities(),"capabilities")))
-            throw DetailUnavailable("UNAVAILABLE")
         sources.cleanupOrphans()
         if(File(root,"files/engine-data").isDirectory && File(root,"cache/detail-preview/sessions").isDirectory) {
             val temporary=positiveId(status(try{api.nativeCreate(root.path)}catch(_:LinkageError){throw DetailUnavailable("UNAVAILABLE")},"create"),"sessionId")
@@ -48,6 +46,8 @@ class OwnedDetailProvider internal constructor(
         var owned:OwnedDetailSession?=null
         try { return withContext(Dispatchers.IO+timing) {
         timing.mark(DetailTimingPoint.OPEN_STARTED)
+        if(parameters.hasFinishing && !FinishingContract.supported(parameters,status(api.nativeCapabilities(),"capabilities")))
+            throw DetailUnavailable("UNAVAILABLE")
         sources.cleanupOrphans()
         val dataRoot=File(root,"files/engine-data")
         if(!dataRoot.isDirectory)throw DetailUnavailable("DATA_NOT_READY") // ordinary engine owns installing immutable bundled data
