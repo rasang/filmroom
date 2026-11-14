@@ -43,6 +43,7 @@ class CodecDiagnosticDetailTest {
             Triple("UNSUPPORTED_VALUE", "DNG", 50720),
             Triple("RESOURCE_LIMIT", "TIFF", 330),
             Triple("TAG_SHAPE", "COMPAT", 50942),
+            Triple("BLACK_WHITE_LEVEL", "DNG_BLACK", 50715),
         )
         cases.forEachIndexed { index, (reason, source, tag) ->
             val payload = valid().put("reason",reason).put("source",source).put("line",100+index)

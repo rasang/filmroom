@@ -42,6 +42,7 @@ pub struct Dng {
     pub tile_width: usize,
     pub tile_height: usize,
     pub cfa: String,
+    pub black_model: crate::dng_black::BlackModel,
     pub black: Vec<f32>,
     pub white: Vec<f32>,
     pub wb: [f32; 4],
@@ -199,17 +200,21 @@ impl Dng {
             Ok(mixed || values.is_some_and(|v|v.iter().enumerate().any(|(i,x)|i%4!=0 && *x!=0.)))
         })?;
         let white_xy_present = inherited(root, raw, 50729).is_some();
+        // Existing D65/unit-calibration files keep their established pixels.
+        // Other standard illuminants and scale-equivalent neutral encodings
+        // need the complete calibrated transform instead of the legacy gate.
+        let has_legacy_d65 = [50778, 50779].iter().try_fold(false, |found, &tag| -> Result<bool> {
+            Ok(found || inherited(root, raw, tag).map(|v| v.uints()).transpose()?.is_some_and(|v| v == [21]))
+        })?;
+        let neutral_needs_complete = inherited(root, raw, 50728)
+            .map(|v| v.nums()).transpose()?.is_some_and(|v| v.iter().any(|&x| x > 100. || (x > 0. && x < 0.01)));
         let color_route = if !cfa_mode
-            && (nonunit_analog || channel_mixing || white_xy_present || compression == 52546 || (compression == 7 && matches!(bits[0], 12 | 14)))
+            && (nonunit_analog || channel_mixing || white_xy_present || !has_legacy_d65 || neutral_needs_complete || compression == 52546 || (compression == 7 && matches!(bits[0], 12 | 14)))
         {
             crate::profile_develop::ColorRoute::NewSof3LinearPrecision
         } else {
             crate::profile_develop::ColorRoute::Legacy
         };
-        if !cfa_mode && (nonunit_analog || channel_mixing || white_xy_present)
-            && [50721,50722,50964,50965,50778,50779].iter().any(|&tag| inherited(root,raw,tag).is_none()) {
-            return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::UnsupportedValue,None));
-        }
         let profile = crate::profile_develop::parse(root, raw, color_route)?;
         if profile.is_some() && cfa_mode {
             return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
@@ -302,52 +307,9 @@ impl Dng {
         } else {
             String::new()
         };
-        let br = arr(nums(raw, 50713)?, [1., 1.])?;
-        let black = nums(raw, 50714)?.unwrap_or_else(|| vec![0.; cpp]);
-        let black = if cfa_mode {
-            if br == [1., 1.] && black.len() == 1 {
-                vec![black[0]; 4]
-            } else if br == [2., 2.] && black.len() == 4 {
-                black
-            } else {
-                return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
-            }
-        } else {
-            // Repeated RGB black levels are equivalent to one RGB triplet only
-            // when every spatial entry is exactly equal; no approximate collapse.
-            let black = if br == [2., 2.]
-                && black.len() == 12
-                && black.chunks_exact(3).all(|p| p == &black[..3])
-            {
-                black[..3].to_vec()
-            } else if br == [1., 1.] {
-                black
-            } else {
-                return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
-            };
-            if black.len() == 1 {
-                vec![black[0]; 3]
-            } else if black.len() == 3 {
-                black
-            } else {
-                return Err(color_err().detail(Reason::BlackWhiteLevel, Some(50714)));
-            }
-        };
-        let white = nums(raw, 50717)?.unwrap_or_else(|| vec![((1u32 << bits[0]) - 1) as f64]);
-        let white = if white.len() == 1 {
-            vec![white[0]; black.len()]
-        } else if !cfa_mode && white.len() == 3 {
-            white
-        } else {
-            return Err(color_err().detail(Reason::TagShape, Some(50717)));
-        };
-        if black
-            .iter()
-            .zip(&white)
-            .any(|(&b, &w)| !b.is_finite() || !w.is_finite() || b < 0. || w <= b || w > 65535.)
-        {
-            return Err(color_err().detail(Reason::BlackWhiteLevel, Some(50717)));
-        }
+        let black_model = crate::dng_black::BlackModel::parse(raw, active, cpp, bits[0] as u8)?;
+        let black = black_model.base.clone();
+        let white = black_model.white.clone();
         let (mut neutral, white_xy) = crate::profile_develop::white_balance(root, raw)?;
         // Full color transforms consume the original neutral/XY themselves.
         // This legacy demosaic placeholder must not impose its WB range on them.
@@ -563,6 +525,7 @@ impl Dng {
             tile_width,
             tile_height,
             cfa,
+            black_model,
             black: black.into_iter().map(|x| x as f32).collect(),
             white: white.into_iter().map(|x| x as f32).collect(),
             wb,
@@ -635,14 +598,14 @@ impl Dng {
             has_alternate_forward_matrix: self.has_forward_matrix,
             development_policy: if let Some(p) = &self.profile {
                 if p.map.is_some() {
-                    "DNG_STD_V2; DNG dual-illuminant ForwardMatrix to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
+                    "DNG_STD_V3; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
                 } else {
-                    "DNG_STD_V2; DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
+                    "DNG_STD_V3; DNG standard single/dual illuminant calibrated color to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
             } else if let Some(color) = &self.cfa_color {
                 color.policy
             } else {
-                "DNG_STD_V2; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
+                "DNG_STD_V3; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },
             baseline_exposure_applied_ev: self.baseline_exposure_ev,
         }
@@ -713,14 +676,8 @@ impl Dng {
                                 .as_ref()
                                 .map_or(sample, |t| t.apply(sample))
                                 as f32;
-                            let ch = if self.cpp == 1 {
-                                (sy % 2) * 2 + sx % 2
-                            } else {
-                                c
-                            };
                             out[((sy - y) * self.active.w + sx - self.active.x) * self.cpp + c] =
-                                (sample - self.black[ch]).max(0.)
-                                    / (self.white[ch] - self.black[ch]);
+                                self.black_model.normalize(sample,sx,sy,c);
                         }
                     }
                 }
@@ -745,7 +702,8 @@ impl Dng {
                 .iter()
                 .map(|m| m.storage_bytes())
                 .sum::<u64>();
-        let map_bytes = map_bytes
+        let map_bytes = map_bytes + self.black_model.storage_bytes()
+            + ((self.black.capacity()+self.white.capacity())*std::mem::size_of::<f32>()) as u64
             + self
                 .profile
                 .as_ref()
@@ -811,8 +769,7 @@ impl Dng {
                 let sample=crate::opcodes::apply_stage1_neighborhood(&self.stage1_opcodes,self.width,self.height,x,sy,
                     |xx,yy| {if indices[yy%5]!=yy {return Err(err("INVALID_INPUT","decode"));}Ok(rows[yy%5][xx])})?;
                 let sample=self.linearization.as_ref().map_or(sample,|t|t.apply(sample))as f32;
-                let ch=(sy%2)*2+x%2;
-                out[r*self.active.w+i]=(sample-self.black[ch]).max(0.)/(self.white[ch]-self.black[ch]);
+                out[r*self.active.w+i]=self.black_model.normalize(sample,x,sy,0);
             }
         }
         crate::cfa_gainmap::apply_region(&self.cfa_gain_maps,&mut out,self.active.w,self.active.h,0,y-self.active.y,self.active.w,cancel)?;
@@ -873,11 +830,6 @@ impl Dng {
             file.read_exact(&mut row)
                 .map_err(|e| io_error(e, "decode"))?;
             for i in 0..w * self.cpp {
-                let ch = if self.cpp == 1 {
-                    (sy % 2) * 2 + (self.active.x + i) % 2
-                } else {
-                    i % 3
-                };
                 let source = self.active.x * self.cpp + i;
                 let sample = if self.sample_bits == 16 {
                     self.endian.u16(&row[source * 2..source * 2 + 2])
@@ -895,7 +847,7 @@ impl Dng {
                     .as_ref()
                     .map_or(sample, |t| t.apply(sample)) as f32;
                 out[r * w * self.cpp + i] =
-                    (sample - self.black[ch]).max(0.) / (self.white[ch] - self.black[ch]);
+                    self.black_model.normalize(sample,self.active.x+i/self.cpp,sy,i%self.cpp);
             }
         }
         crate::cfa_gainmap::apply_region(

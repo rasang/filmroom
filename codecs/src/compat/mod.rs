@@ -55,7 +55,7 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
 
     // These require additional processing not implemented by the pinned developer. Never silently ignore.
     for tag in [
-        50715, 50716, 52530, 52532, 52547, 50974, 50975, 51107, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
+        52530, 52532, 52547, 50974, 50975, 51107, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
         52537,
     ] {
         if inherited(root, raw, tag).is_some() {
@@ -168,7 +168,7 @@ mod preview_color_tests {
         );
         bad.get_mut(&50970).unwrap().typ = 9;
         assert!(unsupported_processing(&bad, &bad).is_err());
-        for tag in [50715, 50716, 52530, 52532, 52547] {
+        for tag in [52530, 52532, 52547] {
             let mut ifd = Ifd::new();
             ifd.insert(50970, value(2));
             ifd.insert(tag, value(0));

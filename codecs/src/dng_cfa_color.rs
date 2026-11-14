@@ -3,8 +3,8 @@
 //! an external numerical test oracle only; no SDK source or runtime is included.
 //! This product includes DNG technology under license by Adobe.
 //!
-//! Supported envelope: A/D50 dual illuminants, full camera
-//! calibration, positive analog balance and AsShotNeutral. The caller must
+//! Supported envelope: standard single/dual illuminants, full camera
+//! calibration, positive analog balance and neutral/xy white balance. The caller must
 //! reject ForwardMatrix, ReductionMatrix, a third calibration and incompatible profile operations before selecting it.
 //! This module does not demosaic, correct bad pixels, warp or render a profile.
 use crate::dng_color_spec::{apply, d50_xyz, inverse, product, robertson_from_table,
@@ -12,7 +12,7 @@ use crate::dng_color_spec::{apply, d50_xyz, inverse, product, robertson_from_tab
 
 #[derive(Clone, Copy, Debug)]
 pub struct Calibration {
-    /// TIFF LightSource 17=A or 23=D50; input pair order is immaterial.
+    /// Standard TIFF LightSource; input pair order is immaterial.
     pub illuminant: u16,
     pub color_matrix: Matrix,
     /// Full individual-camera calibration matrix.
@@ -80,21 +80,20 @@ pub fn resolve_white_xy(input:&Input, xy:[f64;2])->ColorResult<Transform> {
 fn resolve_internal(input: &Input, supplied_xy:Option<[f64;2]>) -> ColorResult<Transform> {
     if !positive(input.analog_balance) || !positive(input.as_shot_neutral) { return invalid(); }
     let [one, two] = input.calibrations;
-    let (a, d) = match (one.illuminant, two.illuminant) {
-        (17, 23) => (one, two), (23, 17) => (two, one),
-        _ => return Err(ColorError::UnsupportedCalibration.located()),
-    };
+    let t1=crate::dng_color_spec::illuminant_kelvin(one.illuminant)?;
+    let t2=crate::dng_color_spec::illuminant_kelvin(two.illuminant)?;
+    let (a,d,low,high)=if t1<=t2 {(one,two,t1,t2)}else{(two,one,t2,t1)};
     let ab_min = input.analog_balance.into_iter().fold(f64::INFINITY, f64::min);
     let neutral_max = peak(input.as_shot_neutral);
     let ab = input.analog_balance.map(|x| round(x / ab_min, 1e6));
-    let neutral = input.as_shot_neutral.map(|x| round(x / neutral_max, 1e6));
+    let neutral = input.as_shot_neutral.map(|x| {let n=x/neutral_max;let rounded=round(n,1e6);if rounded>0. {rounded}else{n}});
     if !positive(ab) || !positive(neutral) { return invalid(); }
     let (a, acc) = prepare(a, input.calibration_signatures_match)?;
     let (d, dcc) = prepare(d, input.calibration_signatures_match)?;
     let xyz_to_camera = |w| product(product(diagonal(ab), mix(acc,dcc,w)), mix(a,d,w));
     let weight = |xy| -> ColorResult<f64> {
         let t = robertson_from_table(xy, true)?;
-        Ok(((1. / 2850. - 1. / t) / (1. / 2850. - 1. / 5000.)).clamp(0., 1.))
+        crate::dng_color_spec::calibration_weight(low,high,t)
     };
     let mut white_xy = supplied_xy.unwrap_or(D50_XY);
     let mut iterations = 0;
@@ -173,7 +172,7 @@ mod tests {
         assert_eq!(resolve(&i).unwrap().camera_to_pcs,expected);
         i.calibration_signatures_match=true;
         assert_ne!(resolve(&i).unwrap().camera_to_pcs,expected);
-        i.calibrations[0].illuminant=21;
+        i.calibrations[0].illuminant=255;
         assert_eq!(resolve(&i).unwrap_err(),ColorError::UnsupportedCalibration);
         let mut i=actual_q2(); i.as_shot_neutral[0]=f64::NAN; assert!(resolve(&i).is_err());
         let mut i=actual_q2(); i.calibrations[0].color_matrix=[[0.;3];3]; assert!(resolve(&i).is_err());
@@ -186,13 +185,23 @@ mod tests {
 /// The TIFF reader must retain ReductionMatrix1/2 (50725/50726), even if only
 /// as descriptors, so their presence cannot be silently ignored.
 pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::Result<Option<Transform>> {
+    // Preserve the established route by default. Expanded color support is
+    // selected explicitly by the caller when legacy processing is inadequate.
+    let get=|tag|raw.get(&tag).or_else(||root.get(&tag));
+    let light=|tag|get(tag).and_then(|v|v.uints().ok()).and_then(|v|v.first().copied());
+    if !matches!((light(50778),light(50779)),(Some(17),Some(23))|(Some(23),Some(17))){return Ok(None);}
+    if crate::tiff::uint(raw,262,Some(0))?!=32803{return Ok(None);}
+    if get(50964).is_some()||get(50965).is_some(){return Ok(None);}
+    if get(52525).is_some(){return Err(crate::error::err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
+    parse_complete(root,raw)
+}
+pub(crate) fn parse_complete(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::Result<Option<Transform>> {
     use crate::{error::{err, Reason}, tiff::Value};
     #[track_caller]
     fn bad() -> crate::error::CodecError { err("INVALID_COLOR_METADATA", "probe") }
     #[track_caller]
     fn unsupported() -> crate::error::CodecError { err("UNSUPPORTED_DNG_CALIBRATION", "probe") }
     let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
-    if crate::tiff::uint(raw, 262, Some(0))? != 32803 { return Ok(None); }
     let illuminant = |tag| -> crate::error::Result<Option<u16>> {
         let Some(v) = get(tag) else { return Ok(None); };
         let values = v.uints().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?;
@@ -200,12 +209,18 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
         Ok(values[0].try_into().ok())
     };
     let pair = (illuminant(50778)?, illuminant(50779)?);
-    if !matches!(pair, (Some(17), Some(23)) | (Some(23), Some(17))) { return Ok(None); }
-    if [50778,50779].iter().any(|&tag|get(tag).is_none_or(|v|v.typ!=3||v.count!=1)) {return Err(bad());}
+    let single=get(50722).is_none() && get(50779).is_none();
+    // A half-present second calibration is not a single-illuminant profile.
+    if get(50722).is_some()!=get(50779).is_some() {return Err(bad().detail(Reason::MissingTag,Some(if get(50722).is_none(){50722}else{50779})));}
+    let Some(first)=pair.0 else {return Ok(None)};
+    if crate::dng_color_spec::illuminant_kelvin(first).is_err() || (!single && pair.1.is_none_or(|v|crate::dng_color_spec::illuminant_kelvin(v).is_err())) {return Ok(None);}
+    if [50778,50779].iter().any(|&tag|(!single||tag==50778)&&get(tag).is_none_or(|v|v.typ!=3||v.count!=1)) {return Err(bad());}
+    if get(50964).is_some()||get(50965).is_some(){return Ok(None);}
+    if single && get(50724).is_some(){return Err(unsupported().detail(Reason::TagValue,Some(50724)));}
     // Forward/reduction matrices, third illuminant and unsupported profile
     // transforms are never silently omitted from this ColorMatrix-only route.
     if [50725,50726,50964,50965,50937,50938,50939,
-        50981,50982,50983,52525,52529,52530,52531,52532,52544,52547]
+        50981,50982,50983,52529,52530,52531,52532,52544,52547]
         .iter().any(|&tag| get(tag).is_some()) { return Err(unsupported()); }
     let matrix = |tag| -> crate::error::Result<Matrix> {
         let v = get(tag).ok_or_else(|| bad().detail(Reason::MissingTag, Some(tag)))?;
@@ -238,7 +253,7 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
     let input = Input {
         calibrations: [
             Calibration { illuminant: pair.0.unwrap(), color_matrix: matrix(50721)?, camera_calibration: camera_cc(50723)? },
-            Calibration { illuminant: pair.1.unwrap(), color_matrix: matrix(50722)?, camera_calibration: camera_cc(50724)? },
+            Calibration { illuminant: pair.1.unwrap_or(first), color_matrix: matrix(if single{50721}else{50722})?, camera_calibration: camera_cc(if single{50723}else{50724})? },
         ],
         analog_balance: vector(50727,Some([1.;3]))?,
         as_shot_neutral: neutral,
@@ -262,7 +277,6 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
         return Ok(Some(DevelopmentTransform { camera_to_pcs: t.camera_to_pcs,
             policy: "DNG_STD_V2; DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
     }
-    if crate::tiff::uint(raw, 262, Some(0))? != 32803 { return Ok(None); }
     let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
     let values = if let Some(ab) = get(50727) {
         if ab.typ != 5 || ab.count != 3 {
@@ -270,7 +284,7 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
         }
         ab.nums().map_err(|e| e.detail(Reason::TagValue, Some(50727)))?
     } else { vec![1.;3] };
-    if values.iter().any(|x| !x.is_finite() || *x <= 0. || *x > 100.) {
+    if values.iter().any(|x| !x.is_finite() || *x <= 0.) {
         return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagValue, Some(50727)));
     }
     // Preserve established unit-AB/diagonal-CC development. General channel
@@ -281,26 +295,27 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
         if v.typ!=10 || m.len()!=9 {return Err(err("INVALID_COLOR_METADATA","probe").detail(Reason::MatrixShape,Some(tag)));}
         Ok(found || m.iter().enumerate().any(|(i,x)|i%4!=0 && x.abs()>1e-8))
     })?;
-    if values.iter().all(|x| (*x - 1.).abs() <= 1e-8) && !mixing && get(50729).is_none() { return Ok(None); }
+    let lights=[50778,50779].map(|tag|get(tag).and_then(|v|v.uints().ok()).and_then(|v|v.first().copied()));
+    let legacy_d65=lights.contains(&Some(21));
+    let neutral_needs_full=get(50728).map(|v|v.nums()).transpose()?.is_some_and(|n|n.iter().any(|x|*x>100.||*x<0.01));
+    if legacy_d65 && values.iter().all(|x| (*x - 1.).abs() <= 1e-8) && !mixing && get(50729).is_none() && !neutral_needs_full { return Ok(None); }
     // This bounded path does not claim support for extra illuminants,
     // reduction matrices, or spatial profile gain tables on Bayer data.
     if [50725,50726,52525,52529,52530,52531,52532,52544,52547,52551]
         .iter().any(|&tag| get(tag).is_some()) {
         return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
     }
-    // A valid DNG may use a single illuminant or ColorMatrix-only calibration.
-    // Those envelopes are not implemented here; missing optional FM fields
-    // must not be reported as corrupt metadata merely because we need them.
-    if let Some(tag)=[50721,50722,50778,50779,50964,50965].into_iter().find(|&tag|get(tag).is_none()) {
+    // A supported color route requires at least its first matrix/illuminant.
+    if let Some(tag)=[50721,50778].into_iter().find(|&tag|get(tag).is_none()) {
         return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::MissingTag,Some(tag)));
     }
-    // Reuse the fully validated A/D65, ForwardMatrix, AnalogBalance,
+    // Reuse the standard ColorMatrix/ForwardMatrix, AnalogBalance,
     // CameraCalibration and signature semantics already used by LinearRaw.
     // Demosaicing remains in camera space, followed by this matrix exactly once.
     let p = profile_develop::parse(root, raw, ColorRoute::NewSof3LinearPrecision)?
         .ok_or_else(|| err("UNSUPPORTED_DNG_CALIBRATION", "probe"))?;
     Ok(Some(DevelopmentTransform { camera_to_pcs: p.camera_to_pcs,
-        policy: "DNG_STD_V2; DNG A/D65 ForwardMatrix calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
+        policy: "DNG_STD_V3; standard single/dual illuminant CM/FM calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
 }
 
 #[cfg(test)]
@@ -321,13 +336,25 @@ mod parser_tests {
         i.insert(50728,rational(&[489952,1000000,671916],1000000,false));
         i
     }
+    #[test] fn single_and_standard_pair_cm_parser(){
+        let mut i=fixture();i.remove(&50722);i.remove(&50779);
+        let single=parse_complete(&i,&i).unwrap().unwrap();assert_eq!(single.d50_weight,0.);
+        i.insert(50722,i[&50721].clone());i.insert(50779,short(17));
+        assert_eq!(parse_complete(&i,&i).unwrap().unwrap().camera_to_pcs,single.camera_to_pcs);
+        for a in [17,20,21,22,23] {for b in [17,20,21,22,23] {
+          i.insert(50778,short(a));i.insert(50779,short(b));
+          let t=parse_complete(&i,&i).unwrap().unwrap();let white=crate::dng_color_spec::apply(t.camera_to_pcs,t.camera_white);
+          for c in 0..3 {assert!((white[c]-crate::dng_color_spec::d50_xyz()[c]).abs()<1e-8);}
+        }}
+        i.remove(&50722);assert!(parse_complete(&i,&i).is_err());
+    }
     #[test]
     fn parse_selects_metadata_not_camera_name() {
         let i=fixture(); let result=parse(&i,&i).unwrap().unwrap();
         assert!((result.white_xy[0]-0.30267332132376035).abs()<1e-12);
         let mut raw=Ifd::new(); raw.insert(262,short(32803));
         assert_eq!(parse(&i,&raw).unwrap().unwrap().camera_to_pcs,result.camera_to_pcs);
-        let mut i=fixture();i.insert(50779,short(21));assert!(parse(&i,&i).unwrap().is_none());
+        let mut i=fixture();i.insert(50779,short(255));assert!(parse(&i,&i).unwrap().is_none());
         let mut i=fixture();i.insert(262,short(34892));assert!(parse(&i,&i).unwrap().is_none());
     }
     #[test]
@@ -345,8 +372,13 @@ mod parser_tests {
     }
     #[test]
     fn parse_does_not_drop_unsupported_or_malformed_metadata() {
-        for tag in [50725,50726,50964,50965,52529,52531,52525,50938] {
+        for tag in [50725,50726,52529,52531,52525,50938] {
             let mut i=fixture();i.insert(tag,short(1));assert!(parse(&i,&i).is_err(),"tag {tag}");
+        }
+        for tag in [50964,50965] {
+            let mut i=fixture();i.insert(tag,short(1));
+            assert!(parse(&i,&i).unwrap().is_none());
+            assert!(parse_development(&i,&i).is_err());
         }
         for tag in [50721,50722,50728] {
             let mut i=fixture();i.remove(&tag);assert!(parse(&i,&i).is_err(),"missing {tag}");
@@ -414,14 +446,14 @@ mod analog_development_tests {
         for tag in [50964,50965,50721,50722,50728] {
             let mut i=fixture();i.remove(&tag);assert!(parse_development(&i,&i).is_err(),"missing {tag}");
         }
-        for values in [[0,1,1],[101,1,1]] {
+        for values in [[0,1,1]] {
             let mut i=fixture();i.insert(50727,rational(&values,1,false));assert!(parse_development(&i,&i).is_err());
         }
         for tag in [50725,50726,52525,50938,52551] {
             let mut i=fixture();i.insert(tag,short(1));assert!(parse_development(&i,&i).is_err(),"unsupported {tag}");
         }
         let mut i=fixture();i.get_mut(&50727).unwrap().typ=10;assert!(parse_development(&i,&i).is_err());
-        let mut i=fixture();i.insert(50779,short(22));assert!(parse_development(&i,&i).is_err());
+        let mut i=fixture();i.insert(50779,short(255));assert!(parse_development(&i,&i).is_err());
     }
 }
 

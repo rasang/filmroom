@@ -4,8 +4,8 @@
 //! license by Adobe. This is the specification PATENT-license notice only;
 //! no Adobe SDK code is shipped. SDK is an external test oracle only.
 //! This is NOT a complete Adobe profile/render pipeline.
-//! Supported initial contract: 3 channels, two illuminants A/D65, both forward
-//! matrices, full camera-calibration matrices, positive analog balance, neutral WB.
+//! Supported contract: 3 channels, standard single/dual illuminants, forward
+//! matrices, full camera-calibration matrices, positive analog balance, neutral/xy WB.
 //! DNG calibration uses the reference-compatible 325-mired ordinate; the
 //! standalone Robertson utility retains the independently corrected dataset.
 //! It rejects nonconvergence instead of concealing an approximate white point.
@@ -50,7 +50,7 @@ impl ColorError {
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Calibration {
-    /// TIFF LightSource: 17=standard A, 21=D65. Pair order is immaterial.
+    /// Standard TIFF LightSource. Pair order is immaterial.
     pub illuminant: u16,
     pub color_matrix: Matrix,
     pub forward_matrix: Matrix,
@@ -113,6 +113,19 @@ pub(crate) fn inverse(m:Matrix)->ColorResult<Matrix> {
     if !result.iter().flatten().all(|x|x.is_finite()) || (0..3).any(|r|(0..3).any(|c|(check[r][c]-ID[r][c]).abs()>1e-8)) {return bad();}
     Ok(result)
 }
+/// Nominal temperatures match the Adobe DNG reference model (not measured
+/// lamp spectra). Unknown/custom illuminants require additional metadata.
+/// Reference: android.googlesource.com/platform/external/dng_sdk/+/master/source/dng_camera_profile.cpp
+pub(crate) fn illuminant_kelvin(light: u16) -> ColorResult<f64> {
+    match light {3|17=>Ok(2850.),24=>Ok(3200.),1|4|9|18|20=>Ok(5500.),10|19|21=>Ok(6500.),11|22=>Ok(7500.),23=>Ok(5000.),
+        12=>Ok(6400.),13=>Ok(5050.),2|14=>Ok(4150.),15=>Ok(3525.),16=>Ok(2925.),
+        _=>Err(ColorError::UnsupportedCalibration.located())}
+}
+pub(crate) fn calibration_weight(low:f64,high:f64,t:f64)->ColorResult<f64>{
+    if !t.is_finite()||t<=0. {return bad();}
+    if low==high {return Ok(0.);}
+    Ok(((1./low-1./t)/(1./low-1./high)).clamp(0.,1.))
+}
 fn positive(v:Vector)->bool {v.iter().all(|x|x.is_finite()&&*x>0.)}
 fn round4(v:f64)->f64 {(v*10000.+0.5).floor()/10000.}
 fn rounded(m:Matrix)->Matrix {m.map(|row|row.map(round4))}
@@ -162,17 +175,16 @@ fn resolve_internal(input:&Input, supplied_xy:Option<[f64;2]>, cct:impl Fn([f64;
     let n_max=input.as_shot_neutral.into_iter().fold(0f64,f64::max);
     let round6=|x:f64|(x*1e6+0.5).floor()/1e6;
     let ab=input.analog_balance.map(|x|round6(x/ab_min));
-    let neutral=input.as_shot_neutral.map(|x|round6(x/n_max));
+    let neutral=input.as_shot_neutral.map(|x| {let n=x/n_max;let rounded=round6(n);if rounded>0. {rounded}else{n}});
     if !positive(ab)||!positive(neutral) {return bad();}
     let [one,two]=input.calibrations;
-    let (a,d)=match (one.illuminant,two.illuminant) {
-        (17,21)=>(one,two),(21,17)=>(two,one),_=>return Err(ColorError::UnsupportedCalibration.located()),
-    };
+    let t1=illuminant_kelvin(one.illuminant)?;let t2=illuminant_kelvin(two.illuminant)?;
+    let (a,d,low,high)=if t1<=t2 {(one,two,t1,t2)}else{(two,one,t2,t1)};
     let a=prepare(a,ab,input.calibration_signatures_match)?;
     let d=prepare(d,ab,input.calibration_signatures_match)?;
     let blend=|xy|->ColorResult<f64>{
         let t=cct(xy)?;if !t.is_finite()||t<=0. {return bad();}
-        Ok(((1./2850.-1./t)/(1./2850.-1./6500.)).clamp(0.,1.))
+        calibration_weight(low,high,t)
     };
     let mut xy=supplied_xy.unwrap_or(D50_XY);let mut iterations=0;let mut converged=supplied_xy.is_some();
     for count in 1..=if supplied_xy.is_some(){0}else{30} {
@@ -335,7 +347,7 @@ mod tests {
         for i in 0..3 {assert!((w[i]-d50_xyz()[i]).abs()<1e-12);}
     }
     #[test] fn reject_unproven_or_invalid_metadata() {
-        let mut i=expert();i.calibrations[0].illuminant=23;
+        let mut i=expert();i.calibrations[0].illuminant=255;
         assert_eq!(resolve(&i).unwrap_err(),ColorError::UnsupportedCalibration);
         let mut i=expert();i.analog_balance[0]=f64::NAN;assert!(resolve(&i).is_err());
         let mut i=expert();i.calibrations[0].forward_matrix=[[0.;3];3];assert!(resolve(&i).is_err());
@@ -418,5 +430,37 @@ mod white_xy_tests {
   assert_eq!(t.iterations,0);assert_eq!(t.white_xy,D50_XY);
   for r in 0..3 {for c in 0..3 {assert!((t.camera_to_pcs[r][c]-ID[r][c]).abs()<1e-12);}}
   for xy in [[0.,0.3],[0.5,0.5],[f64::NAN,0.3]] {assert!(resolve_white_xy(&i,xy).is_err());}
+ }
+}
+
+#[cfg(test)] mod generalized_calibration_tests {
+ use super::*;
+ #[test] fn nominal_temperatures_and_reciprocal_interpolation(){
+  for (code,k) in [(17,2850.),(20,5500.),(21,6500.),(22,7500.),(23,5000.)]{assert_eq!(illuminant_kelvin(code).unwrap(),k);}
+  assert!(illuminant_kelvin(255).is_err());
+  assert_eq!(calibration_weight(5000.,7500.,4000.).unwrap(),0.);
+  assert_eq!(calibration_weight(5000.,7500.,9000.).unwrap(),1.);
+  assert!((calibration_weight(5000.,7500.,6000.).unwrap()-0.5).abs()<1e-12);
+ }
+ #[test] fn generalized_pair_preserves_reference_interpolant(){
+  let a=Calibration{illuminant:17,color_matrix:ID,forward_matrix:[[0.8,0.1,0.1],[0.2,0.7,0.1],[0.05,0.2,0.75]],camera_calibration:ID};
+  let b=Calibration{illuminant:21,color_matrix:[[1.,0.1,0.],[0.,1.,0.1],[0.1,0.,1.]],forward_matrix:[[0.7,0.2,0.1],[0.1,0.8,0.1],[0.2,0.1,0.7]],camera_calibration:ID};
+  let input=Input{calibrations:[a,b],analog_balance:[1.;3],as_shot_neutral:[0.7,1.,0.8],calibration_signatures_match:true};
+  let old_mid=2./(1./2850.+1./6500.);
+  let reference=resolve_with_cct(&input, |_|Ok(old_mid)).unwrap();
+  let mut expanded=input;expanded.calibrations[0].illuminant=23;expanded.calibrations[1].illuminant=22;
+  let actual=resolve_with_cct(&expanded, |_|Ok(6000.)).unwrap();
+  for r in 0..3 {for c in 0..3 {assert!((actual.camera_to_pcs[r][c]-reference.camera_to_pcs[r][c]).abs()<1e-12);}}
+ }
+ #[test] fn all_standard_pairs_order_and_neutral_scale(){
+  for a in [17,20,21,22,23] {for b in [17,20,21,22,23] {
+   let base=Calibration{illuminant:a,color_matrix:ID,forward_matrix:ID,camera_calibration:ID};
+   let mut input=Input{calibrations:[base,Calibration{illuminant:b,..base}],analog_balance:[1.;3],as_shot_neutral:[0.9,1.,0.8],calibration_signatures_match:true};
+   let expected=resolve(&input).unwrap();
+   input.calibrations.swap(0,1);assert_eq!(resolve(&input).unwrap().camera_to_pcs,expected.camera_to_pcs);
+   input.as_shot_neutral=[900.,1000.,800.];assert_eq!(resolve(&input).unwrap().camera_to_pcs,expected.camera_to_pcs);
+   let actual=apply(expected.camera_to_pcs,expected.camera_white);
+   for c in 0..3 {assert!((actual[c]-d50_xyz()[c]).abs()<1e-10);}
+  }}
  }
 }

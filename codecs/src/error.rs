@@ -46,7 +46,7 @@ pub(crate) fn source(file: &str) -> &'static str {
     if file.ends_with("camera_raw/fuji.rs") { return "CAMERA_RAW_FUJI"; }
     if file.ends_with("camera_raw/panasonic.rs") { return "CAMERA_RAW_PANASONIC"; }
     match file.rsplit('/').next().unwrap_or("") {
-        "dng.rs" => "DNG", "tiff.rs" => "TIFF",
+        "dng.rs" => "DNG", "dng_black.rs" => "DNG_BLACK", "tiff.rs" => "TIFF",
         "dng_cfa_color.rs" => "DNG_CFA_COLOR", "dng_color_spec.rs" => "DNG_COLOR_SPEC",
         "profile_develop.rs" => "PROFILE_DEVELOP", "profile_gain_table.rs" => "PROFILE_GAIN_TABLE",
         "raw.rs" => "RAW", "camera_raw.rs" => "CAMERA_RAW",

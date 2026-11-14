@@ -79,3 +79,36 @@ fn rename(mut b:Vec<u8>,old:u16,new:u16)->Vec<u8>{
  }
  assert_eq!(outputs[0],outputs[1]);fs::remove_file(p).unwrap();
 }
+#[test]
+fn single_standard_illuminant_and_scaled_neutral_decode_both_storage_models(){
+ for name in ["linear.dng","RGGB.dng"] {
+  for illuminant in [17u16,23,24,12,13,14,15,16] {
+   let mut b=base(name);
+   for (tag,unused) in [(50722,65001),(50779,65002),(50964,65003),(50965,65004),(50724,65005)] {b=rename(b,tag,unused);}
+   let matrix:Vec<u8>=[1i32,0,0,0,1,0,0,0,1].iter().flat_map(|x|x.to_le_bytes().into_iter().chain(1i32.to_le_bytes())).collect();
+   b=replace(b,50721,10,9,matrix);b=replace(b,50778,3,1,illuminant.to_le_bytes().to_vec());
+   let mut pixels=vec![];
+   for scale in [1,1000] {
+    let p=path(&format!("single-{name}-{illuminant}-{scale}"));let o=p.with_extension("f32");
+    fs::write(&p,replace(b.clone(),50728,5,3,rational(&[(scale,1),(scale,1),(scale,1)]))).unwrap();
+    let d=Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();assert!(d.cfa_color.is_some()||d.profile.is_some());
+    decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap();pixels.push(fs::read(&o).unwrap());fs::remove_file(p).unwrap();fs::remove_file(o).unwrap();
+   }
+   assert_eq!(pixels[0],pixels[1],"{name} illuminant {illuminant}");
+  }
+ }
+}
+#[test]
+fn single_forward_matrix_develops_and_partial_dual_fm_fails_closed(){
+ for name in ["linear.dng","RGGB.dng"] {
+  let mut b=base(name);
+  for (tag,unused) in [(50722,65001),(50779,65002),(50965,65004),(50724,65005)] {b=rename(b,tag,unused);}
+  let matrix:Vec<u8>=[1i32,0,0,0,1,0,0,0,1].iter().flat_map(|x|x.to_le_bytes().into_iter().chain(1i32.to_le_bytes())).collect();
+  for tag in [50721,50964]{b=replace(b,tag,10,9,matrix.clone());}
+  b=replace(b,50778,3,1,23u16.to_le_bytes().to_vec());
+  let p=path(&format!("single-fm-{name}"));let o=p.with_extension("f32");fs::write(&p,b.clone()).unwrap();
+  decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap();assert!(fs::read(&o).unwrap().chunks_exact(4).all(|v|f32::from_le_bytes(v.try_into().unwrap()).is_finite()));fs::remove_file(o).unwrap();
+  b=replace(b,50722,10,9,matrix);b=replace(b,50779,3,1,17u16.to_le_bytes().to_vec());fs::write(&p,b).unwrap();
+  assert_eq!(Dng::read(&mut fs::File::open(&p).unwrap()).unwrap_err().code,"UNSUPPORTED_DNG_CALIBRATION");fs::remove_file(p).unwrap();
+ }
+}

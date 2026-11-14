@@ -12,6 +12,7 @@ use std::sync::Arc;
 pub enum Stage1Opcode {
     FixVignetteRadial(Vignette),
     FixBadPixelsConstant(crate::dng_bad_pixels::BadPixelsConstant),
+    MapTable(MapTable),
 }
 #[derive(Clone, Debug)]
 pub struct Vignette {
@@ -27,7 +28,65 @@ impl Stage1Opcode {
         match self {
             Self::FixVignetteRadial(v) => (v.table.len() * 2 + std::mem::size_of::<Self>()) as u64,
             Self::FixBadPixelsConstant(_) => std::mem::size_of::<Self>() as u64,
+            Self::MapTable(t) => (t.table.len() * 2 + std::mem::size_of::<Self>()) as u64,
         }
+    }
+}
+/// Integer-stage lookup, including short tables extended with their last entry.
+/// Tail behavior is verified against the official Adobe DNG SDK 1.7.1 Build
+/// 2802 ReplicateLastEntry (older SDK snapshots had an off-by-one here).
+#[derive(Clone, Debug)]
+pub struct MapTable {
+    width: usize,
+    height: usize,
+    area: [usize; 4],
+    pitch: [usize; 2],
+    table: Arc<[u16]>,
+}
+impl MapTable {
+    fn parse(payload: &[u8], width: usize, height: usize) -> Result<Self> {
+        if width == 0 || height == 0 || width > 32768 || height > 32768 {
+            return Err(invalid());
+        }
+        let mut c = Cursor::new(payload);
+        let mut area = [0u32; 8];
+        for value in &mut area { *value = c.u32()?; }
+        // This parser is called only for single-plane CFA List1 images.
+        if area[4] != 0 || area[5] != 1 { return Err(unsupported()); }
+        if area[6] == 0 || area[7] == 0 { return Err(invalid()); }
+        if area[..4] == [0, 0, 0, 0] {
+            if area[6..] != [1, 1] { return Err(invalid()); }
+            area[2] = height as u32; area[3] = width as u32;
+        }
+        if area[0] >= area[2] || area[1] >= area[3] { return Err(invalid()); }
+        if area[2] as usize > height || area[3] as usize > width {
+            return Err(unsupported());
+        }
+        if area[6] > area[2] - area[0] || area[7] > area[3] - area[1] {
+            return Err(invalid());
+        }
+        let count = c.u32()? as usize;
+        if count == 0 || count > 65536 { return Err(invalid()); }
+        // Validate the entire serialized payload before allocating the table.
+        if payload.len() != 36 + count * 2 { return Err(invalid()); }
+        let mut table = Vec::with_capacity(count);
+        for _ in 0..count {
+            table.push(u16::from_be_bytes(c.take(2)?.try_into().unwrap()));
+        }
+        Ok(Self { width, height,
+            area: [area[0] as usize, area[1] as usize, area[2] as usize, area[3] as usize],
+            pitch: [area[6] as usize, area[7] as usize], table: table.into() })
+    }
+    fn apply(&self, sample: u16, x: usize, y: usize) -> Result<u16> {
+        if x >= self.width || y >= self.height {
+            return Err(crate::error::err("INVALID_INPUT", "decode"));
+        }
+        if y < self.area[0] || y >= self.area[2] || x < self.area[1] || x >= self.area[3]
+            || (y - self.area[0]) % self.pitch[0] != 0
+            || (x - self.area[1]) % self.pitch[1] != 0 {
+            return Ok(sample);
+        }
+        Ok(self.table[(sample as usize).min(self.table.len() - 1)])
     }
 }
 fn polynomial(k: &[f64; 5], r2: f64) -> f64 {
@@ -154,6 +213,10 @@ pub fn parse_stage1(
                 result.push(Stage1Opcode::FixBadPixelsConstant(
                     crate::dng_bad_pixels::BadPixelsConstant::parse(record.payload)?));
             }
+            7 => {
+                if result.len() >= 4 { return Err(unsupported()); }
+                result.push(Stage1Opcode::MapTable(MapTable::parse(record.payload, width, height)?));
+            }
             // Other neighborhood operations remain unsupported.
             _ => return Err(unsupported()),
         }
@@ -169,6 +232,7 @@ pub fn apply_stage1_sample(
     for op in ops {
         sample = match op {
             Stage1Opcode::FixVignetteRadial(v) => v.apply(sample, x, y)?,
+            Stage1Opcode::MapTable(t) => t.apply(sample, x, y)?,
             Stage1Opcode::FixBadPixelsConstant(_) => return Err(unsupported()),
         };
     }

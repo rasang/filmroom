@@ -459,7 +459,10 @@ fn required_badpixel_neighborhood_matches_materialized_sensor_and_strips() {
     for y in d.active.y..d.active.y+d.active.h {for x in d.active.x..d.active.x+d.active.w {
         let raw=repair.sample(W,H,x,y,|xx,yy|Ok(sample(xx,yy))).unwrap();
         let ch=(y%2)*2+x%2;
-        let expected=(raw as f32-d.black[ch]).max(0.)/(d.white[ch]-d.black[ch]);
+        // CFA is one sample plane: normalize against its maximum black,
+        // independently of the repaired pixel's local repeat phase.
+        let max_black=d.black.iter().copied().fold(f32::NEG_INFINITY,f32::max) as f64;
+        let expected=((raw as f64-d.black[ch] as f64).max(0.)/(d.white[0] as f64-max_black)) as f32;
         assert_eq!(full[(y-d.active.y)*d.active.w+x-d.active.x],expected);
     }}
     for y in (d.active.y..d.active.y+d.active.h).step_by(7) {

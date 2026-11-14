@@ -36,6 +36,9 @@ pub fn parse(root:&Ifd,raw:&Ifd,route:ColorRoute)->Result<Option<ProfileDevelopm
  // reject rather than retaining the legacy approximate-profile warning policy.
  if [50937,50938,50939,50981,50982,50983,52529,52531,52544].iter().any(|&t|get(root,raw,t).is_some()) {return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
  let map=v.map(ProfileGainTable::parse).transpose()?;
+ let camera_to_pcs=if get(root,raw,50964).is_none() && get(root,raw,50965).is_none(){
+  crate::dng_cfa_color::parse_complete(root,raw)?.ok_or_else(||err("UNSUPPORTED_DNG_CALIBRATION","probe"))?.camera_to_pcs
+ }else{
  let camera_cc=|tag|->Result<Matrix>{if get(root,raw,tag).is_none(){return Ok([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]])} matrix(root,raw,tag)};
  let (neutral,white_xy)=white_balance(root,raw)?;
  if let Some(v)=get(root,raw,50727){if v.typ!=5||v.count!=3{return Err(bad().detail(Reason::TagShape,Some(50727)))}}
@@ -43,13 +46,20 @@ pub fn parse(root:&Ifd,raw:&Ifd,route:ColorRoute)->Result<Option<ProfileDevelopm
  if !std::ptr::eq(root,raw) && [50931,50932].iter().any(|t|raw.contains_key(t)){return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe"));}
  let signature=|tag|->Result<&[u8]>{match root.get(&tag){None=>Ok(&[]),Some(v)=>{if !matches!(v.typ,1|2)||v.bytes.len()>1024||v.bytes.last()!=Some(&0){return Err(bad())}Ok(v.bytes.strip_suffix(&[0]).unwrap())}}};
  let cal=|i:u16|->Result<Calibration>{let tag=50778+i;let v=get(root,raw,tag).ok_or_else(|| bad().detail(Reason::MissingTag,Some(tag)))?;let il=v.uints().map_err(|e|e.detail(Reason::TagValue,Some(tag)))?;if v.typ!=3||v.count!=1||il.len()!=1{return Err(bad())}Ok(Calibration{illuminant:il[0].try_into().map_err(|_|bad())?,color_matrix:matrix(root,raw,50721+i)?,forward_matrix:matrix(root,raw,50964+i)?,camera_calibration:camera_cc(50723+i)?})};
- let input=Input{calibrations:[cal(0)?,cal(1)?],analog_balance:analog.try_into().unwrap(),as_shot_neutral:neutral,calibration_signatures_match:signature(50931)?==signature(50932)?};
+ let single=get(root,raw,50722).is_none() && get(root,raw,50779).is_none();
+ if get(root,raw,50722).is_some()!=get(root,raw,50779).is_some(){return Err(bad().detail(Reason::MissingTag,Some(if get(root,raw,50722).is_none(){50722}else{50779})))}
+ if single && [50724,50965].iter().any(|&tag|get(root,raw,tag).is_some()){return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::UnsupportedValue,Some(if get(root,raw,50965).is_some(){50965}else{50724})))}
+ if !single && (get(root,raw,50964).is_none() || get(root,raw,50965).is_none()){return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::MissingTag,Some(if get(root,raw,50964).is_none(){50964}else{50965})))}
+ let first=cal(0)?;let second=if single{first}else{cal(1)?};
+ let input=Input{calibrations:[first,second],analog_balance:analog.try_into().unwrap(),as_shot_neutral:neutral,calibration_signatures_match:signature(50931)?==signature(50932)?};
  let transform=match white_xy{Some(xy)=>color::resolve_white_xy(&input,xy),None=>color::resolve(&input)}.map_err(|e|e.into_codec())?;
+ transform.camera_to_pcs
+ };
  // Standard linear ProPhoto/RIMM primaries, normalized to exact D50 PCS white.
  let mut rimm_to_pcs=[[0.7977,0.1352,0.0313],[0.2880,0.7119,0.0001],[0.,0.,0.8249]];
  let white=color::d50_xyz();for r in 0..3{let sum:f64=rimm_to_pcs[r].iter().sum();for c in 0..3{rimm_to_pcs[r][c]*=white[r]/sum;}}
  let inverse=color::inverse(rimm_to_pcs).map_err(|e|e.into_codec())?;
- Ok(Some(ProfileDevelopment{map,camera_to_pcs:transform.camera_to_pcs,camera_to_rimm:color::product(inverse,transform.camera_to_pcs)}))
+ Ok(Some(ProfileDevelopment{map,camera_to_pcs,camera_to_rimm:color::product(inverse,camera_to_pcs)}))
 }
 // DNG 1.7.1 §5, p99: clip normalized raw above 1 BEFORE camera-color
 // mapping. §ProfileGainTableMap p72 separately preserves post-gain overrange.

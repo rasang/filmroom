@@ -244,8 +244,12 @@ impl Tiff {
                 if tag==52525 && (typ!=7 || len<68) {
                     return Err(err("INVALID_COLOR_METADATA", "probe"));
                 }
+                // Delta tables have one SRATIONAL per active row/column; their
+                // length is checked against the <=32768-pixel edge by BlackModel.
+                // List1 may contain one full 16-bit MapTable plus its headers.
+                // These typed exceptions retain the aggregate 512 KiB ceiling.
                 if len
-                    > (if tag==50712 {128*1024} else if tag==52525 {crate::profile_gain_table::MAX_BYTES} else if camera && tag == 37500 {
+                    > (if matches!(tag,50715|50716) {32768*8} else if tag==51008 {256*1024} else if tag==50712 {128*1024} else if tag==52525 {crate::profile_gain_table::MAX_BYTES} else if camera && tag == 37500 {
                         512 * 1024
                     } else {
                         65536

@@ -1,5 +1,5 @@
 //! Independent test-only List2 oracle. Does not call production TIFF/GainMap
-//! parsing or application. Sensor decoding/scaling and final development use
+//! parsing or application. Sensor decoding and final development use
 //! pinned Rawler; map interpolation independently follows the DNG SDK scalar precision order.
 use rawler::{
     RawImage, RawImageData,
@@ -135,10 +135,56 @@ fn maps(path: &Path) -> Vec<Map> {
     assert_eq!(at, bytes.len());
     result
 }
+/// Independent scalar normalization for these no-Delta fixtures. Rawler's
+/// apply_scaling uses a separate denominator for each CFA phase, contrary to
+/// DNG 1.7.1 linearization: the maximum black is per sample plane (one for CFA).
+/// Spatial Delta fixtures are independently covered by the SDK comparison and
+/// dng_spatial_black; this helper intentionally does not use BlackModel.
+pub fn normalize_standard_black(mut raw: RawImage) -> RawImage {
+    let black = &raw.blacklevel;
+    assert_eq!(black.cpp, raw.cpp);
+    let base: Vec<f64> = black.levels.iter().map(|v| v.n as f64 / v.d as f64).collect();
+    let white = raw.whitelevel.as_vec();
+    let active = raw.active_area.unwrap_or(Rect {
+        p: Point { x: 0, y: 0 },
+        d: Dim2 { w: raw.width, h: raw.height },
+    });
+    let mut maximum = vec![f64::NEG_INFINITY; raw.cpp];
+    // Exhaustive active-image scan is intentionally unlike the production
+    // residue-class maximum algorithm, so it remains an independent oracle.
+    for y in 0..active.d.h {
+        for x in 0..active.d.w {
+            for c in 0..raw.cpp {
+                let b = base[((y % black.height) * black.width + x % black.width) * raw.cpp + c];
+                maximum[c] = maximum[c].max(b);
+            }
+        }
+    }
+    let uniform = base.chunks_exact(raw.cpp).all(|b| b == &base[..raw.cpp]);
+    let mut pixels = raw.data.as_f32().into_owned();
+    for y in 0..active.d.h {
+        for x in 0..active.d.w {
+            for c in 0..raw.cpp {
+                let b = base[((y % black.height) * black.width + x % black.width) * raw.cpp + c];
+                let w = white[if white.len() == 1 { 0 } else { c }];
+                let i = ((y + active.p.y) * raw.width + x + active.p.x) * raw.cpp + c;
+                pixels[i] = if uniform {
+                    (pixels[i] - b as f32).max(0.) / (w - b as f32)
+                } else {
+                    ((pixels[i] as f64 - b).max(0.) / (w as f64 - maximum[c])) as f32
+                };
+            }
+        }
+    }
+    raw.data = RawImageData::Float(pixels);
+    for b in &mut raw.blacklevel.levels { b.n = 0; b.d = 1; }
+    raw.whitelevel.0.fill(1);
+    raw
+}
+
 pub fn prepare(path: &Path) -> RawImage {
     let tables = maps(path);
-    let mut raw = rawler::decode_file(path).unwrap();
-    raw.apply_scaling().unwrap();
+    let mut raw = normalize_standard_black(rawler::decode_file(path).unwrap());
     assert_eq!(raw.cpp, 1);
     let active = raw.active_area.unwrap_or(Rect {
         p: Point { x: 0, y: 0 },

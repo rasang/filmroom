@@ -519,8 +519,8 @@ fn decode_with_reserve(
                         if batch.is_empty() {
                             batch_y = y;
                         }
-                        for pixel in
-                            row[d.active.x * 3..(d.active.x + d.active.w) * 3].chunks_exact(3)
+                        for (x,pixel) in
+                            row[d.active.x * 3..(d.active.x + d.active.w) * 3].chunks_exact(3).enumerate()
                         {
                             for c in 0..3 {
                                 let value = d
@@ -529,7 +529,7 @@ fn decode_with_reserve(
                                     .map_or(pixel[c], |t| t.apply(pixel[c]))
                                     as f32;
                                 batch
-                                    .push((value - d.black[c]).max(0.) / (d.white[c] - d.black[c]));
+                                    .push(d.black_model.normalize(value,d.active.x+x,y,c));
                             }
                         }
                         if batch.len() == d.active.w * admission.strip_rows as usize * 3 {

@@ -17,20 +17,34 @@ finite range and increasing-x validation remain.
 
 ## Color
 
-The complete color path handles full invertible CameraCalibration matrices in
-the existing A/D50 ColorMatrix-only and A/D65 dual-ForwardMatrix envelopes.
-It interpolates ColorMatrix and CameraCalibration separately, then combines them
-with AnalogBalance. ForwardMatrix conversion uses the inverse individual-camera
-calibration, never a second application of AB to sensor pixels.
+The complete color path handles single and dual calibration using the standard
+EXIF illuminants with nominal temperatures defined by the Adobe reference model.
+It supports ColorMatrix-only and ForwardMatrix conversion, full invertible
+CameraCalibration, AnalogBalance, and explicit AsShotWhiteXY. A dual profile
+with only one ForwardMatrix remains unsupported rather than silently selecting
+another algorithm. Unknown/custom illuminants and third illuminants remain out
+of scope. Existing unit-calibration D65 legacy paths retain their pixel pipeline.
 
-AsShotWhiteXY directly sets the reference white in these envelopes. AsShotNeutral
-accepts SHORT and RATIONAL. Supplying both is rejected. Legacy unit-AB diagonal
-development retains its previous pipeline; full paths do not use its WB/matrix.
+AsShotNeutral accepts SHORT and RATIONAL; its absolute scale is not a rejection
+criterion. Full paths normalize the neutral, validate the resulting transform,
+and do not repeat legacy white balance. Supplying both Neutral and WhiteXY is
+rejected. LinearRAW can use complete ColorMatrix-only calibration as well.
 
-LinearRAW requiring AB/channel-mixing/XY selects the complete transform rather
-than passing the value through unused. Unsupported single/other illuminants,
-missing optional FM needed by this implementation, or unsupported required
-processing remain UNSUPPORTED, not silently guessed.
+## Spatial black level
+
+BlackLevel repeat patterns and signed row/column deltas are evaluated relative
+to ActiveArea. Normalization uses the maximum computed black for each sample
+plane, as specified by DNG, not a different denominator for each CFA phase.
+This corrects existing nonuniform CFA black-level output. Uniform existing
+inputs retain their f32 arithmetic; over-white headroom policy is unchanged.
+Delta storage is bounded by image dimensions and included in scratch admission.
+
+## Required List1 MapTable
+
+MapTable runs in its declared position in the existing stage-1 chain, with
+validated area, pitch and table length. Indexes beyond a short table use its last
+entry, verified against the current official SDK implementation. TIFF tag and
+aggregate metadata budgets still apply. This is not support for every opcode.
 
 ## GainMap
 
@@ -53,10 +67,24 @@ derived pixels must never be committed. No new image/GPS metadata logging is add
 
 ## Remaining staged work
 
-- General/third/custom illuminants, ReductionMatrix and richer camera profiles.
-- DefaultScale, fractional resampling, spatial black-level processing.
+- Unknown/third/custom illuminants, partial dual ForwardMatrix profiles,
+  ReductionMatrix and richer camera profiles.
+- DefaultScale and fractional resampling.
 - More required opcodes and combinations of currently supported operators.
 - Wider DNG storage layouts/precision/compression and budget-aware streaming.
 
 Each requires genuine computation plus numeric regression; removing a rejection
 alone is not an implementation.
+
+## Independent reference check (host)
+
+Adobe DNG SDK 1.7.1 Build2802 Stage2 was executed separately, not linked into the
+app. Full original Xiaomi and vivo samples had maximum absolute differences of
+5.96e-8 and 7.66e-6 respectively. A synthetic spatial black/delta case differed
+by at most 7.57e-6. SDK uint16 staging quantizes values, unlike Filmroom floats.
+Public Pixel2XL with List2 GainMap differed by at most 3.98e-5; isolated highlight
+differences are explained by Filmroom retaining over-white headroom while SDK
+Stage2 saturates, not by an incorrect denominator. No exact-match claim is made.
+Required MapTable region/pitch/short-tail and ordered two-table cases were
+byte-identical to actual SDK Stage1 output. Test adapters run outside the app;
+no Adobe SDK source, private sample or derived image is committed.

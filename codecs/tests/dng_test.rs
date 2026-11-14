@@ -28,9 +28,9 @@ fn reference_all_patterns_linear_endian_crop_orientations() {
         "crop.dng",
     ] {
         let input = fixture(file);
-        let raw = rawler::decode_file(&input).unwrap();
+        let raw = gainmap_oracle::normalize_standard_black(rawler::decode_file(&input).unwrap());
         let mut dev = RawDevelop::default();
-        dev.steps.retain(|s| !matches!(s, ProcessingStep::SRgb));
+        dev.steps.retain(|s| !matches!(s, ProcessingStep::SRgb | ProcessingStep::Rescale));
         let reference = match dev.develop_intermediate(&raw).unwrap() {
             Intermediate::ThreeColor(p) => p,
             _ => panic!(),

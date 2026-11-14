@@ -1,3 +1,5 @@
+#[path = "support/gainmap_oracle.rs"]
+mod gainmap_oracle;
 use film_codecs::{
     develop::{Budget, decode, develop_tile},
     dng::Dng,
@@ -260,8 +262,7 @@ fn camera_stage_before_calibration_and_whitebalance_once() {
     let plain = develop_tile(&d, 0, d.height, data.clone()).unwrap();
     // Independent rawler demosaic and subsequent calibration, with known constant
     // camera-plane gains, rather than multiplying already-converted output RGB.
-    let mut raw = rawler::decode_file(&input).unwrap();
-    raw.apply_scaling().unwrap();
+    let mut raw = gainmap_oracle::normalize_standard_black(rawler::decode_file(&input).unwrap());
     raw.color_matrix.clear();
     raw.color_matrix
         .insert(rawler::imgop::xyz::Illuminant::D65, d.matrix.clone());
