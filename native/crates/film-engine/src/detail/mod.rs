@@ -271,6 +271,7 @@ pub struct DetailContext {
     kernel: Option<ExactDiffusionKernel>,
     support: usize,
     brightness: f64,
+    finishing: crate::finishing::Finishing,
     render_guard: Mutex<()>,
     worker: Mutex<Worker>,
     _root: PrivateRoot,
@@ -555,7 +556,7 @@ impl DetailContext {
                     return Ok(Arc::new(Self {
                         identity, backend, plan: plan.clone(), pipe,
                         prepared: None, planes: None, gpu: Some(gpu), kernel: None,
-                        support: 0, brightness: 2f64.powf(config.params.brightness_ev),
+                        support: 0, brightness: 2f64.powf(config.params.brightness_ev), finishing:config.params.finishing(),
                         render_guard: Mutex::new(()), worker: Mutex::new(Worker {
                             blocks: BTreeMap::new(), bytes: 0, clock: 0,
                             fft: fft::ValidFft::new(0),
@@ -618,7 +619,7 @@ impl DetailContext {
             gpu: None,
             kernel,
             support,
-            brightness: 2f64.powf(config.params.brightness_ev),
+            brightness: 2f64.powf(config.params.brightness_ev), finishing:config.params.finishing(),
             render_guard: Mutex::new(()),
             worker: Mutex::new(Worker {
                 blocks: BTreeMap::new(),
@@ -726,7 +727,9 @@ impl DetailContext {
         #[cfg(feature = "adreno-gpu")]
         if let Some(gpu) = &self.gpu {
             let _interactive=crate::export_execution::interactive_work();
-            return gpu.render_into(&self.pipe, sample, rgb, cancel).map(Some);
+            let performance=gpu.render_into(&self.pipe, sample, rgb, cancel)?;
+            self.finishing.apply(rgb,"sRGB").map_err(|e|DetailError::Processing(e.message))?;
+            cancel.check()?;return Ok(Some(performance));
         }
         let mut copy_sample=|part:Rect,owned:Rect|->Result<(),DetailError>{
             cancel.check()?;
@@ -794,6 +797,11 @@ impl DetailContext {
         self.render_sample(core,sample,cancel)
     }
     fn render_sample(self: &Arc<Self>, core: Rect, sample: Rect, cancel: &CancellationToken) -> Result<OwnedDetailTile, DetailError> {
+        let mut result=self.render_sample_unfinished(core,sample,cancel)?;
+        self.finishing.apply(&mut result.rgb,"sRGB").map_err(|e|DetailError::Processing(e.message))?;
+        cancel.check()?;Ok(result)
+    }
+    fn render_sample_unfinished(self: &Arc<Self>, core: Rect, sample: Rect, cancel: &CancellationToken) -> Result<OwnedDetailTile, DetailError> {
         let _interactive=crate::export_execution::interactive_work();
         let (w,h)=(self.identity.width as usize,self.identity.height as usize);
         #[cfg(feature = "adreno-gpu")]

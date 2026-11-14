@@ -465,6 +465,11 @@ impl WgpuBackend {
         })
     }
 
+    /// Scope stays inside the caller's active preview/export memory reservation.
+    pub fn resident_reuse_scope(&self)->crate::resident_reuse::ResidentReuseScope {
+        crate::resident_reuse::begin(self as *const Self as usize)
+    }
+
     /// Human-readable GPU adapter name (e.g. for mobile diagnostics).
     pub fn adapter_name(&self) -> &str {
         &self.adapter_name
@@ -1488,14 +1493,15 @@ impl WgpuBackend {
         // stages downstream of the enlarger-diffusion point.
         let stop = p.stop_after;
         let runs_front = p.start_at == crate::ChainStart::Rgb;
-        assert!(runs_front || (p.start_at == crate::ChainStart::PostHalationRaw && stop == crate::ChainStop::FilmLog) || stop == crate::ChainStop::Full || (p.start_at == crate::ChainStart::FilmLog && stop == crate::ChainStop::CorrectedDensity), "GPU_INVALID_CHAIN_RANGE");
+        assert!(runs_front || (p.start_at == crate::ChainStart::PostHalationRaw && stop == crate::ChainStop::FilmLog) || stop == crate::ChainStop::Full || (p.start_at == crate::ChainStart::FilmLog && stop == crate::ChainStop::CorrectedDensity) || (p.start_at == crate::ChainStart::CorrectedDensity && stop == crate::ChainStop::GrainedDensity), "GPU_INVALID_CHAIN_RANGE");
         let past_front = stop != crate::ChainStop::Front;
         let runs_density = past_front && stop != crate::ChainStop::ScatteredRaw && stop != crate::ChainStop::FilmLog
-            && p.start_at != crate::ChainStart::CorrectedDensity;
-        let runs_finish = past_front && !matches!(stop, crate::ChainStop::ScatteredRaw | crate::ChainStop::FilmLog | crate::ChainStop::CorrectedDensity);
+            && !matches!(p.start_at,crate::ChainStart::CorrectedDensity|crate::ChainStart::GrainedDensity);
+        let runs_grain = past_front && !matches!(stop,crate::ChainStop::ScatteredRaw|crate::ChainStop::FilmLog|crate::ChainStop::CorrectedDensity) && p.start_at!=crate::ChainStart::GrainedDensity;
+        let runs_finish = past_front && !matches!(stop, crate::ChainStop::ScatteredRaw | crate::ChainStop::FilmLog | crate::ChainStop::CorrectedDensity | crate::ChainStop::GrainedDensity);
         let past_print = stop == crate::ChainStop::Full;
         let neutral_grain_reference = p.neutral_media.as_ref().and_then(|m| m.grain_reference);
-        if runs_finish && neutral_grain_reference.is_some() && p.grain.is_none() { return None; }
+        if runs_grain && neutral_grain_reference.is_some() && p.grain.is_none() { return None; }
 
         // Ping-pong image buffers (each holds H*W*3 f32 values).
         let make_img_buf = |label: &str| {
@@ -1554,12 +1560,11 @@ impl WgpuBackend {
             if mappable {
                 usage |= wgpu::BufferUsages::MAP_READ;
             }
-            self.device.census_create_buffer(&wgpu::BufferDescriptor {
-                label: Some("img_b"),
-                size: img_bytes as u64 + if mappable { capture_bytes } else { 0 },
-                usage,
-                mapped_at_creation: false,
-            })
+            let size=img_bytes as u64 + if mappable {capture_bytes}else{0};
+            crate::resident_reuse::take(self as *const Self as usize,size,usage).unwrap_or_else(||
+                self.device.census_create_buffer(&wgpu::BufferDescriptor {
+                    label:Some("img_b"),size,usage,mapped_at_creation:false,
+                }))
         };
 
         // Static (LUT) buffers — uploaded once.
@@ -2253,7 +2258,7 @@ impl WgpuBackend {
         // before print_spectral. Optionally followed by a Gaussian
         // post-blur (uses buf_b as mid, since log_raw_corrected in buf_b
         // is no longer needed after DIR's final density_curve_0).
-        let make_phase_grain_state = || if runs_finish {
+        let make_phase_grain_state = || if runs_grain {
             p.grain.as_ref().map(|gp| {
                 build_grain_state(
                     &self.device,
@@ -2269,7 +2274,7 @@ impl WgpuBackend {
             None
         };
         let mut grain_state = if p.stage_batched { None } else { make_phase_grain_state() };
-        let make_phase_neutral_grain_state = || if runs_finish {
+        let make_phase_neutral_grain_state = || if runs_grain {
             neutral_grain_reference.as_ref().map(|reference| build_neutral_grain_state(
                 &self.device, reference, image.width, image.height, &buf_a, self))
         } else { None };
@@ -2518,7 +2523,7 @@ impl WgpuBackend {
         }
         // Corrected-density input already resides in buf_a. No density or DIR
         // operation is repeated, and grain keeps the original f32 boundary.
-        if runs_finish {
+        if runs_grain {
         if p.stage_batched {
             grain_state = make_phase_grain_state();
             neutral_grain_state = make_phase_neutral_grain_state();
@@ -2532,6 +2537,8 @@ impl WgpuBackend {
         if let Some(ng) = neutral_grain_state.as_ref() { ng.encode(&mut encoder, true, n_pixels); }
         if !finish_batch(&mut encoder, ResidentStage::Grain) { return None; }
         if p.stage_batched { drop(grain_state.take()); drop(neutral_grain_state.take()); }
+        }
+        if runs_finish {
         // 4 + 5. Printing: print_spectral (buf_a → buf_b) then the print
         //     density curve (buf_b → buf_a). Skipped for scan_film — the
         //     scan pass consumes the film density already in buf_a.
@@ -2623,7 +2630,7 @@ impl WgpuBackend {
         }
         }
 
-        if stop == crate::ChainStop::CorrectedDensity {
+        if matches!(stop,crate::ChainStop::CorrectedDensity|crate::ChainStop::GrainedDensity) {
             encoder.copy_buffer_to_buffer(&buf_a, 0, &buf_b, 0, img_bytes as u64);
         }
         drop(finish_batch);
@@ -2647,7 +2654,7 @@ impl WgpuBackend {
         // creation/uploads, and command encoding.
         let before_readback_ms = t_start.elapsed().as_secs_f32() * 1000.0;
         let cpu_setup_ms = before_readback_ms - batch_wait_ms;
-        let final_stage = match p.stop_after { crate::ChainStop::CorrectedDensity=>ResidentStage::Dir, crate::ChainStop::Front=>ResidentStage::Front,
+        let final_stage = match p.stop_after { crate::ChainStop::GrainedDensity=>ResidentStage::Grain, crate::ChainStop::CorrectedDensity=>ResidentStage::Dir, crate::ChainStop::Front=>ResidentStage::Front,
             crate::ChainStop::FilmLog=>ResidentStage::FilmLog, crate::ChainStop::ScatteredRaw=>ResidentStage::Halation,
             crate::ChainStop::PrintLinear=>ResidentStage::Print, crate::ChainStop::Full=>ResidentStage::Output };
         failure_trace::reset();
@@ -2692,7 +2699,12 @@ impl WgpuBackend {
         // groups still retain buf_a/b: keep ping-pong bytes charged through
         // conversion. Dropping local buffer handles alone is not release.
         drop(buf_a);
-        drop(buf_b);
+        // The final mapping fence completed above; output is now unmapped. Never
+        // return buffers on an early error/cancellation/uncertain submission.
+        let mut usage=wgpu::BufferUsages::STORAGE|wgpu::BufferUsages::COPY_DST|wgpu::BufferUsages::COPY_SRC;
+        if mappable {usage|=wgpu::BufferUsages::MAP_READ;}
+        crate::resident_reuse::put_completed(self as *const Self as usize,
+            img_bytes as u64+if mappable {capture_bytes}else{0},usage,buf_b);
         drop(readback);
         drop(halation_state);
         drop(highlight_state);

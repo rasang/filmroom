@@ -280,7 +280,7 @@ class FilmEngine(private val context: Context) {
                 .put("dataRevision",dataRevision).apply {
                     if(border!=null){
                         val identity=java.security.MessageDigest.getInstance("SHA-256")
-                            .digest((border.json()+parameters.json()).toByteArray(Charsets.UTF_8))
+                            .digest(parameters.preImagingInputKey(border.json()).toByteArray(Charsets.UTF_8))
                             .joinToString(""){"%02x".format(it)}
                         put("mappingRevision",getString("mappingRevision")+":"+dev.filmroom.border.PreImagingInput.ALGORITHM+":"+identity)
                     }
@@ -683,7 +683,13 @@ class FilmEngine(private val context: Context) {
         require(parameters.preImagingBorder==(preImaging!=null)){"Export border stage and composite contract must agree"}
         return JSONObject(nativeParameters(parameters,"export",budget)).apply{preImaging?.let{put("preImaging",it)}}.toString()
     }
-    private fun nativeParameters(parameters:EditorState,mode:String,budget:Int)=JSONObject(parameters.json(mode, includePresentation=false)).put("memoryBudgetMiB",budget).toString()
+    private fun nativeParameters(parameters:EditorState,mode:String,budget:Int):String {
+        if(parameters.hasFinishing) {
+            val caps=try {JSONObject(NativeFilmBridge.nativeCapabilities())}catch(_:LinkageError){throw EngineException(EngineFailure.UNAVAILABLE)}
+            if(!FinishingContract.supported(parameters,caps))throw EngineException(EngineFailure.UNAVAILABLE)
+        }
+        return JSONObject(parameters.json(mode, includePresentation=false)).put("memoryBudgetMiB",budget).toString()
+    }
 
 }
 

@@ -73,6 +73,7 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
         calibration_misses:after.calibration_misses.saturating_sub(before.calibration_misses),
         calibration_build_nanoseconds:after.calibration_build_nanoseconds.saturating_sub(before.calibration_build_nanoseconds),cache:after};
     let gpu=full_chain_gpu().filter(|g|g.is_healthy()).ok_or_else(||error("GPU_UNAVAILABLE"))?;
+    let _resident_reuse=gpu.resident_reuse_scope();
     let halo=pipe.banded_halo_pixels(pitch);
     let field_bytes=pipe.gpu_diffusion_working_bytes(width,height)
         .and_then(|n|n.checked_add(std::mem::size_of::<DiffusionScatteredFields>()as u64)).ok_or_else(||error("MEMORY_BUDGET_TOO_SMALL"))?;
@@ -114,7 +115,8 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     // Quarantine and cancellation take precedence over any rendering error or
     // caught panic. Never start a CPU fallback or a second high-res GPU attempt.
     check_cancellation(engine,generation)?;
-    let pixels=attempt.map_err(|_|error("GPU_EXECUTION_FAILED"))??;
+    let mut pixels=attempt.map_err(|_|error("GPU_EXECUTION_FAILED"))??;
+    params.finishing().apply(&mut pixels,"sRGB")?;
     let batches=gpu.thread_submits().saturating_sub(submits);
     if batches==0{return Err(error("GPU_EXECUTION_FAILED"));}
     Ok(RenderOutput{refined_plan:Some(PlanMetrics{abi:1,estimated_peak_bytes:plan.estimated_bytes,external_bytes:external,

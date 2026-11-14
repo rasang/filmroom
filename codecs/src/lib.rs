@@ -78,3 +78,5 @@ pub mod dng_color_spec;
 pub mod profile_develop;
 
 mod jxl;
+
+mod encode8;

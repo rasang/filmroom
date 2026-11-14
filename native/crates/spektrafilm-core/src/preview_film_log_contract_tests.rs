@@ -118,3 +118,48 @@ fn corrected_density_validation_and_cancel_do_not_submit() {
     }
     assert!(backend.ranges.lock().unwrap().is_empty());
 }
+
+#[test]
+fn reprint_range_skips_grain_and_does_not_repeat_upstream_effects() {
+    let mut p=pipe();p.params.enlarger.diffusion_filter.active=true;
+    p.params.film_render.grain.active=true;p.params.film_render.dir_couplers.active=true;
+    let backend=Probe::default();let values=vec![0.18;32*24*3];
+    assert!(p.tap_gpu_grained_density_preview_controlled(&values,32,24,&backend,||true).is_some());
+    assert!(p.process_gpu_from_grained_density_preview_controlled(&values,32,24,&backend,||true).is_some());
+    assert_eq!(*backend.ranges.lock().unwrap(),vec![
+        (ChainStart::CorrectedDensity,ChainStop::GrainedDensity,false,false,false),
+        (ChainStart::GrainedDensity,ChainStop::Full,false,true,false)]);
+    assert_eq!(*backend.effects.lock().unwrap(),vec![(false,true),(false,false)]);
+}
+#[test]
+fn reprint_key_invalidates_for_every_grain_field_not_late_print() {
+    let p=pipe();let key=p.gpu_grained_density_prefix_key("data").unwrap();
+    let baseline=serde_json::to_value(&p.params.film_render.grain).unwrap();
+    for name in baseline.as_object().unwrap().keys() {
+        let mut changed=baseline.clone();let v=&mut changed[name];
+        *v=match v.clone() {
+            serde_json::Value::Bool(b)=>serde_json::json!(!b),
+            serde_json::Value::Number(n) if n.is_u64()=>serde_json::json!(n.as_u64().unwrap()+1),
+            serde_json::Value::Number(n)=>serde_json::json!(n.as_f64().unwrap()+0.1),
+            serde_json::Value::Null=>serde_json::json!([1,2]),
+            serde_json::Value::Array(mut a)=>{a[0]=serde_json::json!(a[0].as_f64().unwrap()+0.1);serde_json::Value::Array(a)},
+            other=>panic!("Add probe for grain.{name}: {other}"),
+        };
+        let mut q=p.clone();q.params.film_render.grain=serde_json::from_value(changed).unwrap();
+        assert_ne!(Some(key.clone()),q.gpu_grained_density_prefix_key("data"),"grain.{name} omitted");
+    }
+    let mut q=p.clone();q.params.enlarger.print_exposure*=1.1;q.params.enlarger.y_filter_shift+=0.1;
+    assert_eq!(Some(key),q.gpu_grained_density_prefix_key("data"));
+    q.params.film_render.grain.amount=f64::NAN;assert!(q.gpu_grained_density_prefix_key("data").is_none());
+}
+#[test]
+fn reprint_rejects_bad_shape_nonfinite_and_cancel_before_submission() {
+    let p=pipe();let backend=Probe::default();
+    for finish in [false,true] {
+        for (v,w,h) in [(vec![0.;11],2,2),(vec![f32::NAN;12],2,2),(vec![],0,2)] {
+            assert!(p.grained_density_preview_range(&v,w,h,&backend,finish,||true).is_none());
+        }
+        assert!(p.grained_density_preview_range(&[0.;12],2,2,&backend,finish,||false).is_none());
+    }
+    assert!(backend.ranges.lock().unwrap().is_empty());
+}

@@ -11,6 +11,7 @@ pub struct Entry<T> {
     pub metadata: T,
     pub film_log: Option<FilmLog>,
     pub corrected_density: Option<FilmLog>,
+    pub reprint_density: Option<FilmLog>,
 }
 pub struct FilmLog { pub key: String, pub values: Vec<f32> }
 impl FilmLog {
@@ -25,6 +26,7 @@ impl<T> Entry<T> {
         (self.input.capacity() as u64) * 4 + (self.linear_srgb.capacity() as u64) * 8
             + self.film_log.as_ref().map_or(0, FilmLog::bytes)
             + self.corrected_density.as_ref().map_or(0, FilmLog::bytes)
+            + self.reprint_density.as_ref().map_or(0, FilmLog::bytes)
             + KEY_ALLOWANCE // bounded key/metadata/allocator bookkeeping allowance
     }
     fn valid(&self) -> bool {
@@ -34,6 +36,8 @@ impl<T> Entry<T> {
             && self.key.capacity() as u64 <= KEY_ALLOWANCE / 2
             && self.film_log.as_ref().is_none_or(|log| log.valid(self.input.len()))
             && self.corrected_density.as_ref().is_none_or(|log| log.valid(self.input.len()))
+            && self.reprint_density.as_ref().is_none_or(|log| log.valid(self.input.len()))
+            && !(self.corrected_density.is_some() && self.reprint_density.is_some())
     }
     fn matches(&self, key: &str, input: &[f32]) -> bool {
         !self.linear_srgb.is_empty() && self.key == key && self.input.len() == input.len()
@@ -67,6 +71,13 @@ impl<T> StageCache<T> {
             .is_some_and(|bytes|self.enabled() && bytes<=self.budget)
     }
     /// Like FilmLog, copy into ACTIVE prepaid storage before releasing the lock.
+    pub fn copy_reprint_density(&mut self, key:&str,input:&[f32])->Option<FilmLog> {
+        let entry=self.entry.as_mut()?;
+        if entry.input.len()!=input.len() || !entry.input.iter().zip(input).all(|(a,b)|a.to_bits()==b.to_bits())
+            || !entry.reprint_density.as_ref().is_some_and(|d|d.key==key) {entry.reprint_density=None;return None;}
+        let density=entry.reprint_density.as_ref()?;
+        Some(FilmLog{key:density.key.clone(),values:density.values.clone()})
+    }
     pub fn copy_corrected_density(&mut self, key: &str, input: &[f32]) -> Option<FilmLog> {
         let entry = self.entry.as_mut()?;
         let matches = entry.input.len() == input.len()
@@ -123,7 +134,7 @@ pub fn finish(linear_srgb: &[f64], brightness_ev: f64) -> Option<Vec<f32>> {
 
 #[cfg(test)] mod tests {
     use super::*;
-    fn entry(key: &str) -> Entry<()> { Entry { key: key.into(), input: vec![0., 0.5, 1.], linear_srgb: vec![-0.125, 0.5000000298023224, 1.25], metadata: (), corrected_density: None, film_log: None } }
+    fn entry(key: &str) -> Entry<()> { Entry { key: key.into(), input: vec![0., 0.5, 1.], linear_srgb: vec![-0.125, 0.5000000298023224, 1.25], metadata: (), reprint_density:None, corrected_density: None, film_log: None } }
     #[test] fn exact_hit_cold_brightness_and_out_of_range() {
         let mut cache = StageCache::default(); cache.configure(128*1024);
         let cold = entry("source-a/cpu/3x1/seed-42/data-1/params"); let input=cold.input.clone();
@@ -180,7 +191,7 @@ pub fn finish(linear_srgb: &[f64], brightness_ev: f64) -> Option<Vec<f32>> {
 #[cfg(test)] mod film_log_owner_tests {
     use super::*;
     fn entry() -> Entry<()> { Entry { key: "final-a".into(), input: vec![0.1, 0.2, 0.3],
-        linear_srgb: vec![0.1, 0.2, 0.3], metadata: (), corrected_density: None,
+        linear_srgb: vec![0.1, 0.2, 0.3], metadata: (), reprint_density:None, corrected_density: None,
         film_log: Some(FilmLog { key: "prefix-a".into(), values: vec![-1., 0., 1.] }) } }
     #[test] fn downstream_miss_keeps_prefix_and_upstream_miss_destroys_it() {
         let mut cache=StageCache::default();cache.configure(128*1024);
@@ -213,7 +224,7 @@ pub fn finish(linear_srgb: &[f64], brightness_ev: f64) -> Option<Vec<f32>> {
     fn entry() -> Entry<()> {
         Entry {key:"final".into(),input:vec![0.1,0.2,0.3],linear_srgb:vec![0.1,0.2,0.3],metadata:(),
             film_log:Some(FilmLog{key:"log".into(),values:vec![-1.,0.,1.]}),
-            corrected_density:Some(FilmLog{key:"density".into(),values:vec![0.3,0.4,0.5]})}
+            reprint_density:None, corrected_density:Some(FilmLog{key:"density".into(),values:vec![0.3,0.4,0.5]})}
     }
     #[test] fn second_slot_admission_preserves_first_slot_and_accounts_capacity() {
         let mut cache=StageCache::default();cache.configure(KEY_ALLOWANCE+48);
@@ -256,5 +267,30 @@ pub fn finish(linear_srgb: &[f64], brightness_ev: f64) -> Option<Vec<f32>> {
         assert!(!c.publish(c.epoch(),invalid));
         let mut invalid=entry();invalid.corrected_density.as_mut().unwrap().values.pop();
         assert!(!c.publish(c.epoch(),invalid));
+    }
+}
+
+#[cfg(test)] mod reprint_density_owner_tests {
+    use super::*;
+    fn entry()->Entry<()> {Entry{key:"finish".into(),input:vec![0.1,0.2,0.3],linear_srgb:vec![0.1,0.2,0.3],metadata:(),
+        film_log:Some(FilmLog{key:"log".into(),values:vec![-1.,0.,1.]}),corrected_density:None,
+        reprint_density:Some(FilmLog{key:"grained".into(),values:vec![0.4,0.5,0.6]})}}
+    #[test]fn reprint_replaces_corrected_slot_without_increasing_memory_contract() {
+        let e=entry();assert_eq!(e.bytes(),KEY_ALLOWANCE+60);
+        let mut cache=StageCache::default();cache.configure(KEY_ALLOWANCE+60);assert!(cache.publish(cache.epoch(),e));
+        assert!(cache.find("print-changed",&[0.1,0.2,0.3]).is_none());
+        assert!(cache.copy_reprint_density("grained",&[0.1,0.2,0.3]).is_some());
+        let mut illegal=entry();illegal.corrected_density=Some(FilmLog{key:"density".into(),values:vec![0.1;3]});
+        cache.configure(MAX_BYTES);assert!(!cache.publish(cache.epoch(),illegal));
+    }
+    #[test]fn upstream_source_pressure_and_cancel_never_reuse_stale_reprint() {
+        let mut cache=StageCache::default();cache.configure(128*1024);let epoch=cache.epoch();
+        assert!(cache.publish(epoch,entry()));let active=cache.copy_reprint_density("grained",&[0.1,0.2,0.3]).unwrap();
+        assert!(cache.copy_reprint_density("changed-seed",&[0.1,0.2,0.3]).is_none());
+        assert!(cache.copy_reprint_density("grained",&[0.1,0.2,0.3]).is_none());
+        assert!(cache.copy_film_log("log",&[0.1,0.2,0.3]).is_some());
+        assert!(cache.publish(epoch,entry()));assert!(cache.copy_reprint_density("grained",&[0.1,0.2,0.4]).is_none());
+        cache.configure(0);assert_eq!(cache.bytes(),0);assert_eq!(active.values,[0.4,0.5,0.6]);
+        cache.configure(128*1024);assert!(!cache.publish(epoch,entry()));let epoch=cache.epoch();cache.cancel_pending();assert!(!cache.publish(epoch,entry()));
     }
 }

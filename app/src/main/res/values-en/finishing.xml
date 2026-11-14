@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="finish_group">Finishing</string>
+    <string name="finish_exposure">Finish exposure</string>
+    <string name="finish_contrast">Finish contrast</string>
+    <string name="finish_saturation">Finish saturation</string>
+    <string name="finish_help">Adjust linear RGB after film rendering without changing darkroom controls. Defaults preserve existing recipes; quick preview can reuse completed rendering.</string>
+</resources>

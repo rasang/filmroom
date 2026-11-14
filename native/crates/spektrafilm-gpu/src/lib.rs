@@ -457,7 +457,7 @@ pub struct DiffusionGpuPlan {
 
 /// Input color domain of the resident chain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChainStart { Rgb, FilmLog, CorrectedDensity, PostHalationRaw }
+pub enum ChainStart { Rgb, FilmLog, CorrectedDensity, GrainedDensity, PostHalationRaw }
 
 /// Where the resident film chain should stop, and what it returns. The
 /// default is [`ChainStop::Full`]; the other variants exist for the banded
@@ -470,6 +470,8 @@ pub enum ChainStop {
     ScatteredRaw,
     /// Exact f32 density after DIR, before grain.
     CorrectedDensity,
+    /// Exact resident f32 film density after grain, before printing.
+    GrainedDensity,
     /// Camera optics completed; returns unclamped f32 film log exposure.
     FilmLog,
     /// Run the whole chain; the readback holds the final RGB.
@@ -867,3 +869,6 @@ mod neutral_media_contract_tests {
         m.paper_omitted=false;assert!(!m.valid()); // ordinary chain must use None
     }
 }
+
+#[cfg(feature="wgpu-backend")]
+pub mod resident_reuse;

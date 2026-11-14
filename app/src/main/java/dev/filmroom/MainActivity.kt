@@ -774,6 +774,11 @@ class MainActivity:ComponentActivity() {
     private fun extraControls():List<Control> = extraControlsRaw().map(::capabilityControl)
     private fun capabilityControl(c:Control)=c.copy(active={p->c.active(p)&&p.controlSupported(c.id)})
     private fun controlsRaw():List<Control> = when(group){
+        "finish"->listOf(
+            Control("finishExposureEv",getString(R.string.finish_exposure),R.drawable.ic_brightness,getString(R.string.finish_help),-2f,2f,0f,{it.finishExposureEv},{p,v->p.copy(finishExposureEv=v)}),
+            Control("finishContrast",getString(R.string.finish_contrast),R.drawable.ic_tool_contrast,getString(R.string.finish_help),0.5f,1.5f,1f,{it.finishContrast},{p,v->p.copy(finishContrast=v)}),
+            Control("finishSaturation",getString(R.string.finish_saturation),R.drawable.ic_tool_saturation,getString(R.string.finish_help),0f,2f,1f,{it.finishSaturation},{p,v->p.copy(finishSaturation=v)})
+        )
         "adjust"->listOf(
             Control("filmExposure",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_aacf040ce88a),R.drawable.ic_tool_exposure,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7ce0c0cf48da),-4f,4f,0f,{it.filmExposure},{p,v->p.copy(filmExposure=v)}),
             Control("brightness",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8e2f643ad160),R.drawable.ic_brightness,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8dbf138761d8),-2f,2f,0f,{it.brightness},{p,v->p.copy(brightness=v)}),
@@ -999,7 +1004,7 @@ class MainActivity:ComponentActivity() {
     private fun buildCategories(){
         categoryBar.removeAllViews()
         (categoryBar.parent as HorizontalScrollView).background=shape(raised)
-        val groups=listOf(Triple("film",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92),R.drawable.ic_film),Triple("adjust",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f65c42a2540b),R.drawable.ic_adjust),Triple("light",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_83219449b5eb),R.drawable.ic_halation),Triple("grain",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b82bd426d236),R.drawable.ic_grain),Triple("develop",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1b5d3d55ef48),R.drawable.ic_adjust),Triple("print",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_499e8c373806),R.drawable.ic_film),Triple("scan",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c2a291b64f6b),R.drawable.ic_gallery))
+        val groups=listOf(Triple("film",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_a97cb6107f92),R.drawable.ic_film),Triple("adjust",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_f65c42a2540b),R.drawable.ic_adjust),Triple("light",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_83219449b5eb),R.drawable.ic_halation),Triple("grain",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_b82bd426d236),R.drawable.ic_grain),Triple("develop",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_1b5d3d55ef48),R.drawable.ic_adjust),Triple("print",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_499e8c373806),R.drawable.ic_film),Triple("scan",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_c2a291b64f6b),R.drawable.ic_gallery),Triple("finish",getString(R.string.finish_group),R.drawable.ic_adjust))
         if(groups.none{it.first==group})group="film"
         for((key,label,_) in groups)categoryBar.addView(button(label){rememberLandscapeScroll();finishCompositionForToolChange();group=key;selected="";buildTools()}.apply{
             tag=key;setTextColor(if(group==key)accent else muted);background=shape(if(group==key)surface else Color.TRANSPARENT);isSelected=group==key
@@ -1438,7 +1443,7 @@ class MainActivity:ComponentActivity() {
         "lensBlurUm","dirDiffusionUm","grainClumpSizeUm"->dev.filmroom.i18n.L10n.format("%.2f μm",value)
         "grainClumpStrengthNm"->dev.filmroom.i18n.L10n.format("%.0f nm",value)
         "halationBounces","grainLayers"->value.roundToInt().toString()
-        "printExposureEv","highlightBoostEv","highlightProtectEv"->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ffd510bae3ad,value)
+        "finishExposureEv","printExposureEv","highlightBoostEv","highlightProtectEv"->dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_ffd510bae3ad,value)
         "scanGlarePercent"->dev.filmroom.i18n.L10n.format("%.2f%%",value)
         else->if(control.exactValue)dev.filmroom.i18n.L10n.format("%.2f",value)else dev.filmroom.i18n.L10n.format("%+.0f",(value-control.neutral)/(control.max-control.min)*100)
     }

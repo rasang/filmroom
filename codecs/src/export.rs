@@ -118,7 +118,7 @@ struct JpegRows<'a> {
     reason: Reason,
     clipped: Rc<RefCell<u64>>,
     last_counted_y: RefCell<Option<u16>>,
-    color_space: crate::output_color::OutputColorSpace,
+    encoder8: crate::encode8::Sdr8Encoder,
     progress: EncodeProgress<'a>,
 }
 impl ImageBuffer for JpegRows<'_> {
@@ -155,7 +155,7 @@ impl ImageBuffer for JpegRows<'_> {
                 if count_clipping && !(0. ..=1.).contains(&v) {
                     *self.clipped.borrow_mut() += 1;
                 }
-                c[i] = (self.color_space.encode(v) * 255.).round() as u8;
+                c[i] = self.encoder8.encode(v);
             }
             let (y, cb, cr) = rgb_to_ycbcr(c[0], c[1], c[2]);
             buffers[0].push(y);
@@ -187,7 +187,7 @@ fn jpeg(
         clipped: clipped.clone(),
         last_counted_y: RefCell::new(None),
         progress,
-        color_space: crate::output_color::OutputColorSpace::parse(&p.output_color_space)?,
+        encoder8: crate::encode8::Sdr8Encoder::new(crate::output_color::OutputColorSpace::parse(&p.output_color_space)?),
     };
     let writer = CheckedWriter {
         file: out,

@@ -1786,6 +1786,41 @@ impl Pipeline {
         }))
     }
 
+    /// Reprint identity includes every grain setting and resolved layer curve.
+    /// Omitted-film donor grain deliberately retains the established path.
+    pub fn gpu_grained_density_prefix_key(&self, revision: &str) -> Option<String> {
+        if self.film.is_omitted() { return None; }
+        let prefix=self.gpu_corrected_density_prefix_key(revision)?;
+        let mut grain=serde_json::to_value(&self.params.film_render.grain).ok()?;
+        grain.as_object_mut()?.remove("coordinate_origin");
+        film_log_exact_key(serde_json::json!({"version":1,"corrected":prefix,
+            "grain":grain,"origin":self.params.film_render.grain.coordinate_origin.into_iter().collect::<Vec<_>>(),
+            "layers":self.film.data.density_curves_layers}))
+    }
+    pub fn tap_gpu_grained_density_preview_controlled(&self,data:&[f32],width:u32,height:u32,
+        backend:&dyn ComputeBackend,checkpoint:impl FnMut()->bool)->Option<ImageBuf> {
+        self.grained_density_preview_range(data,width,height,backend,false,checkpoint)
+    }
+    pub fn process_gpu_from_grained_density_preview_controlled(&self,data:&[f32],width:u32,height:u32,
+        backend:&dyn ComputeBackend,checkpoint:impl FnMut()->bool)->Option<ImageBuf> {
+        self.grained_density_preview_range(data,width,height,backend,true,checkpoint)
+    }
+    fn grained_density_preview_range(&self,data:&[f32],width:u32,height:u32,backend:&dyn ComputeBackend,
+        finish:bool,mut checkpoint:impl FnMut()->bool)->Option<ImageBuf> {
+        backend.reset_thread_resident_progress();
+        if self.film.is_omitted() || !checkpoint() || !self.valid_preview_film_log_shape(width,height,data.len())
+            || data.iter().any(|v|!v.is_finite()) {return None;}
+        let color_ref=crate::color_reference::ColorReference::compute(&self.film,&self.print,&self.params,&self.print_illuminant,self.print_exposure_factor);
+        let (start,stop)=if finish {(spektrafilm_gpu::ChainStart::GrainedDensity,spektrafilm_gpu::ChainStop::Full)}
+            else {(spektrafilm_gpu::ChainStart::CorrectedDensity,spektrafilm_gpu::ChainStop::GrainedDensity)};
+        let out=self.try_gpu_resident_range_controlled(spektrafilm_gpu::ChainImage::F32(data,width,height),backend,
+            &color_ref,false,None,stop,start,None,None,&mut checkpoint)?;
+        if !checkpoint() || out.width!=width || out.height!=height || out.data.len()!=data.len()
+            || out.data.iter().any(|v|!v.is_finite()){return None;}
+        let out=if finish && !backend.resident_chain_applies_post_scan(){self.apply_post_scan(out)}else{out};
+        if !checkpoint(){return None;}Some(out)
+    }
+
     /// Continue an exact FilmLog preview through density/DIR only.
     pub fn tap_gpu_corrected_density_preview_controlled(
         &self, data: &[f32], width: u32, height: u32, backend: &dyn ComputeBackend,
@@ -3075,6 +3110,7 @@ impl Pipeline {
         if chain_start != spektrafilm_gpu::ChainStart::Rgb {
             if chain_stop != spektrafilm_gpu::ChainStop::Full
                 && !(chain_start == spektrafilm_gpu::ChainStart::FilmLog && chain_stop == spektrafilm_gpu::ChainStop::CorrectedDensity)
+                && !(chain_start == spektrafilm_gpu::ChainStart::CorrectedDensity && chain_stop == spektrafilm_gpu::ChainStop::GrainedDensity)
                 && !(chain_start == spektrafilm_gpu::ChainStart::PostHalationRaw && chain_stop == spektrafilm_gpu::ChainStop::FilmLog) { return None; }
             params.halation = None;
             params.camera_lens_blur_px = None;
@@ -3082,7 +3118,9 @@ impl Pipeline {
             params.diffusion = None;
             params.diffusion_scattered = None;
         }
-        if chain_start == spektrafilm_gpu::ChainStart::CorrectedDensity { params.dir_couplers = None; }
+        if matches!(chain_start,spektrafilm_gpu::ChainStart::CorrectedDensity|spektrafilm_gpu::ChainStart::GrainedDensity) { params.dir_couplers = None; }
+        if chain_start == spektrafilm_gpu::ChainStart::GrainedDensity {params.grain=None;}
+        if chain_stop == spektrafilm_gpu::ChainStop::GrainedDensity {params.glare=None;params.enlarger_diffusion=None;params.enlarger_scattered=None;}
         if chain_stop == spektrafilm_gpu::ChainStop::CorrectedDensity {
             params.grain = None; params.glare = None;
             params.enlarger_diffusion = None; params.enlarger_scattered = None;

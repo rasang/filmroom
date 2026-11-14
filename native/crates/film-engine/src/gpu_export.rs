@@ -424,6 +424,7 @@ fn export_impl(params:&RuntimeParams,film_stock:&str,paper_stock:&str,film:&Prof
         return Ok(metric(width,height,budget,start,0.,c.metered_ev(),gpu,TilePlan{width:0,rows:0,expanded_width:0,expanded_rows:0,estimated_bytes:0,whole:false},0,width as u64*height as u64*12,vec![]));
     }
     let gpu=crate::mobile::full_chain_gpu().filter(|g|g.is_healthy()).ok_or_else(||err(if crate::mobile::full_chain_unsupported(){"GPU_UNSUPPORTED_ADAPTER"}else{"GPU_UNAVAILABLE"}))?;
+    let _resident_reuse=gpu.resident_reuse_scope();
     let mut p=params.clone();let mut stages=Vec::new();
     let diffusion=p.camera.diffusion_filter.active||(!p.io.scan_film&&p.enlarger.diffusion_filter.active);
     let global_effect=diffusion||p.film_render.halation.boost_ev!=0.||p.film_render.halation.headroom_active();

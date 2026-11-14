@@ -34,6 +34,9 @@ class SavedPresetCoverageHostTest {
     private val probes = listOf(
         probe("filmStock") { it.copy(filmStock = "kodak_gold_200") },
         probe("paperStock") { it.copy(paperStock = "kodak_2393") },
+        probe("finishExposureEv") { it.copy(finishExposureEv = .5f) },
+        probe("finishContrast") { it.copy(finishContrast = 1.2f) },
+        probe("finishSaturation") { it.copy(finishSaturation = .6f) },
         probe("brightness") { it.copy(brightness = .75f) },
         probe("filmExposure") { it.copy(filmExposure = -.5f) },
         probe("contrast") { it.copy(contrast = 1.2f) },
