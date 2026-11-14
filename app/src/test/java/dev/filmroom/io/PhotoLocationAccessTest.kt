@@ -1,5 +1,6 @@
 package dev.filmroom.io
 
+import dev.filmroom.diagnostics.*
 import android.content.Intent
 import android.net.Uri
 import android.provider.MediaStore
@@ -73,5 +74,22 @@ class PhotoLocationAccessTest {
         val seen=mutableListOf<Uri>()
         PhotoLocationAccess.openSelected(picker,true,{error("must not map picker")},{seen+=it;ByteArrayInputStream(byteArrayOf())})!!.close()
         assertEquals(listOf(picker),seen)
+    }
+
+    @Test fun diagnosticRoutesCaptureFallbackWithoutUris() {
+        val events=mutableListOf<GpsDiagnosticInfo>()
+        PhotoLocationAccess.openSelected(selected,true,{null},{
+            if(it!=selected)throw SecurityException("private path")
+            ByteArrayInputStream(byteArrayOf())
+        },{events+=it})!!.close()
+        assertEquals(GpsAccessRoute.ORIGINAL,events.first().route)
+        assertEquals(GpsAccessRoute.SELECTED_FALLBACK,events.last().route)
+        assertEquals(GpsOriginalFallback.ORIGINAL_DENIED,events.last().fallback)
+        assertFalse(events.toString().contains("private path"))
+    }
+    @Test fun diagnosticFailureCannotBreakSelectedOpen() {
+        PhotoLocationAccess.openSelected(selected,false,{error("mapping forbidden")},{
+            ByteArrayInputStream(byteArrayOf(42))
+        },{error("observer unavailable")})!!.use { assertEquals(42,it.read()) }
     }
 }

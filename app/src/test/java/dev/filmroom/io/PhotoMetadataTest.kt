@@ -1,6 +1,7 @@
 package dev.filmroom.io
 
 import org.junit.Assert.*
+import dev.filmroom.diagnostics.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -184,5 +185,19 @@ class PhotoMetadataTest {
         assertEquals(14,long(exif.getValue(0x829d)));assertEquals(5,long(exif.getValue(0x829d).copyOfRange(4,8)))
         assertEquals(24,gps.getValue(7).size);assertArrayEquals(byteArrayOf(2,3,0,0),gps[0])
         assertNotNull(PhotoMetadata.fromJson("x".repeat(PhotoMetadata.BUDGET+1)).warning)
+    }
+
+    @Test fun gpsReadbackIsPresenceOnlyAndFailureIsNonFatal() {
+        val expected=PhotoMetadata.fromAttributes(mapOf("GPSLatitude" to "31/1,2/1,3/1","GPSLatitudeRef" to "N","GPSLongitude" to "121/1,2/1,3/1","GPSLongitudeRef" to "E"))
+        val same=expected.gpsReadback{expected}
+        assertEquals(GpsPresence.COORDINATE_TAGS,same.snapshot)
+        assertEquals(true,same.sameTagSet)
+        val missing=expected.gpsReadback{PhotoMetadata.fromAttributes(emptyMap())}
+        assertEquals(GpsPresence.NONE,missing.output)
+        assertEquals(false,missing.sameTagSet)
+        val failed=expected.gpsReadback{throw java.io.IOException("secret")}
+        assertEquals(GpsPresence.READ_FAILED,failed.output)
+        assertNull(failed.sameTagSet)
+        assertFalse(failed.toString().contains("secret"))
     }
 }

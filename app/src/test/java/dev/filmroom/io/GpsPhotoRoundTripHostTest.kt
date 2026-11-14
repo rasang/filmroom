@@ -1,5 +1,6 @@
 package dev.filmroom.io
 
+import dev.filmroom.diagnostics.*
 import android.Manifest
 import android.app.Application
 import android.graphics.Bitmap
@@ -55,16 +56,27 @@ class GpsPhotoRoundTripHostTest {
         shadowOf(app.contentResolver).registerInputStream(selected,redacted.inputStream())
         shadowOf(app).grantPermissions(Manifest.permission.ACCESS_MEDIA_LOCATION)
         shadowOf(app.contentResolver).registerInputStream(original,source.inputStream())
-        val repo=PhotoRepository(app);val loaded=repo.import(selected,640)
+        val importFacts=mutableListOf<ImportDiagnosticInfo>()
+        val repo=PhotoRepository(app);val loaded=repo.import(selected,640,onStage={importFacts+=it})
         val outDir=File("build/gps-roundtrip").apply{mkdirs()}
         try {
             assertEquals(sourceGps,gps(loaded.source.photoMetadata))
+            val observation=importFacts.last().gps!!
+            assertEquals(GpsAccessRoute.ORIGINAL,observation.route)
+            assertEquals(GpsPresence.COORDINATE_TAGS,observation.input)
+            assertEquals(GpsPresence.COORDINATE_TAGS,observation.snapshot)
             val frozen=PhotoMetadata.fromJson(loaded.source.photoMetadata.toJson())
+            assertNull(frozen.diagnosticGpsInput)
+            assertEquals(loaded.source.photoMetadata.diagnosticGpsPresence,frozen.diagnosticGpsPresence)
+            assertEquals(loaded.source.photoMetadata.toJson(),frozen.toJson())
             val rgb=File(app.cacheDir,"gps-source.rgb")
             // Robolectric has no real BitmapRegionDecoder pixels; use the production
             // bitmap-to-linear adapter from the real ImageDecoder output instead.
             LinearSpool.fromBitmap(loaded.preview,rgb,kotlinx.coroutines.currentCoroutineContext())
-            val png=repo.exportLinearRgbPng(rgb,loaded.preview.width,loaded.preview.height,photoMetadata=frozen)
+            val diagnostics=mutableListOf<GpsDiagnosticInfo>()
+            val png=repo.exportLinearRgbPng(rgb,loaded.preview.width,loaded.preview.height,photoMetadata=frozen,onGpsDiagnostic={diagnostics+=it})
+            assertEquals(GpsPresence.COORDINATE_TAGS,diagnostics.single().output)
+            assertEquals(true,diagnostics.single().sameTagSet)
             val jpeg=File(app.cacheDir,"gps-encoded.jpg")
             jpeg.outputStream().use{assertTrue(loaded.preview.compress(Bitmap.CompressFormat.JPEG,95,it))}
             val jpg=repo.exportEncodedPayload(jpeg,loaded.preview.width,loaded.preview.height,ExportFormat.JPEG,"sRGB",frozen,0)

@@ -52,6 +52,7 @@ object EffectLivePhotoExporter {
         photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(), onCommitted:(ConversionResult)->Unit = {}, onPrepared:(List<Uri>,List<String>)->Unit = {_,_->}, correlationId:Long=EffectCorrelation.next(),parentCorrelationId:Long?=null): ConversionResult = EffectExportLog.trace(EffectExportScope.LIVE_PHOTO,correlationId,parentCorrelationId) { log ->
         require(!preflight.deviceUnsupported) { preflight.selection.deviceExportBlockedReason.orEmpty() }
         require(preflight.selection.selectedProfile != null) { "没有可生成的 Live Photo 格式" }
+        log.gps(GpsDiagnosticInfo(phase=GpsDiagnosticPhase.EXPORT_SNAPSHOT,snapshot=photoMetadata.diagnosticGpsPresence))
         val captureDates=photoMetadata.livePhotoDates(System.currentTimeMillis())
         check(exportLock.tryLock()) { "Live Photo export already running" }
         val app = context.applicationContext
@@ -112,7 +113,16 @@ object EffectLivePhotoExporter {
                     ConversionStage.COMPLETE -> 1f
                     else -> .75f
                 })
-            }.also { saved -> onCommitted(saved); resolution?.let { report ->
+            }.also { saved -> onCommitted(saved)
+                // parts/publication order is image then companion video. Never inspect the MP4 as EXIF.
+                saved.publishedUris.firstOrNull()?.let { imageUri ->
+                    withContext(NonCancellable) {
+                        withContext(Dispatchers.IO) {
+                            runCatching { log.gps(photoMetadata.gpsReadback { app.contentResolver.openInputStream(imageUri)?.use(PhotoMetadata::readCaptureMetadata) }) }
+                        }
+                    }
+                }
+                resolution?.let { report ->
                 log.record(EffectExportDiagnosticInfo(log.scope,EffectExportEvent.LIVE_SAVED,
                     requestedWidth=requireNotNull(originalRequest).width,requestedHeight=requireNotNull(originalRequest).height,
                     width=report.actual.width,height=report.actual.height))

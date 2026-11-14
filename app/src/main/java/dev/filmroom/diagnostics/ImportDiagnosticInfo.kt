@@ -45,6 +45,7 @@ data class ImportDiagnosticInfo(
     val memory:ImportMemoryInfo?=null,
     val decodedRawFormat:dev.filmroom.codec.RawFormat?=null,
     val originalPhotoGrant:OriginalPhotoGrant?=null,
+    val gps:GpsDiagnosticInfo?=null,
 ) {
     internal fun fields(): Map<String, Any> = buildMap {
         if(origin!=null || phase!=null){
@@ -67,6 +68,7 @@ data class ImportDiagnosticInfo(
         height?.takeIf{it in 1..1_000_000}?.let{put("importHeight",it)}
         memoryStage?.let{put("importMemoryStage",it.name)}
         memory?.let{putAll(it.fields())}
+        gps?.let{putAll(it.fields().mapKeys { entry -> "import"+entry.key.replaceFirstChar(Char::uppercaseChar) })}
     }
 
     internal companion object {
@@ -87,6 +89,7 @@ data class ImportDiagnosticInfo(
                 ImportMemoryStage.entries.firstOrNull{it.name==fields["importMemoryStage"]},ImportMemoryInfo.fromFields(fields),
                 dev.filmroom.codec.RawFormat.entries.firstOrNull{it.name==fields["importDecodedRawFormat"]},
                 OriginalPhotoGrant.entries.firstOrNull{it.name==fields["importOriginalPhotoGrant"]},
+                GpsDiagnosticInfo.fromFields(fields.filterKeys{it.startsWith("importGps")}.mapKeys{it.key.removePrefix("import").replaceFirstChar(Char::lowercaseChar)}),
             )
             return value.takeIf { it.fields().isNotEmpty() }
         }

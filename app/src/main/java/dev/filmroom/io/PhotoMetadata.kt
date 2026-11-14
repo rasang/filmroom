@@ -19,7 +19,14 @@ import java.util.Locale
 
 /** A bounded, typed capture snapshot, never a copy of source offsets or opaque MakerNotes. */
 @ConsistentCopyVisibility
-data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false, private val imprintFallback:String?=null, val imprintFallbackKind:String?=null) {
+data class PhotoMetadata private constructor(private val attributes:Map<String,String>, val warning:String?=null, private val sourceCreateDate:String?=null, val issues:List<MetadataIssue> = emptyList(), private val indexTimeZone:String?=null, private val indexTimeMillis:Long?=null, private val sourceOffsetPresent:Boolean=false, private val imprintFallback:String?=null, val imprintFallbackKind:String?=null, val diagnosticGpsInput:GpsPresence?=null) {
+    val diagnosticGpsPresence:GpsPresence get()=if(issues.any{it.field==MetadataField.METADATA && it.reason==MetadataIssueReason.READ_FAILED}) GpsPresence.READ_FAILED else GpsDiagnosticInfo.presence(attributes.keys)
+    /** Compare tag names only: this is not coordinate-value equality or gallery verification. */
+    internal fun gpsMatches(other:PhotoMetadata):Boolean? = if(diagnosticGpsPresence==GpsPresence.READ_FAILED || other.diagnosticGpsPresence==GpsPresence.READ_FAILED)null else attributes.keys.filter{it.startsWith("GPS")}.toSet()==other.attributes.keys.filter{it.startsWith("GPS")}.toSet()
+    internal fun gpsReadback(read:()->PhotoMetadata?):GpsDiagnosticInfo {
+        val actual=try { read() } catch(_:Exception){null} catch(_:OutOfMemoryError){null}
+        return GpsDiagnosticInfo(phase=GpsDiagnosticPhase.OUTPUT_READBACK,snapshot=diagnosticGpsPresence,output=actual?.diagnosticGpsPresence ?: GpsPresence.READ_FAILED,sameTagSet=actual?.let(::gpsMatches))
+    }
     /** Presentation fallback is separate from capture EXIF and never written as DateTimeOriginal. */
     fun imprintDateTime():LocalDateTime? = attributes["DateTimeOriginal"]?.let(::parseImprintDate)
         ?: imprintFallback?.let(::parseImprintDate)
@@ -201,7 +208,7 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
             val result=(if(fallback.isEmpty())checked else fromAttributes(merged).withImprintFallback(checked.imprintFallback,checked.imprintFallbackKind.orEmpty())).let { metadata ->
                 if(sourceHint!=null)metadata.copy(sourceCreateDate=sourceHint) else metadata
             }
-            val sourceResult=result.copy(sourceOffsetPresent=result.sourceOffsetPresent || exif.hasAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL))
+            val sourceResult=result.copy(sourceOffsetPresent=result.sourceOffsetPresent || exif.hasAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL),diagnosticGpsInput=GpsDiagnosticInfo.presence(fields.keys))
             return if(unsupportedText)sourceResult.copy(warning=dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_5de5710e49a1),issues=MetadataIssues.bounded(sourceResult.issues+textIssues))else sourceResult
         }
         private fun fromCanonCr3(cmt:CanonCr3CaptureMetadata.Result):PhotoMetadata {
@@ -228,7 +235,7 @@ data class PhotoMetadata private constructor(private val attributes:Map<String,S
                 value?.let{fields[key]=it}
             } }
             if(fields.isEmpty())return unavailable()
-            val checked=fromAttributes(fields)
+            val checked=fromAttributes(fields).copy(diagnosticGpsInput=GpsDiagnosticInfo.presence(fields.keys))
             val hint=XmpCaptureTime.read(cmt.xmp)?.takeIf{validatedSourceInstant(checked.attributes,it)!=null}
             return if(hint!=null)checked.copy(sourceCreateDate=hint) else checked
         }

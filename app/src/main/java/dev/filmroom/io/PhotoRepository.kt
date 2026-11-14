@@ -31,6 +31,8 @@ import dev.filmroom.diagnostics.Diagnostics
 import dev.filmroom.diagnostics.ImportDiagnosticInfo
 import dev.filmroom.diagnostics.ImportOrigin
 import dev.filmroom.diagnostics.ImportPhase
+import dev.filmroom.diagnostics.GpsDiagnosticInfo
+import dev.filmroom.diagnostics.GpsDiagnosticPhase
 import dev.filmroom.diagnostics.ImportRoute
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -254,13 +256,14 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         var sizeHintBytes:Long?=null
         var suffix:dev.filmroom.diagnostics.ImportSuffix?=dev.filmroom.diagnostics.ImportSuffix.UNKNOWN
         val observation=dev.filmroom.diagnostics.ImportObservation()
+        var gps=GpsDiagnosticInfo()
         var format: dev.filmroom.io.formats.PhotoFormat? = null
         var route: ImportRoute? = null
         fun facts(failure: Throwable? = null) = ImportDiagnosticInfo(origin, phase, copiedBytes,
             format, route, failure?.let(::classifyImportCause),suffix,sourceBytes,sizeHintBytes,
             observation.width,observation.height,observation.memoryStage,
             if(failure?.let(::classifyImportCause)==dev.filmroom.diagnostics.ImportFailure.MEMORY_ALLOCATION && observation.memory?.failure==null)
-                (observation.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(failure=dev.filmroom.diagnostics.ImportMemoryFailure.JVM_ALLOCATION) else observation.memory,observation.rawFormat)
+                (observation.memory?:dev.filmroom.diagnostics.ImportMemoryInfo()).copy(failure=dev.filmroom.diagnostics.ImportMemoryFailure.JVM_ALLOCATION) else observation.memory,observation.rawFormat,gps=gps)
         fun enrich(error: PhotoException):PhotoException = try {
             // Best-effort terminal observation, separately named from decision-time facts.
             runCatching { importMemorySnapshot() }.getOrNull()?.let { snapshot ->
@@ -302,7 +305,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     observation.memoryStage=dev.filmroom.diagnostics.ImportMemoryStage.SOURCE_COPY
                     phase = ImportPhase.SOURCE_OPEN
                     emitStage()
-                    PhotoLocationAccess.open(importContext, uri)?.use { input ->
+                    PhotoLocationAccess.open(importContext, uri){gps=it}?.use { input ->
                         phase = ImportPhase.PRIVATE_OPEN
                         privateCopy.outputStream().buffered().use { output ->
                             phase = ImportPhase.SOURCE_READ
@@ -344,6 +347,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                             phase = if (selectedRoute == null) ImportPhase.INPUT_PROBE else ImportPhase.INPUT_PROCESS
                             emitStage()
                         }) { rawSpool = it }
+                    gps=gps.copy(phase=GpsDiagnosticPhase.IMPORT_SNAPSHOT,input=loaded.source.photoMetadata.diagnosticGpsInput ?: loaded.source.photoMetadata.diagnosticGpsPresence,snapshot=loaded.source.photoMetadata.diagnosticGpsPresence)
                     loaded.source.rememberOriginalUri(uri.toString())
                     preview = loaded.preview
                     observation.dimensions(loaded.source.originalWidth,loaded.source.originalHeight)
@@ -493,12 +497,13 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }finally{if(!completed)target.delete()}
     }
 
-    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onEncodedPayload:suspend (File)->Unit={},pngPixelPayload:OutputStream?=null,onMetadataWarning:(String)->Unit={},onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=false,metadataIssues=photoMetadata.issues,metadataPhase=MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=photoMetadata.diagnosticDateBasis)) { trace ->
+    suspend fun exportLinear(file:File,width:Int,height:Int,format:ExportFormat,quality:Int=95,onCommitted:(ExportResult)->Unit={},onCleanupUncertain:()->Unit={},outputColorSpace:String="sRGB",onPrepared:(ExportResult)->Unit={},photoMetadata:PhotoMetadata=PhotoMetadata.unavailable(),exportMillis:Long=System.currentTimeMillis(),onEncodedPayload:suspend (File)->Unit={},pngPixelPayload:OutputStream?=null,onMetadataWarning:(String)->Unit={},onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->}):ExportResult = OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=false,metadataIssues=photoMetadata.issues,metadataPhase=MetadataIssuePhase.READ_VALIDATION,captureTimeBasis=photoMetadata.diagnosticDateBasis,gps=GpsDiagnosticInfo(phase=GpsDiagnosticPhase.EXPORT_SNAPSHOT,snapshot=photoMetadata.diagnosticGpsPresence))) { trace ->
         OutputColorSpace.parse(outputColorSpace)
         val committed:(ExportResult)->Unit={result->trace.committed();onCommitted(result)}
         trace.mark(Stage.ENCODE_START)
+        val gpsDiagnostic:(GpsDiagnosticInfo)->Unit={info->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(gps=info))}
         val metadataIssue:(MetadataIssuePhase,MetadataIssue)->Unit={phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
-        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning,pixelPayload=pngPixelPayload,onMetadataIssue=metadataIssue,onWork=onWork)
+        if(format==ExportFormat.PNG)return@run exportLinearRgbPng(file,width,height,committed,onCleanupUncertain,outputColorSpace=outputColorSpace,onPrepared=onPrepared,photoMetadata=photoMetadata,exportMillis=exportMillis,onMetadataWarning=onMetadataWarning,pixelPayload=pngPixelPayload,onMetadataIssue=metadataIssue,onWork=onWork,onGpsDiagnostic=gpsDiagnostic)
         val input=privateFile(file)
         require(input.length()==LinearRgb.byteCount(width,height))
         val encoded=File(input.parentFile,"codec-output-${UUID.randomUUID()}.${format.extension}")
@@ -517,7 +522,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 onEncodedPayload(encoded)
             currentCoroutineContext().ensureActive()
             applyMetadata(encoded,format,photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning,metadataIssue)
-            return@run exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),committed,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
+            return@run exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),committed,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis(),gpsMetadata=photoMetadata,onGpsDiagnostic=gpsDiagnostic){out,job->
                 encoded.inputStream().buffered().use{stream->val bytes=ByteArray(64*1024);var written=0L;val total=encoded.length();onWork("copy",0,total,false);while(true){job.ensureActive();val n=stream.read(bytes);if(n<0)break;out.write(bytes,0,n);written+=n;onWork("copy",written,total,false)}};true
             }
         }finally{encoded.delete()}
@@ -530,14 +535,15 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         onPrepared:(ExportResult)->Unit={},onCommitted:(ExportResult)->Unit={},cacheSourceBackend:dev.filmroom.diagnostics.GpuBackend?=null,onMetadataWarning:(String)->Unit={},onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->}):ExportResult {
         require(format in setOf(ExportFormat.JPEG,ExportFormat.TIFF16,ExportFormat.PNG))
         val encoded=privateFile(file)
-        return OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=true,encodedPayloadCacheBytes=encoded.length(),encodedPayloadSourceBackend=cacheSourceBackend)) { trace ->
+        return OperationTrace.run(Operation.EXPORT_ENCODE,SafeInfo(width=width,height=height,encodedPayloadCacheHit=true,encodedPayloadCacheBytes=encoded.length(),encodedPayloadSourceBackend=cacheSourceBackend,gps=GpsDiagnosticInfo(phase=GpsDiagnosticPhase.EXPORT_SNAPSHOT,snapshot=photoMetadata.diagnosticGpsPresence))) { trace ->
             currentCoroutineContext().ensureActive()
+            val gpsDiagnostic:(GpsDiagnosticInfo)->Unit={info->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(gps=info))}
             if(format==ExportFormat.PNG) {
                 val colorSpace=OutputColorSpace.parse(outputColorSpace)
                 val profile=if(colorSpace==OutputColorSpace.SRGB)null else outputAssets.open("color-profiles/${colorSpace.iccAsset}").use{it.readBytes()}
                 val exif=pngMetadata(photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning){phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
                 return@run exportEncoded(width,height,format,"暗房_原尺寸",{result->trace.committed();onCommitted(result)},
-                    {},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
+                    {},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis(),gpsMetadata=photoMetadata,onGpsDiagnostic=gpsDiagnostic){out,job->
                     encoded.inputStream().buffered().use { rawInput ->
                         val total=encoded.length();var readBytes=0L
                         val input=object:java.io.FilterInputStream(rawInput) {
@@ -551,7 +557,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             applyMetadata(encoded,format,photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning){phase,issue->Diagnostics.event(trace.id,Stage.ENCODE_PROGRESS,SafeInfo(metadataIssues=listOf(issue),metadataPhase=phase))}
             currentCoroutineContext().ensureActive()
             exportEncoded(width,height,format,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8f8660561ea5),
-                {result->trace.committed();onCommitted(result)},{},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()){out,job->
+                {result->trace.committed();onCommitted(result)},{},onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis(),gpsMetadata=photoMetadata,onGpsDiagnostic=gpsDiagnostic){out,job->
                 encoded.inputStream().buffered().use{input->val bytes=ByteArray(64*1024);var written=0L;val total=encoded.length();onWork("copy",0,total,false);while(true){job.ensureActive();val n=input.read(bytes);if(n<0)break;out.write(bytes,0,n);written+=n;onWork("copy",written,total,false)}};true
             }
         }
@@ -665,6 +671,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         onMetadataWarning: (String) -> Unit = {},
         pixelPayload: OutputStream? = null,
         onMetadataIssue: (MetadataIssuePhase,MetadataIssue) -> Unit = {_,_->},
+        onGpsDiagnostic: (GpsDiagnosticInfo) -> Unit = {},
         onWork:(String,Long,Long,Boolean)->Unit={_,_,_,_->},
     ): ExportResult {
         val colorSpace=OutputColorSpace.parse(outputColorSpace)
@@ -675,7 +682,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
             throw PhotoException(PhotoException.Reason.EXPORT, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_0c0a9b25a114))
         }
         val exif=pngMetadata(photoMetadata,width,height,outputColorSpace,exportMillis,onMetadataWarning,onMetadataIssue)
-        return exportEncoded(width,height,ExportFormat.PNG,"暗房_原尺寸",onCommitted,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis()) { output,job ->
+        return exportEncoded(width,height,ExportFormat.PNG,"暗房_原尺寸",onCommitted,onCleanupUncertain,onPrepared,exportMillis,photoMetadata.mediaStoreCaptureTimeMillis(),gpsMetadata=photoMetadata,onGpsDiagnostic=onGpsDiagnostic) { output,job ->
             input.inputStream().buffered(256*1024).use { source ->
                 LinearRgbPng.encode(source,width,height,output,checkActive={job.ensureActive()},onRowEncoded={onProgress(it,height);onWork("encode",it.toLong(),height.toLong(),false)},colorSpace=colorSpace,iccProfile=profile,exifMetadata=exif,exportMillis=exportMillis,pixelPayload=pixelPayload)
             };onWork("encode",1,1,true);true
@@ -724,6 +731,8 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         onPrepared: (ExportResult) -> Unit = {},
         exportMillis: Long = System.currentTimeMillis(),
         captureTimeMillis: Long? = null,
+        gpsMetadata: PhotoMetadata? = null,
+        onGpsDiagnostic: (GpsDiagnosticInfo) -> Unit = {},
         writeEncoded: (OutputStream, CoroutineContext) -> Boolean,
     ): ExportResult = withContext(Dispatchers.IO) {
         val job = currentCoroutineContext()
@@ -762,6 +771,12 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 if (!encoded || output.bytesWritten == 0L) throw IOException("Image encoder failed")
                 output.flush()
             } ?: throw IOException("MediaStore did not open output")
+            job.ensureActive()
+            // Owned pending output only. Read-back is observational and cannot roll back a valid export.
+            gpsMetadata?.let { expected ->
+                val observed=expected.gpsReadback { resolver.openInputStream(uri)?.use(PhotoMetadata::readCaptureMetadata) }
+                runCatching { onGpsDiagnostic(observed) }
+            }
             job.ensureActive()
             result = ExportResult(uri, filename, width, height, format.mimeType)
             // Persist the task→row link before publishing: process death cannot duplicate a saved image.

@@ -14,6 +14,7 @@ internal class EffectExportLog(val scope:EffectExportScope, val correlationId:Lo
     var step:EffectExportStep=EffectExportStep.NONE
     var failureReason:EffectExportReason=EffectExportReason.NONE
     fun record(info:EffectExportDiagnosticInfo){val safe=SafeInfo(effectExport=correlated(info,correlationId,parentCorrelationId));if(queued!=null)queued.event(Stage.ENCODE_PROGRESS,safe) else id?.let{Diagnostics.event(it,Stage.ENCODE_PROGRESS,safe)}}
+    fun gps(info:GpsDiagnosticInfo){val safe=SafeInfo(gps=info,effectExport=correlated(EffectExportDiagnosticInfo(scope,EffectExportEvent.STEP,step=step),correlationId,parentCorrelationId));if(queued!=null)queued.event(Stage.ENCODE_PROGRESS,safe) else id?.let{Diagnostics.event(it,Stage.ENCODE_PROGRESS,safe)}}
     fun phase(value:EffectExportStep){if(step!=value){step=value;record(EffectExportDiagnosticInfo(scope,EffectExportEvent.STEP,step=value,elapsedMs=elapsed()))}}
     fun elapsed()=(System.nanoTime()/1_000_000-started).coerceAtLeast(0)
     fun end(outcome:Outcome,flush:Boolean=true){val safe=SafeInfo(effectExport=EffectExportDiagnosticInfo(scope,EffectExportEvent.END,step=step,elapsedMs=elapsed(),correlationId=correlationId,parentCorrelationId=parentCorrelationId));if(queued!=null)queued.end(outcome,safe) else id?.let{Diagnostics.end(it,outcome,safe)};if(flush&&queued==null)Diagnostics.flush()}

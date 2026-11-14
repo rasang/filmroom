@@ -222,6 +222,7 @@ data class SafeInfo(
     val importDiagnostic: ImportDiagnosticInfo? = null,
     val metadataIssues: List<MetadataIssue> = emptyList(),
     val metadataPhase: MetadataIssuePhase? = null,
+    val gps: GpsDiagnosticInfo? = null,
     val captureTimeBasis: MetadataDateBasis? = null,
     val previewSourceToken: Long? = null,
     val previewGeneration: Long? = null,
@@ -457,6 +458,7 @@ data class SafeInfo(
         rawTechnical?.let { putAll(it.fields()) }
         codecDetail?.let { putAll(it.fields()) }
         importDiagnostic?.let { putAll(it.fields()) }
+        gps?.let{putAll(it.fields())}
         captureTimeBasis?.let{put("captureTimeBasis",it.name)}
         MetadataIssues.encode(metadataIssues).takeIf{it.isNotEmpty()}?.let{put("metadataIssues",it);metadataPhase?.let{phase->put("metadataPhase",phase.name)}}
     }
@@ -473,6 +475,7 @@ data class SafeInfo(
             importDiagnostic = ImportDiagnosticInfo.fromFields(fields),
             metadataIssues = MetadataIssues.parse(fields["metadataIssues"].orEmpty()),
             metadataPhase = MetadataIssuePhase.entries.firstOrNull{it.name==fields["metadataPhase"]},
+            gps = GpsDiagnosticInfo.fromFields(fields),
             captureTimeBasis = MetadataDateBasis.entries.firstOrNull{it.name==fields["captureTimeBasis"]},
             previewSourceToken=fields["previewSourceToken"]?.toLongOrNull(),
             previewGeneration=fields["previewGeneration"]?.toLongOrNull(),
