@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="finish_group">成片微调</string>
-    <string name="finish_exposure">成片曝光</string>
-    <string name="finish_contrast">成片对比度</string>
-    <string name="finish_saturation">成片饱和度</string>
-    <string name="finish_help">在胶片成像后调整线性 RGB，不改变暗房参数。默认值不改变旧配方；快速预览可复用已完成的成像计算。</string>
-</resources>

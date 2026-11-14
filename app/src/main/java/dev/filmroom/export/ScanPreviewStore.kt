@@ -18,7 +18,7 @@ internal object ScanPreviewStore {
     const val WORKING_BYTES=24L*1024*1024
     private const val TOKEN="scan-preview-attempt"
     private val uuid=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-    private val source=Regex("scan-source-([0-9a-f-]{36})(-finished)?\\.png")
+    private val source=Regex("scan-source-([0-9a-f-]{36})\\.png")
     fun clear(dir:File) {NegativePreviewStore.clear(dir);dir.listFiles()?.filter{it.name==TOKEN||it.name=="$TOKEN.part"||it.name.startsWith("scan-source-")||it.name.startsWith("scan-preview-")}.orEmpty().forEach{if(it.isFile)it.delete()}}
     fun begin(dir:File):String {
         clear(dir);File(dir,"negative-preview.png").delete();val id=UUID.randomUUID().toString();val part=File(dir,"$TOKEN.part")
@@ -36,26 +36,17 @@ internal object ScanPreviewStore {
     }
     fun select(dir:File):File? {
         val id=token(dir)?:return null
-        // Distinct identity invalidates UI bitmap caches even within the same
-        // millisecond/byte length. A late intermediate can never supersede final.
-        return listOf("scan-preview-$id-final.jpg","scan-preview-$id.jpg")
-            .map{File(dir,it)}.firstOrNull{it.isFile&&it.length() in 1..MAX_FILE_BYTES && token(dir)==id}
+        return File(dir,"scan-preview-$id.jpg").takeIf{it.isFile&&it.length() in 1..MAX_FILE_BYTES && token(dir)==id}
     }
-    fun publish(dir:File,id:String,input:File,job:ExportJob,provider:BorderProvider,checkActive:()->Unit) =
-        publishInternal(dir,id,input,job,provider,false,checkActive)
-    fun publishFinal(dir:File,id:String,input:File,job:ExportJob,provider:BorderProvider,checkActive:()->Unit) =
-        publishInternal(dir,id,input,job,provider,true,checkActive)
-    private fun publishInternal(dir:File,id:String,input:File,job:ExportJob,provider:BorderProvider,final:Boolean,checkActive:()->Unit) {
+    fun publish(dir:File,id:String,input:File,job:ExportJob,provider:BorderProvider,checkActive:()->Unit) {
         checkActive();require(uuid.matches(id)&&token(dir)==id)
         val match=source.matchEntire(input.name)?:error("Unexpected scan source name")
-        require(!final || !job.parameters.hasFinishing || match.groupValues[2]=="-finished") { "Final finishing source is not committed" }
         require(uuid.matches(match.groupValues[1]) && input.canonicalFile.parentFile==dir.canonicalFile && input.isFile && input.length() in 1..MAX_FILE_BYTES)
         val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(input.path,bounds)
         require(bounds.outWidth in 1..MAX_EDGE&&bounds.outHeight in 1..MAX_EDGE)
         val original=checkNotNull(BitmapFactory.decodeFile(input.path,BitmapFactory.Options().apply{inPreferredConfig=Bitmap.Config.ARGB_8888}))
         var composed:Bitmap?=null;var small:Bitmap?=null
-        val target=File(dir,if(final)"scan-preview-$id-final.jpg" else "scan-preview-$id.jpg")
-        val part=File(dir,target.name+".part")
+        val part=File(dir,"scan-preview-$id.jpg.part")
         try {
             checkActive()
             composed=job.border?.let{frozen->
@@ -91,7 +82,7 @@ internal object ScanPreviewStore {
             small=if(scale==1.0)image else Bitmap.createScaledBitmap(image,(image.width*scale).toInt().coerceAtLeast(1),(image.height*scale).toInt().coerceAtLeast(1),true)
             FileOutputStream(part).use{check(checkNotNull(small).compress(Bitmap.CompressFormat.JPEG,92,it));it.fd.sync()}
             checkActive();check(token(dir)==id)
-            Files.move(part.toPath(),target.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)
+            Files.move(part.toPath(),File(dir,"scan-preview-$id.jpg").toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)
         }finally{part.delete();if(small!==composed)small?.recycle();if(composed!==original)composed?.recycle();original.recycle()}
     }
 }

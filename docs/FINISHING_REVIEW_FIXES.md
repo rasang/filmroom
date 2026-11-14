@@ -1,3 +1,7 @@
+> Historical record: the independent finishing-grade feature was removed.
+> Current scope and compatibility are documented in PREVIEW_EXPORT_PERF_SCOPE.md.
+> Finishing-specific behavior and test counts below describe the earlier commit only.
+
 # Finishing branch review fixes
 
 Review base: `711e09213bfc6aaff4a5de104ce6669a576a792c`.

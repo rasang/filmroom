@@ -7,7 +7,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
-class FinishingRecoveryHostTest {
+class LegacySpoolRecoveryHostTest {
     @get:Rule val temporary=TemporaryFolder()
     private val id="12345678-1234-1234-1234-123456789abc"
     private val name="film-result-$id.rgb.finishing.part"

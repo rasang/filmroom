@@ -29,17 +29,14 @@ object ExportStoragePolicy {
 /** Per-pass progress only: never presented as a percentage of the whole export. */
 data class EngineProgress(val jobId:Long,val passId:Long,val phase:dev.filmroom.diagnostics.NativePhase,val done:Long,val total:Long,
     val display:ExportDisplayProgress=ExportDisplayProgress.forNativePhase(phase.id),
-    val scanPreview:java.io.File?=null,
-    /** True only for a committed post-finishing source, not a polled scan. */
-    val scanPreviewFinal:Boolean=false) {
+    val scanPreview:java.io.File?=null) {
     init {require(jobId>0 && passId>0 && done in 0..1_800_000_000L && total in 0..1_800_000_000L && done<=total)}
     val chinese:String get() = phase.chinese + if(total>0)dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_30fe814c4574, done*100/total) else ""
 }
 
 /** Trusted Kotlin-owned output identity; native JSON never chooses a preview path. */
-internal fun scanPreviewForOutput(output:java.io.File,workspace:java.io.File?,finished:Boolean=false):java.io.File? {
+internal fun scanPreviewForOutput(output:java.io.File,workspace:java.io.File?):java.io.File? {
     if(workspace==null || output.canonicalFile.parentFile!=workspace.canonicalFile)return null
     val match=Regex("film-result-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.rgb").matchEntire(output.name)?:return null
-    val suffix=if(finished)"-finished" else ""
-    return java.io.File(workspace,"scan-source-${match.groupValues[1]}$suffix.png")
+    return java.io.File(workspace,"scan-source-${match.groupValues[1]}.png")
 }

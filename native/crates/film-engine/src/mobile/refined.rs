@@ -115,8 +115,7 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     // Quarantine and cancellation take precedence over any rendering error or
     // caught panic. Never start a CPU fallback or a second high-res GPU attempt.
     check_cancellation(engine,generation)?;
-    let mut pixels=attempt.map_err(|_|error("GPU_EXECUTION_FAILED"))??;
-    params.finishing().apply(&mut pixels,"sRGB")?;
+    let pixels=attempt.map_err(|_|error("GPU_EXECUTION_FAILED"))??;
     let batches=gpu.thread_submits().saturating_sub(submits);
     if batches==0{return Err(error("GPU_EXECUTION_FAILED"));}
     Ok(RenderOutput{refined_plan:Some(PlanMetrics{abi:1,estimated_peak_bytes:plan.estimated_bytes,external_bytes:external,

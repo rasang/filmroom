@@ -1,4 +1,4 @@
-name: Finishing performance branch checks
+name: Preview export performance branch checks
 on:
   push:
     branches: [feat/finishing-preview-export-perf]
@@ -26,10 +26,9 @@ jobs:
         with:
           workspaces: native -> target
           key: finishing-contracts
-      - name: Finishing, cache invalidation and bounded reuse contracts
+      - name: Cache invalidation and bounded reuse contracts
         working-directory: native
         run: |
-          cargo test --locked -p film-engine --features precision-f64 --lib finishing -- --test-threads=1
           cargo test --locked -p film-engine --features precision-f64 --lib scan_preview::tests -- --test-threads=1
           cargo test --locked -p film-engine --features precision-f64 --lib preview_brightness_cache_tests -- --test-threads=1
           cargo test --locked -p film-engine --features precision-f64 --lib preview_stage_cache -- --test-threads=1
@@ -75,10 +74,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
-      - name: Compile Android sources and verify legacy recipes and finishing ABI
+      - name: Compile Android sources and verify recipes and input identity
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest -x :app:verifyEffectAudioAssets --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --tests dev.filmroom.FinishingStateHostTest --tests dev.filmroom.presets.SavedPresetCoverageHostTest --tests dev.filmroom.presets.PresetQrCodecHostTest --tests dev.filmroom.lifecycle.FinishingRecoveryHostTest --tests dev.filmroom.export.ScanPreviewStoreHostTest
+          ./gradlew :app:testDebugUnitTest -x :app:verifyEffectAudioAssets --no-daemon --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process --tests dev.filmroom.InputIdentityHostTest --tests dev.filmroom.presets.SavedPresetCoverageHostTest --tests dev.filmroom.presets.PresetQrCodecHostTest --tests dev.filmroom.lifecycle.LegacySpoolRecoveryHostTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

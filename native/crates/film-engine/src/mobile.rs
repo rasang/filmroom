@@ -101,7 +101,6 @@ pub struct MobileParams {
     #[serde(skip_serializing)]
     pub export_reuse_reserve_bytes:Option<u64>,
     pub schema_version: u32, pub film_stock: String, pub paper_stock: String, pub output_route:String,
-    pub finish_exposure_ev:f64, pub finish_contrast:f64, pub finish_saturation:f64,
     pub film_exposure_ev: f64, pub brightness_ev: f64, pub contrast: f64,
     pub warmth: f64, pub saturation: f64, pub grain_amount: f64, pub grain_size: f64,
     pub halation_amount: f64, pub halation_size: f64,
@@ -159,12 +158,9 @@ pub struct MobileParams {
 
 }
 impl Default for MobileParams {
-    fn default() -> Self { Self { finish_exposure_ev:0.,finish_contrast:1.,finish_saturation:1.,zoom_refinement_edge:None,pre_imaging:None,preview_source:None,export_reuse_reserve_bytes:None,preview_metering:None,checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
+    fn default() -> Self { Self { zoom_refinement_edge:None,pre_imaging:None,preview_source:None,export_reuse_reserve_bytes:None,preview_metering:None,checkpoint_directory:None,schema_version:1,film_stock:"kodak_portra_400".into(),paper_stock:"kodak_portra_endura".into(),output_route:"print".into(),film_exposure_ev:0.,brightness_ev:0.,contrast:1.,warmth:0.,saturation:1.,grain_amount:1.,grain_size:1.,halation_amount:1.,halation_size:1.,diffusion_filter:"off".into(),diffusion_strength:0.5,diffusion_size:1.,print_diffusion_filter:"off".into(),print_diffusion_strength:0.5,print_diffusion_size:1.,print_yellow:0.,print_magenta:0.,preflash:0.,scan_sharpen_amount:0.,scan_sharpen_radius:0.7,film_format_mm:35.,lens_blur_um:0.,scan_blur:0.,scatter_amount:1.,scatter_size:1.,halation_bounces:3,halation_decay:0.5,halation_normalize:true,dir_amount:1.,dir_diffusion_um:20.,dir_same_layer:1.,dir_inter_layer:1.,grain_sublayers:true,grain_layers:1,grain_blur:0.65,grain_dye_cloud:1.,grain_uniformity:1.,seed:42,mode:"preview".into(),memory_budget_mi_b:384,output_color_space:"sRGB".into(),output_gamut:true,print_exposure_ev:0.,print_illuminant:"TH-KG3".into(),print_compensation:true,normalize_print_exposure:true,preflash_yellow:0.,preflash_magenta:0.,scan_white_correction:false,scan_black_correction:false,scan_white_level:0.98,scan_black_level:0.01,auto_exposure:false,metering:"center_weighted".into(),highlight_boost_ev:0.,highlight_boost_range:0.3,highlight_protect_ev:4.,scan_glare_percent:0.,scan_glare_roughness:0.7,scan_glare_blur:0.5,grain_clump_size_um:0.2,grain_clump_strength_nm:30.,use_gpu:true,grain_red_scale:1.,grain_green_scale:1.,grain_blue_scale:1.,halation_color:"stock".into(),neutral_filters_from_database:true,neutral_cyan:0.,neutral_magenta:65.,neutral_yellow:55.,film_gamma:1.,paper_gamma:1.,paper_gamma_fast:1.,paper_gamma_slow:1.,paper_gamma_red:1.,paper_gamma_green:1.,paper_gamma_blue:1.,paper_developer_exhaustion:0.,film_development_time:0.,paper_development_time:0., } }
 }
 impl MobileParams {
-    pub fn finishing(&self)->crate::finishing::Finishing {crate::finishing::Finishing{exposure_ev:self.finish_exposure_ev,contrast:self.finish_contrast,saturation:self.finish_saturation}}
-    fn without_finishing(&self)->Self {let mut p=self.clone();p.finish_exposure_ev=0.;p.finish_contrast=1.;p.finish_saturation=1.;p}
-
     pub fn parse(json: &str) -> Result<Self> {
         if json.len()>16_384 { return Err(EngineError::new("INVALID_PARAMS","Parameter JSON exceeds 16 KiB")); }
         let mut p: Self=serde_json::from_str(json).map_err(|e|EngineError::new("INVALID_PARAMS",e.to_string()))?;
@@ -174,7 +170,6 @@ impl MobileParams {
         p.validate()?; Ok(p)
     }
     pub fn validate(&self)->Result<()> {
-        self.finishing().validate()?;
         if let Some(edge)=self.zoom_refinement_edge {
             if !matches!(edge,2048|3072) || self.mode!="preview" || !self.use_gpu {
                 return Err(EngineError::new("INVALID_PARAMS","Zoom refinement requires an explicit 2048/3072 GPU preview grid"));
@@ -399,7 +394,6 @@ pub fn plan_export(width:i32,height:i32,params:&MobileParams)->Result<ExportPlan
     let pixels=(width as u64).checked_mul(height as u64).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Pixel count overflow"))?;
     let input_bytes=pixels.checked_mul(12).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Byte count overflow"))?;
     let estimated_scratch_bytes=crate::streamed::estimated_scratch_with_diffusion(width as u32,height as u32,(params.diffusion_filter!="off"&&params.diffusion_strength>0.)||(params.output_route=="print"&&params.print_diffusion_filter!="off"&&params.print_diffusion_strength>0.))?;
-    let estimated_scratch_bytes=estimated_scratch_bytes.checked_add(if params.finishing().is_identity(){0}else{input_bytes}).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Finishing disk reservation overflow"))?;
     let estimated_total_local_bytes=estimated_scratch_bytes.checked_add(input_bytes).and_then(|v|v.checked_add(input_bytes)).ok_or_else(||EngineError::new("INVALID_DIMENSIONS","Total byte count overflow"))?;
     #[cfg(feature="adreno-gpu")]
     let background_preview_lease_bytes=crate::early_negative_preview::active_reservation_bytes();
@@ -737,7 +731,7 @@ thread_local! { static DENSITY_CANDIDATE_TEST_HOOK:std::cell::RefCell<Option<Box
 fn density_candidate_test_checkpoint() {DENSITY_CANDIDATE_TEST_HOOK.with(|slot|{if let Some(hook)=slot.borrow_mut().as_mut(){hook();}});}
 const PREVIEW_STAGE_ALGORITHM:&str="pre-brightness-linear-srgb-f64-v1";
 fn preview_stage_key(engine:&Engine,params:&MobileParams,width:u32,height:u32,backend:&str)->Result<String> {
-    let mut upstream=params.without_finishing();upstream.brightness_ev=0.;
+    let mut upstream=params.clone();upstream.brightness_ev=0.;
     serde_json::to_string(&(PREVIEW_STAGE_ALGORITHM,env!("CARGO_PKG_VERSION"),cfg!(feature="precision-f64"),
         spektrafilm_gpu::RESIDENT_APPROXIMATION_VERSION,engine.pipeline_epoch.load(Ordering::Acquire),
         width,height,backend,&upstream)).map_err(|_|EngineError::new("INVALID_PARAMS","Preview key unavailable"))
@@ -832,10 +826,9 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
             if let Some(entry)=cache.find(key,input) {
                 check_cancellation(engine,generation)?;
                 let prepare_ms=start.elapsed().as_secs_f64()*1000.;let finish=Instant::now();
-                let mut pixels=crate::preview_stage_cache::finish(&entry.linear_srgb,params.brightness_ev)
+                let pixels=crate::preview_stage_cache::finish(&entry.linear_srgb,params.brightness_ev)
                     .ok_or_else(||EngineError::new("NONFINITE_OUTPUT","Rendering produced a nonfinite sample"))?;
                 check_cancellation(engine,generation)?;
-                params.finishing().apply(&mut pixels,"sRGB")?;
                 check_cancellation(engine,generation)?;
                 let mut gpu=entry.metadata.gpu.clone();gpu.active=false;gpu.gpu_batches=0;gpu.cpu_fallbacks=0;
                 gpu.reason="preview_stage_cache_hit".into();
@@ -966,7 +959,7 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
     // it cannot release that active charge. Disabled/fallback calls retain the
     // original streaming finish and never allocate a full f64 candidate.
     if !actual_backend_matches {film_log_candidate=None;film_log_hit=false;density_candidate=None;density_hit=false;reprint_candidate=None;reprint_hit=false;}
-    let (mut pixels,linear_srgb)=if retain_candidate {
+    let (pixels,linear_srgb)=if retain_candidate {
         #[cfg(test)] preview_candidate_test_checkpoint(false);
         let mut linear=Vec::<f64>::with_capacity(input.len());
         for v in output.data.chunks_exact(3) {
@@ -987,7 +980,6 @@ pub fn render(engine:&Engine,generation:u64,input:&[f32],width:u32,height:u32,pa
         (pixels,None)
     };
     check_cancellation(engine,generation)?;
-    params.finishing().apply(&mut pixels,"sRGB")?;
     let mut cache=engine.preview_stage_cache.lock().map_err(|_|EngineError::new("INTERNAL_ERROR","Preview cache unavailable"))?;
     check_cancellation(engine,generation)?;
     let mut film_log_retained=false;
@@ -1244,16 +1236,6 @@ pub fn export(engine:&Engine,generation:u64,input:&str,output:&str,width:i32,hei
     #[cfg(not(feature="resource-audit"))]
     let mut result=execution.run(export_work)?;
     // RESOURCE_PROBE_EXPORT_END
-    if !params.finishing().is_identity() {
-        let at=Instant::now();
-        params.finishing().apply_spool(&output,width as u64*height as u64,&params.output_color_space,||check_cancellation(engine,generation).is_err())?;
-        result.stages.push(crate::streamed::StageMetrics{stage:"finishing",elapsed_ms:at.elapsed().as_secs_f64()*1000.});
-        result.elapsed_ms+=at.elapsed().as_secs_f64()*1000.;
-        // Replace the queue thumbnail after the graded output has committed.
-        if let Err(e)=crate::scan_preview::publish_finished(&output,width as u32,height as u32,&params.output_color_space,&mut ||check_cancellation(engine,generation).is_err()) {
-            if e.kind()==std::io::ErrorKind::Interrupted{return Err(EngineError::new("CANCELLED","Finishing preview cancelled"));}
-        }
-    }
     result.export_execution=Some(execution.metrics());
     Ok(result)
 }
@@ -1744,26 +1726,12 @@ mod encoded_reuse_probe_tests {
         let mut invalid=params();invalid.film_stock="missing_real_profile".into();
         assert!(refresh_cache_revision(&e,&invalid).is_err(),"real missing profiles must still fail");
     }
-    #[test] fn finishing_changes_hit_existing_science_and_match_cold_output() {
-        let owner=Owner::new();let engine=get(owner.0).unwrap();let input=input(16,12);
-        let mut p=params();p.grain_amount=0.;
-        set_preview_cache_budget(owner.0,128*1024).unwrap();render(&engine,0,&input,16,12,&p).unwrap();
-        for (exposure,contrast,saturation) in [(0.5,1.,1.),(-0.3,1.2,0.6),(0.,1.,0.)] {
-            p.finish_exposure_ev=exposure;p.finish_contrast=contrast;p.finish_saturation=saturation;
-            let hit=render(&engine,0,&input,16,12,&p).unwrap();assert!(hit.preview_cache.hit);assert_eq!(hit.preview_cache.science_ms,0.);
-            set_preview_cache_budget(owner.0,0).unwrap();let cold=render(&engine,0,&input,16,12,&p).unwrap();assert_pixels(&hit.pixels,&cold.pixels);
-            set_preview_cache_budget(owner.0,128*1024).unwrap();render(&engine,0,&input,16,12,&p).unwrap();
-        }
-        let mut legacy=serde_json::to_value(MobileParams::default()).unwrap();
-        for key in ["finishExposureEv","finishContrast","finishSaturation"]{legacy.as_object_mut().unwrap().remove(key);}
-        let restored:MobileParams=serde_json::from_value(legacy).unwrap();assert!(restored.finishing().is_identity());
-    }
     #[test] fn key_excludes_only_brightness_and_covers_every_upstream_field() {
         let owner=Owner::new();let e=get(owner.0).unwrap();let p=params();let key=preview_stage_key(&e,&p,32,24,"cpu").unwrap();
         let mut q=p.clone();q.brightness_ev=2.;assert_eq!(key,preview_stage_key(&e,&q,32,24,"cpu").unwrap());
         let all=serde_json::to_value(&p).unwrap();
         for (name,value) in all.as_object().unwrap() {
-            if ["brightnessEv","finishExposureEv","finishContrast","finishSaturation"].contains(&name.as_str()){continue;}
+            if name=="brightnessEv"{continue;}
             let mut changed=all.clone();changed[name]=match value {
                 serde_json::Value::Bool(v)=>serde_json::json!(!v),
                 serde_json::Value::Number(v)=>if v.is_f64(){serde_json::json!(v.as_f64().unwrap()+0.125)}else{serde_json::json!(v.as_u64().unwrap()+1)},

@@ -231,7 +231,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
         val previewContext=currentCoroutineContext()
         var negativeDiagnostics:NegativePreviewDiagnostics?=null
         var previewAttempt:String?=null
-        val previewPublication=ScanPreviewPublicationGate()
+        var previewAttempted=false
         var headWork:MeasuredStageWork?=null
         var tailWork:MeasuredStageWork?=null
         try {
@@ -254,7 +254,7 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     val stale=File(dir,name);check(!stale.exists() || stale.delete())
                 }
                 initial.border?.let{BorderExportPolicy.validate(it,initial.format);borderProvider.verifySnapshot(it)}
-                dir.listFiles()?.filter{it.isFile && dev.filmroom.lifecycle.PrivateWorkRecovery.isDisposableExportResult(it.name)}?.forEach{check(it.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_29367795aabb) }}
+                dir.listFiles()?.filter{it.isFile && it.name.matches(Regex("film-result-[0-9a-f-]{36}\\.rgb(\\.part)?"))}?.forEach{check(it.delete()){ dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_29367795aabb) }}
                 val captureMetadata=initial.photoMetadata?.let(PhotoMetadata::fromJson) ?: PhotoMetadata.unavailable()
                 val sourceSnapshot=File(dir,when(initial.inputKind){"LINEAR"->"input.rgb";"RAW","LINEAR_SOURCE"->"source.rgb";else->"source.image"})
                 val cacheJob=currentCoroutineContext()
@@ -334,10 +334,10 @@ class ExportQueue internal constructor(private val context:Context,private val p
                     }
                 }else input
                 val onNativeProgress:(EngineProgress)->Unit={p->
-                    if(p.display.stage==6 && p.scanPreview!=null && previewAttempt!=null && previewPublication.claim(p.scanPreviewFinal)){
+                    if(!previewAttempted && p.display.stage==6 && p.scanPreview!=null && previewAttempt!=null){
+                        previewAttempted=true
                         try {BorderMemoryAdmission.withBudget(ScanPreviewStore.WORKING_BYTES,{NativeWorkReservations.snapshot(context)}){
-                            if(p.scanPreviewFinal)ScanPreviewStore.publishFinal(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
-                            else ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
+                            ScanPreviewStore.publish(dir,checkNotNull(previewAttempt),p.scanPreview,initial,borderProvider){previewContext.ensureActive()}
                         }}catch(c:CancellationException){throw c}catch(_:Exception){}catch(_:OutOfMemoryError){}
                     }
                     update{if(p.display.stage==1 && it.progress.stage==1 && it.progress.measured)it else it.copy(progress=p.display)}

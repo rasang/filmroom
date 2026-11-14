@@ -35,43 +35,6 @@ class ScanPreviewStoreHostTest {
   val b=Bitmap.createBitmap(240,160,Bitmap.Config.ARGB_8888);Canvas(b).apply{drawColor(Color.BLUE);drawRect(0f,0f,120f,160f,Paint().apply{color=Color.RED})}
   return File(d,"scan-source-${UUID.randomUUID()}.png").also{it.outputStream().use{o->b.compress(Bitmap.CompressFormat.PNG,100,o)};b.recycle()}
  }
- @Test fun finalFinishingReplacesIntermediateOnceAndChangesDisplayIdentity(){
-  val d=dir();try{
-   val id=ScanPreviewStore.begin(d);val j=job(EditorState(finishExposureEv=1f));val gate=ScanPreviewPublicationGate()
-   val early=source(d);assertTrue(gate.claim(false));ScanPreviewStore.publish(d,id,early,j,provider){}
-   val old=checkNotNull(ScanPreviewStore.select(d));val oldBytes=old.readBytes();assertFalse(gate.claim(false))
-   val b=Bitmap.createBitmap(240,160,Bitmap.Config.ARGB_8888);b.eraseColor(Color.GREEN)
-   val final=File(d,"scan-source-${UUID.randomUUID()}-finished.png")
-   try{final.outputStream().use{assertTrue(b.compress(Bitmap.CompressFormat.PNG,100,it))}}finally{b.recycle()}
-   assertTrue(gate.claim(true));ScanPreviewStore.publishFinal(d,id,final,j,provider){}
-   val selected=checkNotNull(ScanPreviewStore.select(d));assertNotEquals(old.name,selected.name)
-   assertArrayEquals(oldBytes,old.readBytes())
-   val bitmap=BitmapFactory.decodeFile(selected.path);try{assertTrue(Color.green(bitmap.getPixel(120,80))>240)}finally{bitmap.recycle()}
-   assertEquals(selected,ExportPreviewSelection.select(d,ExportJobState.RUNNING,7).file)
-   assertFalse(gate.claim(true));assertFalse(gate.claim(false))
-   ScanPreviewStore.publish(d,id,early,j,provider){};assertEquals(selected,ScanPreviewStore.select(d))
-   val next=ScanPreviewStore.begin(d);assertNotEquals(id,next);assertNull(ScanPreviewStore.select(d));assertFalse(selected.exists())
-  }finally{d.deleteRecursively()}
- }
- @Test fun missingMalformedCancelledOrStaleFinalNeverReplacesIntermediate(){
-  val d=dir();try{
-   val id=ScanPreviewStore.begin(d);val j=job(EditorState(finishSaturation=.5f));val early=source(d)
-   ScanPreviewStore.publish(d,id,early,j,provider){};val selected=checkNotNull(ScanPreviewStore.select(d));val before=selected.readBytes()
-   try{ScanPreviewStore.publishFinal(d,id,early,j,provider){};fail("Ungraded source cannot be final") }catch(_:IllegalArgumentException){}
-   val bad=File(d,"scan-source-${UUID.randomUUID()}-finished.png").apply{writeText("broken")}
-   try{ScanPreviewStore.publishFinal(d,id,bad,j,provider){};fail()}catch(_:IllegalArgumentException){}
-   val final=File(d,"scan-source-${UUID.randomUUID()}-finished.png");early.copyTo(final)
-   try{ScanPreviewStore.publishFinal(d,id,final,j,provider){throw CancellationException()};fail()}catch(_:CancellationException){}
-   assertEquals(selected,ScanPreviewStore.select(d));assertArrayEquals(before,selected.readBytes())
-   val next=ScanPreviewStore.begin(d)
-   try{ScanPreviewStore.publishFinal(d,id,final,j,provider){};fail()}catch(_:IllegalArgumentException){}
-   assertNotEquals(id,next);assertNull(ScanPreviewStore.select(d))
-  }finally{d.deleteRecursively()}
- }
- @Test fun fastFinalWithoutIntermediateIsPublishedAndDuplicateCallbacksAreIgnored(){
-  val gate=ScanPreviewPublicationGate();assertTrue(gate.claim(true));assertFalse(gate.claim(false));assertFalse(gate.claim(true))
-  val retry=ScanPreviewPublicationGate();assertTrue(retry.claim(false));assertTrue(retry.claim(true))
- }
  @Test fun onlyMatchingAttemptAtStageSixSelectsRealColorAndFinalStillWins(){
   val d=dir();try{
    val id=ScanPreviewStore.begin(d);val input=source(d);val bytes=input.readBytes();val j=job();ScanPreviewStore.publish(d,id,input,j,provider){}

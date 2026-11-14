@@ -8,9 +8,6 @@ internal object PresetQrParameters {
     private val ranges = mapOf(
         "filmExposureEv" to -4.0..4.0,
         "brightnessEv" to -2.0..2.0,
-        "finishExposureEv" to -2.0..2.0,
-        "finishContrast" to 0.5..1.5,
-        "finishSaturation" to 0.0..2.0,
         "contrast" to 0.5..1.5,
         "warmth" to -1.0..1.0,
         "saturation" to 0.0..2.0,

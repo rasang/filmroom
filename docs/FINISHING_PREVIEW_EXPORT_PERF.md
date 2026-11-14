@@ -1,3 +1,7 @@
+> Historical record: the independent finishing-grade feature was removed.
+> Current scope and compatibility are documented in PREVIEW_EXPORT_PERF_SCOPE.md.
+> Finishing-specific behavior and test counts below describe the earlier commit only.
+
 # Finishing / reprint / GPU workspace / JPEG branch
 
 Base: `dev` at `e89db876594845fe111a98646492d795e7e66274` (0.1.22.2-beta8).

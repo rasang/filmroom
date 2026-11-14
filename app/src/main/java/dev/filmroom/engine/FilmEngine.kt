@@ -548,12 +548,9 @@ class FilmEngine(private val context: Context) {
             // The native job retains its route decision until the next begin.
             progressPacket(created)?.let { recordGpuMetadata(it) }
         }}
-        // Finishing commits to a distinct source name. A missing/failed optional
-        // final thumbnail must never relabel the earlier ungraded scan as final.
-        val finalPreview=if(parameters.hasFinishing)scanPreviewForOutput(output,workspace,finished=true)else scanPreview
         // A short stage or checkpoint restore can finish between400ms polls. No new render.
-        if(onProgress!=null && JSONObject(result).optBoolean("ok") && finalPreview!=null && finalPreview.isFile && finalPreview.length()>0){
-            val ready=(latest ?: EngineProgress(1,1,dev.filmroom.diagnostics.NativePhase.PRINTING_SCANNING,1,1)).copy(display=ExportDisplayProgress(6,1,1),scanPreview=finalPreview,scanPreviewFinal=parameters.hasFinishing)
+        if(onProgress!=null && JSONObject(result).optBoolean("ok") && scanPreview!=null && scanPreview.isFile && scanPreview.length()>0){
+            val ready=(latest ?: EngineProgress(1,1,dev.filmroom.diagnostics.NativePhase.PRINTING_SCANNING,1,1)).copy(display=ExportDisplayProgress(6,1,1),scanPreview=scanPreview)
             if(progressOnMain)withContext(Dispatchers.Main.immediate){onProgress(ready)}else onProgress(ready)
         }
         result
@@ -686,13 +683,7 @@ class FilmEngine(private val context: Context) {
         require(parameters.preImagingBorder==(preImaging!=null)){"Export border stage and composite contract must agree"}
         return JSONObject(nativeParameters(parameters,"export",budget)).apply{preImaging?.let{put("preImaging",it)}}.toString()
     }
-    private fun nativeParameters(parameters:EditorState,mode:String,budget:Int):String {
-        if(parameters.hasFinishing) {
-            val caps=try {JSONObject(NativeFilmBridge.nativeCapabilities())}catch(_:LinkageError){throw EngineException(EngineFailure.UNAVAILABLE)}
-            if(!FinishingContract.supported(parameters,caps))throw EngineException(EngineFailure.UNAVAILABLE)
-        }
-        return JSONObject(parameters.json(mode, includePresentation=false)).put("memoryBudgetMiB",budget).toString()
-    }
+    private fun nativeParameters(parameters:EditorState,mode:String,budget:Int)=JSONObject(parameters.json(mode, includePresentation=false)).put("memoryBudgetMiB",budget).toString()
 
 }
 

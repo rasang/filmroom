@@ -6,9 +6,6 @@ import org.json.JSONObject
 data class EditorState(
     val filmStock: String = "kodak_portra_400",
     val paperStock: String = "kodak_portra_endura",
-    val finishExposureEv: Float = 0f,
-    val finishContrast: Float = 1f,
-    val finishSaturation: Float = 1f,
     val brightness: Float = 0f,
     val filmExposure: Float = 0f,
     val contrast: Float = 1f,
@@ -100,11 +97,8 @@ data class EditorState(
     val preferredOutputRoute: String? = null,
 ) {
     init { require(filmBorderStage in 0..1) }
-    val hasFinishing get()=finishExposureEv!=0f || finishContrast!=1f || finishSaturation!=1f
-    /** These controls never change the source/composite presented to the film model. */
-    /** Snapshot already binds frame geometry/artwork; only imprint settings also affect its pixels. */
+    /** Snapshot binds frame geometry/artwork; only imprint settings also affect its pixels. */
     fun preImagingInputKey(snapshot:String)=snapshot+imprint.json()
-    fun withoutLateFinishing()=copy(brightness=0f,finishExposureEv=0f,finishContrast=1f,finishSaturation=1f)
     val preImagingBorder get()=filmBorder && filmBorderStage==1
     val hasFilm get()=filmStock!="none"
     val hasPaper get()=paperStock!="none"
@@ -216,7 +210,6 @@ data class EditorState(
         }
         put("filmDevelopmentTime",filmDevelopmentTime);put("paperDevelopmentTime",paperDevelopmentTime)
         put("schemaVersion", 1); put("filmStock", filmStock); put("paperStock", paperStock)
-        put("finishExposureEv",finishExposureEv);put("finishContrast",finishContrast);put("finishSaturation",finishSaturation)
         put("brightnessEv", brightness); put("filmExposureEv", filmExposure)
         put("contrast", contrast); put("warmth", warmth); put("saturation", saturation)
         put("grainAmount", grain); put("grainSize", grainSize)
@@ -313,8 +306,6 @@ data class EditorState(
                 crop=j.optJSONObject("crop")?.let{CropSettings.fromJson(it)} ?: CropSettings(),
                 preferredOutputRoute=preference,
                 filmStock=j.optString("filmStock", "kodak_portra_400"), paperStock=j.optString("paperStock", "kodak_portra_endura"),
-                finishExposureEv=j.optDouble("finishExposureEv",0.0).toFloat(),
-                finishContrast=j.optDouble("finishContrast",1.0).toFloat(),finishSaturation=j.optDouble("finishSaturation",1.0).toFloat(),
                 brightness=j.optDouble("brightnessEv",0.0).toFloat(), filmExposure=j.optDouble("filmExposureEv",0.0).toFloat(),
                 contrast=j.optDouble("contrast",1.0).toFloat(), warmth=j.optDouble("warmth",0.0).toFloat(),
                 saturation=j.optDouble("saturation",1.0).toFloat(), grain=j.optDouble("grainAmount",1.0).toFloat(),
