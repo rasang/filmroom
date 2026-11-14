@@ -191,6 +191,22 @@ fn contains(outer: Rect, inner: Rect) -> bool {
 fn descriptor(raw: &RawImage, orientation: u8) -> Result<Development<'static>> {
     descriptor_cfa(raw, orientation, false)
 }
+/// Read optional lens identity from the same original file used by the bounded
+/// sensor decoder. Metadata failure leaves ordinary RAW development available.
+fn configure_profile(source:&RawSource,file:&File,format:&str,raw:&RawImage,d:&mut Development) {
+    if d.cpp!=1 || !d.gain_maps.is_empty() {return;}
+    let metadata=bounded("probe",||rawler::get_decoder(source)?.raw_metadata(source,&Default::default())).ok();
+    let Ok(mut original)=file.try_clone() else {return;};
+    let Ok(length)=original.metadata().map(|m|m.len()) else {return;};
+    let capture=crate::lensfun_metadata::capture_identity(&mut original,length,format,raw,metadata.as_ref());
+    if capture.status!=crate::lensfun_metadata::CaptureStatus::Ready
+        || capture.evidence.is_dng
+        || capture.evidence.canon_aspect_mode.is_some_and(|v|v!=0)
+        || capture.evidence.orientation.is_some_and(|v|v!=u16::from(d.orientation)) {return;}
+    if let Some(identity)=capture.identity {
+        crate::lensfun::configure_capture(format,&identity,d);
+    }
+}
 fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Development<'static>> {
     crate::validate_dimensions(
         raw.width.try_into().map_err(|_| unsupported())?,
@@ -248,11 +264,20 @@ fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Devel
         .map(|config| config.cfa.shift(active.x, active.y).name)
         .unwrap_or_default();
     let lens = crate::embedded_lens::from_metadata(&raw.lens_distortion);
+    let mut lens_extras = crate::embedded_optics::from_metadata(&raw.lens_corrections);
+    // Manufacturer photometric/TCA contracts here are qualified on sensor CFA
+    // originals. A camera-produced RGB/YCbCr RAW may already contain corrections.
+    if raw.cpp != 1 {
+        use crate::embedded_optics::State;
+        if matches!(lens_extras.tca, State::Ready(_)) { lens_extras.tca = State::Unsupported; }
+        if matches!(lens_extras.vignette, State::Ready(_)) { lens_extras.vignette = State::Unsupported; }
+    }
     let lens_reference = match &lens {
         crate::embedded_lens::LensStatus::Ready(model) if model.reference_uses_crop() => crop,
+        _ if lens_extras.reference_uses_crop() => crop,
         _ => active,
     };
-    Ok(Development {
+    let mut development=Development {
         width: raw.width,
         height: raw.height,
         cpp: raw.cpp,
@@ -265,9 +290,58 @@ fn descriptor_cfa(raw: &RawImage, orientation: u8, xtrans: bool) -> Result<Devel
         baseline_exposure_ev: 0.,
         gain_maps: &[],
         lens,
+        lens_extras,
+        lens_profile: None,
         lens_reference,
-    })
+    };
+    crate::develop::qualify_optics(&mut development);
+    Ok(development)
 }
+pub(crate) fn append_optics_warnings(d: &Development, warnings: &mut Vec<Warning>) {
+    use crate::embedded_lens::LensStatus;
+    use crate::embedded_optics::State;
+    let profile = match &d.lens { LensStatus::Profile(p) => Some(p), _ => None };
+    if let Some(selected)=&d.lens_profile {
+        if matches!(d.lens,LensStatus::Missing) {
+            if selected.has_distortion() {
+                warnings.push(Warning {code:"LENSFUN_DISTORTION_APPLIED",message:"已应用匹配镜头配置的畸变校正"});
+            } else if selected.distortion_not_applied() {
+                warnings.push(Warning {code:"LENSFUN_DISTORTION_NOT_APPLIED",message:"匹配镜头的畸变校正未应用"});
+            }
+        }
+    }
+    match &d.lens_extras.tca {
+        State::Ready(_) => warnings.push(Warning {
+            code: "EMBEDDED_LENS_TCA_APPLIED", message: "已应用内嵌镜头色差校正",
+        }),
+        State::Unsupported => warnings.push(Warning {
+            code: "EMBEDDED_LENS_TCA_NOT_APPLIED", message: "检测到内嵌镜头色差参数，但未应用校正",
+        }),
+        State::Missing => {
+            if d.lens_profile.as_ref().is_some_and(|p|p.has_tca()) || profile.is_some_and(|p|p.has_tca()) {
+                warnings.push(Warning { code: "LENSFUN_TCA_APPLIED", message: "已应用匹配镜头配置的色差校正" });
+            } else if d.lens_profile.as_ref().is_some_and(|p|p.tca_not_applied()) || profile.is_some_and(|p|p.tca_not_applied()) {
+                warnings.push(Warning { code: "LENSFUN_TCA_NOT_APPLIED", message: "匹配镜头的色差校正未应用" });
+            }
+        },
+    }
+    match &d.lens_extras.vignette {
+        State::Ready(_) => warnings.push(Warning {
+            code: "EMBEDDED_LENS_VIGNETTING_APPLIED", message: "已应用内嵌镜头暗角校正",
+        }),
+        State::Unsupported => warnings.push(Warning {
+            code: "EMBEDDED_LENS_VIGNETTING_NOT_APPLIED", message: "检测到内嵌镜头暗角参数，但未应用校正",
+        }),
+        State::Missing => {
+            if d.lens_profile.as_ref().is_some_and(|p|p.has_vignetting()) || profile.is_some_and(|p|p.has_vignetting()) {
+                warnings.push(Warning { code: "LENSFUN_VIGNETTING_APPLIED", message: "已应用匹配镜头配置的暗角校正" });
+            } else if d.lens_profile.as_ref().is_some_and(|p|p.vignetting_not_applied()) || profile.is_some_and(|p|p.vignetting_not_applied()) {
+                warnings.push(Warning { code: "LENSFUN_VIGNETTING_NOT_APPLIED", message: "匹配镜头的暗角校正未应用" });
+            }
+        },
+    }
+}
+
 fn sony_version(t: &Tiff) -> Result<u8> {
     let v = t
         .ifds
@@ -529,7 +603,8 @@ impl CameraRaw {
         if raw.source_ifd_offset != Some(source_ifd_offset) {
             return Err(unsupported());
         }
-        let development = descriptor(&raw, orientation as u8)?;
+        let mut development = descriptor(&raw, orientation as u8)?;
+        configure_profile(&source,&file,format,&raw,&mut development);
         if expected_dimensions.is_some_and(|dim| dim != (raw.width, raw.height)) {
             return Err(unsupported());
         }
@@ -681,6 +756,7 @@ impl CameraRaw {
             }),
             crate::embedded_lens::LensStatus::Missing => {},
         }
+        append_optics_warnings(d, &mut warnings);
         Probe {
             format: self.format,
             variant: if d.cpp == 3 {
@@ -702,8 +778,11 @@ impl CameraRaw {
             max_pixels: crate::MAX_PIXELS,
             warnings,
             has_alternate_forward_matrix: false,
-            development_policy: if matches!(&d.lens, crate::embedded_lens::LensStatus::Profile(_)) {
+            development_policy: if matches!(&d.lens, crate::embedded_lens::LensStatus::Profile(_))
+                || d.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
                 crate::lensfun::DEVELOPMENT_POLICY
+            } else if d.lens_extras.has_ready() {
+                "camera-matrix-linear-srgb-embedded-v2"
             } else { "camera-matrix-linear-srgb-v1" },
             baseline_exposure_applied_ev: 0.,
         }
@@ -1014,7 +1093,7 @@ pub fn decode(
         guard.1 = true;
         return Ok((camera.probe(), admission));
     }
-    let raw = pool.install(|| {
+    let (raw,d) = pool.install(|| {
         if input_identity!=crate::nikon_he::Identity::read(&input_file)? {return Err(err("INVALID_INPUT","decode"));}
         let source = RawSource::new_from_file(&input_file,input).map_err(|e| io_error(e, "decode"))?;
         if let Some(offset) = camera.arw1_offset {
@@ -1046,7 +1125,10 @@ pub fn decode(
             } else {rawler::decode(&source,&Default::default())}
         });
         if cancel.load(Ordering::Relaxed) {return Err(err("CANCELLED","decode"));}
-        decoded
+        let raw=decoded?;
+        let mut development=descriptor(&raw,camera.development.orientation)?;
+        configure_profile(&source,&input_file,camera.format,&raw,&mut development);
+        Ok((raw,development))
     })?; // source mapping, TIFF decoder and padded buffers are dropped before development.
     if cancel.load(Ordering::Relaxed) {
         return Err(err("CANCELLED", "decode"));
@@ -1055,9 +1137,10 @@ pub fn decode(
     if raw.source_ifd_offset != Some(camera.source_ifd_offset) {
         return Err(err("INVALID_INPUT", "decode"));
     }
-    let d = descriptor(&raw, camera.development.orientation)?;
     if d.cpp != camera.development.cpp
         || d.lens != camera.development.lens
+        || d.lens_extras != camera.development.lens_extras
+        || d.lens_profile != camera.development.lens_profile
         || d.width != camera.development.width
         || d.height != camera.development.height
         || d.active.x != camera.development.active.x

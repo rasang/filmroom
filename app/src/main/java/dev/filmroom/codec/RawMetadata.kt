@@ -11,12 +11,32 @@ enum class RawFormat(val mimeType:String) {
 }
 
 /** Exact native JNI contract: unlike CLI output, Probe fields are at the root. */
-data class RawMetadata(val width:Int,val height:Int,val bytes:Long,val optionalCorrectionWarning:Boolean,val cameraToneCurveWarning:Boolean=false,val cameraHsvLookWarning:Boolean=false,val format:RawFormat=RawFormat.DNG,val cameraBasicDevelopmentWarning:Boolean=false,val embeddedLensDistortionApplied:Boolean=false,val embeddedLensDistortionNotApplied:Boolean=false,val lensfunDistortionApplied:Boolean=false,val developmentPolicy:String?=null) {
+data class RawMetadata(
+    val width:Int,val height:Int,val bytes:Long,val optionalCorrectionWarning:Boolean,
+    val cameraToneCurveWarning:Boolean=false,val cameraHsvLookWarning:Boolean=false,
+    val format:RawFormat=RawFormat.DNG,val cameraBasicDevelopmentWarning:Boolean=false,
+    val embeddedLensDistortionApplied:Boolean=false,val embeddedLensDistortionNotApplied:Boolean=false,
+    val lensfunDistortionApplied:Boolean=false,val developmentPolicy:String?=null,
+    val embeddedLensVignettingApplied:Boolean=false,val embeddedLensVignettingNotApplied:Boolean=false,
+    val embeddedLensTcaApplied:Boolean=false,val embeddedLensTcaNotApplied:Boolean=false,
+    val lensfunVignettingApplied:Boolean=false,val lensfunVignettingNotApplied:Boolean=false,
+    val lensfunTcaApplied:Boolean=false,val lensfunTcaNotApplied:Boolean=false,
+    val lensfunDistortionNotApplied:Boolean=false,
+) {
     val displayMessages:List<dev.filmroom.i18n.UiMessage> get() = listOfNotNull(
         if(cameraBasicDevelopmentWarning) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.camera_raw_basic_development) else null,
         if(embeddedLensDistortionApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_distortion_applied) else null,
         if(embeddedLensDistortionNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_distortion_not_applied) else null,
         if(lensfunDistortionApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_distortion_applied) else null,
+        if(lensfunDistortionNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_distortion_not_applied) else null,
+        if(embeddedLensVignettingApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_vignetting_applied) else null,
+        if(embeddedLensVignettingNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_vignetting_not_applied) else null,
+        if(embeddedLensTcaApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_tca_applied) else null,
+        if(embeddedLensTcaNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.embedded_lens_tca_not_applied) else null,
+        if(lensfunVignettingApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_vignetting_applied) else null,
+        if(lensfunVignettingNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_vignetting_not_applied) else null,
+        if(lensfunTcaApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_tca_applied) else null,
+        if(lensfunTcaNotApplied) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.lensfun_tca_not_applied) else null,
         if(optionalCorrectionWarning) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_62f3e125a3ce) else null,
         if(cameraToneCurveWarning || cameraHsvLookWarning) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_95665116d521) else null,
         if(cameraToneCurveWarning) dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d2d161102e41) else null,
@@ -52,7 +72,16 @@ data class RawMetadata(val width:Int,val height:Int,val bytes:Long,val optionalC
                     RawDevelopmentWarning.CAMERA_BASIC_DEVELOPMENT in codes,
                     RawDevelopmentWarning.EMBEDDED_LENS_DISTORTION_APPLIED in codes,
                     RawDevelopmentWarning.EMBEDDED_LENS_DISTORTION_NOT_APPLIED in codes,
-                    RawDevelopmentWarning.LENSFUN_DISTORTION_APPLIED in codes,policy)
+                    RawDevelopmentWarning.LENSFUN_DISTORTION_APPLIED in codes,policy,
+                    embeddedLensVignettingApplied=RawDevelopmentWarning.EMBEDDED_LENS_VIGNETTING_APPLIED in codes,
+                    embeddedLensVignettingNotApplied=RawDevelopmentWarning.EMBEDDED_LENS_VIGNETTING_NOT_APPLIED in codes,
+                    embeddedLensTcaApplied=RawDevelopmentWarning.EMBEDDED_LENS_TCA_APPLIED in codes,
+                    embeddedLensTcaNotApplied=RawDevelopmentWarning.EMBEDDED_LENS_TCA_NOT_APPLIED in codes,
+                    lensfunVignettingApplied=RawDevelopmentWarning.LENSFUN_VIGNETTING_APPLIED in codes,
+                    lensfunVignettingNotApplied=RawDevelopmentWarning.LENSFUN_VIGNETTING_NOT_APPLIED in codes,
+                    lensfunTcaApplied=RawDevelopmentWarning.LENSFUN_TCA_APPLIED in codes,
+                    lensfunTcaNotApplied=RawDevelopmentWarning.LENSFUN_TCA_NOT_APPLIED in codes,
+                    lensfunDistortionNotApplied=RawDevelopmentWarning.LENSFUN_DISTORTION_NOT_APPLIED in codes)
             }catch(e:Exception){throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5f37317ec18e),e)}
         }
     }
@@ -63,6 +92,15 @@ private enum class RawDevelopmentWarning(val code:String) {
     EMBEDDED_LENS_DISTORTION_APPLIED("EMBEDDED_LENS_DISTORTION_APPLIED"),
     EMBEDDED_LENS_DISTORTION_NOT_APPLIED("EMBEDDED_LENS_DISTORTION_NOT_APPLIED"),
     LENSFUN_DISTORTION_APPLIED("LENSFUN_DISTORTION_APPLIED"),
+    LENSFUN_DISTORTION_NOT_APPLIED("LENSFUN_DISTORTION_NOT_APPLIED"),
+    EMBEDDED_LENS_VIGNETTING_APPLIED("EMBEDDED_LENS_VIGNETTING_APPLIED"),
+    EMBEDDED_LENS_VIGNETTING_NOT_APPLIED("EMBEDDED_LENS_VIGNETTING_NOT_APPLIED"),
+    EMBEDDED_LENS_TCA_APPLIED("EMBEDDED_LENS_TCA_APPLIED"),
+    EMBEDDED_LENS_TCA_NOT_APPLIED("EMBEDDED_LENS_TCA_NOT_APPLIED"),
+    LENSFUN_VIGNETTING_APPLIED("LENSFUN_VIGNETTING_APPLIED"),
+    LENSFUN_VIGNETTING_NOT_APPLIED("LENSFUN_VIGNETTING_NOT_APPLIED"),
+    LENSFUN_TCA_APPLIED("LENSFUN_TCA_APPLIED"),
+    LENSFUN_TCA_NOT_APPLIED("LENSFUN_TCA_NOT_APPLIED"),
     OPTIONAL_LENS_CORRECTIONS("DNG_OPTIONAL_LENS_CORRECTIONS_NOT_APPLIED"),
     CAMERA_TONE_CURVE("DNG_CAMERA_TONE_CURVE_NOT_APPLIED"),
     // Legacy wire name: ProfileHueSatMap is a color-correction mapping, not ProfileLookTable.

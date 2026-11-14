@@ -399,6 +399,12 @@ impl<'a> Decoder for RafDecoder<'a> {
         raw.get_entry(FujiIFD::GeometricDistortionParams).map(|entry| &entry.value),
         self.makernotes.get_entry(RafMakernotes::CropMode).map(|entry| &entry.value)
       );
+      image.lens_corrections = crate::rawimage::EmbeddedLensCorrections::fuji(
+        raw.get_entry(FujiIFD::ChromaticAberrationParams).map(|entry| &entry.value),
+        raw.get_entry(FujiIFD::VignettingParams).map(|entry| &entry.value),
+        self.makernotes.get_entry(RafMakernotes::CropMode).map(|entry| &entry.value),
+        &image.lens_distortion,
+      );
 
       // Overwrite crop if available in metadata
       if let Some(crop) = self.get_crop()? {

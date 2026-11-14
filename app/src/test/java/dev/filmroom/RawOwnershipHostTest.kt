@@ -3,6 +3,7 @@ package dev.filmroom
 import android.app.Application
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewModelScope
 import dev.filmroom.codec.*
 import dev.filmroom.io.*
 import java.io.File
@@ -10,6 +11,7 @@ import java.io.ByteArrayInputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
+import kotlinx.coroutines.test.*
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -30,13 +32,20 @@ class RawOwnershipHostTest {
         var metadataOnly=false
         var lastBatch:String?=null
         var policy="camera-matrix-linear-srgb-v1"
+        var format="DNG"
+        var warningCodes:List<String> = emptyList()
         var decodeCalls=0
         var decodeFailureCode:String?=null
         var pixelValue=0f
         override fun nativeCreate(root:String)=1L
         override fun nativeCancel(handle:Long){release.countDown()}
         override fun nativeDestroy(handle:Long){}
-        private fun response()=JSONObject("{\"ok\":true,\"width\":8,\"height\":8,\"outputOrientation\":1,\"schemaVersion\":1,\"format\":\"DNG\",\"orientationApplied\":true,\"outputBytes\":768,\"warnings\":[],\"outputValid\":true}").put("developmentPolicy",policy).apply{warningCode?.let{put("warnings",org.json.JSONArray().put(JSONObject().put("code",it).put("message","PRIVATE RAW NAME")))}}.toString()
+        private fun response()=JSONObject("{\"ok\":true,\"width\":8,\"height\":8,\"outputOrientation\":1,\"schemaVersion\":1,\"orientationApplied\":true,\"outputBytes\":768,\"outputValid\":true}")
+            .put("format",format).put("developmentPolicy",policy)
+            .put("warnings",org.json.JSONArray().apply {
+                for(code in listOfNotNull(warningCode)+warningCodes)
+                    put(JSONObject().put("code",code).put("message","PRIVATE RAW NAME"))
+            }).toString()
         override fun nativeProbe(handle:Long,input:String,budget:String):String{metadataOnly=JSONObject(budget).optBoolean("metadataOnly");return response()}
         override fun nativeDecode(handle:Long,input:String,output:String,budget:String):String{
             decodeCalls++
@@ -136,6 +145,179 @@ class RawOwnershipHostTest {
                 refreshed?.let{it.preview.recycle();repo.discard(it.source)}
                 loaded.preview.recycle();repo.discard(loaded.source)
             }
+        }
+    }
+
+    private data class OpticsRoute(val format:String,val oldPolicy:String,val newPolicy:String,val prefix:String,val oldDistortion:Boolean=true)
+    private val opticsRoutes=listOf(
+        OpticsRoute("ARW","camera-matrix-linear-srgb-v1","camera-matrix-linear-srgb-embedded-v2","EMBEDDED_LENS"),
+        OpticsRoute("RAF","raf-xtrans-linear-srgb-v1","raf-xtrans-linear-srgb-embedded-v2","EMBEDDED_LENS"),
+        OpticsRoute("CR3","camera-matrix-linear-srgb-lensfun-v1","camera-matrix-linear-srgb-lensfun-v2","LENSFUN"),
+        OpticsRoute("CR3","camera-matrix-linear-srgb-lensfun-v2","camera-matrix-linear-srgb-lensfun-v3","LENSFUN"),
+        OpticsRoute("RAF","raf-xtrans-linear-srgb-v1","raf-xtrans-linear-srgb-lensfun-v3","LENSFUN",false),
+        OpticsRoute("DNG","rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing","dng-cfa-linear-srgb-lensfun-v3","LENSFUN",false))
+    private fun opticsApi(route:OpticsRoute)=Api().apply {
+        format=route.format;policy=route.oldPolicy;warningCode=if(route.oldDistortion) "${route.prefix}_DISTORTION_APPLIED" else null
+    }
+    private fun upgradeOptics(api:Api,route:OpticsRoute) {
+        api.policy=route.newPolicy;api.pixelValue=0.375f
+        api.warningCode="${route.prefix}_DISTORTION_APPLIED"
+        api.warningCodes=listOf("${route.prefix}_VIGNETTING_APPLIED","${route.prefix}_TCA_APPLIED")
+    }
+
+    @Test fun allOpticsPolicyUpgradesRebuildPixelsAndMessagesOnceThenReuseTheirCurrentSpool()=runBlocking {
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        dev.filmroom.i18n.L10n.choose(app,"zh")
+        for(route in opticsRoutes) {
+            val api=opticsApi(route);val(repo,uri)=setup(api);val loaded=repo.import(uri)
+            var refreshed:LoadedPhoto?=null
+            try {
+                val sourceBytes=loaded.source.localFile.readBytes()
+                val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
+                val oldRecord=RawDevelopmentCache.recordFile(old);val oldRecordBytes=oldRecord.readBytes()
+                assertEquals(route.oldPolicy,JSONObject(oldRecord.readText()).getString("developmentPolicy"))
+                assertFalse(loaded.source.developmentWarning.orEmpty().contains("暗角"))
+                upgradeOptics(api,route)
+                val restored=repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey);refreshed=restored
+                val current=checkNotNull(restored.source.linearFile)
+                assertNotEquals(route.format,old,current);assertEquals(2,api.decodeCalls)
+                assertArrayEquals(sourceBytes,loaded.source.localFile.readBytes())
+                assertArrayEquals(oldBytes,old.readBytes());assertArrayEquals(oldRecordBytes,oldRecord.readBytes())
+                assertFalse(oldBytes.contentEquals(current.readBytes()))
+                assertEquals(route.newPolicy,JSONObject(RawDevelopmentCache.recordFile(current).readText()).getString("developmentPolicy"))
+                val messages=restored.source.developmentWarning!!
+                assertEquals(3,messages.lines().size)
+                assertTrue(messages.contains("畸变") && messages.contains("暗角") && messages.contains("色差"))
+                assertFalse(messages.contains("PRIVATE"))
+                val reopened=repo.reopen(restored.source.cacheKey,"照片",512,restored.source.rawCacheKey)
+                try {
+                    assertEquals(current,reopened.source.linearFile);assertEquals(2,api.decodeCalls)
+                    assertEquals(messages,reopened.source.developmentWarning)
+                    dev.filmroom.i18n.L10n.choose(app,"en")
+                    assertTrue(reopened.source.developmentWarning!!.contains("vignetting correction"))
+                    assertTrue(reopened.source.developmentWarning!!.contains("chromatic aberration correction"))
+                    assertEquals(2,api.decodeCalls)
+                } finally {reopened.preview.recycle();dev.filmroom.i18n.L10n.choose(app,"zh")}
+            } finally {
+                refreshed?.let{it.preview.recycle();repo.discard(it.source)}
+                loaded.preview.recycle();repo.discard(loaded.source)
+            }
+        }
+    }
+
+    @Test fun allOpticsMigrationFailuresPreservePreviousSessionSourceSpoolAndRecordUntilExplicitRetry()=runBlocking {
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        for(route in opticsRoutes)for(code in listOf("DISK_BUDGET","MEMORY_BUDGET","DECODE_FAILED")) {
+            val api=opticsApi(route);val(repo,uri)=setup(api);val loaded=repo.import(uri)
+            val preferences=app.getSharedPreferences("raw-optics-migration-session",0)
+            preferences.edit().clear().putString("source",loaded.source.cacheKey)
+                .putString("rawSource",loaded.source.rawCacheKey).commit()
+            var refreshed:LoadedPhoto?=null
+            try {
+                val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
+                val sourceBytes=loaded.source.localFile.readBytes()
+                val record=RawDevelopmentCache.recordFile(old);val recordBytes=record.readBytes()
+                val directory=checkNotNull(old.parentFile)
+                val before=directory.listFiles().orEmpty().map{it.name}.toSet()
+                upgradeOptics(api,route);api.decodeFailureCode=code
+                val error=assertThrows(PhotoException::class.java){runBlocking{repo.reopen(loaded.source.cacheKey,"照片",512,loaded.source.rawCacheKey)}}
+                assertTrue("${route.format} / $code",RawRestoreSession.retainAfterFailure(preferences,error))
+                assertEquals(2,api.decodeCalls)
+                assertEquals(loaded.source.cacheKey,preferences.getString("source",null))
+                assertEquals(old.name,preferences.getString("rawSource",null))
+                assertEquals(before,directory.listFiles().orEmpty().map{it.name}.toSet())
+                dev.filmroom.lifecycle.PrivateWorkRecovery.recover(app.cacheDir,app.filesDir,
+                    preferences.getString("source",null),preferences.getString("rawSource",null))
+                assertArrayEquals(sourceBytes,loaded.source.localFile.readBytes())
+                assertArrayEquals(oldBytes,old.readBytes());assertArrayEquals(recordBytes,record.readBytes())
+                assertEquals(2,api.decodeCalls) // Recovery only preserves the saved files; it never retries decode.
+                api.decodeFailureCode=null
+                val restored=repo.reopen(preferences.getString("source",null)!!,"照片",512,preferences.getString("rawSource",null));refreshed=restored
+                val current=checkNotNull(restored.source.linearFile)
+                assertNotEquals(old,current);assertEquals(3,api.decodeCalls)
+                assertEquals(route.newPolicy,JSONObject(RawDevelopmentCache.recordFile(current).readText()).getString("developmentPolicy"))
+                assertEquals(3,restored.source.developmentWarning!!.lines().size)
+                assertArrayEquals(oldBytes,old.readBytes());assertArrayEquals(recordBytes,record.readBytes())
+            } finally {
+                refreshed?.let{it.preview.recycle();repo.discard(it.source)}
+                loaded.preview.recycle();repo.discard(loaded.source);preferences.edit().clear().commit()
+            }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun TestScope.awaitRestoreState(check:()->Boolean) {
+        repeat(600) { advanceUntilIdle();if(check())return;Thread.sleep(5) }
+        fail("Editor restore state did not settle")
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun editorOpticsMigrationWaitsForManualRetryAndLaterKeepsSavedSession()=runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val app=ApplicationProvider.getApplicationContext<Application>()
+        val settings=dev.filmroom.model.EditorPreferences(app)
+        val previousRestore=settings.restoreLastPhoto
+        val preferences=app.getSharedPreferences("local-session",0)
+        try {
+            settings.restoreLastPhoto=true
+            for((postpone,route) in listOf(false to opticsRoutes.last(),true to opticsRoutes.first())) {
+                val api=opticsApi(route);val(repo,uri)=setup(api);val loaded=repo.import(uri)
+                val old=checkNotNull(loaded.source.linearFile);val oldBytes=old.readBytes()
+                preferences.edit().clear().putString("source",loaded.source.cacheKey)
+                    .putString("rawSource",loaded.source.rawCacheKey).putString("name","照片").commit()
+                var model:EditorViewModel?=null
+                try {
+                    upgradeOptics(api,route);api.decodeFailureCode="MEMORY_BUDGET"
+                    val editor=EditorViewModel(app);model=editor
+                    // Replace only JNI's repository boundary before the queued initializer runs.
+                    // The actual ViewModel restore/retry state machine and disk ownership stay real.
+                    EditorViewModel::class.java.getDeclaredField("repository").apply{isAccessible=true}.set(editor,repo)
+                    editor.setPrewarmForeground(false)
+                    awaitRestoreState {editor.state.value.restoreRetryAvailable}
+                    assertEquals(2,api.decodeCalls)
+                    assertNull(editor.state.value.photo);assertNull(editor.state.value.busy)
+                    assertTrue(editor.state.value.startupReady)
+                    assertEquals(loaded.source.cacheKey,preferences.getString("source",null))
+                    assertEquals(old.name,preferences.getString("rawSource",null))
+                    advanceTimeBy(120_000);runCurrent()
+                    assertEquals("No automatic retry while the prompt is visible",2,api.decodeCalls)
+                    assertArrayEquals(oldBytes,old.readBytes())
+                    if(postpone) {
+                        editor.postponeRestore()
+                        assertFalse(editor.state.value.restoreRetryAvailable)
+                        assertNull(editor.state.value.message)
+                        editor.retryRestore() // A hidden/dismissed prompt does not initiate another attempt.
+                        advanceTimeBy(120_000);runCurrent()
+                        assertEquals(2,api.decodeCalls)
+                        dev.filmroom.lifecycle.PrivateWorkRecovery.recover(app.cacheDir,app.filesDir,
+                            preferences.getString("source",null),preferences.getString("rawSource",null))
+                        assertEquals(loaded.source.cacheKey,preferences.getString("source",null))
+                        assertEquals(old.name,preferences.getString("rawSource",null))
+                        assertTrue(loaded.source.localFile.isFile)
+                        assertArrayEquals(oldBytes,old.readBytes());assertTrue(RawDevelopmentCache.recordFile(old).isFile)
+                    } else {
+                        api.decodeFailureCode=null
+                        editor.retryRestore();editor.retryRestore()
+                        awaitRestoreState {editor.state.value.photo!=null && editor.state.value.busy==null}
+                        assertEquals("Two taps must start one explicit retry",3,api.decodeCalls)
+                        assertFalse(editor.state.value.restoreRetryAvailable)
+                        val restored=editor.state.value.photo!!
+                        assertNotEquals(old,restored.linearFile)
+                        assertEquals(restored.rawCacheKey,preferences.getString("rawSource",null))
+                        assertEquals(route.newPolicy,JSONObject(RawDevelopmentCache.recordFile(restored.linearFile!!).readText()).getString("developmentPolicy"))
+                        assertArrayEquals(oldBytes,old.readBytes())
+                    }
+                } finally {
+                    model?.viewModelScope?.cancel()
+                    model?.state?.value?.original?.let{if(!it.isRecycled)it.recycle()}
+                    model?.state?.value?.photo?.let{repo.discard(it)}
+                    loaded.preview.recycle();repo.discard(loaded.source)
+                    preferences.edit().clear().commit()
+                }
+            }
+        } finally {
+            settings.restoreLastPhoto=previousRestore
+            preferences.edit().clear().commit();Dispatchers.resetMain()
         }
     }
 

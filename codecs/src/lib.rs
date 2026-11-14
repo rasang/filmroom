@@ -50,6 +50,7 @@ pub mod opcodes;
 pub mod dng_bad_pixels;
 pub mod dng_warp;
 pub mod embedded_lens;
+pub mod embedded_optics;
 pub mod lensfun;
 pub mod lensfun_geometry;
 mod lensfun_metadata;

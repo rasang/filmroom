@@ -14,6 +14,9 @@ fn main() {
         if a.len() > 4 {
             b.memory_budget_mi_b = a[4].parse().unwrap_or(128)
         }
+        if let Some(disk_mib) = a.get(5) {
+            b.disk_budget_bytes = disk_mib.parse::<u64>().unwrap_or(1024).saturating_mul(1 << 20);
+        }
         decode(
             Path::new(&a[2]),
             Path::new(&a[3]),

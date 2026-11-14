@@ -196,6 +196,11 @@ impl<'a> Decoder for ArwDecoder<'a> {
     img.lens_distortion = crate::rawimage::EmbeddedLensDistortion::sony(
       raw.get_entry(0x7037u16).map(|entry| &entry.value)
     );
+    img.lens_corrections = crate::rawimage::EmbeddedLensCorrections::sony(
+      raw.get_entry(0x7035u16).map(|entry| &entry.value),
+      raw.get_entry(0x7032u16).map(|entry| &entry.value),
+      &img.lens_distortion,
+    );
 
     if cpp == 3 {
       // For debayer images, we assume WB coeffs already applied

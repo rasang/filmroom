@@ -1,0 +1,42 @@
+{
+  "camera_index_entries": 3363,
+  "camera_records": 1059,
+  "camera_variants": 18,
+  "compiled_samples": {
+    "distortion": 6495,
+    "tca": 3721,
+    "vignetting": 29817
+  },
+  "generated_source_bytes": 6784028,
+  "lens_index_entries": 5252,
+  "lens_records": 1580,
+  "maker_model_names": 1481,
+  "mount_records": 52,
+  "original_samples": {
+    "distortion": 6500,
+    "tca": 3816,
+    "vignetting": 29817
+  },
+  "projection_records": {
+    "equisolid": 13,
+    "fisheye": 11,
+    "panoramic": 1,
+    "rectilinear": 1550,
+    "stereographic": 5
+  },
+  "records_with": {
+    "all_three": 591,
+    "discrete_fixed_lens_groups": 2,
+    "distortion": 1538,
+    "extras_without_distortion": 39,
+    "tca": 1021,
+    "vignetting": 717
+  },
+  "replaced_duplicate_samples": {
+    "distortion": 5,
+    "tca": 95
+  },
+  "source_archive_sha256": "48eb8f268111c3b20a71990e2f6affa084e70fe5ef1ccf8e538f198d3d54d09b",
+  "xml_bytes": 5216859,
+  "xml_files": 56
+}

@@ -1,5 +1,7 @@
 #[path = "dng_cfa.rs"]
 pub mod cfa_storage;
+#[path = "dng_lensfun.rs"]
+mod lensfun;
 use crate::{
     error::{Result, err, io_error, Reason},
     tiff::{Endian, Ifd, Tiff, nums, uint},
@@ -85,6 +87,7 @@ pub struct Dng {
     pub stage1_opcodes: Vec<crate::opcodes::Stage1Opcode>,
     pub warp: Option<crate::dng_warp::WarpPipeline>,
     pub cfa_color: Option<crate::dng_cfa_color::DevelopmentTransform>,
+    pub lens_profile: Option<crate::lensfun::ProfileSelection>,
 }
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -526,7 +529,7 @@ impl Dng {
                 message: "已应用 DNG 内嵌的镜头畸变校正",
             });
         }
-        let decoded = Self {
+        let mut decoded = Self {
             width,
             height,
             cpp,
@@ -561,10 +564,12 @@ impl Dng {
             stage1_opcodes,
             warp,
             cfa_color,
+            lens_profile: None,
         };
         if compression == 52546 {
             crate::jxl::validate_headers(&decoded, f)?;
         }
+        lensfun::configure(&mut decoded,&t,f);
         Ok(decoded)
     }
     pub fn probe(&self) -> Probe {
@@ -618,7 +623,9 @@ impl Dng {
             max_pixels: crate::MAX_PIXELS,
             warnings: self.warnings.clone(),
             has_alternate_forward_matrix: self.has_forward_matrix,
-            development_policy: if let Some(p) = &self.profile {
+            development_policy: if self.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
+                "dng-cfa-linear-srgb-lensfun-v3"
+            } else if let Some(p) = &self.profile {
                 if p.map.is_some() {
                     "DNG_STD_V5; DNG standard single/dual illuminant calibrated color to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
                 } else {

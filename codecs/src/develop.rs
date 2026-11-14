@@ -30,7 +30,7 @@ mod geometry;
 mod scale;
 #[path="camera_geometry.rs"]
 mod camera_geometry;
-pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry};
+pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry, qualify_optics};
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -100,12 +100,13 @@ pub fn admit(d: &Dng, b: &Budget) -> Result<Admission> {
     if b.disk_budget_bytes < disk {
         return Err(err("DISK_BUDGET", "admission"));
     }
-    Ok(Admission {
+    let admission=Admission {
         memory_budget_bytes: memory,
         estimated_peak_bytes: base + d.active.w as u64 * (rows + HALO * 2) as u64 * 96,
         required_disk_bytes: disk,
         strip_rows: rows as u32,
-    })
+    };
+    admit_geometry(&Development::from(d),b,admission)
 }
 /// Format-neutral, already validated sensor-to-linear development contract.
 /// Storage decoding and black/white normalization belong to the input adapter.
@@ -125,6 +126,12 @@ pub struct Development<'a> {
     /// Exactly one validated distortion source: embedded metadata or a qualified
     /// database fallback. Its reference rectangle is explicit below.
     pub lens: crate::embedded_lens::LensStatus,
+    /// Independently validated embedded chromatic-aberration and vignetting
+    /// models. A missing or unsupported item never disables another item.
+    pub lens_extras: crate::embedded_optics::LensExtras,
+    /// Independently selected external calibrations. Each operation only fills
+    /// missing embedded metadata; its reference rectangle remains explicit.
+    pub lens_profile: Option<crate::lensfun::ProfileSelection>,
     /// Optical normalization rectangle, independent of subsequent output crop.
     pub lens_reference: Rect,
 }
@@ -152,7 +159,9 @@ impl<'a> From<&'a Dng> for Development<'a> {
             baseline_exposure_ev: d.baseline_exposure_ev,
             gain_maps: &d.gain_maps,
             lens: crate::embedded_lens::LensStatus::Missing,
-            lens_reference: d.active,
+            lens_extras: Default::default(),
+            lens_profile: d.lens_profile.clone(),
+            lens_reference: if d.lens_profile.is_some() {d.crop} else {d.active},
         }
     }
 }
@@ -207,6 +216,11 @@ fn develop_dng_tile_cancel(
     cancel: &AtomicBool,
 ) -> Result<rawler::pixarray::Color2D<f32, 3>> {
     if d.warp.is_some() { return Err(err("UNSUPPORTED_DNG_OPCODE","develop")); }
+    if d.lens_profile.as_ref().is_some_and(|profile|profile.has_applied()) {
+        // Optics may need source pixels outside this tile. Only the admitted
+        // CameraRgbSink path can apply it and preserve DNG color calibration.
+        return Err(err("UNSUPPORTED_DNG_VARIANT","develop"));
+    }
     if d.cfa_color.is_some() {
         let camera=camera_tile(development,y,h,data)?;
         return calibrate_camera(d,camera,cancel);
@@ -234,6 +248,8 @@ fn calibrate_camera_tile(d:&Development,camera:rawler::pixarray::Color2D<f32,3>,
     linear.active=Rect{x:0,y:0,w:camera.width,h:camera.height};
     linear.crop=linear.active;linear.gain_maps=&[];
     linear.lens=crate::embedded_lens::LensStatus::Missing;
+    linear.lens_extras=Default::default();
+    linear.lens_profile=None;
     linear.lens_reference=linear.active;
     develop_tile_cancel(&linear,0,camera.height,camera.data.into_iter().flatten().collect(),cancel)
 }
@@ -486,6 +502,21 @@ fn decode_with_reserve(
         pool.install(|| scale::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel))?;
     } else if d.warp.is_some() {
         pool.install(|| geometry::decode(&d,storage_reader,&mut file,&out,output,&admission,&pool,cancel))?;
+    } else if d.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
+        let sink=CameraRgbSink::new(&development,output)?;
+        let region=sink.region(&development);
+        let mut first=region.y;
+        while first<region.y+region.h {
+            if cancel.load(Ordering::Relaxed) {return Err(err("CANCELLED","develop"));}
+            let last=(first+admission.strip_rows as usize).min(region.y+region.h);
+            let top=first.saturating_sub(HALO).max(d.active.y);
+            let bottom=(last+HALO).min(d.active.y+d.active.h);
+            let data=storage_reader.read_tile_cancellable(&mut file,top,bottom-top,cancel)?;
+            let pixels=pool.install(||sink.develop_dng(&d,&development,top,bottom-top,data,cancel))?;
+            sink.emit_strip(&development,&out,&pixels,top,first,last,cancel)?;
+            first=last;
+        }
+        pool.install(||sink.finish_dng(&d,&development,&out,cancel))?;
     } else if d.streaming_linear {
         let mut batch = Vec::with_capacity(d.active.w * admission.strip_rows as usize * 3);
         let mut batch_y = d.active.y;
@@ -723,6 +754,8 @@ mod rectangle_emit_tests {
                 gain_maps: &[],
                 lens: crate::embedded_lens::LensStatus::Missing,
                 lens_reference: Rect { x: 0, y: 0, w: 17, h: 13 },
+                lens_extras: Default::default(),
+                lens_profile: None,
             };
             let path = std::env::temp_dir().join(format!(
                 "raw-tile-emit-{}-{orientation}",

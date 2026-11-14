@@ -1,5 +1,5 @@
 //! Nikon HE / ordinary Bayer row-spool candidate; no preview or guessed metadata.
-use crate::{camera_raw::{CameraRaw,NikonStream},develop::{Admission,Budget},dng::Probe,error::{Result,err,io_error},he_spool::RawSpool};
+use crate::{camera_raw::{CameraRaw,NikonStream},develop::{Admission,Budget,Development},dng::Probe,error::{Result,err,io_error},he_spool::RawSpool};
 use std::{fs::{File,OpenOptions,DirBuilder},os::unix::fs::{OpenOptionsExt,DirBuilderExt,MetadataExt},os::fd::AsRawFd,path::{Path,PathBuf},sync::atomic::{AtomicBool,AtomicU64,Ordering}};
 #[derive(PartialEq)]
 pub(crate) struct Identity {dev:u64,ino:u64,pub bytes:u64,mtime:i64,mtime_ns:i64,ctime:i64,ctime_ns:i64}
@@ -51,13 +51,31 @@ pub(crate) fn decode(output:&Path,mut c:CameraRaw,a:Admission,cancel:&AtomicBool
   }
   if h.identity!=Identity::read(&h.file)?{return Err(err("INVALID_INPUT","decode"));}
  } // whole input mapping and C++ scratch released before any float development.
- let pool=rayon::ThreadPoolBuilder::new().num_threads(2).stack_size(1024*1024).build().map_err(|_|err("MEMORY_BUDGET","decode"))?;
- let mut first=d.crop.y;
- while first<d.crop.y+d.crop.h {
-  let last=(first+a.strip_rows as usize).min(d.crop.y+d.crop.h);let y=first.saturating_sub(HALO).max(d.active.y);let end=(last+HALO).min(d.active.y+d.active.h);
-  let normalized=raw.normalized(d.active.x as u32,y as u32,d.active.w as u32,(end-y) as u32,h.black,h.white,cancel).map_err(spool_error)?;
-  let developed=pool.install(||crate::develop::develop_tile_cancel(d,y,end-y,normalized,cancel))?;
-  crate::develop::emit(d,&out,&developed,y,first,last,cancel)?;first=last;
- }
+ let black=h.black;let white=h.white;drop(h);
+ develop_spool(raw,d,output,&out,&a,black,white,cancel)?;
  cancelled(cancel)?;out.sync_all().map_err(|e|io_error(e,"spool"))?;cancelled(cancel)?;guard.1=true;Ok((c.probe(),a))
 }
+
+// Both ordinary NEF rows and HE reach this exact development path. The sink
+// preserves the legacy strips when no optics apply, and otherwise develops
+// the complete active image before the shared camera-RGB resampling stage.
+fn develop_spool(raw:RawSpool,d:&Development,output:&Path,out:&File,a:&Admission,
+ black:[f32;4],white:[f32;4],cancel:&AtomicBool)->Result<()> {
+ let pool=rayon::ThreadPoolBuilder::new().num_threads(2).stack_size(1024*1024).build().map_err(|_|err("MEMORY_BUDGET","decode"))?;
+ let sink=crate::develop::CameraRgbSink::new(d,output)?;
+ let region=sink.region(d);let mut first=region.y;
+ while first<region.y+region.h {
+  let last=(first+a.strip_rows as usize).min(region.y+region.h);let y=first.saturating_sub(HALO).max(d.active.y);let end=(last+HALO).min(d.active.y+d.active.h);
+  let normalized=raw.normalized(d.active.x as u32,y as u32,d.active.w as u32,(end-y) as u32,black,white,cancel).map_err(spool_error)?;
+  let developed=pool.install(||sink.develop(d,y,end-y,normalized,cancel))?;
+  sink.emit_strip(d,out,&developed,y,first,last,cancel)?;first=last;
+ }
+ // Admission treats sensor decoding and geometry as separate peaks. Release
+ // the anonymous integer sensor file before opening resampling windows.
+ drop(raw);
+ pool.install(||sink.finish(d,out,cancel))
+}
+
+#[cfg(test)]
+#[path="nikon_he_tests.rs"]
+mod tests;

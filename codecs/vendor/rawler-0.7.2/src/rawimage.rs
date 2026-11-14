@@ -193,6 +193,9 @@ impl CFAConfig {
 #[path = "embedded_lens_metadata.rs"]
 mod embedded_lens_metadata;
 pub use embedded_lens_metadata::EmbeddedLensDistortion;
+#[path = "embedded_optics_metadata.rs"]
+mod embedded_optics_metadata;
+pub use embedded_optics_metadata::{EmbeddedLensCorrections, EmbeddedOpticsState, EmbeddedTca, EmbeddedVignette};
 
 /// All the data needed to process this raw image, including the image data itself as well
 /// as all the needed metadata
@@ -204,6 +207,8 @@ pub struct RawImage {
   pub nikon_he_mode: Option<u16>,
   /// Filmroom: bounded, optional manufacturer distortion metadata.
   pub lens_distortion: EmbeddedLensDistortion,
+  /// Filmroom: independently available embedded TCA and vignetting tables.
+  pub lens_corrections: EmbeddedLensCorrections,
   /// Camera definition
   pub camera: Camera,
   /// camera make as encoded in the file
@@ -381,6 +386,7 @@ impl RawImage {
       source_ifd_offset: None,
       nikon_he_mode: None,
       lens_distortion: EmbeddedLensDistortion::Missing,
+      lens_corrections: EmbeddedLensCorrections::default(),
       camera: cam.clone(),
       make: cam.make.clone(),
       model: cam.model.clone(),
@@ -473,6 +479,7 @@ impl RawImage {
       source_ifd_offset: None,
       nikon_he_mode: None,
       lens_distortion: EmbeddedLensDistortion::Missing,
+      lens_corrections: EmbeddedLensCorrections::default(),
       camera: cam.clone(),
       make: cam.make.clone(),
       model: cam.model.clone(),

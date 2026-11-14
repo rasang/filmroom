@@ -2,8 +2,17 @@ package dev.filmroom.i18n
 internal object ChineseStrings {
     val values:Map<Int,String> = mapOf(
         dev.filmroom.R.string.photo_location_import_help to "保留拍摄位置请优先从“文件”选择原图，并允许读取照片中的位置信息（不是手机当前定位）。拒绝后仍可编辑；相册选择器或分享副本可能移除位置，授权也无法恢复已移除的信息。",
+        dev.filmroom.R.string.embedded_lens_vignetting_applied to "已应用内嵌镜头暗角校正。",
+        dev.filmroom.R.string.embedded_lens_vignetting_not_applied to "检测到内嵌镜头暗角参数，但无法应用校正。",
+        dev.filmroom.R.string.embedded_lens_tca_applied to "已应用内嵌镜头色差校正。",
+        dev.filmroom.R.string.embedded_lens_tca_not_applied to "检测到内嵌镜头色差参数，但无法应用校正。",
+        dev.filmroom.R.string.lensfun_vignetting_applied to "已应用匹配镜头配置的暗角校正。",
+        dev.filmroom.R.string.lensfun_vignetting_not_applied to "已匹配镜头配置，但无法应用暗角校正。",
+        dev.filmroom.R.string.lensfun_tca_applied to "已应用匹配镜头配置的色差校正。",
+        dev.filmroom.R.string.lensfun_tca_not_applied to "已匹配镜头配置，但无法应用色差校正。",
         dev.filmroom.R.string.embedded_lens_distortion_applied to "已应用内嵌镜头畸变校正。",
         dev.filmroom.R.string.lensfun_distortion_applied to "已应用匹配镜头配置的畸变校正。",
+        dev.filmroom.R.string.lensfun_distortion_not_applied to "已匹配镜头配置，但无法应用畸变校正。",
         dev.filmroom.R.string.raw_restore_retry_title to "照片暂未恢复",
         dev.filmroom.R.string.raw_restore_retry_message to "原照片已保留。请检查可用空间和内存后重试，也可稍后再试。",
         dev.filmroom.R.string.raw_restore_retry_action to "重试",
