@@ -122,12 +122,12 @@ class PresetQrUiHostTest {
             val send=chooser!!.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
             assertEquals("image/png",send.type)
             val uri=send.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)!!
-            assertEquals("dev.filmroom.presetqr",uri.authority)
+            assertEquals((dev.filmroom.BuildConfig.APPLICATION_ID + ".presetqr"),uri.authority)
             assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
             assertEquals(uri,send.clipData!!.getItemAt(0).uri)
             assertEquals(item.parameters(),PresetQrCodec.decode(PresetQrImage.read(activity,uri)).parameters)
             assertEquals(listOf(item),store.list())
-            try { androidx.core.content.FileProvider.getUriForFile(activity,"dev.filmroom.presetqr",File(activity.filesDir,"saved-presets.json"));fail("private store must never be exposed") } catch (_:IllegalArgumentException) { }
+            try { androidx.core.content.FileProvider.getUriForFile(activity,(dev.filmroom.BuildConfig.APPLICATION_ID + ".presetqr"),File(activity.filesDir,"saved-presets.json"));fail("private store must never be exposed") } catch (_:IllegalArgumentException) { }
         }
     }
     @Test fun scannerLocksItsOrientationAndCancelLeavesImportOrientationAlone() {
