@@ -17,7 +17,7 @@ fun renderReleaseNotes(value:String):String = value.split('\n').joinToString("\n
 }
 
 class UpdateSettingsUi(private val activity:ComponentActivity,
-    private val endpoint:String=UpdateConfig.MANIFEST_URL,
+    private val endpoint:String="",
     private val check:(String)->UpdateManifest=UpdateRepository(preferenceCache(activity.applicationContext))::check,
     private val openLink:(String)->Unit={url->activity.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))}
 ) {
