@@ -77,9 +77,8 @@ fn none_retains_sensor_blacklevel_and_exact_linear_development() {
     }
 }
 #[test]
-fn auto_unknown_wrong_type_and_count_remain_rejected() {
+fn unknown_wrong_type_and_count_remain_rejected() {
     for (index, (typ, values)) in [
-        (4, vec![0]),
         (4, vec![2]),
         (4, vec![u32::MAX]),
         (3, vec![1]),
@@ -98,4 +97,16 @@ fn auto_unknown_wrong_type_and_count_remain_rejected() {
         );
         fs::remove_file(p).unwrap();
     }
+}
+
+#[test]
+fn explicit_auto_matches_missing_default_in_actual_development() {
+    let original=temp("default.dng"); let explicit=temp("auto.dng");
+    let a=temp("default.f32"); let b=temp("auto.f32");
+    fs::write(&original,base()).unwrap(); fs::write(&explicit,tagged(4,&[0])).unwrap();
+    for (i,o) in [(&original,&a),(&explicit,&b)] {
+        decode(i,o,&Budget::default(),&AtomicBool::new(false)).unwrap();
+    }
+    assert_eq!(fs::read(&a).unwrap(),fs::read(&b).unwrap());
+    for p in [original,explicit,a,b] { fs::remove_file(p).unwrap(); }
 }

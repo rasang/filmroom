@@ -1,0 +1,81 @@
+use film_codecs::{dng::Dng, develop::{decode,Budget}};
+use std::{fs, path::PathBuf,sync::atomic::AtomicBool};
+fn path(s:&str)->PathBuf {std::env::temp_dir().join(format!("dng-standard-{}-{s}",std::process::id()))}
+fn base(name:&str)->Vec<u8> {fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)).unwrap()}
+fn replace(mut b:Vec<u8>,tag:u16,typ:u16,count:u32,data:Vec<u8>)->Vec<u8>{
+ let off=u32::from_le_bytes(b[4..8].try_into().unwrap())as usize;
+ let n=u16::from_le_bytes(b[off..off+2].try_into().unwrap())as usize;
+ let mut entries:Vec<Vec<u8>>=(0..n).map(|i|b[off+2+i*12..off+14+i*12].to_vec()).filter(|e|u16::from_le_bytes(e[..2].try_into().unwrap())!=tag).collect();
+ let mut e=Vec::new();e.extend(tag.to_le_bytes());e.extend(typ.to_le_bytes());e.extend(count.to_le_bytes());
+ if data.len()<=4 {let mut v=[0;4];v[..data.len()].copy_from_slice(&data);e.extend(v);}else {e.extend((b.len()as u32).to_le_bytes());b.extend(data);}
+ entries.push(e);entries.sort_by_key(|e|u16::from_le_bytes(e[..2].try_into().unwrap()));
+ let off=b.len()as u32;b[4..8].copy_from_slice(&off.to_le_bytes());b.extend((entries.len()as u16).to_le_bytes());for e in entries {b.extend(e);}b.extend(0u32.to_le_bytes());b
+}
+fn rational(v:&[(u32,u32)])->Vec<u8>{v.iter().flat_map(|(a,b)|a.to_le_bytes().into_iter().chain(b.to_le_bytes())).collect()}
+#[test]fn harmless_standard_metadata_preserves_developed_pixels(){
+ let a=path("metadata-base");let b=path("metadata-rich");let oa=path("metadata-a.f32");let ob=path("metadata-b.f32");
+ let mut bytes=base("RGGB.dng");
+ for (tag,typ,count,data) in [(50942,2,5,b"test\0".to_vec()),(50966,2,4,b"app\0".to_vec()),(50972,1,16,vec![0;16]),(51089,3,2,vec![16,0,16,0]),(51110,4,1,0u32.to_le_bytes().to_vec())] {bytes=replace(bytes,tag,typ,count,data);}
+ fs::write(&a,base("RGGB.dng")).unwrap();fs::write(&b,bytes).unwrap();
+ for (i,o) in [(&a,&oa),(&b,&ob)] {decode(i,o,&Budget::default(),&AtomicBool::new(false)).unwrap();}
+ assert_eq!(fs::read(&oa).unwrap(),fs::read(&ob).unwrap());
+ for p in [a,b,oa,ob] {fs::remove_file(p).unwrap();}
+}
+#[test]fn fractional_crop_is_unsupported_not_corrupt_and_no_output(){
+ let p=path("fractional");let out=path("fractional-out");
+ fs::write(&p,replace(base("RGGB.dng"),50720,5,2,rational(&[(25,2),(12,1)]))).unwrap();
+ let e=decode(&p,&out,&Budget::default(),&AtomicBool::new(false)).unwrap_err();
+ assert_eq!(e.code,"UNSUPPORTED_DNG_VARIANT");assert_eq!(e.tag,Some(50720));assert_eq!(serde_json::to_value(&e).unwrap()["reason"],"UNSUPPORTED_VALUE");assert!(!out.exists());fs::remove_file(p).unwrap();
+}
+#[test]fn file_resource_limit_is_not_damage(){
+ let p=path("large");let f=fs::File::create(&p).unwrap();f.set_len(512*1024*1024+1).unwrap();drop(f);
+ let e=Dng::read(&mut fs::File::open(&p).unwrap()).unwrap_err();assert_eq!(e.code,"RESOURCE_LIMIT");fs::remove_file(p).unwrap();
+}
+#[test]fn linear_analog_balance_uses_full_calibration_not_old_matrix(){
+ let mut b=base("linear.dng");
+ let matrix:Vec<u8>=[1i32,0,0,0,1,0,0,0,1].iter().flat_map(|x|x.to_le_bytes().into_iter().chain(1i32.to_le_bytes())).collect();
+ for t in [50721,50722,50964,50965] {b=replace(b,t,10,9,matrix.clone());}
+ for (t,i) in [(50778,21u16),(50779,17u16)] {b=replace(b,t,3,1,i.to_le_bytes().to_vec());}
+ b=replace(b,50727,5,3,rational(&[(2,1),(1,1),(1,1)]));
+ let p=path("linear-ab");let out=path("linear-ab.f32");fs::write(&p,b).unwrap();
+ let d=Dng::read(&mut fs::File::open(&p).unwrap()).unwrap();assert!(d.profile.is_some());assert!(d.matrix.is_empty());
+ decode(&p,&out,&Budget::default(),&AtomicBool::new(false)).unwrap();
+ assert!(fs::read(&out).unwrap().chunks_exact(4).all(|v|f32::from_le_bytes(v.try_into().unwrap()).is_finite()));
+ fs::remove_file(p).unwrap();fs::remove_file(out).unwrap();
+}
+fn rename(mut b:Vec<u8>,old:u16,new:u16)->Vec<u8>{
+ let off=u32::from_le_bytes(b[4..8].try_into().unwrap())as usize;let n=u16::from_le_bytes(b[off..off+2].try_into().unwrap())as usize;
+ for i in 0..n {let p=off+2+i*12;if u16::from_le_bytes(b[p..p+2].try_into().unwrap())==old {b[p..p+2].copy_from_slice(&new.to_le_bytes());}}b
+}
+#[test]fn explicit_xy_and_equivalent_camera_neutral_develop_identically(){
+ for name in ["linear.dng","RGGB.dng"] {
+ let mut b=base(name);
+ let matrix:Vec<u8>=[1i32,0,0,0,1,0,0,0,1].iter().flat_map(|x|x.to_le_bytes().into_iter().chain(1i32.to_le_bytes())).collect();
+ for t in [50721,50722,50964,50965] {b=replace(b,t,10,9,matrix.clone());}
+ for (t,i) in [(50778,21u16),(50779,17u16)] {b=replace(b,t,3,1,i.to_le_bytes().to_vec());}
+ b=replace(b,50727,5,3,rational(&[(2,1),(1,1),(1,1)]));
+ // Non-diagonal CC genuinely mixes channels; explicit XY must imply the
+ // same camera neutral AB * CC * CM * XYZ, not merely select a different route.
+ let cc:Vec<u8>=[10i32,1,0,0,10,0,0,0,10].iter().flat_map(|x|x.to_le_bytes().into_iter().chain(10i32.to_le_bytes())).collect();
+ for t in [50723,50724] {b=replace(b,t,10,9,cc.clone());}
+ b=replace(b,50728,5,3,rational(&[(22,10),(1,1),(1,1)]));
+ let xy=replace(rename(b.clone(),50728,65000),50729,5,2,rational(&[(1,3),(1,3)]));
+ let mut outputs=vec![];
+ for (label,bytes) in [("neutral",b.clone()),("xy",xy)] {
+ let p=path(&format!("{name}-{label}"));let out=path(&format!("{name}-{label}.f32"));fs::write(&p,bytes).unwrap();
+ decode(&p,&out,&Budget::default(),&AtomicBool::new(false)).unwrap();
+ outputs.push(fs::read(&out).unwrap());fs::remove_file(p).unwrap();fs::remove_file(out).unwrap();
+ }
+ let max=outputs[0].chunks_exact(4).zip(outputs[1].chunks_exact(4)).map(|(a,b)|(f32::from_le_bytes(a.try_into().unwrap())-f32::from_le_bytes(b.try_into().unwrap())).abs()).fold(0f32,f32::max);
+ assert!(max<1e-5,"{name}: {max}");
+ let conflict=replace(b,50729,5,2,rational(&[(1,3),(1,3)]));let p=path(&format!("{name}-conflict"));fs::write(&p,conflict).unwrap();
+ assert_eq!(Dng::read(&mut fs::File::open(&p).unwrap()).unwrap_err().code,"INVALID_COLOR_METADATA");fs::remove_file(p).unwrap();
+ }
+}
+#[test]fn short_neutral_is_equivalent_to_rational_in_legacy_development(){
+ let p=path("short-neutral");let o=path("short-neutral.f32");let mut outputs=vec![];
+ for (typ,data) in [(3,vec![1,0,1,0,1,0]),(5,rational(&[(1,1),(1,1),(1,1)]))]{
+ fs::write(&p,replace(base("RGGB.dng"),50728,typ,3,data)).unwrap();decode(&p,&o,&Budget::default(),&AtomicBool::new(false)).unwrap();outputs.push(fs::read(&o).unwrap());fs::remove_file(&o).unwrap();
+ }
+ assert_eq!(outputs[0],outputs[1]);fs::remove_file(p).unwrap();
+}

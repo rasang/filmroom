@@ -40,6 +40,9 @@ class CodecDiagnosticDetailTest {
             Triple("MATRIX_SINGULAR", "COMPAT_CALIBRATION", 50964),
             Triple("TAG_VALUE", "TIFF", 258),
             Triple("COLOR_TRANSFORM", "DNG_COLOR_SPEC", 0),
+            Triple("UNSUPPORTED_VALUE", "DNG", 50720),
+            Triple("RESOURCE_LIMIT", "TIFF", 330),
+            Triple("TAG_SHAPE", "COMPAT", 50942),
         )
         cases.forEachIndexed { index, (reason, source, tag) ->
             val payload = valid().put("reason",reason).put("source",source).put("line",100+index)

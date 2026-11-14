@@ -18,14 +18,14 @@ pub struct CodecError {
 pub enum Reason {
     Validation, MissingTag, TagShape, TagValue, BlackWhiteLevel, WhiteBalanceRange,
     D65MatrixMissing, MatrixShape, MatrixRange, MatrixSingular, ColorTransform,
-    ProfileDimensions, ProfileCurve, ProfileEndpoint,
+    ProfileDimensions, ProfileCurve, ProfileEndpoint, UnsupportedValue, ResourceLimit,
 }
 impl CodecError {
     /// Only a fixed diagnostic category and an explicitly supported tag ID.
     /// Never attach metadata payloads, paths, or exception strings.
     pub fn detail(mut self, reason: Reason, tag: Option<u16>) -> Self {
         self.reason = reason;
-        self.tag = tag.filter(|t| matches!(t, 256|257|258|259|262|266|274|277|278|284|317|322|323|339|33421|33422|50710|50711|50713|50719|50720|50829|50714|50717|50721|50722|50723|50724|50727|50728|50730|50778|50779|50931|50932|50937|50938|50939|50940|50964|50965));
+        self.tag = tag.filter(|t| matches!(t, 256|257|258|259|262|266|274|277|278|284|317|322|323|339|33421|33422|50710|50711|50713|50719|50720|50829|50714|50717|50721|50722|50723|50724|50727|50728|50730|50778|50779|50931|50932|50937|50938|50939|50940|50964|50965|50715|50716|50718|50729|50941|50942|50966|50967|50968|50969|50970|50971|50972|50973|51089|51110|51111|330));
         self
     }
 }
@@ -99,6 +99,7 @@ pub fn err(code: &'static str, stage: &'static str) -> CodecError {
             "INVALID_COLOR_METADATA" => "RAW 色彩矩阵、白平衡或黑白电平无效",
             "EDGE_LIMIT" => "照片单边超过32768像素上限",
             "PIXEL_LIMIT" => "照片尺寸超出当前支持范围（最多5200万像素）",
+            "RESOURCE_LIMIT" => "照片超出当前解码器的文件或元数据资源上限，未判定为损坏",
             "MEMORY_BUDGET" => "可用内存预算不足，未开始解码",
             "DISK_BUDGET" => "本地可用空间不足，未开始解码",
             "NO_SPACE" => "本地空间不足，将尝试清理未完成文件",

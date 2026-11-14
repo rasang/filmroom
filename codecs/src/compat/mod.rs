@@ -1,5 +1,5 @@
-//! Shared DNG capability checks plus narrowly scoped brand compatibility policies.
-//! Brand matching never bypasses required opcodes or safety/resource checks.
+//! Shared DNG capability checks and bounded, brand-independent compatibility.
+//! Compatibility never bypasses required opcodes or safety/resource checks.
 mod brands;
 mod calibration;
 mod lens;
@@ -27,12 +27,13 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
     // DNG DefaultBlackRender None is a profile rendering hint: no extra black
     // subtraction before a look table. It does not disable sensor BlackLevel.
     // This linear pipeline has no extra flare/renderer black subtraction.
-    // Admit only the exact verified LONG/count1/None form; Auto/unknown remain closed.
+    // Auto is the DNG default when this optional rendering hint is absent.
+    // Accept explicit Auto identically; neither value bypasses sensor BlackLevel.
     if !std::ptr::eq(root, raw) && raw.contains_key(&51110) {
         return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
     }
     if let Some(value) = root.get(&51110) {
-        if value.typ != 4 || value.count != 1 || value.uints()? != [1] {
+        if value.typ != 4 || value.count != 1 || value.uints()?.first().is_none_or(|v| *v > 1) {
             return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
         }
     }
@@ -50,14 +51,40 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
         }
     }
 
+    descriptive_metadata(root, raw)?;
+
     // These require additional processing not implemented by the pinned developer. Never silently ignore.
     for tag in [
-        50715, 50716, 50729, 50942, 52530, 52532, 52547, 50966, 50967, 50968, 50969, 50971, 50972,
-        50973, 50974, 50975, 51107, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
+        50715, 50716, 52530, 52532, 52547, 50974, 50975, 51107, 51109, 51112, 51113, 51114, 51115, 51116, 51117, 52536,
         52537,
     ] {
         if inherited(root, raw, tag).is_some() {
-            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe"));
+            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe").detail(crate::error::Reason::UnsupportedValue, Some(tag)));
+        }
+    }
+    Ok(())
+}
+
+/// Descriptor/digest fields do not request pixel processing. Validate their
+/// loaded byte shape without logging their contents or claiming digest verification.
+fn descriptive_metadata(root: &Ifd, raw: &Ifd) -> Result<()> {
+    for ifd in [root, raw] {
+        for tag in [50942, 50966, 50967, 50968, 50971] {
+            if let Some(v) = ifd.get(&tag) {
+                let type_ok = if tag == 50971 { v.typ == 2 } else { matches!(v.typ, 1 | 2) };
+                if !type_ok || v.count == 0 || v.bytes.len() != v.count as usize
+                    || v.bytes.last() != Some(&0)
+                    || std::str::from_utf8(&v.bytes[..v.bytes.len() - 1]).is_err() {
+                    return Err(err("INVALID_INPUT", "probe").detail(crate::error::Reason::TagShape, Some(tag)));
+                }
+            }
+        }
+        for tag in [50969, 50972, 50973] {
+            if let Some(v) = ifd.get(&tag) {
+                if v.typ != 1 || v.count != 16 || v.bytes.len() != 16 {
+                    return Err(err("INVALID_INPUT", "probe").detail(crate::error::Reason::TagShape, Some(tag)));
+                }
+            }
         }
     }
     Ok(())
@@ -141,7 +168,7 @@ mod preview_color_tests {
         );
         bad.get_mut(&50970).unwrap().typ = 9;
         assert!(unsupported_processing(&bad, &bad).is_err());
-        for tag in [50715, 50716, 50729, 50942, 52530, 52532, 52547] {
+        for tag in [50715, 50716, 52530, 52532, 52547] {
             let mut ifd = Ifd::new();
             ifd.insert(50970, value(2));
             ifd.insert(tag, value(0));
@@ -150,5 +177,55 @@ mod preview_color_tests {
                 "UNSUPPORTED_DNG_VARIANT"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod standard_metadata_tests {
+    use super::*;
+    use crate::tiff::{Endian, Value};
+    fn bytes(typ: u16, data: &[u8]) -> Value {
+        Value { typ, count: data.len() as u32, bytes: data.to_vec(), endian: Endian::Le }
+    }
+    #[test]
+    fn descriptive_fields_and_digests_do_not_request_processing() {
+        let mut root = Ifd::new();
+        for tag in [50942, 50966, 50967, 50968] {
+            for typ in [1, 2] {
+                root.insert(tag, bytes(typ, "示例\0".as_bytes()));
+                assert!(unsupported_processing(&root, &root).is_ok());
+            }
+        }
+        root.insert(50971, bytes(2, b"2026-11-14T08:00:00Z\0"));
+        for tag in [50969, 50972, 50973] { root.insert(tag, bytes(1, &[7;16])); }
+        assert!(unsupported_processing(&root, &root).is_ok());
+        assert!(unsupported_processing(&root, &Ifd::new()).is_ok());
+        assert!(unsupported_processing(&Ifd::new(), &root).is_ok());
+    }
+    #[test]
+    fn malformed_descriptors_do_not_panic_or_pass() {
+        for value in [bytes(2, b"unterminated"), bytes(2, b""), bytes(7, b"str\0"), bytes(2, &[255,0]),
+            Value { typ:2, count:99, bytes:b"str\0".to_vec(), endian:Endian::Le }] {
+            let mut root = Ifd::new(); root.insert(50942, value);
+            assert_eq!(unsupported_processing(&root, &root).unwrap_err().code, "INVALID_INPUT");
+        }
+        for value in [bytes(1, &[0;15]), bytes(7, &[0;16]),
+            Value { typ:1, count:16, bytes:vec![], endian:Endian::Le }] {
+            let mut root = Ifd::new(); root.insert(50972,value);
+            assert_eq!(unsupported_processing(&root,&root).unwrap_err().code,"INVALID_INPUT");
+        }
+    }
+    #[test]
+    fn explicit_auto_equals_default_black_render() {
+        let mut root = Ifd::new();
+        assert!(unsupported_processing(&root,&root).is_ok());
+        for value in [0u32,1] {
+            root.insert(51110,Value { typ:4,count:1,bytes:value.to_le_bytes().to_vec(),endian:Endian::Le });
+            assert!(unsupported_processing(&root,&root).is_ok());
+        }
+        root.get_mut(&51110).unwrap().bytes=2u32.to_le_bytes().to_vec();
+        assert!(unsupported_processing(&root,&root).is_err());
+        root.get_mut(&51110).unwrap().bytes.clear();
+        assert!(unsupported_processing(&root,&root).is_err());
     }
 }

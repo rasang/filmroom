@@ -3,10 +3,9 @@
 //! an external numerical test oracle only; no SDK source or runtime is included.
 //! This product includes DNG technology under license by Adobe.
 //!
-//! Supported envelope: A/D50 dual illuminants, positive diagonal camera
+//! Supported envelope: A/D50 dual illuminants, full camera
 //! calibration, positive analog balance and AsShotNeutral. The caller must
-//! reject ForwardMatrix, ReductionMatrix, a third calibration, non-diagonal
-//! camera calibration and incompatible profile operations before selecting it.
+//! reject ForwardMatrix, ReductionMatrix, a third calibration and incompatible profile operations before selecting it.
 //! This module does not demosaic, correct bad pixels, warp or render a profile.
 use crate::dng_color_spec::{apply, d50_xyz, inverse, product, robertson_from_table,
     ColorError, ColorResult, Matrix, Vector, D50_XY};
@@ -16,8 +15,8 @@ pub struct Calibration {
     /// TIFF LightSource 17=A or 23=D50; input pair order is immaterial.
     pub illuminant: u16,
     pub color_matrix: Matrix,
-    /// Caller validates the source matrix is exactly diagonal.
-    pub camera_calibration: Vector,
+    /// Full individual-camera calibration matrix.
+    pub camera_calibration: Matrix,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Input {
@@ -52,17 +51,15 @@ fn mix(a: Matrix, d: Matrix, weight: f64) -> Matrix {
     if weight >= 1. { return d; }
     std::array::from_fn(|r| std::array::from_fn(|c| (1. - weight) * a[r][c] + weight * d[r][c]))
 }
-fn prepare(cal: Calibration, ab: Vector, signatures: bool) -> ColorResult<Matrix> {
-    if !positive(cal.camera_calibration) || !cal.color_matrix.iter().flatten().all(|v| v.is_finite()) { return invalid(); }
+fn prepare(cal: Calibration, signatures: bool) -> ColorResult<(Matrix, Matrix)> {
+    if !cal.camera_calibration.iter().flatten().all(|v| v.is_finite()) || !cal.color_matrix.iter().flatten().all(|v| v.is_finite()) { return invalid(); }
     let p = peak(apply(cal.color_matrix, d50_xyz()));
     if !p.is_finite() || p <= 0. { return invalid(); }
     let scale = if (0.99..=1.01).contains(&p) { 1. } else { p };
     let cm = cal.color_matrix.map(|row| row.map(|x| round(x / scale, 1e4)));
-    let cc = if signatures { cal.camera_calibration.map(|x| round(x, 1e4)) } else { [1.; 3] };
-    if !positive(cc) { return invalid(); }
-    let result = product(diagonal(std::array::from_fn(|i| ab[i] * cc[i])), cm);
-    inverse(result)?;
-    Ok(result)
+    let cc = if signatures { cal.camera_calibration.map(|row| row.map(|x| round(x, 1e4))) } else { diagonal([1.;3]) };
+    inverse(cc)?; inverse(cm)?;
+    Ok((cm,cc))
 }
 /// Linear Bradford adaptation, with bounded cone gains for reference-compatible
 /// DNG normalization. Out-of-envelope non-positive cone responses fail closed.
@@ -75,7 +72,12 @@ fn d50_to_white(white: [f64; 2]) -> ColorResult<Matrix> {
     Ok(product(product(inverse(bradford)?, diagonal(gains)), bradford))
 }
 /// Resolve once per image; applying the resulting matrix requires no iteration.
-pub fn resolve(input: &Input) -> ColorResult<Transform> {
+pub fn resolve(input: &Input) -> ColorResult<Transform> { resolve_internal(input,None) }
+/// AsShotWhiteXY bypasses iterative neutral solving but uses the same matrices.
+pub fn resolve_white_xy(input:&Input, xy:[f64;2])->ColorResult<Transform> {
+    xyz(xy)?; resolve_internal(input,Some(xy))
+}
+fn resolve_internal(input: &Input, supplied_xy:Option<[f64;2]>) -> ColorResult<Transform> {
     if !positive(input.analog_balance) || !positive(input.as_shot_neutral) { return invalid(); }
     let [one, two] = input.calibrations;
     let (a, d) = match (one.illuminant, two.illuminant) {
@@ -87,17 +89,18 @@ pub fn resolve(input: &Input) -> ColorResult<Transform> {
     let ab = input.analog_balance.map(|x| round(x / ab_min, 1e6));
     let neutral = input.as_shot_neutral.map(|x| round(x / neutral_max, 1e6));
     if !positive(ab) || !positive(neutral) { return invalid(); }
-    let a = prepare(a, ab, input.calibration_signatures_match)?;
-    let d = prepare(d, ab, input.calibration_signatures_match)?;
+    let (a, acc) = prepare(a, input.calibration_signatures_match)?;
+    let (d, dcc) = prepare(d, input.calibration_signatures_match)?;
+    let xyz_to_camera = |w| product(product(diagonal(ab), mix(acc,dcc,w)), mix(a,d,w));
     let weight = |xy| -> ColorResult<f64> {
         let t = robertson_from_table(xy, true)?;
         Ok(((1. / 2850. - 1. / t) / (1. / 2850. - 1. / 5000.)).clamp(0., 1.))
     };
-    let mut white_xy = D50_XY;
+    let mut white_xy = supplied_xy.unwrap_or(D50_XY);
     let mut iterations = 0;
-    let mut converged = false;
-    for count in 1..=30 {
-        let candidate = apply(inverse(mix(a, d, weight(white_xy)?))?, neutral);
+    let mut converged = supplied_xy.is_some();
+    for count in 1..=if supplied_xy.is_some(){0}else{30} {
+        let candidate = apply(inverse(xyz_to_camera(weight(white_xy)?))?, neutral);
         let sum = candidate.iter().sum::<f64>();
         if !sum.is_finite() || sum <= 0. { return invalid(); }
         let next = [candidate[0] / sum, candidate[1] / sum];
@@ -111,7 +114,7 @@ pub fn resolve(input: &Input) -> ColorResult<Transform> {
     if !converged { return Err(ColorError::NonConvergent.located()); }
     let temperature_kelvin = robertson_from_table(white_xy, true)?;
     let d50_weight = weight(white_xy)?;
-    let cm = mix(a, d, d50_weight);
+    let cm = xyz_to_camera(d50_weight);
     let white = apply(cm, xyz(white_xy)?);
     if !positive(white) { return invalid(); }
     let camera_white = white.map(|x| (x / peak(white)).clamp(0.001, 1.));
@@ -127,8 +130,8 @@ mod tests {
     use super::*;
     fn actual_q2() -> Input {
         Input { calibrations: [
-            Calibration { illuminant: 17, color_matrix: [[1.2587,-0.5232,-0.1496],[-0.3610,1.0841,0.0277],[-0.0911,0.1674,0.2070]], camera_calibration: [1.;3] },
-            Calibration { illuminant: 23, color_matrix: [[0.8389,-0.3198,-0.1019],[-0.3834,1.0222,0.0661],[-0.1122,0.1900,0.3415]], camera_calibration: [1.;3] },
+            Calibration { illuminant: 17, color_matrix: [[1.2587,-0.5232,-0.1496],[-0.3610,1.0841,0.0277],[-0.0911,0.1674,0.2070]], camera_calibration: diagonal([1.;3]) },
+            Calibration { illuminant: 23, color_matrix: [[0.8389,-0.3198,-0.1019],[-0.3834,1.0222,0.0661],[-0.1122,0.1900,0.3415]], camera_calibration: diagonal([1.;3]) },
         ], analog_balance: [1.;3], as_shot_neutral: [1024./2090.,1.,1024./1524.], calibration_signatures_match: true }
     }
     #[test]
@@ -165,7 +168,7 @@ mod tests {
     fn order_signature_and_invalid_metadata() {
         let mut i=actual_q2(); let expected=resolve(&i).unwrap().camera_to_pcs;
         i.calibrations.swap(0,1); assert_eq!(resolve(&i).unwrap().camera_to_pcs,expected);
-        i.calibrations[0].camera_calibration=[2.,1.,3.];
+        i.calibrations[0].camera_calibration=diagonal([2.,1.,3.]);
         i.calibration_signatures_match=false;
         assert_eq!(resolve(&i).unwrap().camera_to_pcs,expected);
         i.calibration_signatures_match=true;
@@ -201,8 +204,8 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
     if [50778,50779].iter().any(|&tag|get(tag).is_none_or(|v|v.typ!=3||v.count!=1)) {return Err(bad());}
     // Forward/reduction matrices, third illuminant and unsupported profile
     // transforms are never silently omitted from this ColorMatrix-only route.
-    if [50725,50726,50729,50964,50965,50937,50938,50939,50940,50941,50942,
-        50981,50982,50983,52525,52529,52530,52531,52532,52544,52547,52548,52549,52550]
+    if [50725,50726,50964,50965,50937,50938,50939,
+        50981,50982,50983,52525,52529,52530,52531,52532,52544,52547]
         .iter().any(|&tag| get(tag).is_some()) { return Err(unsupported()); }
     let matrix = |tag| -> crate::error::Result<Matrix> {
         let v = get(tag).ok_or_else(|| bad().detail(Reason::MissingTag, Some(tag)))?;
@@ -210,11 +213,9 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
         let a = v.nums().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?;
         Ok(std::array::from_fn(|r| std::array::from_fn(|c| a[r*3+c])))
     };
-    let diagonal_cc = |tag| -> crate::error::Result<Vector> {
-        if get(tag).is_none() { return Ok([1.;3]); }
-        let m = matrix(tag)?;
-        if m.iter().enumerate().any(|(r,row)| row.iter().enumerate().any(|(c,&x)| r != c && x != 0.)) { return Err(unsupported()); }
-        Ok([m[0][0],m[1][1],m[2][2]])
+    let camera_cc = |tag| -> crate::error::Result<Matrix> {
+        if get(tag).is_none() { return Ok(diagonal([1.;3])); }
+        matrix(tag)
     };
     let vector = |tag, default: Option<Vector>| -> crate::error::Result<Vector> {
         let Some(v) = get(tag) else { return default.ok_or_else(|| bad().detail(Reason::MissingTag, Some(tag))); };
@@ -233,16 +234,17 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
             }
         }
     };
+    let (neutral, white_xy)=crate::profile_develop::white_balance(root,raw)?;
     let input = Input {
         calibrations: [
-            Calibration { illuminant: pair.0.unwrap(), color_matrix: matrix(50721)?, camera_calibration: diagonal_cc(50723)? },
-            Calibration { illuminant: pair.1.unwrap(), color_matrix: matrix(50722)?, camera_calibration: diagonal_cc(50724)? },
+            Calibration { illuminant: pair.0.unwrap(), color_matrix: matrix(50721)?, camera_calibration: camera_cc(50723)? },
+            Calibration { illuminant: pair.1.unwrap(), color_matrix: matrix(50722)?, camera_calibration: camera_cc(50724)? },
         ],
         analog_balance: vector(50727,Some([1.;3]))?,
-        as_shot_neutral: vector(50728,None)?,
+        as_shot_neutral: neutral,
         calibration_signatures_match: signature(50931)? == signature(50932)?,
     };
-    resolve(&input).map(Some).map_err(|e| e.into_codec())
+    match white_xy {Some(xy)=>resolve_white_xy(&input,xy),None=>resolve(&input)}.map(Some).map_err(|e| e.into_codec())
 }
 
 /// The render path only needs the resolved camera-to-PCS matrix. Keep the
@@ -258,25 +260,39 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
     use crate::{error::{err, Reason}, profile_develop::{self, ColorRoute}};
     if let Some(t) = parse(root, raw)? {
         return Ok(Some(DevelopmentTransform { camera_to_pcs: t.camera_to_pcs,
-            policy: "DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
+            policy: "DNG_STD_V2; DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
     }
     if crate::tiff::uint(raw, 262, Some(0))? != 32803 { return Ok(None); }
     let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
-    let Some(ab) = get(50727) else { return Ok(None); };
-    if ab.typ != 5 || ab.count != 3 {
-        return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagShape, Some(50727)));
-    }
-    let values = ab.nums().map_err(|e| e.detail(Reason::TagValue, Some(50727)))?;
+    let values = if let Some(ab) = get(50727) {
+        if ab.typ != 5 || ab.count != 3 {
+            return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagShape, Some(50727)));
+        }
+        ab.nums().map_err(|e| e.detail(Reason::TagValue, Some(50727)))?
+    } else { vec![1.;3] };
     if values.iter().any(|x| !x.is_finite() || *x <= 0. || *x > 100.) {
         return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagValue, Some(50727)));
     }
-    // Existing unit-AnalogBalance inputs retain their established developer.
-    if values.iter().all(|x| (*x - 1.).abs() <= 1e-8) { return Ok(None); }
+    // Preserve established unit-AB/diagonal-CC development. General channel
+    // mixing requires the complete transform even when AnalogBalance is unit.
+    let mixing = [50723,50724].into_iter().try_fold(false, |found,tag| -> crate::error::Result<bool> {
+        let Some(v)=get(tag) else {return Ok(found)};
+        let m=v.nums()?;
+        if v.typ!=10 || m.len()!=9 {return Err(err("INVALID_COLOR_METADATA","probe").detail(Reason::MatrixShape,Some(tag)));}
+        Ok(found || m.iter().enumerate().any(|(i,x)|i%4!=0 && x.abs()>1e-8))
+    })?;
+    if values.iter().all(|x| (*x - 1.).abs() <= 1e-8) && !mixing && get(50729).is_none() { return Ok(None); }
     // This bounded path does not claim support for extra illuminants,
     // reduction matrices, or spatial profile gain tables on Bayer data.
-    if [50725,50726,52525,52529,52530,52531,52532,52544,52547,52548,52549,52550,52551]
+    if [50725,50726,52525,52529,52530,52531,52532,52544,52547,52551]
         .iter().any(|&tag| get(tag).is_some()) {
         return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
+    }
+    // A valid DNG may use a single illuminant or ColorMatrix-only calibration.
+    // Those envelopes are not implemented here; missing optional FM fields
+    // must not be reported as corrupt metadata merely because we need them.
+    if let Some(tag)=[50721,50722,50778,50779,50964,50965].into_iter().find(|&tag|get(tag).is_none()) {
+        return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::MissingTag,Some(tag)));
     }
     // Reuse the fully validated A/D65, ForwardMatrix, AnalogBalance,
     // CameraCalibration and signature semantics already used by LinearRaw.
@@ -284,7 +300,7 @@ pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
     let p = profile_develop::parse(root, raw, ColorRoute::NewSof3LinearPrecision)?
         .ok_or_else(|| err("UNSUPPORTED_DNG_CALIBRATION", "probe"))?;
     Ok(Some(DevelopmentTransform { camera_to_pcs: p.camera_to_pcs,
-        policy: "DNG A/D65 ForwardMatrix calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
+        policy: "DNG_STD_V2; DNG A/D65 ForwardMatrix calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
 }
 
 #[cfg(test)]
@@ -315,14 +331,27 @@ mod parser_tests {
         let mut i=fixture();i.insert(262,short(34892));assert!(parse(&i,&i).unwrap().is_none());
     }
     #[test]
+    fn parse_white_xy_and_full_cc_are_structural_not_brand_specific() {
+        let mut i=fixture();i.remove(&50728);
+        i.insert(50729,rational(&[3457,3585],10000,false));
+        i.insert(50723,rational(&[100,5,0,0,100,5,0,0,100],100,true));
+        i.insert(50724,rational(&[100,10,0,0,100,10,0,0,100],100,true));
+        let t=parse(&i,&i).unwrap().unwrap();
+        assert_eq!(t.iterations,0);assert_eq!(t.white_xy,D50_XY);
+        let mapped=apply(t.camera_to_pcs,t.camera_white);
+        for c in 0..3 {assert!((mapped[c]-d50_xyz()[c]).abs()<1e-10);}
+        i.insert(50728,rational(&[1,1,1],1,false));
+        assert!(parse(&i,&i).is_err());
+    }
+    #[test]
     fn parse_does_not_drop_unsupported_or_malformed_metadata() {
-        for tag in [50725,50726,50729,50964,50965,52529,52531,52525,50938] {
+        for tag in [50725,50726,50964,50965,52529,52531,52525,50938] {
             let mut i=fixture();i.insert(tag,short(1));assert!(parse(&i,&i).is_err(),"tag {tag}");
         }
         for tag in [50721,50722,50728] {
             let mut i=fixture();i.remove(&tag);assert!(parse(&i,&i).is_err(),"missing {tag}");
         }
-        let mut i=fixture();i.insert(50723,rational(&[1,1,0,0,1,0,0,0,1],1,true));assert!(parse(&i,&i).is_err());
+        let mut i=fixture();i.insert(50723,rational(&[1,0,0,0,0,0,0,0,1],1,true));assert!(parse(&i,&i).is_err());
         let mut i=fixture();i.get_mut(&50721).unwrap().typ=5;assert!(parse(&i,&i).is_err());
         let mut i=fixture();i.get_mut(&50728).unwrap().bytes.clear();assert!(parse(&i,&i).is_err());
         let mut i=fixture();i.insert(50931,Value{typ:2,count:3,bytes:b"bad".to_vec(),endian:Endian::Le});assert!(parse(&i,&i).is_err());
@@ -394,4 +423,29 @@ mod analog_development_tests {
         let mut i=fixture();i.get_mut(&50727).unwrap().typ=10;assert!(parse_development(&i,&i).is_err());
         let mut i=fixture();i.insert(50779,short(22));assert!(parse_development(&i,&i).is_err());
     }
+}
+
+#[cfg(test)]
+mod full_color_tests {
+ use super::*;
+ #[test]
+ fn explicit_d50_has_no_iterative_white_balance_and_identity_transform() {
+  let id=diagonal([1.;3]);
+  let a=Calibration{illuminant:17,color_matrix:id,camera_calibration:id};
+  let i=Input{calibrations:[a,Calibration{illuminant:23,..a}],analog_balance:[1.;3],as_shot_neutral:[1.;3],calibration_signatures_match:true};
+  let t=resolve_white_xy(&i,D50_XY).unwrap();
+  assert_eq!(t.iterations,0);
+  for r in 0..3 {for c in 0..3 {assert!((t.camera_to_pcs[r][c]-id[r][c]).abs()<1e-12);}}
+ }
+ #[test]
+ fn full_camera_matrix_is_not_silently_diagonalized() {
+  let cc=[[1.,0.1,0.],[0.,1.,0.2],[0.,0.,1.]];
+  let a=Calibration{illuminant:17,color_matrix:diagonal([1.;3]),camera_calibration:cc};
+  let i=Input{calibrations:[a,Calibration{illuminant:23,..a}],analog_balance:[1.;3],as_shot_neutral:[1.;3],calibration_signatures_match:true};
+  let t=resolve_white_xy(&i,D50_XY).unwrap();
+  // With D50 adaptation identity, only normalization and inverse CC remain.
+  let white=apply(cc,d50_xyz());let scale=peak(white);
+  let expected=[[1.,-0.1,0.02],[0.,1.,-0.2],[0.,0.,1.]];
+  for r in 0..3 {for c in 0..3 {assert!((t.camera_to_pcs[r][c]-scale*expected[r][c]).abs()<1e-12);}}
+ }
 }

@@ -1,13 +1,23 @@
 use crate::{error::{Result, err, Reason}, tiff::Ifd};
 use super::inherited;
 use super::color_err;
-pub(crate) fn camera_calibration(root: &Ifd, raw: &Ifd) -> Result<()> {
+pub(crate) fn camera_calibration(root: &Ifd, raw: &Ifd, complete_transform: bool) -> Result<()> {
         // Positive diagonal camera calibration is row scaling of XYZ-to-camera.
         // The pinned RawDevelop row-normalizes this matrix, so that scaling
-        // cancels algebraically. Apply it explicitly below; reject channel mixing.
+        // cancels algebraically. The legacy path still rejects channel mixing;
+        // complete transforms above that path consume the full matrix.
         for tag in [50723, 50724] {
             if let Some(v) = inherited(root, raw, tag) {
                 let m = v.nums().map_err(|e| e.detail(Reason::TagValue, Some(tag)))?;
+                if complete_transform {
+                    if v.typ != 10 || m.len() != 9 || m.iter().any(|x| !x.is_finite()) {
+                        return Err(color_err().detail(Reason::MatrixShape, Some(tag)));
+                    }
+                    // The selected transform validates invertibility of the
+                    // calibration actually used. On signature mismatch DNG
+                    // requires identity, so do not invert the ignored matrix.
+                    continue;
+                }
                 if m.len() != 9
                     || m.iter().enumerate().any(|(i, x)| {
                         !x.is_finite()

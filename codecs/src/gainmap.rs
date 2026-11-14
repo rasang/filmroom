@@ -8,6 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone, Debug)]
 pub struct GainMap {
     area: [usize; 4],
+    plane: usize,
+    planes: usize,
+    pitch: [usize; 2],
+    map_planes: usize,
     rows: usize,
     cols: usize,
     spacing: [f64; 2],
@@ -47,7 +51,7 @@ impl<'a> Cursor<'a> {
     }
 }
 /// Returns ordered supported maps and whether an explicitly optional record was skipped.
-/// Admit bounded rectangular, all-three-plane, unit-pitch List3 maps. No silent
+/// Admit bounded rectangular List3 maps, including plane subsets and row/column pitch. No silent
 /// approximation of CFA/List1/List2, cropped stage images, or geometric transforms.
 pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>, bool)> {
     let mut maps = Vec::new();
@@ -83,22 +87,28 @@ pub fn parse(bytes: &[u8], width: usize, height: usize) -> Result<(Vec<GainMap>,
     Ok((maps, skipped))
 }
 
-/// Parse one bounded, all-three-plane, unit-pitch List3 GainMap. The caller
+/// Parse one bounded List3 GainMap in a three-plane camera RGB image. The caller
 /// accounts for the cumulative limits across the complete ordered list.
 pub(crate) fn parse_opcode(payload: &[u8], width: usize, height: usize) -> Result<GainMap> {
     let mut p = Cursor { bytes: payload, pos: 0 };
     let mut area = [0; 8];
     for x in &mut area { *x = p.u32()?; }
     if area[0] >= area[2] || area[1] >= area[3] { return Err(invalid()); }
-    if area[2] as usize > height || area[3] as usize > width || area[4..] != [0, 3, 1, 1] {
+    if area[2] as usize > height || area[3] as usize > width {
         return Err(unsupported());
+    }
+    // The image has three planes. Reject empty/out-of-image ranges and zero
+    // pitch; positive pitch is anchored at the opcode's Top/Left, not the tile.
+    if area[4] >= 3 || area[5] == 0 || area[5] > 3 - area[4]
+        || area[6] == 0 || area[7] == 0 {
+        return Err(invalid());
     }
     let rows = p.u32()? as usize;
     let cols = p.u32()? as usize;
     let spacing = [p.f64()?, p.f64()?];
     let origin = [p.f64()?, p.f64()?];
-    let planes = p.u32()?;
-    if rows == 0 || cols == 0 || planes != 3 { return Err(unsupported()); }
+    let map_planes = p.u32()? as usize;
+    if rows == 0 || cols == 0 || map_planes == 0 { return Err(invalid()); }
     if spacing.iter().any(|v| !v.is_finite() || *v <= 0.)
         || origin.iter().any(|v| !v.is_finite()) {
         return Err(invalid());
@@ -108,7 +118,7 @@ pub(crate) fn parse_opcode(payload: &[u8], width: usize, height: usize) -> Resul
         || origin.iter().any(|v| v.abs() > 1e12) {
         return Err(unsupported());
     }
-    let values = rows.checked_mul(cols).and_then(|v| v.checked_mul(3)).ok_or_else(|| invalid())?;
+    let values = rows.checked_mul(cols).and_then(|v| v.checked_mul(map_planes)).ok_or_else(|| invalid())?;
     if values > MAX_VALUES { return Err(unsupported()); }
     if payload.len() != 76usize.checked_add(values.checked_mul(4).ok_or_else(|| invalid())?).ok_or_else(|| invalid())? {
         return Err(invalid());
@@ -122,6 +132,8 @@ pub(crate) fn parse_opcode(payload: &[u8], width: usize, height: usize) -> Resul
     }
     Ok(GainMap {
         area: [area[0] as usize, area[1] as usize, area[2] as usize, area[3] as usize],
+        plane: area[4] as usize, planes: area[5] as usize,
+        pitch: [area[6] as usize, area[7] as usize], map_planes,
         rows, cols, spacing, origin, gains,
     })
 }
@@ -140,7 +152,10 @@ impl GainMap {
         let x1 = (x0 + 1).min(self.cols - 1);
         let y1 = (y0 + 1).min(self.rows - 1);
         let fy = (v - y0 as f64) as f32;
-        let at = |r, c| self.gains[(r * self.cols + c) * 3 + channel];
+        // Adobe SDK ProcessArea indexes by absolute image plane, not by
+        // (channel - Plane), and replicates the final available map plane.
+        let map_plane = channel.min(self.map_planes - 1);
+        let at = |r, c| self.gains[(r * self.cols + c) * self.map_planes + map_plane];
         let a = at(y0, x0) * (1. - fy) + at(y1, x0) * fy;
         let b = at(y0, x1) * (1. - fy) + at(y1, x1) * fy;
         (a as f64 + (b as f64 - a as f64) * (u - x0 as f64)) as f32
@@ -158,11 +173,14 @@ impl GainMap {
         for (row, line) in pixels.chunks_exact_mut(tile_width).enumerate() {
             if cancel.load(Ordering::Relaxed) { return Err(err("CANCELLED", "develop")); }
             let sy = y + row;
-            if sy < self.area[0] || sy >= self.area[2] { continue; }
+            if sy < self.area[0] || sy >= self.area[2]
+                || (sy - self.area[0]) % self.pitch[0] != 0 { continue; }
             for (col, pixel) in line.iter_mut().enumerate() {
                 let sx = x + col;
-                if sx < self.area[1] || sx >= self.area[3] { continue; }
-                for (ch, value) in pixel.iter_mut().enumerate() {
+                if sx < self.area[1] || sx >= self.area[3]
+                    || (sx - self.area[1]) % self.pitch[1] != 0 { continue; }
+                for (ch, value) in pixel.iter_mut().enumerate()
+                    .skip(self.plane).take(self.planes) {
                     if !value.is_finite() { return Err(err("INVALID_INPUT", "develop")); }
                     let result = *value * self.sample(sx, sy, ch, width, height);
                     if !result.is_finite() { return Err(err("INVALID_INPUT", "develop")); }

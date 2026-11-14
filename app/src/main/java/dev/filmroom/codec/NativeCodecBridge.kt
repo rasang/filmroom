@@ -133,6 +133,7 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
                     "EDGE_LIMIT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.image_edge_limit_32768)
                     "PIXEL_LIMIT"->if(failureReason==PhotoException.Reason.EXPORT)dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d6bc69a0a6a8)else dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5c55db3ba035)
                     "DISK_BUDGET","NO_SPACE"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_6bceec6d29d6)
+                    "RESOURCE_LIMIT"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.raw_codec_resource_limit)
                     "MEMORY_BUDGET"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_d171c3322a9c)
                     "INVALID_COLOR_METADATA"->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_56858cdae70f)
                     else->dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_aff865b41066)

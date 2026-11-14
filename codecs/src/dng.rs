@@ -191,27 +191,40 @@ impl Dng {
         // Beta4 admitted only 16-bit DNG. This explicit new SOF3 LinearRaw
         // route gets complete dual-illuminant calibration even without PGT;
         // existing 16-bit non-PGT inputs retain their established developer.
+        let nonunit_analog = inherited(root, raw, 50727)
+            .map(|v| v.nums()).transpose()?
+            .is_some_and(|v| v.iter().any(|x| (*x - 1.).abs() > 1e-8));
+        let channel_mixing = [50723,50724].iter().try_fold(false, |mixed, &tag| -> Result<bool> {
+            let values = inherited(root, raw, tag).map(|v|v.nums()).transpose()?;
+            Ok(mixed || values.is_some_and(|v|v.iter().enumerate().any(|(i,x)|i%4!=0 && *x!=0.)))
+        })?;
+        let white_xy_present = inherited(root, raw, 50729).is_some();
         let color_route = if !cfa_mode
-            && (compression == 52546 || (compression == 7 && matches!(bits[0], 12 | 14)))
+            && (nonunit_analog || channel_mixing || white_xy_present || compression == 52546 || (compression == 7 && matches!(bits[0], 12 | 14)))
         {
             crate::profile_develop::ColorRoute::NewSof3LinearPrecision
         } else {
             crate::profile_develop::ColorRoute::Legacy
         };
+        if !cfa_mode && (nonunit_analog || channel_mixing || white_xy_present)
+            && [50721,50722,50964,50965,50778,50779].iter().any(|&tag| inherited(root,raw,tag).is_none()) {
+            return Err(err("UNSUPPORTED_DNG_CALIBRATION","probe").detail(Reason::UnsupportedValue,None));
+        }
         let profile = crate::profile_develop::parse(root, raw, color_route)?;
         if profile.is_some() && cfa_mode {
             return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
         }
         crate::compat::unsupported_processing(root, raw)?;
-        crate::compat::camera_calibration(root, raw)?;
         let has_forward_matrix = crate::compat::forward_matrices(root, raw)?;
         let mut warnings = Vec::new();
         let baseline_exposure_ev = crate::compat::baseline_exposure(root, raw)?;
         crate::compat::profile_metadata(root, raw, &mut warnings)?;
         let cfa_color = if cfa_mode { crate::dng_cfa_color::parse_development(root, raw)? } else { None };
-        crate::compat::unit_geometry(root, raw, cfa_color.is_some())?;
+        let complete_color = cfa_color.is_some() || profile.is_some();
+        crate::compat::camera_calibration(root, raw, complete_color)?;
+        crate::compat::unit_geometry(root, raw, complete_color)?;
         let a = arr(nums(raw, 50829)?, [0., 0., height as f64, width as f64])?;
-        if a.iter().any(|x| x.fract() != 0. || *x < 0.)
+        if a.iter().any(|x| !x.is_finite() || x.fract() != 0. || *x < 0.)
             || a[0] >= a[2]
             || a[1] >= a[3]
             || a[2] > height as f64
@@ -245,13 +258,19 @@ impl Dng {
         if origin
             .iter()
             .chain(size.iter())
-            .any(|x| x.fract() != 0. || *x < 0.)
+            .any(|x| !x.is_finite() || *x < 0.)
             || size[0] < 1.
             || size[1] < 1.
             || origin[0] + size[0] > active.w as f64
             || origin[1] + size[1] > active.h as f64
         {
             return Err(err("INVALID_INPUT", "probe"));
+        }
+        // Fractional crop geometry is legal DNG, but the current integer crop
+        // path cannot resample it. Do not mislabel this as damaged metadata.
+        if origin.iter().chain(size.iter()).any(|x| x.fract() != 0.) {
+            return Err(err("UNSUPPORTED_DNG_VARIANT", "probe")
+                .detail(Reason::UnsupportedValue, Some(if origin.iter().any(|x| x.fract()!=0.) {50719} else {50720})));
         }
         let crop = Rect {
             x: active.x + origin[0] as usize,
@@ -329,7 +348,13 @@ impl Dng {
         {
             return Err(color_err().detail(Reason::BlackWhiteLevel, Some(50717)));
         }
-        let neutral = inherited(root, raw, 50728).ok_or_else(|| color_err().detail(Reason::MissingTag, Some(50728)))?.nums().map_err(|e| e.detail(Reason::TagValue, Some(50728)))?;
+        let (mut neutral, white_xy) = crate::profile_develop::white_balance(root, raw)?;
+        // Full color transforms consume the original neutral/XY themselves.
+        // This legacy demosaic placeholder must not impose its WB range on them.
+        if complete_color { neutral = [1.;3]; }
+        if white_xy.is_some() && !complete_color {
+            return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe").detail(Reason::UnsupportedValue, Some(50729)));
+        }
         if neutral.len() != 3
             || neutral
                 .iter()
@@ -351,6 +376,7 @@ impl Dng {
         }
         let mut matrix = None;
         for (mt, il) in [(50721, 50778), (50722, 50779)] {
+            if complete_color { break; }
             if let (Some(m), Some(l)) = (inherited(root, raw, mt), inherited(root, raw, il)) {
                 if l.uints()? == vec![21] {
                     let mut values = m.nums().map_err(|e| e.detail(Reason::TagValue, Some(mt)))?;
@@ -373,11 +399,11 @@ impl Dng {
         }
         // The new ColorMatrix-only route carries its own transform. No D65
         // matrix is invented or relabelled for demosaic-only intermediate data.
-        let matrix = if cfa_color.is_some() { Vec::new() } else { matrix.ok_or_else(|| color_err().detail(Reason::D65MatrixMissing, None))? };
-        if cfa_color.is_none() && (matrix.len() != 9 || matrix.iter().any(|x| !x.is_finite() || x.abs() > 10.)) {
+        let matrix = if complete_color { Vec::new() } else { matrix.ok_or_else(|| color_err().detail(Reason::D65MatrixMissing, None))? };
+        if !complete_color && (matrix.len() != 9 || matrix.iter().any(|x| !x.is_finite() || x.abs() > 10.)) {
             return Err(color_err().detail(Reason::MatrixRange, None));
         }
-        if cfa_color.is_none() {
+        if !complete_color {
         let m = &matrix;
         let det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
             + m[2] * (m[3] * m[7] - m[4] * m[6]);
@@ -609,14 +635,14 @@ impl Dng {
             has_alternate_forward_matrix: self.has_forward_matrix,
             development_policy: if let Some(p) = &self.profile {
                 if p.map.is_some() {
-                    "DNG dual-illuminant ForwardMatrix to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
+                    "DNG_STD_V2; DNG dual-illuminant ForwardMatrix to D50; linearization + RIMM ProfileGainTableMap; linear sRGB, no camera tone curve"
                 } else {
-                    "DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
+                    "DNG_STD_V2; DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
             } else if let Some(color) = &self.cfa_color {
                 color.policy
             } else {
-                "rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
+                "DNG_STD_V2; rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },
             baseline_exposure_applied_ev: self.baseline_exposure_ev,
         }

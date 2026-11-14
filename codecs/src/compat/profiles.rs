@@ -40,9 +40,11 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
         }
         // This basic development also omits the profile tone curve before
         // applying the film pipeline. Validate its points, and report omission;
-        // this is not full DNG camera-profile rendering.
+        // this is not full DNG camera-profile rendering. The standard orders
+        // points by x, not y; a legal non-monotonic display curve is still omitted.
         if let Some(curve) = inherited(root, raw, 50940) {
-            if curve.typ != 11 || curve.count < 4 || curve.count % 2 != 0 || curve.count > 4096 {
+            if curve.typ != 11 || curve.count < 4 || curve.count % 2 != 0 || curve.count > 4096
+                || curve.bytes.len() != curve.count as usize * 4 {
                 return Err(color_err().detail(Reason::ProfileCurve, Some(50940)));
             }
             let points: Vec<f32> = curve
@@ -58,12 +60,12 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
                     .chunks_exact(2)
                     .collect::<Vec<_>>()
                     .windows(2)
-                    .any(|p| p[1][0] <= p[0][0] || p[1][1] < p[0][1])
+                    .any(|p| p[1][0] <= p[0][0])
             {
                 return Err(color_err().detail(Reason::ProfileCurve, Some(50940)));
             }
-            // Keep the shared SDR rule strict except for the bounded vivo
-            // compatibility policy (also validated for Xiaomi). All curve safety checks above still apply.
+            // Use the same bounded compatibility policy for every camera make.
+            // This is nonstandard-file tolerance, not a change to the SDR specification.
             let endpoint = points[points.len() - 1];
             if endpoint != 1.
                 && !super::brands::vivo::allows_subunity_tone_endpoint(root, raw, endpoint, points[points.len() - 3])
@@ -90,12 +92,12 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
         // Original-size hint and digest describe provenance/integrity, not a
         // transform to the current pixels. We do not claim digest verification.
         if let Some(size) = inherited(root, raw, 51089) {
-            if size.typ != 4 || size.uints()?.len() != 2 {
+            if !matches!(size.typ, 3 | 4) || size.uints()?.len() != 2 {
                 return Err(err("INVALID_INPUT", "probe"));
             }
         }
         if let Some(digest) = inherited(root, raw, 51111) {
-            if digest.typ != 1 || digest.count != 16 {
+            if digest.typ != 1 || digest.count != 16 || digest.bytes.len() != 16 {
                 return Err(err("INVALID_INPUT", "probe"));
             }
         }
@@ -182,5 +184,41 @@ mod phone_tone_tests {
         }
         let mut r=root(&[0.,0.,1.,0.998]);r.get_mut(&50940).unwrap().typ=12;
         assert!(profile_metadata(&r,&r,&mut vec![]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod standard_shape_tests {
+    use super::*;
+    use crate::tiff::{Endian, Value};
+    #[test]
+    fn original_size_accepts_both_standard_integer_types() {
+        for (typ, bytes) in [(3,[6000u16,4000].into_iter().flat_map(u16::to_le_bytes).collect()),
+            (4,[6000u32,4000].into_iter().flat_map(u32::to_le_bytes).collect())] {
+            let mut root = Ifd::new();
+            root.insert(51089,Value { typ,count:2,bytes,endian:Endian::Le });
+            profile_metadata(&root,&root,&mut vec![]).unwrap();
+            root.get_mut(&51089).unwrap().bytes.pop();
+            assert!(profile_metadata(&root,&root,&mut vec![]).is_err());
+        }
+    }
+    #[test]
+    fn standard_curve_need_not_be_monotonic_in_y() {
+        let mut root=Ifd::new();
+        let points=[0f32,0.,0.25,0.7,0.5,0.4,1.,1.];
+        root.insert(50940,Value { typ:11,count:8,bytes:points.into_iter().flat_map(f32::to_le_bytes).collect(),endian:Endian::Le });
+        let mut warnings=vec![];
+        profile_metadata(&root,&root,&mut warnings).unwrap();
+        assert!(warnings.iter().any(|w|w.code=="DNG_CAMERA_TONE_CURVE_NOT_APPLIED"));
+    }
+    #[test]
+    fn declared_curve_count_must_match_loaded_bytes() {
+        for bytes in [vec![],vec![0;4],vec![0;15],vec![0;20]] {
+            let mut root = Ifd::new();
+            root.insert(50940,Value { typ:11,count:4,bytes,endian:Endian::Le });
+            let error=profile_metadata(&root,&root,&mut vec![]).unwrap_err();
+            assert_eq!(error.code,"INVALID_COLOR_METADATA");
+            assert_eq!(error.tag,Some(50940));
+        }
     }
 }

@@ -18,7 +18,7 @@ class CodecDiagnosticDetail private constructor(
     companion object {
         private val tags = setOf(256L,257L,258L,259L,262L,266L,274L,277L,278L,284L,317L,322L,323L,339L,
             33421L,33422L,50710L,50711L,50713L,50719L,50720L,50829L,50714L,50717L,50721L,50722L,50723L,50724L,50727L,50728L,
-            50730L,50778L,50779L,50931L,50932L,50937L,50938L,50939L,50940L,50964L,50965L)
+            50730L,50778L,50779L,50931L,50932L,50937L,50938L,50939L,50940L,50964L,50965L,50715L,50716L,50718L,50729L,50941L,50942L,50966L,50967L,50968L,50969L,50970L,50971L,50972L,50973L,51089L,51110L,51111L,330L)
         fun fromNative(json: JSONObject?): CodecDiagnosticDetail? = if (number(json?.opt("diagnosticSchema")) != 1L) null else parse(
             json?.opt("reason") as? String, json?.opt("source") as? String,
             number(json?.opt("line")), number(json?.opt("column")), number(json?.opt("tag")))
@@ -39,7 +39,7 @@ class CodecDiagnosticDetail private constructor(
     private enum class Reason {
         VALIDATION, MISSING_TAG, TAG_SHAPE, TAG_VALUE, BLACK_WHITE_LEVEL, WHITE_BALANCE_RANGE,
         D65_MATRIX_MISSING, MATRIX_SHAPE, MATRIX_RANGE, MATRIX_SINGULAR, COLOR_TRANSFORM,
-        PROFILE_DIMENSIONS, PROFILE_CURVE, PROFILE_ENDPOINT,
+        PROFILE_DIMENSIONS, PROFILE_CURVE, PROFILE_ENDPOINT, UNSUPPORTED_VALUE, RESOURCE_LIMIT,
     }
     private enum class Source {
         DNG, TIFF, DNG_CFA_COLOR, DNG_COLOR_SPEC, PROFILE_DEVELOP, PROFILE_GAIN_TABLE,

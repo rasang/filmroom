@@ -82,21 +82,18 @@ fn verified_vivo_endpoint_and_policy_boundary() {
     ));
 }
 #[test]
-fn brand_match_is_exact_ascii_not_model_or_prefix() {
+fn bounded_compatibility_is_independent_of_brand() {
     for (i, make) in [
         b"OPPO\0" as &[u8],
         b"Xiaomi\0",
         b"Vivo X300\0",
         b"vivox\0",
         b" vivo\0",
-        b"vivo\0\0",
-        b"vivo",
-        b"\0",
     ]
     .into_iter()
     .enumerate()
     {
-        assert!(!accepted(
+        assert!(accepted(
             make,
             11,
             &[0., 0., 1., 0.9971559],

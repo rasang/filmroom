@@ -794,4 +794,5 @@
     <string name="preview_histogram_description">Brightness histogram of the current photo preview</string>
     <string name="film_none">None</string>
     <string name="photo_location_import_help">To retain capture location, prefer the original via Files and allow access to location embedded in photos (not your current location). Editing still works if denied. A picker or shared copy may remove location; permission cannot restore removed metadata.</string>
+    <string name="raw_codec_resource_limit">Photo exceeds the decoder’s file or metadata limits. It is not necessarily damaged.</string>
 </resources>

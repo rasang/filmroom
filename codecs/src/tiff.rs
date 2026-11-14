@@ -1,5 +1,5 @@
 //! Bounded classic-TIFF metadata reader. Unknown metadata is never copied or logged.
-use crate::error::{Result, err, io_error};
+use crate::error::{Result, err, io_error, Reason};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -107,7 +107,10 @@ impl Tiff {
     }
     fn read_mode(file: &mut File, camera: bool) -> Result<Self> {
         let size = file.metadata().map_err(|e| io_error(e, "probe"))?.len();
-        if !(8..=512 * 1024 * 1024).contains(&size) {
+        if size > 512 * 1024 * 1024 {
+            return Err(err("RESOURCE_LIMIT", "probe").detail(Reason::ResourceLimit, None));
+        }
+        if size < 8 {
             return Err(err("INVALID_INPUT", "probe"));
         }
         let mut h = [0; 8];
@@ -130,9 +133,13 @@ impl Tiff {
             if off == 0 {
                 continue;
             }
-            if !seen.insert(off) || seen.len() > 16 {
+            if seen.contains(&off) {
                 return Err(err("INVALID_INPUT", "probe"));
             }
+            if seen.len() >= 16 {
+                return Err(err("RESOURCE_LIMIT", "probe").detail(Reason::ResourceLimit, None));
+            }
+            seen.insert(off);
             if off as u64 + 2 > size {
                 return Err(err("INVALID_INPUT", "probe"));
             }
@@ -141,7 +148,10 @@ impl Tiff {
             let mut b = [0; 2];
             file.read_exact(&mut b).map_err(|e| io_error(e, "probe"))?;
             let n = endian.u16(&b) as usize;
-            if n > 256 || off as u64 + 6 + n as u64 * 12 > size {
+            if n > 256 {
+                return Err(err("RESOURCE_LIMIT", "probe").detail(Reason::ResourceLimit, None));
+            }
+            if off as u64 + 6 + n as u64 * 12 > size {
                 return Err(err("INVALID_INPUT", "probe"));
             }
             let mut entries = vec![0; n * 12 + 4];
@@ -231,7 +241,7 @@ impl Tiff {
                 if tag==50712 && (typ!=3 || count==0 || count>65536) {
                     return Err(err("INVALID_COLOR_METADATA", "probe"));
                 }
-                if tag==52525 && (typ!=7 || len<68 || len>crate::profile_gain_table::MAX_BYTES) {
+                if tag==52525 && (typ!=7 || len<68) {
                     return Err(err("INVALID_COLOR_METADATA", "probe"));
                 }
                 if len
@@ -242,7 +252,7 @@ impl Tiff {
                     })
                     || bytes_total + len > 512 * 1024
                 {
-                    return Err(err("INVALID_INPUT", "probe"));
+                    return Err(err("RESOURCE_LIMIT", "probe").detail(Reason::ResourceLimit, Some(tag)));
                 }
                 bytes_total += len;
                 let mut bytes = vec![0; len];
@@ -274,7 +284,7 @@ impl Tiff {
             }
             if let Some(sub) = ifd.get(&330) {
                 if sub.count > 8 {
-                    return Err(err("INVALID_INPUT", "probe"));
+                    return Err(err("RESOURCE_LIMIT", "probe").detail(Reason::ResourceLimit, Some(330)));
                 }
                 // The A100 transitional container uses SubIFDs as an entropy offset.
                 let legacy_a100 = camera

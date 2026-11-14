@@ -5,7 +5,7 @@
 //! no Adobe SDK code is shipped. SDK is an external test oracle only.
 //! This is NOT a complete Adobe profile/render pipeline.
 //! Supported initial contract: 3 channels, two illuminants A/D65, both forward
-//! matrices, positive diagonal camera calibration/analog balance, neutral WB.
+//! matrices, full camera-calibration matrices, positive analog balance, neutral WB.
 //! DNG calibration uses the reference-compatible 325-mired ordinate; the
 //! standalone Robertson utility retains the independently corrected dataset.
 //! It rejects nonconvergence instead of concealing an approximate white point.
@@ -54,8 +54,8 @@ pub struct Calibration {
     pub illuminant: u16,
     pub color_matrix: Matrix,
     pub forward_matrix: Matrix,
-    /// Caller must validate that the original matrix is exactly diagonal.
-    pub camera_calibration: Vector,
+    /// Full individual-camera calibration matrix; ignored on signature mismatch.
+    pub camera_calibration: Matrix,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Input {
@@ -131,22 +131,30 @@ fn profile_fm(m:Matrix)->ColorResult<Matrix> {
     inverse(result)?;Ok(result)
 }
 #[derive(Clone,Copy)]
-struct Prepared { cm:Matrix,fm:Matrix,cc:Vector }
+struct Prepared { cm:Matrix,fm:Matrix,cc:Matrix }
 fn prepare(c:Calibration,ab:Vector,signatures_match:bool)->ColorResult<Prepared> {
-    if !positive(c.camera_calibration) {return bad();}
-    let cc=if signatures_match {c.camera_calibration.map(round4)}else{[1.;3]};
-    if !positive(cc) {return bad();}
-    let cm=product(diagonal(std::array::from_fn(|i|ab[i]*cc[i])),profile_cm(c.color_matrix)?);
-    inverse(cm)?;
+    if !c.camera_calibration.iter().flatten().all(|v| v.is_finite()) {return bad();}
+    let cc=if signatures_match {rounded(c.camera_calibration)}else{ID};
+    inverse(cc)?;
+    let cm=profile_cm(c.color_matrix)?;
+    inverse(product(product(diagonal(ab), cc), cm))?;
     Ok(Prepared{cm,fm:profile_fm(c.forward_matrix)?,cc})
 }
 /// Validated production envelope. No per-pixel iteration or allocation.
 pub fn resolve(input:&Input)->ColorResult<Transform> {
-    resolve_with_cct(input, |xy|robertson_from_table(xy,true))
+    resolve_internal(input, None, |xy|robertson_from_table(xy,true))
+}
+/// Resolve a standard AsShotWhiteXY directly, without a neutral-to-xy iteration.
+pub fn resolve_white_xy(input:&Input, xy:[f64;2])->ColorResult<Transform> {
+    xyz(xy)?;
+    resolve_internal(input, Some(xy), |xy|robertson_from_table(xy,true))
 }
 /// Injectable CCT evaluator for independent matrix unit/oracle tests. Not a
 /// fallback: production callers must use resolve until broader validation.
 pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->ColorResult<Transform> {
+    resolve_internal(input,None,cct)
+}
+fn resolve_internal(input:&Input, supplied_xy:Option<[f64;2]>, cct:impl Fn([f64;2])->ColorResult<f64>)->ColorResult<Transform> {
     if !positive(input.analog_balance)||!positive(input.as_shot_neutral) {return bad();}
     // Metadata normalization is explicit and mirrors the chosen numerical
     // convention: AB minimum=1, neutral maximum=1, six decimal places.
@@ -166,10 +174,11 @@ pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->C
         let t=cct(xy)?;if !t.is_finite()||t<=0. {return bad();}
         Ok(((1./2850.-1./t)/(1./2850.-1./6500.)).clamp(0.,1.))
     };
-    let mut xy=D50_XY;let mut iterations=0;let mut converged=false;
-    for count in 1..=30 {
+    let mut xy=supplied_xy.unwrap_or(D50_XY);let mut iterations=0;let mut converged=supplied_xy.is_some();
+    for count in 1..=if supplied_xy.is_some(){0}else{30} {
         let weight=blend(xy)?;
-        let v=apply(inverse(mix(a.cm,d.cm,weight))?,neutral);
+        let xyz_to_camera=product(product(diagonal(ab),mix(a.cc,d.cc,weight)),mix(a.cm,d.cm,weight));
+        let v=apply(inverse(xyz_to_camera)?,neutral);
         let sum=v.iter().sum::<f64>();if !sum.is_finite()||sum<=0. {return bad();}
         let next=[v[0]/sum,v[1]/sum];xyz(next)?;
         iterations=count;
@@ -178,12 +187,12 @@ pub fn resolve_with_cct(input:&Input, cct:impl Fn([f64;2])->ColorResult<f64>)->C
     }
     if !converged {return Err(ColorError::NonConvergent.located());}
     let temperature_kelvin=cct(xy)?;let weight=blend(xy)?;
-    let cam=apply(mix(a.cm,d.cm,weight),xyz(xy)?);
+    let cam=apply(product(product(diagonal(ab),mix(a.cc,d.cc,weight)),mix(a.cm,d.cm,weight)),xyz(xy)?);
     let peak=cam.into_iter().fold(f64::NEG_INFINITY,f64::max);
     if !positive(cam)||!peak.is_finite() {return bad();}
     let camera_white=cam.map(|x|(x/peak).clamp(0.001,1.));
-    let cc:Vector=std::array::from_fn(|i|(1.-weight)*a.cc[i]+weight*d.cc[i]);
-    let individual_to_reference=diagonal(std::array::from_fn(|i|1./(ab[i]*cc[i])));
+    let cc=mix(a.cc,d.cc,weight);
+    let individual_to_reference=inverse(product(diagonal(ab),cc))?;
     let reference_neutral=apply(individual_to_reference,camera_white);
     if !positive(reference_neutral) {return bad();}
     let camera_to_pcs=product(product(mix(a.fm,d.fm,weight),diagonal(reference_neutral.map(|x|1./x))),individual_to_reference);
@@ -297,7 +306,7 @@ mod tests {
         assert!(!serialized.contains("NaN"));
     }
     fn expert()->Input {
-        let cal=[1.0029296875,1.,1.0087890625];
+        let cal=diagonal([1.0029296875,1.,1.0087890625]);
         Input{analog_balance:[1.;3],as_shot_neutral:[493./1024.,1.,179./256.],calibration_signatures_match:true,
             calibrations:[
                 Calibration{illuminant:21,camera_calibration:cal,
@@ -343,7 +352,7 @@ mod tests {
     #[test] fn warm_domain_reference_converges() {
         let t=robertson_cct([0.4476,0.4074]).unwrap();assert!(t<3500.);
         let mut i=expert();let c=prepare(i.calibrations[1],[1.;3],true).unwrap();
-        i.as_shot_neutral=apply(c.cm,xyz([0.4476,0.4074]).unwrap());
+        i.as_shot_neutral=apply(product(c.cc,c.cm),xyz([0.4476,0.4074]).unwrap());
         assert!(resolve(&i).is_ok());
     }
 }
@@ -351,9 +360,63 @@ mod tests {
 #[cfg(test)] mod additional_actual_oracles {
 use super::*;
 #[test] fn s23_6697_3403k_matches_sdk2768() {
-let input=Input { calibrations:[Calibration{illuminant:21,color_matrix:[[0.8115234375,-0.18359375,-0.123046875],[-0.5947265625,1.501953125,0.05859375],[-0.162109375,0.3330078125,0.43359375]],forward_matrix:[[0.6552734375,0.1298828125,0.1787109375],[0.259765625,0.7236328125,0.0166015625],[0.0322265625,-0.380859375,1.173828125]],camera_calibration:[0.986328125,1.0,1.02734375]},Calibration{illuminant:17,color_matrix:[[1.7353515625,-0.9775390625,-0.1767578125],[-0.404296875,1.484375,-0.1123046875],[-0.0078125,0.19921875,0.47265625]],forward_matrix:[[0.4814453125,0.197265625,0.28515625],[0.0986328125,0.7568359375,0.14453125],[-0.115234375,-0.7919921875,1.7314453125]],camera_calibration:[0.986328125,1.0,1.02734375]},],analog_balance:[1.;3],as_shot_neutral:[0.708984375, 1.0, 0.431640625],calibration_signatures_match:true};
+let input=Input { calibrations:[Calibration{illuminant:21,color_matrix:[[0.8115234375,-0.18359375,-0.123046875],[-0.5947265625,1.501953125,0.05859375],[-0.162109375,0.3330078125,0.43359375]],forward_matrix:[[0.6552734375,0.1298828125,0.1787109375],[0.259765625,0.7236328125,0.0166015625],[0.0322265625,-0.380859375,1.173828125]],camera_calibration:diagonal([0.986328125,1.0,1.02734375])},Calibration{illuminant:17,color_matrix:[[1.7353515625,-0.9775390625,-0.1767578125],[-0.404296875,1.484375,-0.1123046875],[-0.0078125,0.19921875,0.47265625]],forward_matrix:[[0.4814453125,0.197265625,0.28515625],[0.0986328125,0.7568359375,0.14453125],[-0.115234375,-0.7919921875,1.7314453125]],camera_calibration:diagonal([0.986328125,1.0,1.02734375])},],analog_balance:[1.;3],as_shot_neutral:[0.708984375, 1.0, 0.431640625],calibration_signatures_match:true};
 let t=resolve(&input).unwrap();assert!(t.temperature_kelvin>3333.333 && t.temperature_kelvin<3500.);
 let expected=[[0.750284960320298,0.17786932576964934,0.5895786713137943],[0.20487591071192846,0.7472466422201414,0.24904867150320717],[-0.10245139158578376,-0.6736575926762108,3.640522088700886]];
 for r in 0..3{for c in 0..3{assert!((t.camera_to_pcs[r][c]-expected[r][c]).abs()<1e-12);}}
 }
+}
+
+#[cfg(test)]
+mod general_calibration_tests {
+    use super::*;
+    #[test]
+    fn non_diagonal_calibration_uses_full_inverse_not_diagonal_approximation() {
+        // An analytically invertible upper-triangular matrix. Both calibrations
+        // differ, so this also exercises CC interpolation separately from CM.
+        let a=Calibration{illuminant:17,color_matrix:ID,forward_matrix:ID,
+            camera_calibration:[[1.,0.1,0.],[0.,1.,0.1],[0.,0.,1.]]};
+        let d=Calibration{illuminant:21,color_matrix:ID,forward_matrix:ID,
+            camera_calibration:[[1.,0.3,0.],[0.,1.,0.3],[0.,0.,1.]]};
+        let input=Input{calibrations:[a,d],analog_balance:[1.,2.,3.],
+            as_shot_neutral:[0.5,1.,0.75],calibration_signatures_match:true};
+        let midpoint=2./(1./2850.+1./6500.);
+        let t=resolve_with_cct(&input, |_|Ok(midpoint)).unwrap();
+        assert!((t.d65_weight-0.5).abs()<1e-12);
+        // Inverse(diag(1,2,3) * [[1,.2,0],[0,1,.2],[0,0,1]])
+        let inv=[[1.,-0.1,0.04/3.],[0.,0.5,-0.2/3.],[0.,0.,1./3.]];
+        let reference:[f64;3]=std::array::from_fn(|r|(0..3).map(|c|inv[r][c]*t.camera_white[c]).sum());
+        for r in 0..3 {for c in 0..3 {
+            let expected=d50_xyz()[r]/reference[r]*inv[r][c];
+            assert!((t.camera_to_pcs[r][c]-expected).abs()<1e-12);
+        }}
+        assert!(t.camera_to_pcs[0][1].abs()>0.01);
+        let mut ignored=input; ignored.calibration_signatures_match=false;
+        let t=resolve_with_cct(&ignored, |_|Ok(midpoint)).unwrap();
+        assert!(t.camera_to_pcs[0][1].abs()<1e-12);
+    }
+    #[test]
+    fn general_calibration_still_rejects_singular_and_nonfinite() {
+        let base=Calibration{illuminant:17,color_matrix:ID,forward_matrix:ID,camera_calibration:ID};
+        let mut input=Input{calibrations:[base,Calibration{illuminant:21,..base}],analog_balance:[1.;3],as_shot_neutral:[0.5,1.,0.7],calibration_signatures_match:true};
+        input.calibrations[0].camera_calibration=[[1.,1.,0.],[1.,1.,0.],[0.,0.,1.]];
+        assert!(resolve(&input).is_err());
+        input.calibrations[0].camera_calibration=ID;
+        input.calibrations[0].camera_calibration[0][1]=f64::NAN;
+        assert!(resolve(&input).is_err());
+    }
+}
+
+#[cfg(test)]
+mod white_xy_tests {
+ use super::*;
+ #[test]
+ fn direct_d50_identity_profile_is_identity_and_no_iteration() {
+  let a=Calibration{illuminant:17,color_matrix:ID,forward_matrix:ID,camera_calibration:ID};
+  let i=Input{calibrations:[a,Calibration{illuminant:21,..a}],analog_balance:[1.;3],as_shot_neutral:[1.;3],calibration_signatures_match:true};
+  let t=resolve_white_xy(&i,D50_XY).unwrap();
+  assert_eq!(t.iterations,0);assert_eq!(t.white_xy,D50_XY);
+  for r in 0..3 {for c in 0..3 {assert!((t.camera_to_pcs[r][c]-ID[r][c]).abs()<1e-12);}}
+  for xy in [[0.,0.3],[0.5,0.5],[f64::NAN,0.3]] {assert!(resolve_white_xy(&i,xy).is_err());}
+ }
 }

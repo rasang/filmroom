@@ -413,3 +413,92 @@ fn bounded_map_count_and_dynamic_cancel_in_operation() {
     assert_eq!(result.unwrap_err().code, "CANCELLED");
     assert_eq!(*pixels.last().unwrap(), [0.1; 3]);
 }
+
+fn area_payload(area: [u32; 8], rows: u32, cols: u32, map_planes: u32, gains: &[f32]) -> Vec<u8> {
+    let mut p = payload(area[3], area[2], rows, cols, &[]);
+    for (i, value) in area.iter().enumerate() {
+        p[i * 4..i * 4 + 4].copy_from_slice(&value.to_be_bytes());
+    }
+    p[72..76].copy_from_slice(&map_planes.to_be_bytes());
+    for value in gains { p.extend(value.to_be_bytes()); }
+    p
+}
+
+#[test]
+fn plane_subset_uses_absolute_sdk_plane_and_replicates_last_map_plane() {
+    // Adobe SDK dng_opcode_GainMap::ProcessArea uses min(imagePlane,
+    // MapPlanes-1), not a plane index relative to the area Plane field.
+    for (first, planes, map_planes, gains, expected) in [
+        (1, 1, 3, vec![2., 3., 4.], [0.1, 0.3, 0.1]),
+        (1, 2, 2, vec![2., 3.], [0.1, 0.3, 0.3]),
+        (0, 3, 1, vec![2.], [0.2, 0.2, 0.2]),
+        (2, 1, 1, vec![4.], [0.1, 0.1, 0.4]),
+    ] {
+        let p = area_payload([0, 0, 2, 3, first, planes, 1, 1], 1, 1, map_planes, &gains);
+        let maps = gainmap::parse(&list(&[record(9, &p)]), 3, 2).unwrap().0;
+        let mut pixels = vec![[0.1; 3]; 6];
+        gainmap::apply(&maps, &mut pixels, 3, 2, 0, &AtomicBool::new(false)).unwrap();
+        assert!(pixels.iter().all(|p| *p == expected));
+    }
+}
+
+#[test]
+fn pitched_subarea_affine_oracle_and_non_aligned_tiles() {
+    let (w, h) = (13usize, 17usize);
+    let area = [1, 2, 16, 12, 1, 2, 3, 2];
+    let mut gains = vec![];
+    for row in 0..3 {
+        for col in 0..4 {
+            // Two map planes: R unused, G and B both use the second.
+            gains.extend([1., 1. + row as f32 / 2. + col as f32 / 3.]);
+        }
+    }
+    let maps = gainmap::parse(&list(&[record(9, &area_payload(area, 3, 4, 2, &gains))]), w, h).unwrap().0;
+    let cancel = AtomicBool::new(false);
+    let mut full = vec![[0.1; 3]; w*h];
+    gainmap::apply(&maps, &mut full, w, h, 0, &cancel).unwrap();
+    for y in 0..h {
+        for x in 0..w {
+            let active = (1..16).contains(&y) && (2..12).contains(&x)
+                && (y-1)%3 == 0 && (x-2)%2 == 0;
+            let expected = if active {
+                (0.1 * (1. + (y as f64+0.5)/h as f64 + (x as f64+0.5)/w as f64)) as f32
+            } else {0.1};
+            assert_eq!(full[y*w+x][0], 0.1);
+            assert!((full[y*w+x][1] - expected).abs() < 1e-7);
+            assert_eq!(full[y*w+x][1], full[y*w+x][2]);
+        }
+    }
+    // Crop the work tiles, not the stage image. Pitch stays anchored to the
+    // original opcode area even when tile origins have different remainders.
+    let mut stitched = vec![[0.; 3]; w*h];
+    for top in (0..h).step_by(4) {
+        for left in (0..w).step_by(5) {
+            let tw = 5.min(w-left); let th = 4.min(h-top);
+            let mut tile = vec![[0.1; 3]; tw*th];
+            maps[0].apply_region(&mut tile, w, h, left, top, tw, &cancel).unwrap();
+            for row in 0..th {
+                stitched[(top+row)*w+left..(top+row)*w+left+tw]
+                    .copy_from_slice(&tile[row*tw..(row+1)*tw]);
+            }
+        }
+    }
+    assert_eq!(full, stitched);
+}
+
+#[test]
+fn generalized_map_rejects_empty_or_out_of_bounds_planes_and_zero_pitch() {
+    let valid = area_payload([0, 0, 2, 2, 0, 3, 1, 1], 1, 1, 1, &[1.]);
+    for (offset, value) in [(16, 3u32), (20, 0), (20, u32::MAX), (24, 0), (28, 0), (72, 0), (72, u32::MAX)] {
+        let mut bad = valid.clone();
+        bad[offset..offset+4].copy_from_slice(&value.to_be_bytes());
+        assert!(gainmap::parse(&list(&[record(9, &bad)]), 2, 2).is_err());
+    }
+    // Each positive pitch remains legal even if only its first sample falls in
+    // the area. Large values do not overflow the modulo-based traversal.
+    let p = area_payload([0, 0, 2, 2, 0, 3, u32::MAX, u32::MAX], 1, 1, 1, &[2.]);
+    let maps = gainmap::parse(&list(&[record(9, &p)]), 2, 2).unwrap().0;
+    let mut pixels = vec![[0.1; 3]; 4];
+    gainmap::apply(&maps, &mut pixels, 2, 2, 0, &AtomicBool::new(false)).unwrap();
+    assert_eq!(pixels, vec![[0.2;3],[0.1;3],[0.1;3],[0.1;3]]);
+}
