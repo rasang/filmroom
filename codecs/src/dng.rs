@@ -54,7 +54,7 @@ pub struct Dng {
     pub cfa_gain_maps: Vec<crate::cfa_gainmap::CfaGainMap>,
     pub stage1_opcodes: Vec<crate::opcodes::Stage1Opcode>,
     pub warp: Option<crate::dng_warp::WarpPipeline>,
-    pub cfa_color: Option<crate::dng_cfa_color::Transform>,
+    pub cfa_color: Option<crate::dng_cfa_color::DevelopmentTransform>,
 }
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -208,7 +208,8 @@ impl Dng {
         let mut warnings = Vec::new();
         let baseline_exposure_ev = crate::compat::baseline_exposure(root, raw)?;
         crate::compat::profile_metadata(root, raw, &mut warnings)?;
-        crate::compat::unit_geometry(root, raw)?;
+        let cfa_color = if cfa_mode { crate::dng_cfa_color::parse_development(root, raw)? } else { None };
+        crate::compat::unit_geometry(root, raw, cfa_color.is_some())?;
         let a = arr(nums(raw, 50829)?, [0., 0., height as f64, width as f64])?;
         if a.iter().any(|x| x.fract() != 0. || *x < 0.)
             || a[0] >= a[2]
@@ -345,7 +346,6 @@ impl Dng {
         if wb.iter().any(|&x| x > 100.) {
             return Err(color_err().detail(Reason::WhiteBalanceRange, Some(50728)));
         }
-        let cfa_color = if cfa_mode { crate::dng_cfa_color::parse(root, raw)? } else { None };
         if cfa_color.is_some() && !gain_maps.is_empty() {
             return Err(err("UNSUPPORTED_DNG_OPCODE", "probe"));
         }
@@ -613,8 +613,8 @@ impl Dng {
                 } else {
                     "DNG dual-illuminant ForwardMatrix to D50; normalized LinearRaw; linear sRGB, no camera tone curve"
                 }
-            } else if self.cfa_color.is_some() {
-                "DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve"
+            } else if let Some(color) = &self.cfa_color {
+                color.policy
             } else {
                 "rawler0.7.2 ColorMatrix(D65)+AsShotNeutral; not full Adobe/Camera2 processing"
             },

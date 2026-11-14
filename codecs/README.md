@@ -113,3 +113,17 @@ The earlier JPEG-XL exclusion is superseded only for the validated 16-bit, three
 ## 内嵌镜头畸变扩展
 
 当前分支扩展 CFA DNG `OpcodeList3` 的 `WarpRectilinear`、`WarpFisheye` 与有序 `GainMap` 链，并接入 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 的受支持内嵌畸变模型。厂商路径仅覆盖几何畸变，使用有界、磁盘承载的相机 RGB 重采样，在最终裁切/方向和色彩转换前执行。所需临时磁盘空间纳入实际预算；照片信息区显示应用或未应用状态。参数边界、参考坐标域、自动填充缩放、公开样片及本轮验证见 [EMBEDDED-LENS-CORRECTIONS](docs/EMBEDDED-LENS-CORRECTIONS.md)。该文档扩展早期 Q2 单个必需 WarpRectilinear 的支持范围，未扩大其历史 SDK 对照结果。
+
+## 手机 DNG 非单位 AnalogBalance 校准
+
+针对已验证的 Bayer、A/D65 双光源和双 ForwardMatrix 元数据，非单位
+AnalogBalance 进入白点求解与相机 RGB → XYZ D50 变换，不会被丢弃或再次乘到
+传感器像素上。单位 AnalogBalance 的既有路径保持不变。该扩展不是全部手机
+RAW 的支持承诺；非对角校准、未知光源、未实现的必需操作仍受各自准入限制。
+
+一份 Xiaomi 手机样本的 ProfileToneCurve 末端为 `(1, 0.997156024)`，不符合
+SDR DNG 的 `(1, 1)` 端点要求。这里沿用已验证 vivo 样本的有界兼容策略：
+仅对明确识别的厂商、IFD0 曲线、无 HDR 声明且末端位于 `[0.997, 1)` 的情况
+容错，其他曲线安全检查不变。该阈值是产品兼容策略，不是规范或浮点误差。
+原文件与曲线不修改；基础 RAW 胶片流程仍不套用相机显示曲线，并同时记录
+`DNG_NONSTANDARD_TONE_ENDPOINT` 和 `DNG_CAMERA_TONE_CURVE_NOT_APPLIED`。

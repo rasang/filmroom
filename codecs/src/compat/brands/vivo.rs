@@ -1,12 +1,13 @@
 use crate::tiff::Ifd;
 
-/// Narrow admission for a nonstandard SDR profile curve produced by vivo.
-/// The observed file ends at (1, 0.9971559047698975), not the DNG-required (1, 1).
+/// Narrow admission for a nonstandard SDR profile curve produced by the validated vivo and Xiaomi samples.
+/// The observed vivo file ends at (1, 0.9971559047698975), not the DNG-required (1, 1).
 /// 0.997 is an explicit maximum 0.3% white-end deficit policy, NOT an assertion
 /// that this is floating-point roundoff or that the file meets the SDR spec.
 /// Explicit ProfileDynamicRange declarations are outside this exception.
 /// Caller must retain all shape/type/range/monotonicity and (0,0)/final-x checks.
-/// This only permits the already-omitted camera curve to be ignored with the
+/// The Xiaomi sample ends at 0.997156023979187. This only permits the
+/// already-omitted camera curve to be ignored with the
 /// existing warning. It never rewrites the file, normalizes or applies a curve.
 /// Brand admission is deliberately independent of Model and CFA layout.
 pub(crate) fn allows_subunity_tone_endpoint(
@@ -29,7 +30,8 @@ pub(crate) fn allows_subunity_tone_endpoint(
                 && v.count <= 128
                 && v.bytes.len() == v.count as usize
                 && v.bytes.last() == Some(&0)
-                && v.bytes[..v.bytes.len() - 1].eq_ignore_ascii_case(b"vivo")
+                && [b"vivo".as_slice(), b"xiaomi".as_slice()].iter().any(|make|
+                    v.bytes[..v.bytes.len() - 1].eq_ignore_ascii_case(make))
         })
 }
 
@@ -62,6 +64,18 @@ mod tests {
         raw.insert(271, value);
         assert!(!allows_subunity_tone_endpoint(&root, &raw, 0.9972, 0.5));
         assert!(!allows_subunity_tone_endpoint(&root, &root, 0.9972, 0.9972));
+    }
+    #[test]
+    fn xiaomi_sample_and_boundaries() {
+        let mut root=Ifd::new();
+        root.insert(271,Value{typ:2,count:7,bytes:b"Xiaomi\0".to_vec(),endian:Endian::Le});
+        root.insert(50940,Value{typ:11,count:64,bytes:vec![0;256],endian:Endian::Le});
+        assert!(allows_subunity_tone_endpoint(&root,&root,0.997156024,0.97112298));
+        for endpoint in [0.9969, 1., f32::NAN, f32::INFINITY] {
+            assert!(!allows_subunity_tone_endpoint(&root,&root,endpoint,0.97));
+        }
+        root.insert(52551,Value{typ:4,count:1,bytes:0u32.to_le_bytes().to_vec(),endian:Endian::Le});
+        assert!(!allows_subunity_tone_endpoint(&root,&root,0.997156024,0.97));
     }
     #[test]
     fn make_descriptor_must_be_exact_bounded_ascii() {

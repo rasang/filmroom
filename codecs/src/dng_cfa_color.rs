@@ -245,6 +245,48 @@ pub fn parse(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd) -> crate::error::R
     resolve(&input).map(Some).map_err(|e| e.into_codec())
 }
 
+/// The render path only needs the resolved camera-to-PCS matrix. Keep the
+/// calibration policy explicit rather than inventing A/D50 fields for A/D65.
+#[derive(Clone, Debug)]
+pub struct DevelopmentTransform {
+    pub camera_to_pcs: Matrix,
+    pub policy: &'static str,
+}
+
+pub fn parse_development(root: &crate::tiff::Ifd, raw: &crate::tiff::Ifd)
+    -> crate::error::Result<Option<DevelopmentTransform>> {
+    use crate::{error::{err, Reason}, profile_develop::{self, ColorRoute}};
+    if let Some(t) = parse(root, raw)? {
+        return Ok(Some(DevelopmentTransform { camera_to_pcs: t.camera_to_pcs,
+            policy: "DNG A/D50 ColorMatrix-only calibration; required CFA/lens operations; linear sRGB, no camera tone curve" }));
+    }
+    if crate::tiff::uint(raw, 262, Some(0))? != 32803 { return Ok(None); }
+    let get = |tag| raw.get(&tag).or_else(|| root.get(&tag));
+    let Some(ab) = get(50727) else { return Ok(None); };
+    if ab.typ != 5 || ab.count != 3 {
+        return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagShape, Some(50727)));
+    }
+    let values = ab.nums().map_err(|e| e.detail(Reason::TagValue, Some(50727)))?;
+    if values.iter().any(|x| !x.is_finite() || *x <= 0. || *x > 100.) {
+        return Err(err("INVALID_COLOR_METADATA", "probe").detail(Reason::TagValue, Some(50727)));
+    }
+    // Existing unit-AnalogBalance inputs retain their established developer.
+    if values.iter().all(|x| (*x - 1.).abs() <= 1e-8) { return Ok(None); }
+    // This bounded path does not claim support for extra illuminants,
+    // reduction matrices, or spatial profile gain tables on Bayer data.
+    if [50725,50726,52525,52529,52530,52531,52532,52544,52547,52548,52549,52550,52551]
+        .iter().any(|&tag| get(tag).is_some()) {
+        return Err(err("UNSUPPORTED_DNG_CALIBRATION", "probe"));
+    }
+    // Reuse the fully validated A/D65, ForwardMatrix, AnalogBalance,
+    // CameraCalibration and signature semantics already used by LinearRaw.
+    // Demosaicing remains in camera space, followed by this matrix exactly once.
+    let p = profile_develop::parse(root, raw, ColorRoute::NewSof3LinearPrecision)?
+        .ok_or_else(|| err("UNSUPPORTED_DNG_CALIBRATION", "probe"))?;
+    Ok(Some(DevelopmentTransform { camera_to_pcs: p.camera_to_pcs,
+        policy: "DNG A/D65 ForwardMatrix calibration with AnalogBalance; required CFA/lens operations; linear sRGB, no camera tone curve" }))
+}
+
 #[cfg(test)]
 mod parser_tests {
     use super::*;
@@ -284,5 +326,72 @@ mod parser_tests {
         let mut i=fixture();i.get_mut(&50721).unwrap().typ=5;assert!(parse(&i,&i).is_err());
         let mut i=fixture();i.get_mut(&50728).unwrap().bytes.clear();assert!(parse(&i,&i).is_err());
         let mut i=fixture();i.insert(50931,Value{typ:2,count:3,bytes:b"bad".to_vec(),endian:Endian::Le});assert!(parse(&i,&i).is_err());
+    }
+}
+
+#[cfg(test)]
+mod analog_development_tests {
+    use super::*;
+    use crate::tiff::{Ifd, Value, Endian};
+    fn rational(values: &[i32], denominator: i32, signed: bool) -> Value {
+        let bytes = values.iter().flat_map(|v| v.to_le_bytes().into_iter().chain(denominator.to_le_bytes())).collect();
+        Value { typ: if signed {10} else {5}, count: values.len() as u32, bytes, endian: Endian::Le }
+    }
+    fn short(v:u16) -> Value { Value {typ:3,count:1,bytes:v.to_le_bytes().to_vec(),endian:Endian::Le} }
+    fn fixture() -> Ifd {
+        let mut i = Ifd::new();
+        i.insert(262,short(32803)); i.insert(50778,short(21)); i.insert(50779,short(17));
+        i.insert(50721,rational(&[134,-47,-12,-12,123,15,8,22,49],128,true));
+        i.insert(50722,rational(&[196,-108,12,-26,135,60,5,11,107],128,true));
+        for t in [50723,50724] { i.insert(t,rational(&[101,0,0,0,128,0,0,0,134],128,true)); }
+        for t in [50964,50965] { i.insert(t,rational(&[70,53,0,10,148,-30,-11,-52,169],128,true)); }
+        i.insert(50727,rational(&[244976,100000,149271],100000,false));
+        i.insert(50728,rational(&[1,1,1],1,false)); i
+    }
+    #[test]
+    fn phone_forward_route_resolves_neutral_and_preserves_legacy_unit_route() {
+        let mut i=fixture();
+        let t=parse_development(&i,&i).unwrap().unwrap();
+        let white=apply(t.camera_to_pcs,[1.;3]);
+        for c in 0..3 { assert!((white[c]-d50_xyz()[c]).abs()<1e-7); }
+        // Independent numerical calculation: equal FM endpoints and a unit
+        // neutral reduce to row-normalized FM, regardless of AB/CC. Golden
+        // numbers computed separately with NumPy from the rational metadata.
+        let expected=[[0.5487755519660047,0.4155201244635629,0.0],
+            [0.0781,1.1563,-0.2344],[-0.08557894875108493,-0.4046818275051303,1.3153653787666755]];
+        for r in 0..3 { for c in 0..3 { assert!((t.camera_to_pcs[r][c]-expected[r][c]).abs()<1e-6); } }
+        assert!(t.policy.contains("AnalogBalance"));
+        i.insert(50727,rational(&[1,1,1],1,false));
+        assert!(parse_development(&i,&i).unwrap().is_none());
+        i.remove(&50727); assert!(parse_development(&i,&i).unwrap().is_none());
+    }
+    #[test]
+    fn analog_changes_forward_interpolation_not_stored_pixel_gain() {
+        let mut i=fixture();
+        // Different (valid) warm FM makes white point/CCT interpolation visible.
+        i.insert(50965,rational(&[502,211,275,68,841,116,-49,-883,1777],1024,true));
+        let original=parse_development(&i,&i).unwrap().unwrap();
+        i.insert(50727,rational(&[180000,100000,120000],100000,false));
+        let other=parse_development(&i,&i).unwrap().unwrap();
+        let diff=original.camera_to_pcs.iter().flatten().zip(other.camera_to_pcs.iter().flatten())
+            .map(|(a,b)|(a-b).abs()).fold(0f64,f64::max);
+        assert!(diff>1e-4,"AnalogBalance must affect interpolated calibration: {diff}");
+        for t in [original,other] { let white=apply(t.camera_to_pcs,[1.;3]);
+            for c in 0..3 { assert!((white[c]-d50_xyz()[c]).abs()<1e-7); }
+        }
+    }
+    #[test]
+    fn invalid_or_unsupported_calibration_is_not_silently_ignored() {
+        for tag in [50964,50965,50721,50722,50728] {
+            let mut i=fixture();i.remove(&tag);assert!(parse_development(&i,&i).is_err(),"missing {tag}");
+        }
+        for values in [[0,1,1],[101,1,1]] {
+            let mut i=fixture();i.insert(50727,rational(&values,1,false));assert!(parse_development(&i,&i).is_err());
+        }
+        for tag in [50725,50726,52525,50938,52551] {
+            let mut i=fixture();i.insert(tag,short(1));assert!(parse_development(&i,&i).is_err(),"unsupported {tag}");
+        }
+        let mut i=fixture();i.get_mut(&50727).unwrap().typ=10;assert!(parse_development(&i,&i).is_err());
+        let mut i=fixture();i.insert(50779,short(22));assert!(parse_development(&i,&i).is_err());
     }
 }

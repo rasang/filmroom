@@ -63,8 +63,11 @@ pub(crate) fn unsupported_processing(root: &Ifd, raw: &Ifd) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn unit_geometry(root: &Ifd, raw: &Ifd) -> Result<()> {
+pub(crate) fn unit_geometry(root: &Ifd, raw: &Ifd, calibrated_analog_balance: bool) -> Result<()> {
     for tag in [50718, 50727] {
+        // Non-unit AnalogBalance is admitted only after a color path has
+        // validated and incorporated it. DefaultScale stays strictly unit.
+        if tag == 50727 && calibrated_analog_balance { continue; }
         if let Some(v) = inherited(root, raw, tag) {
             let values = v.nums()?;
             let expected = if tag == 50718 { 2 } else { 3 };

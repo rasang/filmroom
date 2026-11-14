@@ -63,12 +63,18 @@ pub(crate) fn profile_metadata(root: &Ifd, raw: &Ifd, warnings: &mut Vec<Warning
                 return Err(color_err().detail(Reason::ProfileCurve, Some(50940)));
             }
             // Keep the shared SDR rule strict except for the bounded vivo
-            // compatibility policy. All curve safety checks above still apply.
+            // compatibility policy (also validated for Xiaomi). All curve safety checks above still apply.
             let endpoint = points[points.len() - 1];
             if endpoint != 1.
                 && !super::brands::vivo::allows_subunity_tone_endpoint(root, raw, endpoint, points[points.len() - 3])
             {
                 return Err(color_err().detail(Reason::ProfileEndpoint, Some(50940)));
+            }
+            if endpoint != 1. {
+                warnings.push(Warning {
+                    code: "DNG_NONSTANDARD_TONE_ENDPOINT",
+                    message: "相机显示曲线白端略低于标准值；按基础 RAW 显色处理，不修改原文件或套用该曲线",
+                });
             }
             warnings.push(Warning {
                 code: "DNG_CAMERA_TONE_CURVE_NOT_APPLIED",
@@ -146,4 +152,35 @@ pub(super) fn identity_look_table(root: &Ifd, raw: &Ifd) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod phone_tone_tests {
+    use super::*;
+    use crate::tiff::{Value,Endian};
+    fn root(points:&[f32])->Ifd {
+        let mut r=Ifd::new();
+        r.insert(271,Value{typ:2,count:7,bytes:b"Xiaomi\0".to_vec(),endian:Endian::Le});
+        r.insert(50940,Value{typ:11,count:points.len() as u32,bytes:points.iter().flat_map(|x|x.to_le_bytes()).collect(),endian:Endian::Le});r
+    }
+    #[test]
+    fn nonstandard_endpoint_has_explicit_warning_and_no_metadata_mutation() {
+        let r=root(&[0.,0.,0.5,0.48,1.,0.997156024]);
+        let before=r[&50940].bytes.clone();let mut warnings=vec![];
+        profile_metadata(&r,&r,&mut warnings).unwrap();
+        assert_eq!(r[&50940].bytes,before);
+        assert!(warnings.iter().any(|w|w.code=="DNG_NONSTANDARD_TONE_ENDPOINT"));
+        assert!(warnings.iter().any(|w|w.code=="DNG_CAMERA_TONE_CURVE_NOT_APPLIED"));
+        let standard=root(&[0.,0.,1.,1.]);warnings.clear();
+        profile_metadata(&standard,&standard,&mut warnings).unwrap();
+        assert!(!warnings.iter().any(|w|w.code=="DNG_NONSTANDARD_TONE_ENDPOINT"));
+    }
+    #[test]
+    fn compatibility_does_not_bypass_curve_validation() {
+        for points in [vec![0.,0.,1.,0.996],vec![0.,0.,0.5,0.8,1.,0.7],vec![0.,0.,0.,0.3,1.,0.998],vec![0.,0.,1.,f32::NAN],vec![0.,0.,1.,f32::INFINITY],vec![0.,0.,0.9,0.998],vec![0.,0.1,1.,0.998]] {
+            let r=root(&points);assert!(profile_metadata(&r,&r,&mut vec![]).is_err());
+        }
+        let mut r=root(&[0.,0.,1.,0.998]);r.get_mut(&50940).unwrap().typ=12;
+        assert!(profile_metadata(&r,&r,&mut vec![]).is_err());
+    }
 }
