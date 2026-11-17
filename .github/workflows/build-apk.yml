@@ -7,15 +7,15 @@ on:
 
 jobs:
   build:
-    name: Build ARM64 Repacked APK
+    name: Build ARM64 Signed APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout dev branch
         uses: actions/checkout@v4
 
-      - name: Install CMake, Ninja and FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build ffmpeg
+      - name: Install CMake, Ninja, FFmpeg and Cryptography
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build ffmpeg python3-cryptography
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -84,36 +84,59 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleRelease -PfilmroomAbi=arm64-v8a --no-daemon --max-workers=2
 
-      - name: Repack, 16KiB zipalign and sign APK
+      - name: Repack, 16KiB zipalign and sign with release key
+        env:
+          FILMROOM_SIGNING_ENC_B64: ${{ secrets.FILMROOM_SIGNING_ENC_B64 }}
+          FILMROOM_SIGNING_RECOVERY_KEY: ${{ secrets.FILMROOM_SIGNING_RECOVERY_KEY }}
         run: |
-          RAW_APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
-          echo "Original APK size:" && ls -lh "$RAW_APK"
+          SIGN_DIR=$(mktemp -d)
+          chmod 700 "$SIGN_DIR"
+          trap 'rm -rf "$SIGN_DIR" build-repacked.apk build-aligned.apk' EXIT
 
+          python3 - "$SIGN_DIR" << 'PYEOF'
+          import base64, io, os, sys, tarfile
+          from pathlib import Path
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+          out_dir = Path(sys.argv[1])
+          enc = base64.b64decode(os.environ["FILMROOM_SIGNING_ENC_B64"].strip())
+          key = base64.b64decode(os.environ["FILMROOM_SIGNING_RECOVERY_KEY"].strip())
+          aad = b"FILMROOM-SIGNING-BACKUP-V1\n"
+          assert enc.startswith(aad), "Unexpected encrypted backup header"
+          nonce = enc[len(aad):len(aad) + 12]
+          ciphertext = enc[len(aad) + 12:]
+          tar_bytes = AESGCM(key).decrypt(nonce, ciphertext, aad)
+
+          with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:*") as tf:
+              for member_name in ("filmroom-release.p12", "keystore-password.txt"):
+                  data = tf.extractfile(member_name).read()
+                  (out_dir / member_name).write_bytes(data)
+                  os.chmod(out_dir / member_name, 0o600)
+          PYEOF
+
+          RAW_APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
           python3 tools/repack-apk-transport.py "$RAW_APK" build-repacked.apk
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 build-repacked.apk build-aligned.apk
 
-          keytool -genkeypair -noprompt \
-            -keystore /tmp/ci-temp.jks \
-            -storepass android -keypass android \
-            -alias ci-key -keyalg RSA -keysize 2048 -validity 365 \
-            -dname "CN=Filmroom CI, OU=Dev, O=Filmroom, L=Unknown, ST=Unknown, C=CN"
-
+          export KS_PASS=$(tr -d '\r\n' < "$SIGN_DIR/keystore-password.txt")
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
-            --ks /tmp/ci-temp.jks \
-            --ks-pass pass:android \
-            --ks-key-alias ci-key \
-            --key-pass pass:android \
+            --ks "$SIGN_DIR/filmroom-release.p12" \
+            --ks-type PKCS12 \
+            --ks-pass env:KS_PASS \
+            --ks-key-alias filmroom-release \
+            --key-pass env:KS_PASS \
             --v1-signing-enabled false \
-            --out filmroom-arm64-ci.apk \
+            --out filmroom-arm64-signed.apk \
             build-aligned.apk
+          unset KS_PASS
 
-          python3 tools/effect-audio/verify-package.py filmroom-arm64-ci.apk
-          echo "Final repacked APK size:" && ls -lh filmroom-arm64-ci.apk
-          rm -f /tmp/ci-temp.jks build-repacked.apk build-aligned.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs filmroom-arm64-signed.apk | grep -qi "1cf7b23f5c954a781ef1260634fb8b4df3e84a59bae486dc5b357bd5fabaf37a"
+          python3 tools/effect-audio/verify-package.py filmroom-arm64-signed.apk
+          ls -lh filmroom-arm64-signed.apk
 
-      - name: Upload Repacked ARM64 APK
+      - name: Upload Signed ARM64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: filmroom-arm64-repacked-apk
-          path: filmroom-arm64-ci.apk
+          name: filmroom-arm64-signed-apk
+          path: filmroom-arm64-signed.apk
           retention-days: 14
