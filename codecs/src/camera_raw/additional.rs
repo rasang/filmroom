@@ -198,6 +198,7 @@ impl AdditionalRaw {
                 source_ifd_offset: 0,
                 arw1_offset: None,
                 arw6: None,
+                profile_corrections: true,
             },
             plan,
             file,
@@ -206,6 +207,10 @@ impl AdditionalRaw {
             black,
             white,
         }))
+    }
+    pub(crate) fn with_budget(mut self, b: &Budget) -> Self {
+        self.camera = self.camera.with_budget(b);
+        self
     }
     pub(crate) fn probe(&self) -> Probe {
         let mut p = self.camera.probe();
@@ -247,11 +252,12 @@ impl AdditionalRaw {
         })
     }
     pub(crate) fn decode(
-        self,
+        mut self,
         output: &Path,
         b: &Budget,
         cancel: &AtomicBool,
     ) -> Result<(Probe, Admission)> {
+        self = self.with_budget(b);
         let check = || {
             if cancel.load(Ordering::Relaxed) {
                 Err(err("CANCELLED", "decode"))

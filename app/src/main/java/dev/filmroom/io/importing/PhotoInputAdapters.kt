@@ -27,6 +27,7 @@ internal data class PhotoImportRequest(
     val file: File, val name: String, val maxEdge: Int, val job: CoroutineContext,
     val existingRaw: File?, val allowDecode: Boolean, val onNewRaw: (File) -> Unit,
     val sourceDirectory: File, val captureMetadata: PhotoMetadata,
+    val profileCorrections: Boolean = true,
 )
 
 internal interface PhotoInputAdapter {
@@ -53,9 +54,13 @@ internal fun interface RasterPreviewDecoder {
 }
 internal interface RawSourceDecoder {
     suspend fun probe(file: File): JSONObject
+    suspend fun probe(file: File, profileCorrections: Boolean): JSONObject = probe(file)
     suspend fun decode(file: File, target: File): JSONObject
+    suspend fun decode(file: File, target: File, profileCorrections: Boolean): JSONObject = decode(file, target)
 }
 internal class NativeRawSourceDecoder(private val codecs: PhotoCodecs): RawSourceDecoder {
-    override suspend fun probe(file: File) = codecs.probe(file)
-    override suspend fun decode(file: File, target: File) = codecs.decode(file, target)
+    override suspend fun probe(file: File) = codecs.probe(file, true)
+    override suspend fun probe(file: File, profileCorrections: Boolean) = codecs.probe(file, profileCorrections)
+    override suspend fun decode(file: File, target: File) = codecs.decode(file, target, true)
+    override suspend fun decode(file: File, target: File, profileCorrections: Boolean) = codecs.decode(file, target, profileCorrections)
 }

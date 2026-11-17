@@ -810,4 +810,8 @@
     <string name="film_none">None</string>
     <string name="photo_location_import_help">To retain capture location, prefer the original via Files and allow access to location embedded in photos (not your current location). Editing still works if denied. A picker or shared copy may remove location; permission cannot restore removed metadata.</string>
     <string name="raw_codec_resource_limit">Photo exceeds the decoder’s file or metadata limits. It is not necessarily damaged.</string>
+    <string name="tool_profile_corrections">Profile corrections</string>
+    <string name="tool_profile_corrections_help">Apply embedded or matched lens profile distortion, vignetting, and chromatic aberration corrections</string>
+    <string name="profile_corrections_on">Enabled</string>
+    <string name="profile_corrections_raw_only">Applies to RAW / DNG originals only; no lens profile correction is needed for this photo.</string>
 </resources>

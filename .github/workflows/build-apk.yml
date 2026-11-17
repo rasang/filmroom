@@ -60,10 +60,10 @@ jobs:
           bash native/build-native.sh --check
           bash native/build-native.sh arm64-v8a
 
-      - name: Build codecs & libjxl (Rust 1.94.0)
+      - name: Build codecs & libjxl (arm64-v8a, Rust 1.94.0)
         env:
           RUSTUP_TOOLCHAIN: "1.94.0"
-        run: bash codecs/build-android.sh
+        run: bash codecs/build-android.sh arm64-v8a
 
       - name: Copy ARM64 JNI libraries into app/src/main/jniLibs
         run: |

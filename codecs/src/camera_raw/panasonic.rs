@@ -50,7 +50,7 @@ pub(super) fn sensor(t:&Tiff)->Result<&crate::tiff::Ifd> {
             active:Rect{x:12,y:24,w:8368,h:5584},crop:Rect{x:12,y:24,w:8368,h:5584},
             cfa:"GBRG".into(),wb:[1.;4],matrix:vec![1.,0.,0.,0.,1.,0.,0.,0.,1.],
             baseline_exposure_ev:0.,gain_maps:&[],lens:crate::embedded_lens::LensStatus::Missing,lens_extras:Default::default(),lens_profile:None,lens_reference:Rect{x:12,y:24,w:8368,h:5584} };
-        let c=CameraRaw {he:None,development:d,format:"RW2",input_bytes:69873664,jpeg_blocks:vec![],decoder_extra_bytes:0,source_ifd_offset:24,arw1_offset:None,arw6:None};
+        let c=CameraRaw {he:None,development:d,format:"RW2",input_bytes:69873664,jpeg_blocks:vec![],decoder_extra_bytes:0,source_ifd_offset:24,arw1_offset:None,arw6:None,profile_corrections:true};
         let b=Budget {memory_budget_mi_b:256,..Default::default()};
         let a=c.admit(&b).unwrap();assert!(a.estimated_peak_bytes<224*MIB);
         assert!(a.estimated_peak_bytes>=BASE+69873664+8448*5632*2);

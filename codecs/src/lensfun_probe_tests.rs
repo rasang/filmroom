@@ -10,7 +10,7 @@ fn camera() -> CameraRaw {
             gain_maps:&[],lens:crate::embedded_lens::LensStatus::Missing,lens_extras:Default::default(),lens_profile:None,lens_reference:active,
         },
         format:"CR3",input_bytes:100,jpeg_blocks:vec![],decoder_extra_bytes:0,
-        source_ifd_offset:0,arw1_offset:None,arw6:None,
+        source_ifd_offset:0,arw1_offset:None,arw6:None,profile_corrections:true,
     }
 }
 

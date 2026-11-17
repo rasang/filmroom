@@ -819,5 +819,9 @@ internal object ChineseStrings {
         dev.filmroom.R.string.toast_edge_limit_30000 to "边长过大：上限30000像素",
         dev.filmroom.R.string.toast_edge_limit_32768 to "边长过大：上限32768像素",
         dev.filmroom.R.string.toast_metadata_limit to "元数据超出安全限制",
+        dev.filmroom.R.string.tool_profile_corrections to "配置文件校正",
+        dev.filmroom.R.string.tool_profile_corrections_help to "应用内嵌或匹配镜头配置文件的畸变、暗角与色差校正",
+        dev.filmroom.R.string.profile_corrections_on to "启用",
+        dev.filmroom.R.string.profile_corrections_raw_only to "仅对 RAW / DNG 原片生效；当前照片无需镜头配置文件校正。",
     )
 }

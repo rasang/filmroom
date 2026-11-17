@@ -31,6 +31,7 @@ internal object PresetQrBinary {
         for (key in input.keys()) {
             val path = prefix + key; val v = input.get(key)
             if (path in known) continue
+            if (path == "profileCorrections" && v == true) continue
             if (v is JSONObject) { val children = extras(v, "$path."); if (children.length() > 0) put(key, children) }
             else put(key, v)
         }

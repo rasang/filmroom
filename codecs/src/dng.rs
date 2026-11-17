@@ -2,6 +2,7 @@
 pub mod cfa_storage;
 #[path = "dng_lensfun.rs"]
 mod lensfun;
+pub(crate) use lensfun::native_firmware;
 use crate::{
     error::{Result, err, io_error, Reason},
     tiff::{Endian, Ifd, Tiff, nums, uint},

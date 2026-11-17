@@ -16,27 +16,37 @@
 #include "dng_1d_function.h"
 #include "dng_abort_sniffer.h"
 #include "dng_area_task.h"
+#include "dng_bottlenecks.h"
 #include "dng_camera_profile.h"
 #include "dng_color_space.h"
 #include "dng_exceptions.h"
 #include "dng_file_stream.h"
+#include "dng_gain_map.h"
 #include "dng_host.h"
 #include "dng_ifd.h"
 #include "dng_image.h"
 #include "dng_info.h"
+#include "dng_lens_correction.h"
 #include "dng_linearization_info.h"
 #include "dng_memory.h"
+#include "dng_memory_stream.h"
 #include "dng_negative.h"
+#include "dng_opcode_list.h"
+#include "dng_opcodes.h"
 #include "dng_orientation.h"
 #include "dng_pixel_buffer.h"
 #include "dng_render.h"
+#include "dng_resample.h"
+#include "dng_safe_arithmetic.h"
 #include "dng_simple_image.h"
 #include "dng_tag_values.h"
+#include "dng_utils.h"
 #include "dng_xmp_sdk.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -55,6 +65,44 @@
 
 #define FILM_EXPORT extern "C" __attribute__((visibility("default")))
 
+extern "C" {
+
+// Field order and types must match `Info` in src/dng_sdk.rs.
+struct FilmDngInfo {
+	uint32_t encoded_width;
+	uint32_t encoded_height;
+	uint32_t width;   // final, oriented output
+	uint32_t height;
+	uint32_t active_x, active_y, active_w, active_h;
+	uint32_t crop_x, crop_y, crop_w, crop_h;
+	uint32_t orientation;      // TIFF 1..8
+	uint32_t color_planes;     // 1 = monochrome, 3 = RGB/CFA, 4 = CMYG
+	uint32_t is_cfa;
+	uint32_t compression;      // TIFF Compression of the main raw IFD
+	uint32_t bits_per_sample;
+	uint32_t sample_format;    // 1 = unsigned, 3 = float
+	uint32_t has_forward_matrix;
+	uint32_t dng_version;      // 0xMMmmrrpp
+	uint32_t optical_flags;    // bitmask of OpticalFlags below
+	double baseline_exposure;  // total EV applied by rendering
+	uint64_t heap_peak_bytes;
+	uint64_t disk_peak_bytes;
+	char message[160];
+};
+
+// Optional Stage 3 Lensfun callbacks for native-firmware camera CFA DNGs that
+// carry no embedded opcode contract. Executed in demosaiced linear camera RGB
+// before dng_render applies color matrices, ProfileHueSatMap, crop, or rotation.
+struct FilmLensfunHooks {
+	const void *ctx;
+	uint32_t has_vignette;
+	uint32_t has_warp;
+	int32_t (*vignette_row)(const void *ctx, uint32_t row, uint32_t col0, uint32_t cols, float *gains_out);
+	int32_t (*warp_row)(const void *ctx, uint32_t crop_row, uint32_t crop_col0, uint32_t cols, double *src_xy_out);
+};
+
+}  // extern "C"
+
 namespace {
 
 enum Status : int32_t {
@@ -67,6 +115,26 @@ enum Status : int32_t {
 	kIoError = 6,
 	kNoSpace = 7,
 	kInternal = 8,
+	kUnsupportedOpcode = 9,
+};
+
+// Must match FLAG_* constants in src/dng_sdk.rs.
+enum OpticalFlags : uint32_t {
+	kOptHasOpcodeTag        = 1u << 0,
+	kOptEmbeddedDistortion  = 1u << 1,
+	kOptEmbeddedTca         = 1u << 2,
+	kOptEmbeddedVignetting  = 1u << 3,
+	kOptOptionalSkipped     = 1u << 4,
+	kOptStrippedToneCurve   = 1u << 5,
+	kOptHasProfileGainTable = 1u << 6,
+	kOptNonUnitScale        = 1u << 7,
+	kOptStage1Warp          = 1u << 8,
+	kOptStage2Warp          = 1u << 9,
+	kOptStage3Warp          = 1u << 10,
+};
+
+struct CallbackError {
+	int32_t status;
 };
 
 constexpr uint64_t kMiB = 1024ull * 1024ull;
@@ -263,13 +331,247 @@ private:
 	size_t fBytes = 0;
 };
 
+// In-place Stage 3 vignetting task matching dng_opcode_GainMap's black-pedestal
+// handling: un-offset Stage3BlackLevel, multiply by Lensfun radial gain, re-offset.
+class LensfunVignetteTask final : public dng_area_task {
+public:
+	LensfunVignetteTask(dng_image &image, const dng_negative &negative, const FilmLensfunHooks &hooks)
+		: dng_area_task("LensfunVignetteTask"),
+		  fImage(image),
+		  fBounds(image.Bounds()),
+		  fBlackLevel(negative.Stage3BlackLevel()),
+		  fHooks(hooks) {
+		fMaxTileSize = dng_point(64, 1024);
+	}
+
+	void Start(uint32 threadCount, const dng_rect & /* dstArea */, const dng_point &tileSize,
+			   dng_memory_allocator *allocator, dng_abort_sniffer * /* sniffer */) override {
+		const uint32 bufBytes = ComputeBufferSize(ttFloat, tileSize, fImage.Planes(), padSIMDBytes);
+		for (uint32 i = 0; i < threadCount; i++) {
+			fBuffer[i].Reset(allocator->Allocate(bufBytes));
+			fGains[i].assign((size_t) tileSize.h, 1.0f);
+		}
+	}
+
+	void Process(uint32 threadIndex, const dng_rect &tile, dng_abort_sniffer *sniffer) override {
+		const uint32 planes = fImage.Planes();
+		dng_pixel_buffer buffer(tile, 0, planes, ttFloat, pcPlanar, fBuffer[threadIndex]->Buffer());
+		fImage.Get(buffer);
+
+		const real32 blackOffset = fBlackLevel != 0 ? ((real32) fBlackLevel) / 65535.0f : 0.0f;
+		const real32 blackScale = 1.0f - blackOffset;
+		const real32 invBlackScale = blackScale > 0.0f ? 1.0f / blackScale : 0.0f;
+		const uint32 cols = (uint32) tile.W();
+		float *gains = fGains[threadIndex].data();
+
+		for (int32 row = tile.t; row < tile.b; row++) {
+			dng_abort_sniffer::SniffForAbort(sniffer);
+			const int32_t rc = fHooks.vignette_row(
+				fHooks.ctx, (uint32_t) (row - fBounds.t), (uint32_t) (tile.l - fBounds.l), cols, gains);
+			if (rc != kOk) {
+				if (rc == kCancelled) ThrowUserCanceled();
+				throw CallbackError{rc};
+			}
+			for (uint32 plane = 0; plane < planes; plane++) {
+				real32 *ptr = buffer.DirtyPixel_real32(row, tile.l, plane);
+				if (fBlackLevel != 0) {
+					for (uint32 c = 0; c < cols; c++) {
+						real32 v = (ptr[c] - blackOffset) * invBlackScale;
+						v = std::min<real32>(v * gains[c], 1.0f);
+						ptr[c] = Pin_real32(v * blackScale + blackOffset);
+					}
+				} else {
+					for (uint32 c = 0; c < cols; c++) {
+						ptr[c] = Pin_real32(ptr[c] * gains[c]);
+					}
+				}
+			}
+		}
+		fImage.Put(buffer);
+	}
+
+private:
+	dng_image &fImage;
+	dng_rect fBounds;
+	uint16 fBlackLevel;
+	const FilmLensfunHooks &fHooks;
+	AutoPtr<dng_memory_block> fBuffer[kMaxMPThreads];
+	std::vector<float> fGains[kMaxMPThreads];
+};
+
+// Stage 3 composite distortion + lateral CA resampling task using the SDK's
+// 32x32-phase Catmull-Rom (A = -0.75) bicubic table over certified 128x32 tiles.
+class LensfunWarpTask final : public dng_area_task {
+public:
+	LensfunWarpTask(const dng_image &srcImage, dng_image &dstImage,
+					const dng_rect &cropArea, const FilmLensfunHooks &hooks)
+		: dng_area_task("LensfunWarpTask"),
+		  fSrcImage(srcImage),
+		  fDstImage(dstImage),
+		  fCropArea(cropArea),
+		  fHooks(hooks) {
+		fMinTaskArea = 32 * 128;
+		fMaxTileSize = dng_point(32, 128);
+	}
+
+	void Initialize(dng_host &host) {
+		fWeights.Initialize(dng_resample_bicubic::Get(), host.Allocator());
+	}
+
+	void Start(uint32 threadCount, const dng_rect & /* dstArea */, const dng_point &tileSize,
+			   dng_memory_allocator *allocator, dng_abort_sniffer * /* sniffer */) override {
+		fAllocator = allocator;
+		const uint32 dstBytes = ComputeBufferSize(ttFloat, tileSize, 3, padSIMDBytes);
+		for (uint32 i = 0; i < threadCount; i++) {
+			fDstBuffer[i].Reset(allocator->Allocate(dstBytes));
+			DoZeroBytes(fDstBuffer[i]->Buffer(), fDstBuffer[i]->LogicalSize());
+			fCoords[i].assign((size_t) tileSize.v * (size_t) tileSize.h * 6, 0.0);
+		}
+	}
+
+	void Process(uint32 threadIndex, const dng_rect &dstTile, dng_abort_sniffer *sniffer) override {
+		const uint32 rows = (uint32) dstTile.H();
+		const uint32 cols = (uint32) dstTile.W();
+		double *coords = fCoords[threadIndex].data();
+		const dng_rect srcBounds = fSrcImage.Bounds();
+		const double minH = (double) srcBounds.l;
+		const double maxH = (double) (srcBounds.r - 1);
+		const double minV = (double) srcBounds.t;
+		const double maxV = (double) (srcBounds.b - 1);
+
+		int32 xMin = INT32_MAX;
+		int32 xMax = INT32_MIN;
+		int32 yMin = INT32_MAX;
+		int32 yMax = INT32_MIN;
+
+		for (uint32 r = 0; r < rows; r++) {
+			dng_abort_sniffer::SniffForAbort(sniffer);
+			double *rowCoords = coords + (size_t) r * cols * 6;
+			const int32_t rc = fHooks.warp_row(
+				fHooks.ctx,
+				(uint32_t) (dstTile.t + (int32) r - fCropArea.t),
+				(uint32_t) (dstTile.l - fCropArea.l),
+				cols,
+				rowCoords);
+			if (rc != kOk) {
+				if (rc == kCancelled) ThrowUserCanceled();
+				throw CallbackError{rc};
+			}
+			for (uint32 i = 0; i < cols * 3; i++) {
+				const double sx = std::clamp(rowCoords[i * 2 + 0] + minH, minH, maxH);
+				const double sy = std::clamp(rowCoords[i * 2 + 1] + minV, minV, maxV);
+				rowCoords[i * 2 + 0] = sx;
+				rowCoords[i * 2 + 1] = sy;
+				xMin = std::min(xMin, ConvertDoubleToInt32(std::floor(sx)));
+				xMax = std::max(xMax, ConvertDoubleToInt32(std::ceil(sx)));
+				yMin = std::min(yMin, ConvertDoubleToInt32(std::floor(sy)));
+				yMax = std::max(yMax, ConvertDoubleToInt32(std::ceil(sy)));
+			}
+		}
+
+		const int32 wCount = (int32) fWeights.Width();
+		const int32 offset = fWeights.Offset();
+		const dng_rect srcArea(
+			SafeInt32Add(yMin, offset),
+			SafeInt32Add(xMin, offset),
+			SafeInt32Add(SafeInt32Add(yMax, offset), wCount + 1),
+			SafeInt32Add(SafeInt32Add(xMax, offset), wCount + 1));
+
+		const uint32 srcBytes = ComputeBufferSize(ttFloat, srcArea.Size(), 3, padSIMDBytes);
+		// Certified Lensfun windows fit within 8 MiB (+ 4-tap border & SIMD row padding).
+		if (srcBytes > 10 * kMiB) {
+			ThrowMemoryFull("Lensfun source window exceeds certified tile cap");
+		}
+		if (!fSrcBuffer[threadIndex].Get() || fSrcBuffer[threadIndex]->LogicalSize() < srcBytes) {
+			fSrcBuffer[threadIndex].Reset(fAllocator->Allocate(srcBytes));
+			DoZeroBytes(fSrcBuffer[threadIndex]->Buffer(), fSrcBuffer[threadIndex]->LogicalSize());
+		}
+
+		dng_pixel_buffer srcBuffer(srcArea, 0, 3, ttFloat, pcPlanar, fSrcBuffer[threadIndex]->Buffer());
+		fSrcImage.Get(srcBuffer, dng_image::edge_repeat);
+		dng_pixel_buffer dstBuffer(dstTile, 0, 3, ttFloat, pcPlanar, fDstBuffer[threadIndex]->Buffer());
+
+		const int32 srcRowStep = (int32) srcBuffer.RowStep();
+		const int32 hMin = srcArea.l;
+		const int32 hMax = srcArea.r - wCount;
+		const int32 vMin = srcArea.t;
+		const int32 vMax = srcArea.b - wCount;
+		const real64 subsamples = (real64) kResampleSubsampleCount2D;
+		const int32 maxPhase = (int32) kResampleSubsampleCount2D - 1;
+
+		for (uint32 plane = 0; plane < 3; plane++) {
+			real32 *dPtr = dstBuffer.DirtyPixel_real32(dstTile.t, dstTile.l, plane);
+			for (uint32 r = 0; r < rows; r++) {
+				const double *rowCoords = coords + (size_t) r * cols * 6;
+				for (uint32 c = 0; c < cols; c++) {
+					const double sx = rowCoords[(c * 3 + plane) * 2 + 0];
+					const double sy = rowCoords[(c * 3 + plane) * 2 + 1];
+					const int32 ix = ConvertDoubleToInt32(std::floor(sx));
+					const int32 iy = ConvertDoubleToInt32(std::floor(sy));
+					int32 fh = Pin_int32(0, ConvertDoubleToInt32((sx - (double) ix) * subsamples), maxPhase);
+					int32 fv = Pin_int32(0, ConvertDoubleToInt32((sy - (double) iy) * subsamples), maxPhase);
+					int32 tapH = ix + offset;
+					int32 tapV = iy + offset;
+					if (tapH < hMin) { tapH = hMin; fh = 0; }
+					else if (tapH > hMax) { tapH = hMax; fh = 0; }
+					if (tapV < vMin) { tapV = vMin; fv = 0; }
+					else if (tapV > vMax) { tapV = vMax; fv = 0; }
+
+					const real32 *w = fWeights.Weights32(dng_point(fv, fh));
+					const real32 *s = srcBuffer.ConstPixel_real32(tapV, tapH, plane);
+					real32 total = 0.0f;
+					for (int32 i = 0; i < wCount; i++) {
+						for (int32 j = 0; j < wCount; j++) {
+							total += w[j] * s[j];
+						}
+						w += wCount;
+						s += srcRowStep;
+					}
+					dPtr[c] = Pin_real32(total);
+				}
+				dPtr += dstBuffer.RowStep();
+			}
+		}
+
+		fDstImage.Put(dstBuffer);
+	}
+
+private:
+	const dng_image &fSrcImage;
+	dng_image &fDstImage;
+	dng_rect fCropArea;
+	const FilmLensfunHooks &fHooks;
+	dng_resample_weights_2d fWeights;
+	dng_memory_allocator *fAllocator = nullptr;
+	AutoPtr<dng_memory_block> fSrcBuffer[kMaxMPThreads];
+	AutoPtr<dng_memory_block> fDstBuffer[kMaxMPThreads];
+	std::vector<double> fCoords[kMaxMPThreads];
+};
+
+bool IsLensProfileOpcode(const dng_opcode &op) {
+	switch (op.OpcodeID()) {
+	case dngOpcode_WarpRectilinear:
+	case dngOpcode_WarpRectilinear2:
+	case dngOpcode_WarpFisheye:
+	case dngOpcode_FixVignetteRadial:
+	case dngOpcode_GainMap:
+		return true;
+	default:
+		return false;
+	}
+}
+
 // dng_host with a small fixed worker pool for area tasks (the SDK default is
-// single-threaded), plus optional zero-copy rendering directly into the
-// pre-allocated output file mapping.
+// single-threaded), Stage 3 Lensfun hook execution, and optional zero-copy
+// rendering directly into the pre-allocated output file mapping.
 class FilmHost final : public dng_host {
 public:
 	FilmHost(dng_memory_allocator *allocator, dng_abort_sniffer *sniffer, uint32 threads)
 		: dng_host(allocator, sniffer), fThreads(std::max<uint32>(1, threads)) {}
+
+	void SetApplyProfileCorrections(bool apply) { fApplyProfileCorrections = apply; }
+
+	void ArmLensfun(const FilmLensfunHooks *hooks) { fLensfun = hooks; }
 
 	void ArmDirectOutput(void *map, uint32 outW, uint32 outH,
 						 const dng_orientation &orientation, uint32 skipCalls) {
@@ -282,6 +584,56 @@ public:
 	}
 
 	bool DirectOutputUsed() const { return fDirectUsed; }
+
+	void ApplyOpcodeList(dng_opcode_list &list, dng_negative &negative,
+						 AutoPtr<dng_image> &image) override {
+		if (!fApplyProfileCorrections) {
+			for (uint32 i = list.Count(); i > 0; i--) {
+				if (IsLensProfileOpcode(list.Entry(i - 1))) {
+					list.Remove(i - 1);
+				}
+			}
+		}
+		dng_host::ApplyOpcodeList(list, negative, image);
+		// BuildStage3Image invokes ApplyOpcodeList on fStage3Image immediately
+		// after demosaicing and releasing fStage2Image.
+		if (!fLensfun || !image.Get() || image.Get() != negative.Stage3Image()) {
+			return;
+		}
+		if (image->Planes() != 3 || list.Count() != 0) {
+			ThrowBadFormat("Stage 3 Lensfun requires 3-plane camera RGB with empty OpcodeList3");
+		}
+		const dng_rect srcBounds = image->Bounds();
+		const dng_rect cropArea = negative.DefaultCropArea();
+		if ((cropArea & srcBounds) != cropArea || cropArea.W() < 5 || cropArea.H() < 5) {
+			ThrowBadFormat("invalid DefaultCropArea for Stage 3 Lensfun");
+		}
+		if (fLensfun->has_vignette && fLensfun->vignette_row) {
+			LensfunVignetteTask task(*image, negative, *fLensfun);
+			PerformAreaTask(task, srcBounds, nullptr);
+		}
+		if (fLensfun->has_warp && fLensfun->warp_row) {
+			AutoPtr<dng_image> dstImage(Make_dng_image(srcBounds, 3, image->PixelType()));
+			if (cropArea != srcBounds) {
+				if (cropArea.t > srcBounds.t) {
+					dstImage->CopyArea(*image, dng_rect(srcBounds.t, srcBounds.l, cropArea.t, srcBounds.r), 0, 3);
+				}
+				if (cropArea.b < srcBounds.b) {
+					dstImage->CopyArea(*image, dng_rect(cropArea.b, srcBounds.l, srcBounds.b, srcBounds.r), 0, 3);
+				}
+				if (cropArea.l > srcBounds.l) {
+					dstImage->CopyArea(*image, dng_rect(cropArea.t, srcBounds.l, cropArea.b, cropArea.l), 0, 3);
+				}
+				if (cropArea.r < srcBounds.r) {
+					dstImage->CopyArea(*image, dng_rect(cropArea.t, cropArea.r, cropArea.b, srcBounds.r), 0, 3);
+				}
+			}
+			LensfunWarpTask task(*image, *dstImage, cropArea, *fLensfun);
+			task.Initialize(*this);
+			PerformAreaTask(task, cropArea, nullptr);
+			image.Reset(dstImage.Release());
+		}
+	}
 
 	dng_image *Make_dng_image(const dng_rect &bounds, uint32 planes, uint32 pixelType) override {
 		if (fDirectMap) {
@@ -344,6 +696,8 @@ public:
 
 private:
 	uint32 fThreads;
+	bool fApplyProfileCorrections = true;
+	const FilmLensfunHooks *fLensfun = nullptr;
 	void *fDirectMap = nullptr;
 	uint32 fDirectW = 0;
 	uint32 fDirectH = 0;
@@ -351,36 +705,6 @@ private:
 	uint32 fDirectSkip = 0;
 	bool fDirectUsed = false;
 };
-
-}  // namespace
-
-extern "C" {
-
-// Field order and types must match `DngSdkInfo` in src/dng_sdk.rs.
-struct FilmDngInfo {
-	uint32_t encoded_width;
-	uint32_t encoded_height;
-	uint32_t width;   // final, oriented output
-	uint32_t height;
-	uint32_t active_x, active_y, active_w, active_h;
-	uint32_t crop_x, crop_y, crop_w, crop_h;
-	uint32_t orientation;      // TIFF 1..8
-	uint32_t color_planes;     // 1 = monochrome, 3 = RGB/CFA, 4 = CMYG
-	uint32_t is_cfa;
-	uint32_t compression;      // TIFF Compression of the main raw IFD
-	uint32_t bits_per_sample;
-	uint32_t sample_format;    // 1 = unsigned, 3 = float
-	uint32_t has_forward_matrix;
-	uint32_t dng_version;      // 0xMMmmrrpp
-	double baseline_exposure;  // total EV applied by rendering
-	uint64_t heap_peak_bytes;
-	uint64_t disk_peak_bytes;
-	char message[160];
-};
-
-}  // extern "C"
-
-namespace {
 
 void SetMessage(FilmDngInfo *info, const char *text) {
 	if (!info) return;
@@ -414,7 +738,139 @@ int32_t MapDngError(dng_error_code code, const BudgetAllocator *alloc) {
 	}
 }
 
-void FillInfo(dng_host &host, dng_info &info, dng_negative &negative, FilmDngInfo *out) {
+bool RectilinearHasDistinctPlanes(const dng_warp_params_rectilinear &p) {
+	if (p.fPlanes <= 1) return false;
+	for (uint32 plane = 1; plane < p.fPlanes; plane++) {
+		for (uint32 i = 0; i < dng_warp_params_radial::kMaxTerms; i++) {
+			if (p.fRadParams.fData[plane][i] != p.fRadParams.fData[0][i]) return true;
+		}
+		if (p.fRadParams.fValidRange[plane][0] != p.fRadParams.fValidRange[0][0] ||
+			p.fRadParams.fValidRange[plane][1] != p.fRadParams.fValidRange[0][1]) {
+			return true;
+		}
+		if (p.fTanParams[plane].Count() != p.fTanParams[0].Count()) return true;
+		for (uint32 i = 0; i < p.fTanParams[plane].Count(); i++) {
+			if (p.fTanParams[plane][i] != p.fTanParams[0][i]) return true;
+		}
+	}
+	return false;
+}
+
+bool FisheyeHasDistinctPlanes(dng_host &host, const dng_opcode_WarpFisheye &op) {
+	dng_memory_stream mem(host.Allocator());
+	mem.SetBigEndian();
+	op.PutData(mem);
+	mem.SetReadPosition(0);
+	const uint32 bytes = mem.Get_uint32();
+	const uint32 planes = mem.Get_uint32();
+	if (planes <= 1 || bytes != 4 + 32 * planes + 16) return false;
+	double ref[4];
+	for (uint32 i = 0; i < 4; i++) ref[i] = mem.Get_real64();
+	for (uint32 plane = 1; plane < planes; plane++) {
+		for (uint32 i = 0; i < 4; i++) {
+			if (mem.Get_real64() != ref[i]) return true;
+		}
+	}
+	return false;
+}
+
+bool GainMapHasEffect(const dng_gain_map &gm) {
+	const uint32 rows = (uint32) std::max<int32>(0, gm.Points().v);
+	const uint32 cols = (uint32) std::max<int32>(0, gm.Points().h);
+	const uint32 planes = gm.Planes();
+	for (uint32 r = 0; r < rows; r++) {
+		for (uint32 c = 0; c < cols; c++) {
+			for (uint32 p = 0; p < planes; p++) {
+				if (gm.Entry(r, c, p) != 1.0f) return true;
+			}
+		}
+	}
+	return false;
+}
+
+uint32_t StageWarpFlag(uint32 stage) {
+	if (stage == 1) return kOptStage1Warp;
+	if (stage == 2) return kOptStage2Warp;
+	if (stage == 3) return kOptStage3Warp;
+	return 0;
+}
+
+void InspectOpcodeList(dng_host &host, dng_stream &stream, const dng_negative &negative,
+					   uint32 stage, uint32 byteCount, uint64 streamOffset,
+					   bool applyProfileCorrections, uint32_t &flags) {
+	if (byteCount == 0) return;
+	flags |= kOptHasOpcodeTag;
+	dng_opcode_list list(stage);
+	list.Parse(host, stream, byteCount, streamOffset);
+	bool prevOptionalWarp2 = false;
+	for (uint32 i = 0; i < list.Count(); i++) {
+		const dng_opcode &op = list.Entry(i);
+		const uint32 id = op.OpcodeID();
+		if (prevOptionalWarp2 && (id == dngOpcode_WarpRectilinear || id == dngOpcode_WarpFisheye)) {
+			continue;
+		}
+		if (op.MinVersion() > dngVersion_Current && op.WasReadFromStream()) {
+			if (!op.Optional()) {
+				throw CallbackError{kUnsupportedOpcode};
+			}
+			if (applyProfileCorrections) {
+				flags |= kOptOptionalSkipped;
+			}
+			continue;
+		}
+		if (dynamic_cast<const dng_opcode_Unknown *>(&op)) {
+			if (!op.Optional()) {
+				throw CallbackError{kUnsupportedOpcode};
+			}
+			if (applyProfileCorrections) {
+				flags |= kOptOptionalSkipped;
+			}
+			continue;
+		}
+		if (!op.IsValidForNegative(negative)) {
+			ThrowBadFormat("invalid opcode for negative");
+		}
+		if (op.IsNOP()) {
+			continue;
+		}
+		prevOptionalWarp2 = (op.Optional() && id == dngOpcode_WarpRectilinear2);
+		if (!applyProfileCorrections && IsLensProfileOpcode(op)) {
+			continue;
+		}
+
+		if (const auto *rect = dynamic_cast<const dng_opcode_BaseWarpRectilinear *>(&op)) {
+			flags |= StageWarpFlag(stage);
+			const dng_warp_params_rectilinear &p = rect->Params();
+			if (p.fPlanes <= 1) {
+				flags |= kOptEmbeddedDistortion;
+			} else {
+				const uint32 refPlane = p.fPlanes >= 3 ? 1u : 0u;
+				if (!p.IsNOP(refPlane)) {
+					flags |= kOptEmbeddedDistortion;
+				}
+				if (RectilinearHasDistinctPlanes(p)) {
+					flags |= kOptEmbeddedTca;
+				}
+			}
+		} else if (const auto *fish = dynamic_cast<const dng_opcode_WarpFisheye *>(&op)) {
+			flags |= StageWarpFlag(stage) | kOptEmbeddedDistortion;
+			if (FisheyeHasDistinctPlanes(host, *fish)) {
+				flags |= kOptEmbeddedTca;
+			}
+		} else if (dynamic_cast<const dng_opcode_FixVignetteRadial *>(&op)) {
+			flags |= kOptEmbeddedVignetting;
+		} else if (const auto *gm = dynamic_cast<const dng_opcode_GainMap *>(&op)) {
+			if (GainMapHasEffect(gm->GainMap())) {
+				flags |= kOptEmbeddedVignetting;
+			}
+		} else if (dynamic_cast<const dng_filter_opcode *>(&op)) {
+			flags |= StageWarpFlag(stage);
+		}
+	}
+}
+
+void FillInfo(dng_host &host, dng_stream &stream, dng_info &info, dng_negative &negative,
+			  bool applyProfileCorrections, FilmDngInfo *out) {
 	const dng_ifd &raw = *info.fIFD[info.fMainIndex];
 	out->encoded_width = raw.fImageWidth;
 	out->encoded_height = raw.fImageLength;
@@ -433,6 +889,7 @@ void FillInfo(dng_host &host, dng_info &info, dng_negative &negative, FilmDngInf
 	out->active_y = active.t;
 	out->active_w = active.W();
 	out->active_h = active.H();
+	// DefaultCropArea() is relative to ActiveArea (0, 0) in Stage 3 coordinates.
 	const dng_rect crop = negative.DefaultCropArea();
 	out->crop_x = crop.l;
 	out->crop_y = crop.t;
@@ -451,12 +908,33 @@ void FillInfo(dng_host &host, dng_info &info, dng_negative &negative, FilmDngInf
 		out->height = fh;
 	}
 
+	uint32_t flags = 0;
+	if (negative.DefaultScaleH().As_real64() != 1.0 ||
+		negative.DefaultScaleV().As_real64() != 1.0 ||
+		negative.BestQualityScale().As_real64() != 1.0) {
+		flags |= kOptNonUnitScale;
+	}
+	if (negative.HasProfileGainTableMap()) {
+		flags |= kOptHasProfileGainTable;
+	}
+
 	dng_camera_profile profile;
-	out->has_forward_matrix =
-		negative.GetProfileByID(dng_camera_profile_id(), profile) &&
-		profile.ForwardMatrix1().NotEmpty() ? 1 : 0;
+	const bool hasProfile = negative.GetProfileByID(dng_camera_profile_id(), profile);
+	out->has_forward_matrix = hasProfile && profile.ForwardMatrix1().NotEmpty() ? 1 : 0;
+	if (hasProfile) {
+		if (profile.ToneCurve().IsValid() && !profile.ToneCurve().IsNull()) {
+			flags |= kOptStrippedToneCurve;
+		}
+		if (profile.HasProfileGainTableMap()) {
+			flags |= kOptHasProfileGainTable;
+		}
+	}
+
+	InspectOpcodeList(host, stream, negative, 1, raw.fOpcodeList1Count, raw.fOpcodeList1Offset, applyProfileCorrections, flags);
+	InspectOpcodeList(host, stream, negative, 2, raw.fOpcodeList2Count, raw.fOpcodeList2Offset, applyProfileCorrections, flags);
+	InspectOpcodeList(host, stream, negative, 3, raw.fOpcodeList3Count, raw.fOpcodeList3Offset, applyProfileCorrections, flags);
+	out->optical_flags = flags;
 	out->baseline_exposure = negative.TotalBaselineExposure(dng_camera_profile_id());
-	(void) host;
 }
 
 // The film engine applies its own tone response; drop profile tone curves so
@@ -464,10 +942,12 @@ void FillInfo(dng_host &host, dng_info &info, dng_negative &negative, FilmDngInf
 void StripProfileToneCurves(dng_negative &negative) {
 	const uint32 count = negative.ProfileCount();
 	if (count == 0) return;
+	dng_tone_curve invalid;
+	invalid.SetInvalid();
 	std::vector<std::unique_ptr<dng_camera_profile>> copies;
 	for (uint32 i = 0; i < count; i++) {
 		copies.emplace_back(new dng_camera_profile(negative.ProfileByIndex(i)));
-		copies.back()->SetToneCurve(dng_tone_curve());
+		copies.back()->SetToneCurve(invalid);
 	}
 	negative.ClearProfiles();
 	for (auto &copy : copies) {
@@ -494,7 +974,8 @@ void WriteAll(int fd, const uint8_t *data, size_t size, uint64_t offset) {
 }
 
 int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBudget,
-			uint64_t diskBudget, const uint8_t *cancel, uint32_t threads, FilmDngInfo *out) {
+			uint64_t diskBudget, const uint8_t *cancel, uint32_t threads,
+			bool applyProfileCorrections, const FilmLensfunHooks *lensfun, FilmDngInfo *out) {
 	std::memset(out, 0, sizeof(*out));
 	std::call_once(gXmpInit, [] { dng_xmp_sdk::InitializeSDK(); });
 	BudgetAllocator allocator(scratchDir ? scratchDir : ".", heapBudget, diskBudget);
@@ -505,6 +986,7 @@ int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBu
 		host.SetSaveDNGVersion(0);
 		host.SetSaveLinearDNG(false);
 		host.SetKeepOriginalFile(false);
+		host.SetApplyProfileCorrections(applyProfileCorrections);
 		dng_file_stream stream(path);
 		dng_info info;
 		info.Parse(host, stream);
@@ -516,16 +998,18 @@ int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBu
 		AutoPtr<dng_negative> negative(host.Make_dng_negative());
 		negative->Parse(host, stream, info);
 		negative->PostParse(host, stream, info);
-		FillInfo(host, info, *negative, out);
+		FillInfo(host, stream, info, *negative, applyProfileCorrections, out);
 		if (outFd < 0) {
 			return kOk;  // metadata-only probe
 		}
 
+		host.ArmLensfun(applyProfileCorrections ? lensfun : nullptr);
 		negative->ReadStage1Image(host, stream, info);
 		negative->ClearRawImage();
 		negative->BuildStage2Image(host);
 		negative->ClearStage1Image();
 		negative->BuildStage3Image(host);
+		host.ArmLensfun(nullptr);
 		negative->ClearTransparencyMask();
 		StripProfileToneCurves(*negative);
 
@@ -592,7 +1076,7 @@ int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBu
 			}
 			try {
 				WriteAll(outFd, rgb.data(), (size_t) w * rows * 12, (uint64_t) (y - bounds.t) * w * 12);
-			} catch (const dng_exception &e) {
+			} catch (const dng_exception &) {
 				noSpaceWrite = errno == ENOSPC || errno == EDQUOT;
 				throw;
 			}
@@ -600,6 +1084,9 @@ int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBu
 		out->heap_peak_bytes = allocator.heapPeak();
 		out->disk_peak_bytes = allocator.diskPeak();
 		return kOk;
+	} catch (const CallbackError &ce) {
+		SetMessage(out, ce.status == kUnsupportedOpcode ? "unsupported_opcode" : "lensfun_callback");
+		return ce.status;
 	} catch (const dng_exception &e) {
 		SetMessage(out, "dng_exception");
 		if (noSpaceWrite) return kNoSpace;
@@ -619,16 +1106,19 @@ int32_t Run(const char *path, int outFd, const char *scratchDir, uint64_t heapBu
 }  // namespace
 
 // Metadata-only parse. Never reads pixel data.
-FILM_EXPORT int32_t film_dng_sdk_probe(const char *path, FilmDngInfo *out) {
+FILM_EXPORT int32_t film_dng_sdk_probe(const char *path, uint32_t apply_profile_corrections, FilmDngInfo *out) {
 	if (!path || !out) return kInternal;
-	return Run(path, -1, nullptr, 0, 0, nullptr, 1, out);
+	return Run(path, -1, nullptr, 0, 0, nullptr, 1, apply_profile_corrections != 0, nullptr, out);
 }
 
 // Full decode into an already created, empty output file descriptor.
 FILM_EXPORT int32_t film_dng_sdk_decode(const char *path, int out_fd, const char *scratch_dir,
 										uint64_t heap_budget, uint64_t disk_budget,
 										const uint8_t *cancel, uint32_t threads,
+										uint32_t apply_profile_corrections,
+										const FilmLensfunHooks *lensfun,
 										FilmDngInfo *out) {
 	if (!path || out_fd < 0 || !scratch_dir || !out) return kInternal;
-	return Run(path, out_fd, scratch_dir, heap_budget, disk_budget, cancel, threads, out);
+	return Run(path, out_fd, scratch_dir, heap_budget, disk_budget, cancel, threads,
+			   apply_profile_corrections != 0, lensfun, out);
 }

@@ -89,6 +89,7 @@ pub struct CameraRaw {
     source_ifd_offset: u32,
     arw1_offset: Option<u64>,
     arw6: Option<(u64, u64, u64)>,
+    pub(crate) profile_corrections: bool,
 }
 fn blocks(
     t: &Tiff,
@@ -732,7 +733,15 @@ impl CameraRaw {
             source_ifd_offset,
             arw1_offset,
             arw6,
+            profile_corrections: true,
         })
+    }
+    pub(crate) fn with_budget(mut self, b: &Budget) -> Self {
+        if !b.profile_corrections {
+            self.profile_corrections = false;
+            self.development.disable_profile_corrections();
+        }
+        self
     }
     pub fn probe(&self) -> Probe {
         let d = &self.development;
@@ -778,7 +787,9 @@ impl CameraRaw {
             max_pixels: crate::MAX_PIXELS,
             warnings,
             has_alternate_forward_matrix: false,
-            development_policy: if matches!(&d.lens, crate::embedded_lens::LensStatus::Profile(_))
+            development_policy: if !self.profile_corrections {
+                "camera-matrix-linear-srgb-uncorrected-v1"
+            } else if matches!(&d.lens, crate::embedded_lens::LensStatus::Profile(_))
                 || d.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
                 crate::lensfun::DEVELOPMENT_POLICY
             } else if d.lens_extras.has_ready() {
@@ -1042,7 +1053,7 @@ pub fn decode(
     // Bind metadata and generic integer decode to one descriptor, not a reopened path.
     let input_file=File::open(input).map_err(|e|io_error(e,"probe"))?;
     let input_identity=crate::nikon_he::Identity::read(&input_file)?;
-    let camera = CameraRaw::read_file(input,input_file.try_clone().map_err(|e|io_error(e,"probe"))?)?;
+    let camera = CameraRaw::read_file(input,input_file.try_clone().map_err(|e|io_error(e,"probe"))?)?.with_budget(b);
     let admission = camera.admit(b)?;
     if camera.he.is_some(){return crate::nikon_he::decode(output,camera,admission,cancel);}
     if cancel.load(Ordering::Relaxed) {
@@ -1127,7 +1138,11 @@ pub fn decode(
         if cancel.load(Ordering::Relaxed) {return Err(err("CANCELLED","decode"));}
         let raw=decoded?;
         let mut development=descriptor(&raw,camera.development.orientation)?;
-        configure_profile(&source,&input_file,camera.format,&raw,&mut development);
+        if camera.profile_corrections {
+            configure_profile(&source,&input_file,camera.format,&raw,&mut development);
+        } else {
+            development.disable_profile_corrections();
+        }
         Ok((raw,development))
     })?; // source mapping, TIFF decoder and padded buffers are dropped before development.
     if cancel.load(Ordering::Relaxed) {
@@ -1433,7 +1448,7 @@ mod tests {
             let d=descriptor(&raw,1).unwrap();
             let camera=CameraRaw {he:None,development:d,format:"CR2",input_bytes:38_000_000,
                 jpeg_blocks:vec![JpegBlock{components:4,sampling:0x11,offset:0,bytes:1,width:width*2,height:height/2}],
-                decoder_extra_bytes:(width*height*2) as u64,source_ifd_offset:0,arw1_offset:None,arw6:None};
+                decoder_extra_bytes:(width*height*2) as u64,source_ifd_offset:0,arw1_offset:None,arw6:None,profile_corrections:true};
             let admitted=camera.admit(&Budget::default()).unwrap();
             assert!(BASE+camera.input_bytes+(width*height*4) as u64>128*MIB);
             assert!(admitted.estimated_peak_bytes<=128*MIB);
@@ -1458,6 +1473,7 @@ mod tests {
             source_ifd_offset: 0,
             arw1_offset: None,
             arw6: None,
+            profile_corrections: true,
         };
         assert!(c.admit(&Budget::default()).unwrap().estimated_peak_bytes <= 128 * MIB);
         assert_eq!(
@@ -1491,7 +1507,7 @@ mod tests {
         let d=descriptor(&synthetic("RGGB",false),1).unwrap();
         let mut c=CameraRaw {he:None,development:d,format:"ARW",input_bytes:48*MIB,
             jpeg_blocks:vec![JpegBlock{components:4,sampling:0x11,offset:0,bytes:MIB,width:1024,height:256}],
-            decoder_extra_bytes:0,source_ifd_offset:0,arw1_offset:None,arw6:None};
+            decoder_extra_bytes:0,source_ifd_offset:0,arw1_offset:None,arw6:None,profile_corrections:true};
         assert!(sony_bayer::matches(&c));
         let a=c.admit(&Budget::default()).unwrap();
         assert_eq!(a.required_disk_bytes,c.probe().output_bytes+(c.development.width*c.development.height*2) as u64);

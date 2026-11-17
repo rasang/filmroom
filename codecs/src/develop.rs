@@ -30,7 +30,10 @@ mod geometry;
 mod scale;
 #[path="camera_geometry.rs"]
 mod camera_geometry;
-pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry, qualify_optics};
+pub(crate) use camera_geometry::{CameraRgbSink, admit_geometry, optics_source_position, qualify_optics};
+fn default_true() -> bool {
+    true
+}
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Budget {
@@ -38,6 +41,8 @@ pub struct Budget {
     pub disk_budget_bytes: u64,
     #[serde(default)]
     pub raw_batch: crate::raw_batch::RawBatch,
+    #[serde(default = "default_true")]
+    pub profile_corrections: bool,
 }
 impl Default for Budget {
     fn default() -> Self {
@@ -45,6 +50,7 @@ impl Default for Budget {
             memory_budget_mi_b: 128,
             disk_budget_bytes: 1024 * MIB,
             raw_batch: crate::raw_batch::RawBatch::Auto,
+            profile_corrections: true,
         }
     }
 }
@@ -142,6 +148,12 @@ impl Development<'_> {
         } else {
             (self.crop.w, self.crop.h)
         }
+    }
+    pub(crate) fn disable_profile_corrections(&mut self) {
+        self.lens = crate::embedded_lens::LensStatus::Missing;
+        self.lens_extras = crate::embedded_optics::LensExtras::default();
+        self.lens_profile = None;
+        self.lens_reference = self.active;
     }
 }
 impl<'a> From<&'a Dng> for Development<'a> {

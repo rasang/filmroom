@@ -48,16 +48,18 @@ pub fn probe(input: &Path, b: &Budget, metadata_only: bool) -> Result<(Probe, Op
     if is_dng(input)? {
         crate::dng_sdk::probe(input, b, metadata_only)
     } else if let Some(d)=crate::camera_raw::fuji::FujiRaw::read(input)? {
+        let d=d.with_budget(b);
         let admission=if metadata_only {None}else{Some(d.admit(b)?)};
         Ok((d.probe(),admission))
     } else if let Some(d)=crate::camera_raw::additional::AdditionalRaw::read(input)? {
+        let d=d.with_budget(b);
         let admission=if metadata_only {None}else{Some(d.admit(b)?)};
         Ok((d.probe(),admission))
     } else if let Some(d) = crate::nikon_snef::Snef::read(input)? {
         let admission=if metadata_only {None}else{Some(d.admit(b)?)};
         Ok((d.probe(),admission))
     } else {
-        let d = CameraRaw::read(input)?;
+        let d = CameraRaw::read(input)?.with_budget(b);
         let admission = if metadata_only {
             None
         } else {

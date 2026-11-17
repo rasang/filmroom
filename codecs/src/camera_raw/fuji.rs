@@ -154,9 +154,13 @@ impl FujiRaw {
         let black=raw.blacklevel.as_vec();let white=raw.whitelevel.0[0] as f32;
         if black.iter().any(|v|!v.is_finite() || *v<0. || *v>=white) || white>(1u32<<plan.bits) as f32-1. {return Err(err("INVALID_COLOR_METADATA","probe"));}
         let black_width=raw.blacklevel.width;
-        let camera=CameraRaw{he:None,development,format:"RAF",input_bytes:identity.bytes,jpeg_blocks:vec![],decoder_extra_bytes:0,source_ifd_offset:0,arw1_offset:None,arw6:None};
+        let camera=CameraRaw{he:None,development,format:"RAF",input_bytes:identity.bytes,jpeg_blocks:vec![],decoder_extra_bytes:0,source_ifd_offset:0,arw1_offset:None,arw6:None,profile_corrections:true};
         if identity!=crate::nikon_he::Identity::read(&file)?{return Err(invalid());}
         Ok(Some(Self{camera,plan,black,black_width,white,file,source,identity}))
+    }
+    pub(crate) fn with_budget(mut self,b:&Budget)->Self {
+        self.camera=self.camera.with_budget(b);
+        self
     }
     pub(crate) fn probe(&self)->Probe {
         let mut p=self.camera.probe();
@@ -165,7 +169,9 @@ impl FujiRaw {
             (false,Encoding::Lossless)=>"RAF_BAYER_LOSSLESS",(false,Encoding::Lossy)=>"RAF_BAYER_LOSSY",(false,_)=>"RAF_BAYER_UNCOMPRESSED",
         };
         if self.plan.xtrans {
-            p.development_policy=if self.camera.development.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
+            p.development_policy=if !self.camera.profile_corrections {
+                "raf-xtrans-linear-srgb-uncorrected-v1"
+            } else if self.camera.development.lens_profile.as_ref().is_some_and(|p|p.has_applied()) {
                 "raf-xtrans-linear-srgb-lensfun-v3"
             } else if self.camera.development.lens_extras.has_ready() {
                 "raf-xtrans-linear-srgb-embedded-v2"
@@ -188,7 +194,8 @@ impl FujiRaw {
         if disk>b.disk_budget_bytes.min(1024*MIB){return Err(err("DISK_BUDGET","admission"));}
         crate::develop::admit_geometry(d,b,Admission{memory_budget_bytes:memory,estimated_peak_bytes:decode_peak.max(retained+d.active.w as u64*(rows+2*HALO) as u64*128),required_disk_bytes:disk,strip_rows:rows as u32})
     }
-    pub(crate) fn decode(self,output:&Path,b:&Budget,cancel:&AtomicBool)->Result<(Probe,Admission)>{
+    pub(crate) fn decode(mut self,output:&Path,b:&Budget,cancel:&AtomicBool)->Result<(Probe,Admission)>{
+        self=self.with_budget(b);
         if cancel.load(Ordering::Relaxed){return Err(err("CANCELLED","decode"));}
         let admission=self.admit(b)?;let probe=self.probe();
         if self.identity!=crate::nikon_he::Identity::read(&self.file)? || plan(&self.source)?!=self.plan {return Err(invalid());}
@@ -199,7 +206,11 @@ impl FujiRaw {
             let mut raw=decoded?;
             raw.active_area=None;
             let mut revalidated=descriptor_cfa(&raw,self.plan.orientation,true)?;
-            configure_profile(&self.source,&self.file,"RAF",&raw,&mut revalidated);
+            if self.camera.profile_corrections {
+                configure_profile(&self.source,&self.file,"RAF",&raw,&mut revalidated);
+            } else {
+                revalidated.disable_profile_corrections();
+            }
             if raw.width!=self.plan.width || raw.height!=self.plan.height || raw.blacklevel.as_vec()!=self.black || raw.whitelevel.0.as_slice()!=[self.white as u32]
                 || revalidated.lens!=self.camera.development.lens
                 || revalidated.lens_extras!=self.camera.development.lens_extras

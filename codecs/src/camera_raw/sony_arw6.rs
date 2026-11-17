@@ -48,7 +48,11 @@ pub(super) fn decode(
         let source = RawSource::new_from_file(&file,input).map_err(|e| io_error(e, "decode"))?;
         let raw = bounded("decode", || rawler::decode_dummy(&source))?;
         let mut d = descriptor(&raw, camera.development.orientation)?;
-        configure_profile(&source,&file,"ARW",&raw,&mut d);
+        if camera.profile_corrections {
+            configure_profile(&source,&file,"ARW",&raw,&mut d);
+        } else {
+            d.disable_profile_corrections();
+        }
         let rect = |r: Rect| (r.x, r.y, r.w, r.h);
         if raw.source_ifd_offset != Some(camera.source_ifd_offset)
             || d.cpp != 1

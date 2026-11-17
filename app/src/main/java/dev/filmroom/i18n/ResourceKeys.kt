@@ -747,6 +747,10 @@ internal object ResourceKeys {
         dev.filmroom.R.string.queue_original_details to "queue_original_details",
         dev.filmroom.R.string.queue_metadata_warning to "queue_metadata_warning",
         dev.filmroom.R.string.export_progress_preview to "export_progress_preview",
+        dev.filmroom.R.string.tool_profile_corrections to "tool_profile_corrections",
+        dev.filmroom.R.string.tool_profile_corrections_help to "tool_profile_corrections_help",
+        dev.filmroom.R.string.profile_corrections_on to "profile_corrections_on",
+        dev.filmroom.R.string.profile_corrections_raw_only to "profile_corrections_raw_only",
     )
     val ids:Map<String,Int> = names.entries.associate { it.value to it.key }
     val arities:Map<String,Int> = mapOf(
@@ -1496,5 +1500,9 @@ internal object ResourceKeys {
         "queue_original_details" to 0,
         "queue_metadata_warning" to 0,
         "export_progress_preview" to 0,
+        "tool_profile_corrections" to 0,
+        "tool_profile_corrections_help" to 0,
+        "profile_corrections_on" to 0,
+        "profile_corrections_raw_only" to 0,
     )
 }

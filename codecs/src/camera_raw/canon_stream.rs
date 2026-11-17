@@ -69,7 +69,11 @@ pub(super) fn decode(camera:&CameraRaw,input:&Path,output:&Path,out:&File,admiss
         if let Some(e)=storage.failure.take() {return Err(e);}
         let raw=decoded?;
         let mut actual=descriptor(&raw,d.orientation)?;
-        configure_profile(&source,&file,"CR2",&raw,&mut actual);
+        if camera.profile_corrections {
+            configure_profile(&source,&file,"CR2",&raw,&mut actual);
+        } else {
+            actual.disable_profile_corrections();
+        }
         (raw,actual)
     }; // release input mapping before linear development
     let rect=|r:Rect|(r.x,r.y,r.w,r.h);

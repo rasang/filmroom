@@ -95,6 +95,7 @@ data class EditorState(
     val crop: CropSettings = CropSettings(),
     // null follows each film's default; explicit choice survives a forced reversal/direct route.
     val preferredOutputRoute: String? = null,
+    val profileCorrections: Boolean = true,
 ) {
     init { require(filmBorderStage in 0..1) }
     val preImagingBorder get()=filmBorder && filmBorderStage==1
@@ -205,6 +206,7 @@ data class EditorState(
             put("composition",composition.json())
             put("crop",crop.json())
             put("preferredOutputRoute",preferredOutputRoute ?: JSONObject.NULL)
+            put("profileCorrections",profileCorrections)
         }
         put("filmDevelopmentTime",filmDevelopmentTime);put("paperDevelopmentTime",paperDevelopmentTime)
         put("schemaVersion", 1); put("filmStock", filmStock); put("paperStock", paperStock)
@@ -303,6 +305,7 @@ data class EditorState(
                 composition=j.optJSONObject("composition")?.let{CompositionTransform.fromJson(it)} ?: CompositionTransform(),
                 crop=j.optJSONObject("crop")?.let{CropSettings.fromJson(it)} ?: CropSettings(),
                 preferredOutputRoute=preference,
+                profileCorrections=j.optBoolean("profileCorrections",true),
                 filmStock=j.optString("filmStock", "kodak_portra_400"), paperStock=j.optString("paperStock", "kodak_portra_endura"),
                 brightness=j.optDouble("brightnessEv",0.0).toFloat(), filmExposure=j.optDouble("filmExposureEv",0.0).toFloat(),
                 contrast=j.optDouble("contrast",1.0).toFloat(), warmth=j.optDouble("warmth",0.0).toFloat(),

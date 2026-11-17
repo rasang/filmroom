@@ -70,7 +70,9 @@ class PhotoSource internal constructor(
     developmentWarning: String? = null,
     val photoMetadata: PhotoMetadata = PhotoMetadata.unavailable(),
     private val developmentMessages:List<dev.filmroom.i18n.UiMessage>? = null,
+    internal val rawProfileCorrections: Boolean? = null,
 ) {
+    val isRawSource: Boolean get() = rawProfileCorrections != null
     /** Original provider locator for future use only; not a persistent access grant. */
     var originalUri: String? = null
         private set
@@ -89,13 +91,16 @@ class PhotoSource internal constructor(
     private val detailLeaseLock=Any()
     private var detailReaders=0
     private var discardRequested=false
+    private var variantDiscardOnly=false
     internal fun retainDetailSource():AutoCloseable=synchronized(detailLeaseLock){
         check(!discardRequested); detailReaders++
         var closed=false
-        AutoCloseable { synchronized(detailLeaseLock){if(!closed){closed=true;detailReaders--;if(discardRequested && detailReaders==0)deleteSourceFiles()}} }
+        AutoCloseable { synchronized(detailLeaseLock){if(!closed){closed=true;detailReaders--;if(discardRequested && detailReaders==0){if(variantDiscardOnly)deleteVariantSpoolOnly() else deleteSourceFiles()}}} }
     }
-    private fun deleteSourceFiles(){File(localFile.path+".imprint-time").delete();localFile.delete();linearFile?.let(RawDevelopmentCache::delete)}
-    internal fun discardWhenUnused(){try{detailGridCache.close()}finally{previewMetering.close();synchronized(detailLeaseLock){discardRequested=true;if(detailReaders==0)deleteSourceFiles()}}}
+    private fun deleteVariantSpoolOnly(){linearFile?.let(RawDevelopmentCache::delete)}
+    private fun deleteSourceFiles(){File(localFile.path+".imprint-time").delete();localFile.delete();deleteVariantSpoolOnly()}
+    internal fun discardVariantSpoolWhenUnused(){try{detailGridCache.close()}finally{previewMetering.close();synchronized(detailLeaseLock){if(!discardRequested){variantDiscardOnly=true;discardRequested=true;if(detailReaders==0)deleteVariantSpoolOnly()}}}}
+    internal fun discardWhenUnused(){try{detailGridCache.close()}finally{previewMetering.close();synchronized(detailLeaseLock){variantDiscardOnly=false;discardRequested=true;if(detailReaders==0)deleteSourceFiles()}}}
     private val previewMutex=Mutex()
     private val previewCacheLock=Any()
     private var previewCacheReleased=false
@@ -246,6 +251,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
 
     suspend fun import(uri: Uri, previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
         origin: ImportOrigin = ImportOrigin.UNKNOWN,
+        profileCorrections: Boolean = true,
         onStage: suspend (ImportDiagnosticInfo) -> Unit = {}): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
@@ -341,6 +347,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                     phase = ImportPhase.INPUT_PROBE
                     emitStage()
                     val loaded = loadPrivate(privateCopy, name, previewMaxEdge, job, null,
+                        profileCorrections = profileCorrections,
                         onInput = { header, selectedRoute ->
                             format = header.identified.format
                             route = selectedRoute
@@ -424,6 +431,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
         rawCacheKey: String? = null,
         originalUri: String? = null,
+        profileCorrections: Boolean = true,
     ): LoadedPhoto {
         require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
         var produced: LoadedPhoto? = null
@@ -443,6 +451,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
                 }
                 val rawFile = rawCacheKey?.takeIf { it.matches(Regex("(?:raw|heic)-source-[0-9a-fA-F-]{36}\\.rgb")) }?.let { File(sourceDirectory,it) }
                 loadPrivate(file, PhotoLimits.safeDisplayName(name), previewMaxEdge, job, rawFile, allowDecode=false,
+                    profileCorrections=profileCorrections,
                     onNewRaw={regeneratedRaw=it}).also { it.source.rememberOriginalUri(originalUri); produced = it }
 
             }
@@ -465,7 +474,50 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         }
     }
 
-    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,onInput:suspend (PhotoInputHeader,ImportRoute?)->Unit={_,_->},onNewRaw:(File)->Unit={}):LoadedPhoto {
+    /** Re-develop an already imported RAW private copy when optical profile corrections change. */
+    suspend fun redevelopRaw(
+        current: PhotoSource,
+        profileCorrections: Boolean,
+        previewMaxEdge: Int = PhotoLimits.PREVIEW_EDGE,
+    ): LoadedPhoto {
+        require(current.isRawSource) { "Only RAW sources can be redeveloped" }
+        require(previewMaxEdge in 1..PhotoLimits.MAX_DECODE_EDGE)
+        var produced: LoadedPhoto? = null
+        var regeneratedRaw: File? = null
+        var handedOff = false
+        try {
+            val rawBatch = codecs.snapshotRawBatch()
+            val result = withContext(Dispatchers.IO + rawBatch) {
+                val job = currentCoroutineContext()
+                job.ensureActive()
+                val file = current.localFile
+                if (file.canonicalFile.parentFile != sourceDirectory.canonicalFile ||
+                    !file.isFile || file.length() !in 1..PhotoLimits.MAX_COMPRESSED_BYTES) {
+                    throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_b769fd8412bb))
+                }
+                loadPrivate(file, PhotoLimits.safeDisplayName(current.name), previewMaxEdge, job, null, allowDecode=true,
+                    profileCorrections=profileCorrections,
+                    onNewRaw={regeneratedRaw=it}).also { it.source.rememberOriginalUri(current.originalUri); produced = it }
+            }
+            handedOff = true
+            return result
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: PhotoException) {
+            throw e
+        } catch (e: OutOfMemoryError) {
+            throw PhotoException(PhotoException.Reason.TOO_LARGE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_5e9174903275), e)
+        } catch (e: Exception) {
+            throw PhotoException(PhotoException.Reason.UNREADABLE, dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_63b74410c9d6), e)
+        } finally {
+            if (!handedOff) {
+                produced?.preview?.recycle()
+                regeneratedRaw?.let(RawDevelopmentCache::delete)
+            }
+        }
+    }
+
+    private suspend fun loadPrivate(file:File,name:String,maxEdge:Int,job:CoroutineContext,existingRaw:File?,allowDecode:Boolean=true,profileCorrections:Boolean=true,onInput:suspend (PhotoInputHeader,ImportRoute?)->Unit={_,_->},onNewRaw:(File)->Unit={}):LoadedPhoto {
         val header=ByteArray(dev.filmroom.io.formats.PhotoHeaders.MAX_PREFIX_BYTES)
         val count=file.inputStream().use { input ->
             var n=0
@@ -480,7 +532,7 @@ class PhotoRepository internal constructor(context: Context, private val codecs:
         val adapter=inputAdapters.select(inputHeader)
         val route=when(adapter){is RasterInputAdapter->ImportRoute.RASTER;is RawInputAdapter->ImportRoute.RAW;is HeicInputAdapter->ImportRoute.HEIC;else->ImportRoute.OTHER}
         onInput(inputHeader,route)
-        return adapter.load(PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata),inputHeader)
+        return adapter.load(PhotoImportRequest(file,name,maxEdge,job,existingRaw,allowDecode,onNewRaw,sourceDirectory,captureMetadata,profileCorrections),inputHeader)
     }
 
     /** Returns a NEW owned spool for standard output. Original linear-source callers may borrow linearFile separately. */

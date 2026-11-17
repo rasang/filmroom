@@ -81,7 +81,7 @@ fn build_dng_sdk(out:&std::path::Path,cxx:&str,ar:&str,target:&str,jxl:&std::pat
  dng_sources.sort();
  for p in dng_sources {jobs.push((p,cxx_flags(&dng_defs,&dng_inc)));}
  let mut bridge_inc=dng_inc.clone();bridge_inc.push("-Icpp/dng_sdk".into());
- for p in ["cpp/dng_sdk/bridge.cpp","cpp/dng_sdk/jxl_encoder_unavailable.cpp"] {jobs.push((PathBuf::from(p),cxx_flags(&dng_defs,&bridge_inc)));}
+ for p in ["cpp/dng_sdk/bridge.cpp","cpp/dng_sdk/jxl_encoder_unavailable.cpp"] {println!("cargo:rerun-if-changed={p}");jobs.push((PathBuf::from(p),cxx_flags(&dng_defs,&bridge_inc)));}
  let xc=xt.join("XMPCore/source");
  for n in ["ExpatAdapter","ParseRDF","WXMPIterator","WXMPMeta","WXMPUtils","XMPCore_Impl","XMPIterator","XMPMeta","XMPMeta-GetSet","XMPMeta-Parse","XMPMeta-Serialize","XMPUtils","XMPUtils-FileInfo","Android_Utils"] {jobs.push((xc.join(format!("{n}.cpp")),cxx_flags(&xmp_defs,&xmp_inc)));}
  for n in ["UnicodeConversions","XML_Node","XMP_LibUtils","SafeStringAPIs"] {jobs.push((xt.join(format!("source/{n}.cpp")),cxx_flags(&xmp_defs,&xmp_inc)));}

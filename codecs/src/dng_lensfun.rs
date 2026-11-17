@@ -10,7 +10,7 @@ fn normalized(value:&str)->String {
     value.chars().flat_map(char::to_lowercase).filter(|c|c.is_alphanumeric()).collect()
 }
 
-fn native_firmware(model:&str,software:Option<&str>)->bool {
+pub(crate) fn native_firmware(model:&str,software:Option<&str>)->bool {
     let model=normalized(model);
     let Some(software)=software else {return false;};
     let software=normalized(software);

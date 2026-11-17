@@ -2,8 +2,6 @@
 //! Matching and per-operation source selection are in the data-driven registry
 //! and selection modules. The RF16 constants below are regression fixtures.
 use crate::{
-    develop::Development,
-    embedded_lens::LensStatus,
     error::{Result, err},
     lensfun_geometry::Geometry,
 };

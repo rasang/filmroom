@@ -12,18 +12,17 @@
 //! ExifTool Canon.pm at 1da714924f67763b6a8a7013dd2aa1983a16f87b.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     io::{Read, Seek, SeekFrom},
 };
 #[cfg(test)]
-use std::fs::File;
+use std::{collections::BTreeSet, fs::File};
 
 #[path = "lensfun_metadata/capture.rs"]
 mod capture;
-pub(crate) use capture::{
-    capture_identity, CaptureIdentity, CaptureMetadata, CaptureStatus,
-    LensIdentityProvenance, SourceEvidence,
-};
+pub(crate) use capture::{capture_identity, CaptureIdentity, CaptureStatus};
+#[cfg(test)]
+pub(crate) use capture::LensIdentityProvenance;
 
 const MAX_INPUT_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_READ_BYTES: usize = 32 * 1024;

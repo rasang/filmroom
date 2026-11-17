@@ -54,19 +54,23 @@ class PhotoCodecs(private val root: File, private val api:CodecNativeApi=NativeC
             InputAdmission(RawMetadataAdmission.estimatedBytes(input),JxlDngAdmission.matches(input)) else InputAdmission()
     }
     fun snapshotRawBatch():RawBatchSnapshot=RawBatchSnapshot(rawBatchPreference())
-    suspend fun decode(input: File, output: File): JSONObject {
+    suspend fun decode(input: File, output: File, profileCorrections: Boolean = true): JSONObject {
         // Freeze before metadata IO or ledger wait. Repository carries the selection from import start.
         val batch=currentCoroutineContext()[RawBatchSnapshot] ?: snapshotRawBatch()
         val admission=inputAdmission(input)
-        val request=budget(cameraRaw=admission.metadataBytes>0,jxlDng=admission.jxlDng).put("rawBatch",batch.mode.id)
+        val request=budget(cameraRaw=admission.metadataBytes>0,jxlDng=admission.jxlDng).put("rawBatch",batch.mode.id).apply {
+            if(!profileCorrections) put("profileCorrections",false)
+        }
         val reservedBytes=request.getLong("memoryBudgetMiB")*NativeMemoryPolicy.MIB
         return execute(heavyBytes=reservedBytes) { handle ->
             api.nativeDecode(handle,input.canonicalPath,output.canonicalPath,request.toString())
         }
     }
-    suspend fun probe(input: File): JSONObject {
+    suspend fun probe(input: File, profileCorrections: Boolean = true): JSONObject {
         val metadataBytes=inputAdmission(input).metadataBytes
-        val request=budget(metadataOnly=true,cameraRaw=metadataBytes>0).put("metadataOnly",true)
+        val request=budget(metadataOnly=true,cameraRaw=metadataBytes>0).put("metadataOnly",true).apply {
+            if(!profileCorrections) put("profileCorrections",false)
+        }
         return execute(metadataBytes=metadataBytes) { handle ->
             api.nativeProbe(handle,input.canonicalPath,request.toString())
         }

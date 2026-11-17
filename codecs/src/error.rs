@@ -46,7 +46,7 @@ pub(crate) fn source(file: &str) -> &'static str {
     if file.ends_with("camera_raw/fuji.rs") { return "CAMERA_RAW_FUJI"; }
     if file.ends_with("camera_raw/panasonic.rs") { return "CAMERA_RAW_PANASONIC"; }
     match file.rsplit('/').next().unwrap_or("") {
-        "dng.rs" => "DNG", "dng_black.rs" => "DNG_BLACK", "tiff.rs" => "TIFF",
+        "dng.rs" => "DNG", "dng_sdk.rs" => "DNG_SDK", "dng_black.rs" => "DNG_BLACK", "tiff.rs" => "TIFF",
         "dng_cfa_color.rs" => "DNG_CFA_COLOR", "dng_color_spec.rs" => "DNG_COLOR_SPEC",
         "profile_develop.rs" => "PROFILE_DEVELOP", "profile_gain_table.rs" => "PROFILE_GAIN_TABLE",
         "raw.rs" => "RAW", "camera_raw.rs" => "CAMERA_RAW",
@@ -60,6 +60,9 @@ pub(crate) fn source(file: &str) -> &'static str {
         "dng_bad_pixels.rs" => "DNG_BAD_PIXELS",
         "dng_scale_develop.rs" | "dng_scale_resample.rs" | "dng_geometry_develop.rs" => "DNG_GEOMETRY_DEVELOP",
         "embedded_lens.rs" => "EMBEDDED_LENS",
+        "embedded_optics.rs" => "EMBEDDED_OPTICS",
+        "camera_optics.rs" | "camera_profile_optics.rs" => "CAMERA_OPTICS",
+        "lensfun.rs" | "lensfun_database.rs" | "lensfun_geometry.rs" | "lensfun_metadata.rs" | "lensfun_optics.rs" | "lensfun_profiles.rs" | "lensfun_selection.rs" | "dng_lensfun.rs" => "LENSFUN",
         "output_color.rs" => "OUTPUT_COLOR",
         "dng_warp.rs" => "DNG_WARP",
         "camera_geometry.rs" => "CAMERA_GEOMETRY",

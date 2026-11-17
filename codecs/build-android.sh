@@ -8,7 +8,14 @@ export PATH="$CARGO_HOME/bin:$PATH"
 ndk=${ANDROID_NDK_HOME:?Set ANDROID_NDK_HOME to the installed Android NDK 27.2 directory}
 bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$root/target"}
-for spec in 'aarch64-linux-android arm64-v8a' 'x86_64-linux-android x86_64'; do
+requested_abi=${1:-all}
+case "$requested_abi" in
+ all) specs=('aarch64-linux-android arm64-v8a' 'x86_64-linux-android x86_64') ;;
+ arm64-v8a) specs=('aarch64-linux-android arm64-v8a') ;;
+ x86_64) specs=('x86_64-linux-android x86_64') ;;
+ *) echo "Unsupported ABI: $requested_abi (expected all, arm64-v8a, or x86_64)" >&2; exit 2 ;;
+esac
+for spec in "${specs[@]}"; do
  read -r target abi <<< "$spec"
  export FILM_JXL_PREFIX=$("$root/../third-party/libjxl/build.sh" "$abi")
  export HE_CXX="$bin/${target}26-clang++" HE_AR="$bin/llvm-ar"

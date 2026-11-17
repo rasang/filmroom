@@ -162,6 +162,7 @@ class SavedPresetStoreHostTest {
         composition = CompositionTransform(.35, .65, 2.25, 4.0 / 5.0, -7.3),
         crop = CropSettings(CropMode.FREE, CompositionTransform(.6, .4, 1.8, 1.23, 4.1)),
         preferredOutputRoute = "direct",
+        profileCorrections = false,
     )
 
     @Test fun all90NonDefaultFieldsAndNestedPresentationRoundTripExactly() {
@@ -170,7 +171,7 @@ class SavedPresetStoreHostTest {
         val fields = EditorState::class.java.declaredFields.filter {
             !Modifier.isStatic(it.modifiers) && !it.isSynthetic
         }
-        assertEquals("Update this fixture when the editor gains a parameter", 90, fields.size)
+        assertEquals("Update this fixture when the editor gains a parameter", 91, fields.size)
         fields.forEach { field ->
             field.isAccessible = true
             assertNotEquals("Fixture must exercise ${field.name}", field.get(defaults), field.get(input))

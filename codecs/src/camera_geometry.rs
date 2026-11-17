@@ -9,6 +9,7 @@ mod optics;
 const GEOMETRY_SCRATCH: u64 = 10 * MIB;
 
 pub(crate) fn qualify_optics(d: &mut Development) { optics::qualify(d); }
+pub(crate) use optics::source_position as optics_source_position;
 
 fn enabled(d: &Development) -> bool {
     d.lens_profile.as_ref().is_some_and(|p|p.has_distortion())

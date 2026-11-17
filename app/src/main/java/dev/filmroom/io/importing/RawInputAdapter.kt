@@ -20,7 +20,7 @@ internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInput
             job.ensureActive()
             val cached=existingRaw?.takeIf { Files.isRegularFile(it.toPath(),NOFOLLOW_LINKS)
                 && it.canonicalFile.parentFile==sourceDirectory.canonicalFile }
-            val probed=cached?.let { RawMetadata.parse(codecs.probe(file)) }
+            val probed=cached?.let { RawMetadata.parse(codecs.probe(file,profileCorrections)) }
             val parsed:RawMetadata
             val raw:File
             if(cached!=null && probed!=null && RawDevelopmentCache.matches(cached,file,probed)) {
@@ -32,7 +32,7 @@ internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInput
                 migrating=cached!=null
                 raw=File(sourceDirectory,"raw-source-${UUID.randomUUID()}.rgb")
                 onNewRaw(raw)
-                parsed=RawMetadata.parse(codecs.decode(file,raw))
+                parsed=RawMetadata.parse(codecs.decode(file,raw,profileCorrections))
                 if(raw.length()!=parsed.bytes)throw PhotoException(PhotoException.Reason.UNREADABLE,dev.filmroom.i18n.UiMessage.of(dev.filmroom.R.string.text_52dca03550a9))
                 RawDevelopmentCache.write(raw,file,parsed)
             }
@@ -41,7 +41,7 @@ internal class RawInputAdapter(private val codecs: RawSourceDecoder): PhotoInput
             job.ensureActive()
             val bitmap=LinearSpool.preview(raw,width,height,maxEdge,job)
             preview=bitmap
-            val loaded=LoadedPhoto(PhotoSource(file,name,parsed.format.mimeType,width,height,file.length(),false,raw,photoMetadata=captureMetadata,developmentMessages=parsed.displayMessages),bitmap)
+            val loaded=LoadedPhoto(PhotoSource(file,name,parsed.format.mimeType,width,height,file.length(),false,raw,photoMetadata=captureMetadata,developmentMessages=parsed.displayMessages,rawProfileCorrections=profileCorrections),bitmap)
             completed=true
             loaded
         } catch(c:CancellationException) {

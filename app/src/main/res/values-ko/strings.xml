@@ -810,4 +810,8 @@
     <string name="film_none">없음</string>
     <string name="photo_location_import_help">촬영 위치를 유지하려면 파일에서 원본을 선택하고 사진에 포함된 위치 정보 접근을 허용하세요(현재 위치가 아닙니다). 거부해도 편집할 수 있습니다. 선택기나 공유 사본에서 제거된 위치 정보는 권한을 허용해도 복원되지 않습니다.</string>
     <string name="raw_codec_resource_limit">사진이 디코더의 파일 또는 메타데이터 제한을 초과했습니다. 파일 손상을 의미하지는 않습니다.</string>
+    <string name="tool_profile_corrections">프로파일 보정</string>
+    <string name="tool_profile_corrections_help">내장 또는 일치하는 렌즈 프로파일의 왜곡, 비네팅 및 색수차 보정을 적용합니다</string>
+    <string name="profile_corrections_on">사용</string>
+    <string name="profile_corrections_raw_only">RAW / DNG 원본에만 적용됩니다. 현재 사진에는 렌즈 프로파일 보정이 필요하지 않습니다.</string>
 </resources>

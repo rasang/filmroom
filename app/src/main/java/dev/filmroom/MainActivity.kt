@@ -158,7 +158,7 @@ class MainActivity:ComponentActivity() {
     private var compositionReturnTool:String?=null;private var compositionReturnGroup:String?=null
     private var straightenDial:dev.filmroom.ui.StraightenDialView?=null
     private var straightenReset:Button?=null
-    private var builtCompositionEditing=false;private var builtCompositionAspect:Double?=null;private var boundCompositionEditing:Boolean?=null;private var boundCompare:Boolean?=null;private var builtParameters:EditorState?=null;private var shownSource:String?=null;private var lastBitmap:android.graphics.Bitmap?=null
+    private var builtCompositionEditing=false;private var builtCompositionAspect:Double?=null;private var boundCompositionEditing:Boolean?=null;private var boundCompare:Boolean?=null;private var builtParameters:EditorState?=null;private var builtRawSource:Boolean?=null;private var shownSource:String?=null;private var lastBitmap:android.graphics.Bitmap?=null
     private val recipeImport: dev.filmroom.presets.RecipeImportDialog by lazy { dev.filmroom.presets.RecipeImportDialog(this,{it.showReadable()},{savedPresetDialogs.open()}) }
     private val recipeScanner: androidx.activity.result.ActivityResultLauncher<Intent> =registerForActivityResult(ActivityResultContracts.StartActivityForResult()){result->recipeImport.accept(result.resultCode,result.data)}
     private val picker=registerForActivityResult(object:ActivityResultContracts.PickVisualMedia(){
@@ -785,9 +785,10 @@ class MainActivity:ComponentActivity() {
         showStatus(s)
         // Tool values depend on scientific parameters and border ON/OFF, not the crop or edit mode.
         // Keep existing listeners/views during a gesture; every mutation reads current parameters.
+        val rawSource=s.photo?.isRawSource==true
         val toolValues=builtParameters?.let{it.copy(composition=s.parameters.composition,crop=it.crop.copy(transform=s.parameters.crop.transform))}
         if(!dragging && (sourceChanged || toolValues!=s.parameters || builtCompositionEditing!=s.compositionEditing ||
-            (s.compositionEditing && builtCompositionAspect!=s.parameters.composition.targetAspect) || tools.tag!=s.editable)){buildTools()}
+            (s.compositionEditing && builtCompositionAspect!=s.parameters.composition.targetAspect) || tools.tag!=s.editable || builtRawSource!=rawSource)){buildTools()}
         val straighten=if(s.parameters.filmBorder)s.parameters.composition.straightenDegrees else s.parameters.crop.transform.straightenDegrees
         straightenDial?.angle=straighten
         straightenReset?.let{enabled(it,s.editable && s.compositionEditing && straighten!=0.0)}
@@ -874,7 +875,8 @@ class MainActivity:ComponentActivity() {
             Control("brightness",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8e2f643ad160),R.drawable.ic_brightness,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8dbf138761d8),-2f,2f,0f,{it.brightness},{p,v->p.copy(brightness=v)}),
             Control("contrast",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4cbc753240e5),R.drawable.ic_tool_contrast,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0a746a522ab4),0.5f,1.5f,1f,{it.contrast},{p,v->p.copy(contrast=v)},{it.outputRoute=="print"}),
             Control("warmth",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_90f74b4ac6f1),R.drawable.ic_tool_warmth,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_4bed17be043d),-1f,1f,0f,{it.warmth},{p,v->p.copy(warmth=v)},{it.outputRoute=="print"}),
-            Control("saturation",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6045e74dcfa7),R.drawable.ic_tool_saturation,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_fa586db5f990),0f,2f,1f,{it.saturation},{p,v->p.copy(saturation=v)})
+            Control("saturation",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_6045e74dcfa7),R.drawable.ic_tool_saturation,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_fa586db5f990),0f,2f,1f,{it.saturation},{p,v->p.copy(saturation=v)}),
+            Control("profileCorrections",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.tool_profile_corrections),R.drawable.ic_tool_profile_corrections,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.tool_profile_corrections_help),exactValue=true)
         )
         "light"->listOf(
             Control("diffusionFilter",dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_cda1ea706d23),R.drawable.ic_tool_diffusion,dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_69c47fd991d5)),
@@ -984,6 +986,7 @@ class MainActivity:ComponentActivity() {
         "printIlluminant"->listOf("TH-KG3","D50","D55","D65").map{it to it}
         "autoExposure"->dev.filmroom.ui.AutoExposureChoice.options
         "neutralFiltersFromDatabase","halationNormalize","grainSublayers","printCompensation","normalizePrintExposure","scanWhiteCorrection","scanBlackCorrection","outputGamut","useGpu"->listOf("false" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3fd47edce45b),"true" to if(id=="useGpu")dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_7eb336e42cb5)else dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8da97ddda990))
+        "profileCorrections"->listOf("false" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_3fd47edce45b),"true" to dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.profile_corrections_on))
         else->emptyList()
     }
     private fun choiceValue(p:EditorState,id:String):String=when(id){
@@ -993,6 +996,7 @@ class MainActivity:ComponentActivity() {
         "halationNormalize"->p.halationNormalize.toString();"grainSublayers"->p.grainSublayers.toString();"autoExposure"->dev.filmroom.ui.AutoExposureChoice.value(p)
         "printCompensation"->p.printCompensation.toString();"normalizePrintExposure"->p.normalizePrintExposure.toString()
         "scanWhiteCorrection"->p.effectiveScanWhiteCorrection.toString();"scanBlackCorrection"->p.effectiveScanBlackCorrection.toString();"outputGamut"->p.outputGamut.toString();"useGpu"->p.useGpu.toString()
+        "profileCorrections"->p.profileCorrections.toString()
         else->""
     }
     private fun choose(p:EditorState,id:String,value:String):EditorState=when(id){
@@ -1003,6 +1007,7 @@ class MainActivity:ComponentActivity() {
         "halationNormalize"->p.copy(halationNormalize=value.toBoolean());"grainSublayers"->p.copy(grainSublayers=value.toBoolean());"autoExposure"->dev.filmroom.ui.AutoExposureChoice.choose(p,value)
         "printCompensation"->p.copy(printCompensation=value.toBoolean());"normalizePrintExposure"->p.copy(normalizePrintExposure=value.toBoolean())
         "scanWhiteCorrection"->p.copy(scanWhiteCorrection=value.toBoolean());"scanBlackCorrection"->p.copy(scanBlackCorrection=value.toBoolean());"outputGamut"->p.copy(outputGamut=value.toBoolean());"useGpu"->p.copy(useGpu=value.toBoolean())
+        "profileCorrections"->p.copy(profileCorrections=value.toBoolean())
         else->p
     }
     private fun buildTools(){
@@ -1015,7 +1020,7 @@ class MainActivity:ComponentActivity() {
             compositionReturnTool=selected;compositionReturnGroup=group;selected="composition";group="film"
         }
         if(!s.compositionEditing && selected=="composition")restoreCompositionTool()
-        val p=s.parameters;tools.removeAllViews();builtParameters=p;builtCompositionEditing=s.compositionEditing;builtCompositionAspect=p.composition.targetAspect;tools.tag=s.editable
+        val p=s.parameters;tools.removeAllViews();builtParameters=p;builtCompositionEditing=s.compositionEditing;builtCompositionAspect=p.composition.targetAspect;builtRawSource=s.photo?.isRawSource==true;tools.tag=s.editable
         try {
         buildCategories()
         if(selected=="metering")selected="autoExposure" // Restore the legacy separate tool without changing parameters.
@@ -1055,7 +1060,8 @@ class MainActivity:ComponentActivity() {
             val id=control.id
             val value=when(id){"filmStock"->listOf(p.filmStock,p.filmBorder,p.negativeWhiteHoles,p.outputRoute,p.effectiveMediumFormat,p.effectiveMediumPortrait);"paper"->p.paperStock;else->if(choiceValues(id).isNotEmpty())choiceValue(p,id)else control.read(p)}
             val key=listOf(value,p.filmStock,p.paperStock,p.outputRoute,s.editable,control.active(p),if(group=="print")p.outputRoute else null,
-                if(id=="outputRoute" || id=="scanWhiteCorrection" || id=="scanBlackCorrection")listOf(p.isReversalFilm,p.preferredOutputRoute,p.scannerCorrectionSupported,p.scanWhiteCorrection,p.scanBlackCorrection)else null)
+                if(id=="outputRoute" || id=="scanWhiteCorrection" || id=="scanBlackCorrection")listOf(p.isReversalFilm,p.preferredOutputRoute,p.scannerCorrectionSupported,p.scanWhiteCorrection,p.scanBlackCorrection)else null,
+                if(id=="profileCorrections")(s.photo?.isRawSource==true)else null)
             val section=landscapeSections.getOrPut(id){
                 ParameterSection(LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;tag="parameter-section:$id";setPadding(0,dp(8),0,dp(12))},emptyList()).also{
                     tools.addView(it.view,LinearLayout.LayoutParams(-1,-2))
@@ -1081,7 +1087,7 @@ class MainActivity:ComponentActivity() {
                 }
             }
         }
-        builtParameters=p;builtCompositionEditing=s.compositionEditing;builtCompositionAspect=p.composition.targetAspect;tools.tag=s.editable
+        builtParameters=p;builtCompositionEditing=s.compositionEditing;builtCompositionAspect=p.composition.targetAspect;builtRawSource=s.photo?.isRawSource==true;tools.tag=s.editable
         if(groupChanged){
             val destination=landscapePositions[group] ?: 0
             landscapeScroll?.addOnLayoutChangeListener(object:View.OnLayoutChangeListener{
@@ -1105,16 +1111,19 @@ class MainActivity:ComponentActivity() {
     private fun renderControl(control:Control,p:EditorState,s:EditorUiState,target:LinearLayout){
         val optionValues=choiceValues(control.id)
         if(optionValues.isNotEmpty()){
+            val rawCapable=control.id!="profileCorrections" || s.photo?.isRawSource==true
             controlHeading(control,null,target)
             target.addView(dev.filmroom.ui.SettledChoiceSelector(this).apply {
                 bind(control.label,optionValues.map{it.second},optionValues.indexOfFirst{it.first==choiceValue(p,control.id)}) { which ->
                     finishCompositionForParameterEdit()
                     val now=model.state.value
-                    if(now.editable&&control.active(now.parameters))
+                    if(now.editable&&control.active(now.parameters)&&(control.id!="profileCorrections"||now.photo?.isRawSource==true))
                         model.parameters(choose(now.parameters,control.id,optionValues[which].first),true)
                 }
-                enabled(this,s.editable&&control.active(p))
+                enabled(this,s.editable&&control.active(p)&&rawCapable)
             },LinearLayout.LayoutParams(-1,-2))
+            if(control.id=="profileCorrections" && s.photo!=null && !s.photo.isRawSource)
+                target.addView(text(dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.profile_corrections_raw_only),12f,muted))
             if(control.id=="outputRoute" && p.isReversalFilm){
                 target.addView(text(getString(R.string.route_reversal_only),12f,muted))
                 if(p.preferredOutputRoute=="print")target.addView(text(getString(R.string.route_print_preference_retained),12f,muted))

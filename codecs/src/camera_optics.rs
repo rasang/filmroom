@@ -103,7 +103,7 @@ pub(super) fn apply_source_vignette(
     Ok(())
 }
 
-pub(super) fn source_position(
+pub(crate) fn source_position(
     d: &Development, x: usize, y: usize, channel: usize,
 ) -> Result<[f64; 2]> {
     let reference = d.lens_reference;

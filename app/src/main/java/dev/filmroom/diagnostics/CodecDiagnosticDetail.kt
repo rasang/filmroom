@@ -51,6 +51,7 @@ class CodecDiagnosticDetail private constructor(
         LOSSLESS, LINEAR_JPEG, JXL, NIKON_HE, NIKON_SNEF, DNG_CFA, DNG_BAD_PIXELS,
         DNG_GEOMETRY_DEVELOP, EMBEDDED_LENS, OUTPUT_COLOR, DNG_WARP, CAMERA_GEOMETRY,
         LIB, OPCODES, GAINMAP, OPCODE_STAGE1, CFA_GAINMAP, TECHNICAL,
+        DNG_SDK, CAMERA_OPTICS, EMBEDDED_OPTICS, LENSFUN,
     }
     override fun equals(other: Any?): Boolean = other is CodecDiagnosticDetail && fields() == other.fields()
     override fun hashCode(): Int = fields().hashCode()

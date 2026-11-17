@@ -119,6 +119,7 @@ class SavedPresetCoverageHostTest {
         probe("mediumPortrait") { it.copy(mediumPortrait = true) },
         probe("negativeWhiteHoles") { it.copy(negativeWhiteHoles = false) },
         probe("preferredOutputRoute") { it.copy(preferredOutputRoute = "direct") },
+        probe("profileCorrections") { it.copy(profileCorrections = false) },
         probe("imprint.dateStyle") { it.copy(imprint = it.imprint.copy(dateStyle = "canon_luna")) },
         probe("imprint.corner") { it.copy(imprint = it.imprint.copy(corner = "top_left")) },
         probe("imprint.size") { it.copy(imprint = it.imprint.copy(size = 1.4)) },
