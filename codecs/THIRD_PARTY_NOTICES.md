@@ -1,3 +1,9 @@
+## Adobe DNG SDK
+
+This product includes DNG technology under license by Adobe.
+
+All DNG decoding uses the Adobe DNG SDK 1.7.1 (build 2802), vendored unmodified with the needed XMPCore, Expat 2.2.9 and IJG libjpeg 9c sources in `../third-party/adobe-dng-sdk/sdk/`. Provenance, upstream checksum, license conditions and the Filmroom bridge are documented in `../third-party/adobe-dng-sdk/README.md`; the complete notices (Adobe DNG SDK License, XMP/RSA MD5, Expat MIT, IJG) are in `../third-party/adobe-dng-sdk/NOTICE.txt` and ship in the APK as `licenses/ADOBE_DNG_SDK_NOTICE.txt`. **This software is based in part on the work of the Independent JPEG Group.** The DNG logo is not used.
+
 # Source and licenses
 
 The adapter is GPL-3.0-or-later. Its integration follows the approved Spektrafilm Rust reference:

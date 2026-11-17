@@ -313,8 +313,9 @@
     <string name="text_42cec9151c59" formatted="false">胶片档案 · CC BY-SA 4.0 与署名</string>
     <string name="text_0b3a85a2a436" formatted="false">胶片引擎 · Rust 第三方依赖声明</string>
     <string name="text_334ca499fe26" formatted="false">图像编解码 · rawler 与其他依赖声明</string>
+    <string name="adobe_dng_sdk_notices" formatted="false">DNG 解码 · Adobe DNG SDK 声明</string>
     <string name="text_8150d89b6537" formatted="false">齿边素材 · 真实资料参考绘制与署名</string>
-    <string name="text_1a485ac7a998" formatted="false">胶片模型来自 Andrea Volpato 的 spektrafilm 及其 Rust 移植工作；界面与图像处理接线作了修改。程序按 GPL-3.0 提供，胶片资料按 CC BY-SA 4.0 提供。RAW 解码使用 rawler（LGPL-2.1），各依赖保留各自许可。完整对应源码及构建材料随安装包一起提供。法律文本保留原文。</string>
+    <string name="text_1a485ac7a998" formatted="false">胶片模型来自 Andrea Volpato 的 spektrafilm 及其 Rust 移植工作；界面与图像处理接线作了修改。程序按 GPL-3.0 提供，胶片资料按 CC BY-SA 4.0 提供。DNG 解码使用 Adobe DNG SDK（This product includes DNG technology under license by Adobe.），其他相机 RAW 解码使用 rawler（LGPL-2.1），各依赖保留各自许可。完整对应源码及构建材料随安装包一起提供。法律文本保留原文。</string>
     <string name="text_200ae4c1c12e" formatted="false">此声明暂时无法读取。请查看安装包随附的对应源码与许可证，不影响照片保存在本机。</string>
     <string name="text_564eb6dfeaca" formatted="false">开源许可与署名</string>
     <string name="text_d6d466c03f8e" formatted="false">从哪里导入</string>

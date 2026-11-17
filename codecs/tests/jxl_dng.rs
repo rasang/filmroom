@@ -39,7 +39,8 @@ fn path(s:&str)->PathBuf{std::env::temp_dir().join(format!("jxl-test-{}-{s}",std
 #[test]fn jxl_rejects_mismatched_dimensions_and_tiles(){
  let input=path("mismatch.dng");let mut bytes=tiff(true,1);let n=u16::from_le_bytes([bytes[8],bytes[9]])as usize;for i in 0..n{let o=10+12*i;let tag=u16::from_le_bytes([bytes[o],bytes[o+1]]);if tag==256{bytes[o+8..o+12].copy_from_slice(&20u32.to_le_bytes());}}
  fs::write(&input,bytes).unwrap();assert_eq!(film_codecs::raw::probe(&input,&Budget::default(),true).unwrap_err().code,"INVALID_INPUT");
- fs::write(&input,tiff_layout(true,1,true)).unwrap();assert_eq!(film_codecs::raw::probe(&input,&Budget::default(),true).unwrap_err().code,"UNSUPPORTED_DNG_VARIANT");fs::remove_file(input).unwrap();
+ // Non-multiple-of-16 tile dimensions (18x20) violate TIFF 6.0 / DNG spec -> INVALID_INPUT.
+ fs::write(&input,tiff_layout(true,1,true)).unwrap();assert_eq!(film_codecs::raw::probe(&input,&Budget::default(),true).unwrap_err().code,"INVALID_INPUT");fs::remove_file(input).unwrap();
 }
 fn two_strips()->Vec<u8>{
  let mut b=tiff(true,1);let n=u16::from_le_bytes([b[8],b[9]])as usize;let data=include_bytes!("fixtures/linear-u16-18x20.jxl");let first=b.len()-data.len();let second=b.len();b.extend(data);

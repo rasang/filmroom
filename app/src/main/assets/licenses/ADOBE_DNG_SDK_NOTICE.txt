@@ -1,0 +1,254 @@
+Adobe DNG SDK notices
+=====================
+
+This product includes DNG technology under license by Adobe.
+
+Filmroom decodes every DNG file with the Adobe DNG SDK 1.7.1 (build 2802,
+dng_sdk_1_7_1_2802_20261110.zip). The SDK source, together with the subset of
+the bundled XMP Toolkit (XMPCore), Expat XML parser and IJG libjpeg it needs, is
+included unmodified in the Filmroom source repository under
+third-party/adobe-dng-sdk/. Filmroom does not use the DNG logo and is not
+endorsed by Adobe. "Adobe" and "DNG" are trademarks or registered trademarks of
+Adobe in the United States and/or other countries.
+
+JPEG XL compressed DNG tiles are decoded by the pinned libjxl 0.12.0 already
+listed in the codec notices.
+
+----------------------------------------------------------------------
+Adobe DNG SDK License (LICENSE.txt, as shipped with the SDK)
+----------------------------------------------------------------------
+
+DNG SDK License Agreement
+
+NOTICE TO USER: Adobe Inc. provides the Software and Documentation for
+use under the terms of this Agreement. Any download, installation,
+use, reproduction, modification or distribution of the Software or
+Documentation, or any derivatives or portions thereof, constitutes
+your acceptance of this Agreement.
+
+As used in this Agreement,
+
+"Adobe" means Adobe Inc.
+
+"Software" means the software code, in any format, including sample
+code and source code, accompanying this Agreement.
+
+"Documentation" means the documents, specifications and all other
+items accompanying this Agreement other than the Software.
+
+1. LICENSE GRANT Software License. Subject to the restrictions below
+and other terms of this Agreement, Adobe hereby grants you a
+non-exclusive, worldwide, royalty free license to use, reproduce,
+prepare derivative works from, publicly display, publicly perform,
+distribute and sublicense the Software for any purpose.
+
+Document License. Subject to the terms of this Agreement, Adobe hereby
+grants you a non-exclusive, worldwide, royalty free license to make a
+limited number of copies of the Documentation for your development
+purposes and to publicly display, publicly perform and distribute such
+copies. You may not modify the Documentation.
+
+2. RESTRICTIONS AND OWNERSHIP You will not remove any copyright or
+other notice included in the Software or Documentation and you will
+include such notices in any copies of the Software that you distribute
+in human-readable format.
+
+You will not copy, use, display, modify or distribute the Software or
+Documentation in any manner not permitted by this Agreement. No title
+to the intellectual property in the Software or Documentation is
+transferred to you under the terms of this Agreement. You do not
+acquire any rights to the Software or the Documentation except as
+expressly set forth in this Agreement. All rights not granted are
+reserved by Adobe.
+
+3. DISCLAIMER OF WARRANTY ADOBE PROVIDES THE SOFTWARE AND
+DOCUMENTATION ONLY ON AN "AS IS" BASIS WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT
+LIMITATION ANY WARRANTIES OR CONDITIONS OF TITLE, NON-INFRINGEMENT,
+MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. ADOBE MAKES NO
+WARRANTY THAT THE SOFTWARE OR DOCUMENTATION WILL BE ERROR-FREE. To the
+extent permissible, any warranties that are not and cannot be excluded
+by the foregoing are limited to ninety (90) days.
+
+4. LIMITATION OF LIABILITY ADOBE AND ITS SUPPLIERS SHALL NOT BE LIABLE
+FOR LOSS OR DAMAGE ARISING OUT OF THIS AGREEMENT OR FROM THE USE OF
+THE SOFTWARE OR DOCUMENTATION. IN NO EVENT WILL ADOBE BE LIABLE TO YOU
+OR ANY THIRD PARTY FOR ANY DIRECT, INDIRECT, CONSEQUENTIAL,
+INCIDENTAL, OR SPECIAL DAMAGES INCLUDING LOST PROFITS, LOST SAVINGS,
+COSTS, FEES, OR EXPENSES OF ANY KIND ARISING OUT OF ANY PROVISION OF
+THIS AGREEMENT OR THE USE OR THE INABILITY TO USE THE SOFTWARE OR
+DOCUMENTATION, HOWEVER CAUSED AND UNDER ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE), EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+ADOBE'S AGGREGATE LIABILITY AND THAT OF ITS SUPPLIERS UNDER OR IN
+CONNECTION WITH THIS AGREEMENT SHALL BE LIMITED TO THE AMOUNT PAID BY
+YOU FOR THE SOFTWARE AND DOCUMENTATION.
+
+5. INDEMNIFICATION If you choose to distribute the Software in a
+commercial product, you do so with the understanding that you agree to
+defend, indemnify and hold harmless Adobe against any losses, damages
+and costs arising from the claims, lawsuits or other legal actions
+arising out of such distribution.
+
+6. TRADEMARK USAGE Adobe and the DNG logo are the trademarks or
+registered trademarks of Adobe Inc. in the United States and other
+countries. Such trademarks may not be used to endorse or promote any
+product unless expressly permitted under separate agreement with
+Adobe. For information on how to license the DNG logo please go to
+www.adobe.com.
+
+7. TERM Your rights under this Agreement shall terminate if you fail
+to comply with any of the material terms or conditions of this
+Agreement. If all your rights under this Agreement terminate, you will
+immediately cease use and distribution of the Software and
+Documentation.
+
+8. GOVERNING LAW AND JURISDICTION This Agreement is governed by the
+statutes and laws of the State of California, without regard to the
+conflicts of law principles thereof. The federal and state courts
+located in Santa Clara County, California, USA, will have
+non-exclusive jurisdiction over any dispute arising out of this
+Agreement.
+
+9. GENERAL This Agreement supersedes any prior agreement, oral or
+written, between Adobe and you with respect to the licensing to you of
+the Software and Documentation. No variation of the terms of this
+Agreement will be enforceable against Adobe unless Adobe gives its
+express consent in writing signed by an authorized signatory of Adobe.
+If any part of this Agreement is found void and unenforceable, it will
+not affect the validity of the balance of the Agreement, which shall
+remain valid and enforceable according to its terms.
+
+For licensing information on the DNG File Format Specification, which
+is not included in the DNG SDK, please visit:
+https://helpx.adobe.com/camera-raw/digital-negative.html
+
+----------------------------------------------------------------------
+Adobe XMP Toolkit (XMPCore), as bundled with the DNG SDK
+----------------------------------------------------------------------
+
+Copyright Adobe. Distributed with the DNG SDK under the Adobe DNG SDK License
+above ("the Adobe license agreement accompanying it"). Adobe also publishes the
+XMP Toolkit SDK under the BSD 3-Clause license at
+https://github.com/adobe/XMP-Toolkit-SDK.
+
+The bundled MD5 implementation is derived from the RSA Data Security, Inc. MD5
+Message-Digest Algorithm:
+
+MD5C.C - RSA Data Security, Inc., MD5 message-digest algorithm
+
+Copyright (C) 1991-2, RSA Data Security, Inc. Created 1991. All rights
+reserved.
+
+License to copy and use this software is granted provided that it is
+identified as the "RSA Data Security, Inc. MD5 Message-Digest Algorithm" in
+all material mentioning or referencing this software or this function.
+
+License is also granted to make and use derivative works provided that such
+works are identified as "derived from the RSA Data Security, Inc. MD5
+Message-Digest Algorithm" in all material mentioning or referencing the
+derived work.
+
+RSA Data Security, Inc. makes no representations concerning either the
+merchantability of this software or the suitability of this software for
+any particular purpose. It is provided "as is" without express or implied
+warranty of any kind.
+
+These notices must be retained in any copies of any part of this
+documentation and/or software.
+
+----------------------------------------------------------------------
+Expat XML parser 2.2.9 (bundled with the XMP Toolkit), MIT license
+----------------------------------------------------------------------
+
+Copyright (c) 1997-2000 Thai Open Source Software Center Ltd
+Copyright (c) 2000-2017 Expat development team
+Licensed under the MIT license:
+
+Permission is  hereby granted,  free of charge,  to any  person obtaining
+a  copy  of  this  software   and  associated  documentation  files  (the
+"Software"),  to  deal in  the  Software  without restriction,  including
+without  limitation the  rights  to use,  copy,  modify, merge,  publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit
+persons  to whom  the Software  is  furnished to  do so,  subject to  the
+following conditions:
+
+The above copyright  notice and this permission notice  shall be included
+in all copies or substantial portions of the Software.
+
+THE  SOFTWARE  IS  PROVIDED  "AS  IS",  WITHOUT  WARRANTY  OF  ANY  KIND,
+EXPRESS  OR IMPLIED,  INCLUDING  BUT  NOT LIMITED  TO  THE WARRANTIES  OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR  OTHER LIABILITY, WHETHER  IN AN  ACTION OF CONTRACT,  TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+----------------------------------------------------------------------
+IJG libjpeg 9c (bundled with the DNG SDK)
+----------------------------------------------------------------------
+
+This software is based in part on the work of the Independent JPEG Group.
+
+LEGAL ISSUES
+============
+
+In plain English:
+
+1. We don't promise that this software works.  (But if you find any bugs,
+   please let us know!)
+2. You can use this software for whatever you want.  You don't have to pay us.
+3. You may not pretend that you wrote this software.  If you use it in a
+   program, you must acknowledge somewhere in your documentation that
+   you've used the IJG code.
+
+In legalese:
+
+The authors make NO WARRANTY or representation, either express or implied,
+with respect to this software, its quality, accuracy, merchantability, or
+fitness for a particular purpose.  This software is provided "AS IS", and you,
+its user, assume the entire risk as to its quality and accuracy.
+
+This software is copyright (C) 1991-2018, Thomas G. Lane, Guido Vollbeding.
+All Rights Reserved except as specified below.
+
+Permission is hereby granted to use, copy, modify, and distribute this
+software (or portions thereof) for any purpose, without fee, subject to these
+conditions:
+(1) If any part of the source code for this software is distributed, then this
+README file must be included, with this copyright and no-warranty notice
+unaltered; and any additions, deletions, or changes to the original files
+must be clearly indicated in accompanying documentation.
+(2) If only executable code is distributed, then the accompanying
+documentation must state that "this software is based in part on the work of
+the Independent JPEG Group".
+(3) Permission for use of this software is granted only if the user accepts
+full responsibility for any undesirable consequences; the authors accept
+NO LIABILITY for damages of any kind.
+
+These conditions apply to any software derived from or based on the IJG code,
+not just to the unmodified library.  If you use our work, you ought to
+acknowledge us.
+
+Permission is NOT granted for the use of any IJG author's name or company name
+in advertising or publicity relating to this software or products derived from
+it.  This software may be referred to only as "the Independent JPEG Group's
+software".
+
+We specifically permit and encourage the use of this software as the basis of
+commercial products, provided that all warranty or liability claims are
+assumed by the product vendor.
+
+
+The Unix configuration script "configure" was produced with GNU Autoconf.
+It is copyright by the Free Software Foundation but is freely distributable.
+The same holds for its supporting scripts (config.guess, config.sub,
+ltmain.sh).  Another support script, install-sh, is copyright by X Consortium
+but is also freely distributable.
+
+The IJG distribution formerly included code to read and write GIF files.
+To avoid entanglement with the Unisys LZW patent (now expired), GIF reading
+support has been removed altogether, and the GIF writer has been simplified
+to produce "uncompressed GIFs".  This technique does not use the LZW
+algorithm; the resulting GIF files are larger than usual, but are readable
+by all standard GIF decoders.

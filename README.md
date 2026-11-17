@@ -143,7 +143,7 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 | Olympus / OM System ORF / ORI | 按文件内容识别并解码支持的 Bayer 传感器布局；ORI 走同一 ORF 解码路径，不保证所有高分辨率模式，80 MP 文件仍超出当前导入上限。 |
 | Pentax PEF | 已接入受限的 Bayer RAW 解码；像素位移、HDR 合成及单色等不支持或未验证变体仍会拒绝。 |
 | RAF | 富士 Bayer 与 X-Trans 的受限基础显色候选；已测未压缩、无损/有损压缩样片，保留原始像素与 EXIF。具体机型、模式、GFX/旧式布局限制及验证状态见 [RAF 范围](docs/FUJIFILM_RAF.md)。 |
-| DNG | 新增受限 16 位三通道 LinearRaw JPEG XL 条带导入，见[JXL 范围](docs/JPEG_XL_DNG.md)； 既有 16 位路径，以及新增已验证的 12/14 位三通道 LinearRaw SOF3 条带路径；S23 系列 4 份公开样本通过主机整幅像素/线性色彩对照，其中仅 1 份明确为 Expert RAW。不是全品牌/全模式保证。 |
+| DNG | 全部 DNG 改由 **Adobe DNG SDK 1.7.1** 解码（Bayer/X-Trans 等 CFA、LinearRaw、单色；未压缩、无损 JPEG、有损 JPEG、Deflate、JPEG XL；DNG 1.0–1.7 的 Opcode、增益图、相机配置文件），输出线性 sRGB，不套用配置文件色调曲线。超出内存预算的中间像素会写入应用私有缓存，需要足够的临时空间。仍受 5200 万像素导入上限。见 [Adobe DNG SDK 说明](third-party/adobe-dng-sdk/README.md)。 |
 | Panasonic RW2 | 13 份样本验证 v4、v5（14 位）、v6、v7（14 位）及受约束的 v8/CF2；包括 GH6、S5 II X、G9 II、GH7、S1R II 的已测模式。特殊编码与超限文件仍可能被拒绝，详见[边界](codecs/README.md)。 |
 
 | 输出 | 适合用途 |
@@ -153,11 +153,13 @@ Filmroom 将胶片、相纸与扫描路线放进手机上的同一间暗房：�
 | TIFF · 16 位 | 继续后期，文件较大；部分相册无法显示。8 位输入不会因此变成 RAW。 |
 | MP4 / Live 照片 | 从照片动效页面导出；设备编码、相册识别与音频播放限制见上文。 |
 
-**使用前请知道：** DNG 后缀不代表一定兼容；HEIC 导出、其他未列出的相机 RAW、AVIF、EXR 和 HDR 增强/保存尚未接入。RAW/HEIC 导入上限为 5200 万像素，最终编码上限为 8400 万像素，仍受格式、内存与空间限制。局部放大预览最长边仍为 1536 像素，**不是原图像素级预览**。不支持的文件变体或内存/临时空间不足时会明确停止，不暗中缩图完成原尺寸导出。
+**使用前请知道：** 损坏或不符合 DNG 规范的文件仍会被拒绝；HEIC 导出、其他未列出的相机 RAW、AVIF、EXR 和 HDR 增强/保存尚未接入。RAW/HEIC 导入上限为 5200 万像素，最终编码上限为 8400 万像素，仍受格式、内存与空间限制。局部放大预览最长边仍为 1536 像素，**不是原图像素级预览**。不支持的文件变体或内存/临时空间不足时会明确停止，不暗中缩图完成原尺寸导出。
 
 **相机 RAW 验证边界：** 上述列表说明已验证的格式/像素布局，不是机型白名单；按文件内容和离线色彩配置识别，不仅凭后缀放行。没有承诺所有未知新机型、未来压缩变体或任意损坏文件均兼容。基础矩阵显色不复刻相机风格；small NEF 使用独立验证的已平衡线性 sRGB 路径，避免重复白平衡。开发验证中的 host 结果不等于 Android 真机结果。
 
 **内嵌镜头畸变（本分支）：** 完善 CFA DNG 的几何校正与有序 GainMap 链，并为 Sony ARW、Fujifilm RAF、Olympus / OM System ORF 接入经过验证的内嵌畸变参数。识别到支持的模型时自动应用，在照片信息中显示应用状态。本批厂商适配仅覆盖畸变；具体参数范围、裁切约定、额外临时空间和验证结果见[内嵌镜头校正说明](codecs/docs/EMBEDDED-LENS-CORRECTIONS.md)。
+
+This product includes DNG technology under license by Adobe.（本产品包含经 Adobe 许可的 DNG 技术。）
 
 详细范围：[HEIC](docs/HEIC_IMPORT.md) · [DNG 与编解码器](codecs/README.md) · [小米 DNG 适配边界](docs/XIAOMI_DNG_COMPAT.md) · [预览](docs/LOCAL_DETAIL_UI.md)。
 

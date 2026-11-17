@@ -1592,6 +1592,7 @@ class MainActivity:ComponentActivity() {
             dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_42cec9151c59) to "licenses/SPEKTRAFILM_LICENSE.txt",
             dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_0b3a85a2a436) to "licenses/THIRD_PARTY_RUST_NOTICES.txt",
             dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_334ca499fe26) to "licenses/CODEC_NOTICES.txt",
+            dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.adobe_dng_sdk_notices) to "licenses/ADOBE_DNG_SDK_NOTICE.txt",
             dev.filmroom.i18n.L10n.text(dev.filmroom.R.string.text_8150d89b6537) to "fixed135/PROVENANCE-AND-NOTICES.md",
         )
         val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(24),dp(8),dp(24),dp(8))}

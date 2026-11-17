@@ -1,1 +1,1 @@
-{"code":"INVALID_PATH","elapsedMs":0,"message":"照片必须位于应用私有目录","ok":false,"operation":"probe","outputValid":false,"schemaVersion":1,"stage":"validate"}
+{"code":"INVALID_PATH","column":24,"diagnosticSchema":1,"elapsedMs":0,"line":68,"message":"照片必须位于应用私有目录","ok":false,"operation":"probe","outputValid":false,"reason":"VALIDATION","schemaVersion":1,"source":"JNI","stage":"validate"}

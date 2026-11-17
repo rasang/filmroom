@@ -313,8 +313,9 @@
     <string name="text_42cec9151c59" formatted="false">필름 프로파일 · CC BY-SA 4.0 및 출처 표시</string>
     <string name="text_0b3a85a2a436" formatted="false">필름 엔진 · Rust 타사 의존성 고지</string>
     <string name="text_334ca499fe26" formatted="false">이미지 코덱 · rawler 및 기타 의존성 고지</string>
+    <string name="adobe_dng_sdk_notices" formatted="false">DNG 디코딩 · Adobe DNG SDK 고지</string>
     <string name="text_8150d89b6537" formatted="false">스프로킷 테두리 소재 · 실제 자료를 참고한 제작 및 출처 표시</string>
-    <string name="text_1a485ac7a998" formatted="false">필름 모델은 Andrea Volpato의 spektrafilm과 Rust 이식 작업을 기반으로 합니다. 인터페이스와 이미지 처리 연결 부분은 수정되었습니다. 프로그램은 GPL-3.0, 필름 자료는 CC BY-SA 4.0에 따라 제공됩니다. RAW 디코딩에는 rawler(LGPL-2.1)를 사용하며 각 의존성은 자체 라이선스를 유지합니다. 완전한 대응 소스 코드와 빌드 자료가 설치 패키지와 함께 제공됩니다. 법률 문서는 원문으로 유지됩니다.</string>
+    <string name="text_1a485ac7a998" formatted="false">필름 모델은 Andrea Volpato의 spektrafilm과 Rust 이식 작업을 기반으로 합니다. 인터페이스와 이미지 처리 연결 부분은 수정되었습니다. 프로그램은 GPL-3.0, 필름 자료는 CC BY-SA 4.0에 따라 제공됩니다. DNG 디코딩에는 Adobe DNG SDK(This product includes DNG technology under license by Adobe.)를, 기타 카메라 RAW 디코딩에는 rawler(LGPL-2.1)를 사용하며 각 의존성은 자체 라이선스를 유지합니다. 완전한 대응 소스 코드와 빌드 자료가 설치 패키지와 함께 제공됩니다. 법률 문서는 원문으로 유지됩니다.</string>
     <string name="text_200ae4c1c12e" formatted="false">지금은 이 고지문을 읽을 수 없습니다. 설치 패키지에 포함된 대응 소스 코드와 라이선스를 확인해 주세요. 기기에 사진을 저장하는 데는 영향이 없습니다.</string>
     <string name="text_564eb6dfeaca" formatted="false">오픈소스 라이선스 및 출처 표시</string>
     <string name="text_d6d466c03f8e" formatted="false">가져올 위치</string>

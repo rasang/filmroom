@@ -143,7 +143,7 @@ Open photo effects from export history. Each sequence is approximately 3 seconds
 | Olympus / OM System ORF / ORI | Content-based identification and decoding of supported Bayer sensor layouts. ORI uses the same ORF decoder; this does not cover every high-resolution mode, and 80 MP files remain above the import limit. |
 | Pentax PEF | Bounded Bayer RAW decoding. Unsupported or unverified pixel-shift, HDR-composite and monochrome variants remain rejected. |
 | RAF | Bounded basic Fujifilm Bayer/X-Trans candidate with tested uncompressed, lossless and lossy samples; original pixels and EXIF are retained. See [RAF scope](docs/FUJIFILM_RAF.md) for tested modes, GFX/legacy limits and validation status. |
-| DNG | Adds constrained 16-bit three-channel LinearRaw JPEG XL strips; see [JXL scope](docs/JPEG_XL_DNG.md).  Existing 16-bit paths plus validated 12/14-bit three-channel LinearRaw SOF3 strips. Four public S23-family samples passed full-frame raw/linear-color host comparisons; only one is confirmed Expert RAW. Not blanket brand/mode support. |
+| DNG | Every DNG is now decoded by the **Adobe DNG SDK 1.7.1** (CFA incl. Bayer/X-Trans, LinearRaw, monochrome; uncompressed, lossless JPEG, lossy JPEG, Deflate, JPEG XL; DNG 1.0–1.7 opcodes, gain maps and camera profiles). Output is linear sRGB without the profile tone curve. Pixel buffers beyond the memory budget spill to the private cache, so enough temporary space is required. The 52 MP import limit still applies. See [Adobe DNG SDK notes](third-party/adobe-dng-sdk/README.md). |
 | Panasonic RW2 | 13 samples cover v4, v5 (14-bit), v6, v7 (14-bit) and constrained v8/CF2, including tested modes from GH6, S5 II X, G9 II, GH7 and S1R II. Special encodings and oversized files may still be rejected; see [limits](codecs/README.md). |
 
 | Output | Best for |
@@ -158,6 +158,8 @@ Open photo effects from export history. Each sequence is approximately 3 seconds
 **Camera RAW scope:** The list describes tested formats and pixel layouts, not a camera-model allowlist. Identification uses file contents and offline color profiles, not the suffix alone. It does not guarantee every unknown camera, future compression variant or damaged file. Basic matrix development does not reproduce camera styles; small NEF uses an independently verified already-balanced linear-sRGB path without applying white balance twice. Host validation is not physical Android-device validation.
 
 **Embedded lens distortion (this branch):** CFA DNG gains extended geometry and ordered GainMap chains. Sony ARW, Fujifilm RAF and Olympus / OM System ORF gain validated embedded distortion models, applied automatically when supported and reported in photo information. This manufacturer integration covers distortion only. See [embedded lens correction](codecs/docs/EMBEDDED-LENS-CORRECTIONS.md) for supported metadata, crop conventions, additional temporary storage and validation results.
+
+This product includes DNG technology under license by Adobe.
 
 Detailed contracts: [HEIC](docs/HEIC_IMPORT.md) · [DNG/codecs](codecs/README.md) · [Xiaomi DNG scope](docs/XIAOMI_DNG_COMPAT.md) · [Previews](docs/LOCAL_DETAIL_UI.md). These technical documents are primarily in Chinese.
 

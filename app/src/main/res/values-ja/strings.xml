@@ -313,8 +313,9 @@
     <string name="text_42cec9151c59" formatted="false">フィルムプロファイル · CC BY-SA 4.0とクレジット</string>
     <string name="text_0b3a85a2a436" formatted="false">フィルムエンジン · Rustサードパーティ依存関係の声明</string>
     <string name="text_334ca499fe26" formatted="false">画像コーデック · rawlerとその他の依存関係の声明</string>
+    <string name="adobe_dng_sdk_notices" formatted="false">DNG デコード · Adobe DNG SDK の声明</string>
     <string name="text_8150d89b6537" formatted="false">パーフォレーション素材 · 実資料を参考にした描画とクレジット</string>
-    <string name="text_1a485ac7a998" formatted="false">フィルムモデルはAndrea VolpatoのspektrafilmおよびそのRust移植に基づきます。UIと画像処理の接続部分を変更しています。プログラムはGPL-3.0、フィルムデータはCC BY-SA 4.0で提供されます。RAWデコードにはrawler（LGPL-2.1）を使用し、各依存関係はそれぞれのライセンスを保持します。完全な対応ソースコードとビルド資料をインストールパッケージとともに提供しています。法的文書は原文のまま掲載しています。</string>
+    <string name="text_1a485ac7a998" formatted="false">フィルムモデルはAndrea VolpatoのspektrafilmおよびそのRust移植に基づきます。UIと画像処理の接続部分を変更しています。プログラムはGPL-3.0、フィルムデータはCC BY-SA 4.0で提供されます。DNGデコードにはAdobe DNG SDK（This product includes DNG technology under license by Adobe.）、その他のカメラRAWデコードにはrawler（LGPL-2.1）を使用し、各依存関係はそれぞれのライセンスを保持します。完全な対応ソースコードとビルド資料をインストールパッケージとともに提供しています。法的文書は原文のまま掲載しています。</string>
     <string name="text_200ae4c1c12e" formatted="false">この声明を読み込めません。インストールパッケージに付属する対応ソースコードとライセンスをご確認ください。端末への写真の保存には影響しません。</string>
     <string name="text_564eb6dfeaca" formatted="false">オープンソースライセンスとクレジット</string>
     <string name="text_d6d466c03f8e" formatted="false">読み込み元</string>

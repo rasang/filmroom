@@ -1,8 +1,9 @@
-//! Content-identified RAW facade. DNG retains its existing decoder and policy.
+//! Content-identified RAW facade. Every DNG is decoded by the Adobe DNG SDK
+//! (crate::dng_sdk); other camera RAW formats keep their dedicated decoders.
 use crate::{
     camera_raw::CameraRaw,
     develop::{Admission, Budget},
-    dng::{Dng, Probe},
+    dng::Probe,
     error::{Result, io_error},
 };
 use std::{fs::File, path::Path, sync::atomic::AtomicBool};
@@ -45,13 +46,7 @@ fn is_dng(input: &Path) -> Result<bool> {
 }
 pub fn probe(input: &Path, b: &Budget, metadata_only: bool) -> Result<(Probe, Option<Admission>)> {
     if is_dng(input)? {
-        let d = Dng::read(&mut File::open(input).map_err(|e| io_error(e, "probe"))?)?;
-        let admission = if metadata_only {
-            None
-        } else {
-            Some(crate::develop::admit(&d, b)?)
-        };
-        Ok((d.probe(), admission))
+        crate::dng_sdk::probe(input, b, metadata_only)
     } else if let Some(d)=crate::camera_raw::fuji::FujiRaw::read(input)? {
         let admission=if metadata_only {None}else{Some(d.admit(b)?)};
         Ok((d.probe(),admission))
@@ -81,7 +76,7 @@ pub fn decode(
         return Err(crate::error::err("CANCELLED", "probe"));
     }
     if is_dng(input)? {
-        crate::develop::decode(input, output, b, cancel)
+        crate::dng_sdk::decode(input, output, b, cancel)
     } else if let Some(d)=crate::camera_raw::fuji::FujiRaw::read(input)? {
         d.decode(output,b,cancel)
     } else if let Some(d)=crate::camera_raw::additional::AdditionalRaw::read(input)? {
@@ -97,23 +92,15 @@ pub fn decode(
 mod tests {
     use super::*;
     #[test]
-    fn dng_facade_preserves_probe_and_pixels() {
+    fn dng_facade_routes_to_adobe_sdk() {
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/RGGB.dng");
-        let d = Dng::read(&mut File::open(&input).unwrap()).unwrap();
         let (p, _) = probe(&input, &Budget::default(), false).unwrap();
-        assert_eq!(
-            serde_json::to_value(p).unwrap(),
-            serde_json::to_value(d.probe()).unwrap()
-        );
+        assert_eq!(p.development_policy, crate::dng_sdk::DEVELOPMENT_POLICY);
         let a = std::env::temp_dir().join(format!("camera-facade-{}-a", std::process::id()));
-        let b = std::env::temp_dir().join(format!("camera-facade-{}-b", std::process::id()));
         let _ = std::fs::remove_file(&a);
-        let _ = std::fs::remove_file(&b);
         let cancel = AtomicBool::new(false);
-        decode(&input, &a, &Budget::default(), &cancel).unwrap();
-        crate::develop::decode(&input, &b, &Budget::default(), &cancel).unwrap();
-        assert_eq!(std::fs::read(&a).unwrap(), std::fs::read(&b).unwrap());
+        let (q, _) = decode(&input, &a, &Budget::default(), &cancel).unwrap();
+        assert_eq!(std::fs::metadata(&a).unwrap().len(), q.output_bytes);
         std::fs::remove_file(a).unwrap();
-        std::fs::remove_file(b).unwrap();
     }
 }

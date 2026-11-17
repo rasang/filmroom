@@ -2,6 +2,21 @@
 
 此组件完全离线，用于原生安卓“暗房”的 RAW 导入及 JPEG / TIFF 导出。它不联网，不使用嵌入 JPEG 代替 RAW，不重建或伪造 RAW，不自动降低照片尺寸。
 
+## DNG：全部由 Adobe DNG SDK 解码
+
+This product includes DNG technology under license by Adobe.
+
+自本版本起，所有按内容识别为 DNG 的文件（IFD0 含 DNGVersion）都交给官方 **Adobe DNG SDK 1.7.1（build 2802）** 处理，旧的 Rust DNG 解码路径不再被调用。源码与许可见 [`../third-party/adobe-dng-sdk/`](../third-party/adobe-dng-sdk/README.md)，桥接代码在 `cpp/dng_sdk/`，Rust 入口为 `src/dng_sdk.rs`。
+
+- 解析、解压（未压缩、无损 JPEG、有损 JPEG、Deflate、JPEG XL）、线性化、黑白电平、Opcode List 1/2/3、增益图、去马赛克（含非拜耳 CFA）、默认缩放与默认裁切全部由 SDK 完成；色彩由 SDK 的 `dng_render` 按相机配置文件（ColorMatrix/ForwardMatrix、HueSatMap、LookTable、BaselineExposure 及其 Offset）计算。
+- 输出契约不变：最终方向、默认裁切后的**线性 sRGB float32 RGB 私有文件**。为配合线性胶片流程，渲染使用线性 sRGB 色彩空间、恒等色调曲线、Shadows=0，并去除配置文件内的 ProfileToneCurve；结果裁切到 [0,1]。
+- JPEG XL 瓦片使用仓库内 `../third-party/libjxl` 的 libjxl 0.12.0 解码器；SDK 的 DNG 写入用到的 JPEG XL 编码入口以失败即报错的占位实现链接，读取路径不会调用。
+- 资源：SDK 的各阶段为整幅缓冲。超过本次内存预算（DNG 默认 128 MiB，JXL DNG 384 MiB）的大块像素缓冲会落到应用私有缓存目录中预先分配、已 unlink 的文件并以共享映射访问，因此需要额外临时空间（约为整幅中间结果大小）；空间不足时在解码开始前或分配时明确返回 `DISK_BUDGET` / `NO_SPACE`，不会崩溃或留下半成品。5200 万像素导入上限不变。
+- 取消通过 SDK 的 `dng_abort_sniffer` 实现；失败时删除输出文件。
+- 已知差异：结果与此前 Rust 路径不逐像素一致（采用了 Adobe 的去马赛克与色彩模型）。旧版缓存的 RAW 线性中间文件因 `developmentPolicy` 改变而不会复用。
+
+以下各节保留此前 Rust DNG 路径的历史说明，仅供参考。
+
 ## Beta5 RAW 支持范围与限制
 
 DNG 保留既有 16-bit 路径，并新增经过样本验证的 12/14-bit、三通道 LinearRaw SOF3 无损 JPEG：predictor 1、无点变换、全分辨率通道、按行对齐的重启间隔及有界条带解码。新校准路径支持经验证的 LinearizationTable、ProfileGainTableMap 和双光源 ColorMatrix/ForwardMatrix 校准；增益表可缺省。4 份 S23 系列公开样本（其中 1 份明确为 Expert RAW，其余拍摄模式未知）通过整幅原始像素及线性色彩对照。这不等于所有三星/Pro/Expert RAW 模式均支持。

@@ -313,8 +313,9 @@
     <string name="text_42cec9151c59" formatted="false">Film profiles · CC BY-SA 4.0 and attribution</string>
     <string name="text_0b3a85a2a436" formatted="false">Film engine · Rust third-party notices</string>
     <string name="text_334ca499fe26" formatted="false">Image codecs · rawler and other dependency notices</string>
+    <string name="adobe_dng_sdk_notices" formatted="false">DNG decoding · Adobe DNG SDK notices</string>
     <string name="text_8150d89b6537" formatted="false">Sprocket border assets · Drawn from real references and attribution</string>
-    <string name="text_1a485ac7a998" formatted="false">The film model is based on Andrea Volpato\'s spektrafilm and its Rust port. The interface and image processing integration have been modified. Software is provided under GPL-3.0; film data under CC BY-SA 4.0. RAW decoding uses rawler (LGPL-2.1). Each dependency retains its own license. Complete corresponding source and build materials are provided with the installation package. Legal texts are kept in their original language.</string>
+    <string name="text_1a485ac7a998" formatted="false">The film model is based on Andrea Volpato\'s spektrafilm and its Rust port. The interface and image processing integration have been modified. Software is provided under GPL-3.0; film data under CC BY-SA 4.0. DNG decoding uses the Adobe DNG SDK (This product includes DNG technology under license by Adobe.); other camera RAW decoding uses rawler (LGPL-2.1). Each dependency retains its own license. Complete corresponding source and build materials are provided with the installation package. Legal texts are kept in their original language.</string>
     <string name="text_200ae4c1c12e" formatted="false">This notice cannot be read right now. See the corresponding source and licenses included with the installation package. This does not affect saving photos on your device.</string>
     <string name="text_564eb6dfeaca" formatted="false">Open-source licenses and attribution</string>
     <string name="text_d6d466c03f8e" formatted="false">Import from</string>
