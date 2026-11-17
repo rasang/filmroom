@@ -24,13 +24,10 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK 35 & NDK 27.2.12479018
-        uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-            ndk;27.2.12479018
+        run: |
+          SDKMANAGER=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          (yes || true) | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
 
       - name: Install Rust toolchains (1.88.0 & 1.94.0)
         run: |
@@ -39,8 +36,10 @@ jobs:
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
             export PATH="$HOME/.cargo/bin:$PATH"
           fi
-          rustup toolchain install 1.88.0 --profile minimal --target aarch64-linux-android x86_64-linux-android
-          rustup toolchain install 1.94.0 --profile minimal --target aarch64-linux-android x86_64-linux-android
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup target add --toolchain 1.88.0 aarch64-linux-android x86_64-linux-android
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup target add --toolchain 1.94.0 aarch64-linux-android x86_64-linux-android
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
