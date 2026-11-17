@@ -25,9 +25,13 @@ jobs:
 
       - name: Setup Android SDK 35 & NDK 27.2.12479018
         run: |
-          SDKMANAGER=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER=$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n 1)
           (yes || true) | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchains (1.88.0 & 1.94.0)
         run: |
@@ -51,7 +55,6 @@ jobs:
 
       - name: Build native engine (libfilm_engine.so, Rust 1.88.0)
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           RUSTUP_TOOLCHAIN: "1.88.0"
         run: |
           bash native/build-native.sh --check
@@ -59,7 +62,6 @@ jobs:
 
       - name: Build codecs & libjxl (libfilm_codecs.so, Rust 1.94.0)
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
           RUSTUP_TOOLCHAIN: "1.94.0"
         run: bash codecs/build-android.sh
 
