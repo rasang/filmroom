@@ -14,8 +14,8 @@ jobs:
       - name: Checkout dev branch
         uses: actions/checkout@v4
 
-      - name: Install CMake, Ninja, FFmpeg and Cryptography
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build ffmpeg python3-cryptography
+      - name: Install CMake, Ninja and Cryptography
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build python3-cryptography
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -71,10 +71,18 @@ jobs:
           cp "native/artifacts/jniLibs/arm64-v8a/libfilm_engine.so" "app/src/main/jniLibs/arm64-v8a/"
           cp "codecs/artifacts/jniLibs/arm64-v8a/libfilm_codecs.so" "app/src/main/jniLibs/arm64-v8a/"
 
-      - name: Generate synthetic effect audio for CI APK
+      - name: Restore verified effect audio from release APK
         run: |
-          python3 tools/effect-audio/generate.py
-          (cd app/src/main/assets/effect_audio && sha256sum light_table.m4a optical_leak.m4a optical_leak_slow.m4a > SHA256SUMS)
+          curl -fsSL -o /tmp/ref-release.apk "https://github.com/rasang/filmroom/releases/download/v0.1.22.2-beta13/Filmroom-0.1.22.2-beta13-arm64-v8a.apk"
+          python3 tools/effect-audio/verify-package.py /tmp/ref-release.apk
+          python3 - << 'PYEOF'
+          import pathlib, zipfile
+          dest = pathlib.Path("app/src/main/assets/effect_audio")
+          with zipfile.ZipFile("/tmp/ref-release.apk") as zf:
+              for name in ("light_table.m4a", "optical_leak.m4a", "optical_leak_slow.m4a"):
+                  (dest / name).write_bytes(zf.read("assets/effect_audio/" + name))
+          PYEOF
+          rm -f /tmp/ref-release.apk
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
