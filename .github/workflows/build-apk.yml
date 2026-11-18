@@ -2,7 +2,7 @@ name: Build Filmroom APK
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "main", "dev" ]
   workflow_dispatch:
 
 jobs:
@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout dev branch
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install CMake, Ninja and Cryptography
