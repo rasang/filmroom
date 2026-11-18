@@ -1,3 +1,7 @@
+# 自动发布工作流（完整发版步骤见 docs/DEVELOPMENT.md「GitHub Actions 自动构建与 Release 发布流程」）：
+# - 日常推送 dev / main 分支不会触发本工作流；仅在推送 v* 标签（如 v0.1.22.3、v0.1.23-beta1）或手动运行时触发。
+# - 标签名去掉 v 后必须与 app/build.gradle.kts 的 versionName 完全一致；含 "-" 自动标为 Pre-release，不含则为正式版。
+# - 若存在 docs/releases/<versionName>.md 会自动作为正文并追加 APK 字节数与 SHA-256 下载核验信息。
 name: Publish Filmroom Release
 
 on:

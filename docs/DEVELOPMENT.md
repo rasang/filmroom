@@ -90,3 +90,45 @@ cargo build --offline --locked --release --lib
 不是编译成功或测试通过证明。构建期间须冻结源码并串行操作该target；
 失败时保留日志，最终核对源码清单、`Compiling rawler` 与新库SHA256。
 不要手工伪造指纹标记，不要靠更新时间判断，不需要把registry vendor改成path依赖。
+
+## GitHub Actions 自动构建与 Release 发布流程
+
+仓库内置两条独立的 GitHub Actions 工作流，日常推送分支代码**不会**自动发 Release，只有推送 `v*` 标签（或手动运行发布工作流）才会对外发布版本。
+
+### 1. 两条工作流分工
+
+| 工作流文件 | 触发条件 | 作用 |
+| --- | --- | --- |
+| [`.github/workflows/build-apk.yml`](../.github/workflows/build-apk.yml) | 推送 `dev` / `main` 分支（忽略纯 `docs/**`、`*.md` 与 `release.yml` 改动），或手动 `workflow_dispatch` | 编译原生引擎与编解码器、还原并校验私有音效、构建 ARM64 Release APK、重打包与 16KiB 对齐、使用仓库 Secrets 中的发行密钥签名并上传 `filmroom-arm64-signed-apk` 构建产物（保留 14 天）。**不创建 Release。** |
+| [`.github/workflows/release.yml`](../.github/workflows/release.yml) | 推送 `v*` Git 标签（如 `v0.1.22.2`、`v0.1.23-beta1`），或在网页 Actions 手动填入已有 tag 运行 | 核对标签版本与 Gradle `versionName` 一致 -> 自动复用已完成（或等待正在运行）的同源码树 `Build Filmroom APK` 签名产物 -> 二次校验发行证书指纹、音轨哈希与 ZIP 完整性 -> 生成 `SHA256SUMS` 与下载核验段落 -> 自动发布或更新 GitHub Release。 |
+
+### 2. 标准发版步骤（备忘清单）
+
+1. **升级版本号（两处必须同步）**
+   - 修改 `app/build.gradle.kts` 中的 `versionCode`（递增整数）与 `versionName`（如 `"0.1.22.3"` 或 `"0.1.23-beta1"`）。
+   - 同步修改 `app/src/test/java/dev/filmroom/OfficialReleaseIdentityHostTest.kt` 中的 `versionCode` 与 `versionName` 断言。
+2. **准备版本更新说明（推荐）**
+   - 新建 `docs/releases/<versionName>.md`（例如 `docs/releases/0.1.22.3.md`，参考 [`docs/releases/0.1.22.2.md`](releases/0.1.22.2.md)）。
+   - 无需手写文件大小与 `SHA-256`：发布脚本会自动在正文末尾追加 `## 下载核验`（包含提交 SHA、精确字节数与 `SHA-256`）；若未创建该文件，也会自动生成带下载核验信息的简版说明。
+3. **提交并推送到分支**
+   ```sh
+   git checkout main
+   git merge --ff-only dev   # 若从 dev 合入主干
+   git add app/build.gradle.kts app/src/test/java/dev/filmroom/OfficialReleaseIdentityHostTest.kt docs/releases/
+   git commit -m "release: prepare 0.1.22.3 (119)"
+   git branch -f dev main
+   git push origin main dev
+   ```
+4. **打 `v*` 标签触发自动发 Release**
+   ```sh
+   git tag v0.1.22.3
+   git push origin v0.1.22.3
+   ```
+   推送标签后无需等待 `Build Filmroom APK` 先跑完再打标签——若对应提交的 APK 仍在编译中，`release.yml` 会自动等待其完成后再取包发布；若已编译完成，约 10–30 秒即可发布完毕。
+
+### 3. 自动规则与防呆保护
+
+- **版本号强校验**：标签名去掉前缀 `v` 后必须与 `app/build.gradle.kts` 的 `versionName` 完全一致，否则工作流立即报错中止，防止打错标签发错包。
+- **自动区分正式版与测试版**：`versionName` 含连字符 `-`（如 `0.1.23-beta1`）时自动勾选 GitHub **Pre-release**；不含 `-`（如 `0.1.22.3`）时发为正式版（Latest Release）。
+- **重跑幂等更新**：若同名标签的 Release 已存在，再次手动运行 `Publish Filmroom Release` 会自动覆盖上传 APK / `SHA256SUMS` 并刷新 Release 说明。
+- **参考音效源更新提示**：`build-apk.yml` 当前从已发布的公开 Release APK 中还原经 `SHA256SUMS` 校验的三条音效文件；只要该参考 Release 保持未删除即可正常构建。
